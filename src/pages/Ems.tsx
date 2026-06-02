@@ -30,6 +30,27 @@ interface ClientData {
   rows?: string[][]
 }
 
+interface TrackingEvent {
+  date: string
+  time: string
+  status: string
+  location: string
+  remark: string
+}
+
+interface TrackingDetail {
+  ok: boolean
+  error?: string
+  regiNo?: string
+  senderName?: string
+  receiveName?: string
+  trackState?: string
+  expressType?: string
+  statusLabel?: string
+  statusColor?: string
+  history?: TrackingEvent[]
+}
+
 interface CombinedRow {
   email: string
   name: string
@@ -82,6 +103,26 @@ export default function Ems() {
     product: '', addr1: '', addr2: '', city: '', state: '', zip: '', country: 'United States',
   })
   const [clientSaving, setClientSaving] = useState(false)
+
+  // Detail Modal
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [detailData, setDetailData] = useState<TrackingDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailNum, setDetailNum] = useState('')
+
+  async function openDetail(emsNum: string) {
+    setDetailNum(emsNum)
+    setDetailData(null)
+    setShowDetailModal(true)
+    setDetailLoading(true)
+    try {
+      const res = await gasPost<TrackingDetail>({ action: 'getTrackingDetail', number: emsNum })
+      setDetailData(res)
+    } catch (e: unknown) {
+      setDetailData({ ok: false, error: (e as Error).message })
+    }
+    setDetailLoading(false)
+  }
 
   // Tracking Modal
   const [showTrackingModal, setShowTrackingModal] = useState(false)
@@ -299,7 +340,7 @@ export default function Ems() {
                               ? (
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{row.emsNum}</span>
+                                    <span onClick={() => openDetail(row.emsNum)} style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline' }}>{row.emsNum}</span>
                                     <button onClick={() => { setTrackingForm({ rowId: row.rowId, emsNum: row.emsNum, arrival: row.usArrival === '—' ? '' : row.usArrival, registered: row.registered === '—' ? 'No' : row.registered, status: row.statusText || 'Preparing' }); setTrackingName(row.name); setShowTrackingModal(true) }}
                                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue-dk)', fontSize: 13 }}>✎</button>
                                   </div>
@@ -440,6 +481,41 @@ export default function Ems() {
           <button className="modal-btn-cancel" onClick={() => setShowTrackingModal(false)}>취소</button>
           <button className="modal-btn-confirm" onClick={submitTrackingForm} disabled={trackingSaving}>{trackingSaving ? '저장 중...' : '정보 업데이트'}</button>
         </div>
+      </Modal>
+
+      {/* Tracking Detail Modal */}
+      <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={`배송 상세 조회 — ${detailNum}`}>
+        {detailLoading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0' }}>
+            <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>Korea Post API 조회 중...</span>
+          </div>
+        )}
+        {!detailLoading && detailData && !detailData.ok && (
+          <div style={{ color: '#e53935', background: '#fde8e8', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+            오류: {detailData.error}
+          </div>
+        )}
+        {!detailLoading && detailData?.ok && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ background: detailData.statusColor, color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{detailData.statusLabel}</span>
+              <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{detailData.expressType}</span>
+              <span style={{ fontSize: 12, color: 'var(--gray-5)', marginLeft: 'auto' }}>수신: {detailData.receiveName}</span>
+            </div>
+            <div style={{ position: 'relative', paddingLeft: 24 }}>
+              <div style={{ position: 'absolute', left: 7, top: 0, bottom: 0, width: 2, background: 'var(--gray-2)' }} />
+              {(detailData.history || []).slice().reverse().map((evt, i) => (
+                <div key={i} style={{ position: 'relative', marginBottom: 14 }}>
+                  <div style={{ position: 'absolute', left: -20, top: 4, width: 10, height: 10, borderRadius: '50%', background: i === 0 ? detailData.statusColor! : 'var(--gray-3)', border: '2px solid #fff', boxShadow: '0 0 0 1px var(--gray-3)' }} />
+                  <div style={{ fontSize: 11, color: 'var(--gray-5)', marginBottom: 2 }}>{evt.date} {evt.time}</div>
+                  <div style={{ fontSize: 13, fontWeight: i === 0 ? 700 : 400, color: i === 0 ? 'var(--gray-8)' : 'var(--gray-6)' }}>{evt.status}</div>
+                  {evt.location && <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{evt.location}</div>}
+                  {evt.remark && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2, fontStyle: 'italic' }}>{evt.remark}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

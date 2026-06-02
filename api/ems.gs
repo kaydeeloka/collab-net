@@ -126,6 +126,61 @@ function _epostFetch(number) {
   }
 }
 
+// ── Full tracking detail — returns complete event history ─────
+function getTrackingDetail(number) {
+  if (!number) return { ok: false, error: 'Missing tracking number' };
+  const url = EPOST_RELAY_URL + '?rgist=' + encodeURIComponent(number);
+
+  try {
+    const res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const code = res.getResponseCode();
+    if (code !== 200) return { ok: false, error: 'Relay HTTP ' + code };
+
+    const xml  = res.getContentText();
+    const doc  = XmlService.parse(xml);
+    const root = doc.getRootElement();
+
+    const header = root.getChild('header');
+    if (header) {
+      const successYN = (header.getChildText('successYN') || '').trim();
+      if (successYN && successYN !== 'Y') {
+        return { ok: false, error: header.getChildText('errorMessage') || '조회 실패' };
+      }
+    }
+
+    const trackInfo = root.getChild('trackInfo');
+    if (!trackInfo) return { ok: false, error: '추적 정보 없음' };
+
+    const trackState  = (trackInfo.getChildText('trackState')  || '').trim();
+    const statusInfo  = _mapEpostStatus(trackState);
+    const events      = trackInfo.getChildren('detaileTrackList');
+
+    const history = events.map(function(e) {
+      return {
+        date    : (e.getChildText('date')     || '').trim(),
+        time    : (e.getChildText('time')     || '').trim(),
+        status  : (e.getChildText('statue')   || '').trim(),  // API typo
+        location: (e.getChildText('location') || '').trim(),
+        remark  : (e.getChildText('remark')   || '').trim(),
+      };
+    });
+
+    return {
+      ok          : true,
+      regiNo      : (trackInfo.getChildText('regiNo')      || '').trim(),
+      senderName  : (trackInfo.getChildText('senderName')  || '').trim(),
+      receiveName : (trackInfo.getChildText('receiveName') || '').trim(),
+      trackState,
+      expressType : (trackInfo.getChildText('expressType') || '').trim(),
+      statusLabel : statusInfo.label,
+      statusColor : statusInfo.color,
+      history,
+    };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
 // ── Sheet helpers ─────────────────────────────────────────────
 function _getEmsSheet() {
   const ss = SpreadsheetApp.openById(getActiveOutreachId());
@@ -425,7 +480,8 @@ function routeEms(action, p, body) {
     case 'updateTracking':     return updateTracking(b);
     case 'syncOneTracking':    return syncOneTracking(b.number, b.sheetRow);
     case 'syncAllTracking':    return syncAllTracking();
-    case 'addAndSyncTracking': return addAndSyncTracking(b.number, b.sheetRow);
+    case 'addAndSyncTracking':  return addAndSyncTracking(b.number, b.sheetRow);
+    case 'getTrackingDetail':   return getTrackingDetail(b.number || (p && p.number));
     default: return null;
   }
 }
