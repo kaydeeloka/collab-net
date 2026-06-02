@@ -2,29 +2,39 @@
 //  Tab: 인플루언서 모니터링
 // ============================================================
 
-// Column indices (0-based) — must match what influencer_monitor_apify.py writes
+// Column indices (0-based) — matches sheet headers: 플랫폼|계정|핸들|영상일|링크|조회수|좋아요|댓글|최종업데이트
 const MON_C = {
-  INFLUENCER : 0,  // 인플루언서명
-  HANDLE     : 1,  // 핸들
-  PLATFORM   : 2,  // 플랫폼
-  LINK       : 3,  // 리뷰콘텐츠링크
-  DATE       : 4,  // 업로드일자
+  PLATFORM   : 0,  // 플랫폼
+  INFLUENCER : 1,  // 계정 (인플루언서명)
+  HANDLE     : 2,  // 핸들
+  DATE       : 3,  // 영상일
+  LINK       : 4,  // 링크
   VIEWS      : 5,  // 조회수
-  LIKES      : 6,  // 좋아요수
-  COMMENTS   : 7,  // 댓글수
-  KEYWORDS   : 8,  // 감지 키워드
-  UPDATED    : 9,  // 모니터링 실행일
+  LIKES      : 6,  // 좋아요
+  COMMENTS   : 7,  // 댓글
+  UPDATED    : 8,  // 최종업데이트
+  KEYWORDS   : 9,  // 감지 키워드 (optional, may not exist)
 };
 
 const DEFAULT_MON_KEYWORDS = ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', '#mimuse', '#미뮤즈', 'MiMuse Beauty'];
 
 function getMonitoringData() {
   try {
-    const ss  = SpreadsheetApp.openById(MONITORING_SHEET_ID);
-    const ws  = ss.getSheets()[0];
+    // If a dedicated monitoring spreadsheet ID is saved in Script Properties, use it;
+    // otherwise look for the 모니터링 tab in the active outreach spreadsheet.
+    const monId = PropertiesService.getScriptProperties().getProperty('MONITORING_SHEET_ID');
+    let ws;
+    if (monId) {
+      const mss = SpreadsheetApp.openById(monId);
+      ws = mss.getSheetByName(SHEET_MONITORING) || mss.getSheetByName('모니터링') || mss.getSheets()[0];
+    } else {
+      const ss = SpreadsheetApp.openById(getActiveOutreachId());
+      ws = ss.getSheetByName(SHEET_MONITORING) || ss.getSheetByName('모니터링');
+    }
+    if (!ws) return _emptyMonitoring('모니터링 시트를 찾을 수 없습니다. 스프레드시트에 「모니터링」 탭이 있는지 확인하세요.');
     const all = ws.getDataRange().getValues();
 
-    if (all.length < 2) return _emptyMonitoring('No data in sheet');
+    if (all.length < 2) return _emptyMonitoring('데이터가 없습니다.');
 
     const headers = all[0].map(h => h.toString());
     const rows    = all.slice(1).map(r => r.map(c => c.toString()));
@@ -36,8 +46,8 @@ function getMonitoringData() {
 
     const reviewRows  = rows.filter(r => r[C.LINK] && r[C.LINK].startsWith('http'));
     const influencers = [...new Set(rows.map(r => r[C.INFLUENCER]).filter(n => n))];
-    const totalViews  = reviewRows.reduce((s, r) => s + (parseInt(r[C.VIEWS])    || 0), 0);
-    const totalLikes  = reviewRows.reduce((s, r) => s + (parseInt(r[C.LIKES])    || 0), 0);
+    const totalViews  = reviewRows.reduce((s, r) => s + (parseInt(r[C.VIEWS])     || 0), 0);
+    const totalLikes  = reviewRows.reduce((s, r) => s + (parseInt(r[C.LIKES])     || 0), 0);
     const totalComments = reviewRows.reduce((s, r) => s + (parseInt(r[C.COMMENTS]) || 0), 0);
 
     // Count how many times each keyword was detected across all reviews

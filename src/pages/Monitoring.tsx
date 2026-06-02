@@ -3,18 +3,18 @@ import { gasGet, gasPost } from '../lib/api'
 import { fmtNum } from '../lib/utils'
 import Spinner from '../components/Spinner'
 
-// Column indices matching the GAS/Python sheet layout
+// Column indices — matches sheet: 플랫폼|계정|핸들|영상일|링크|조회수|좋아요|댓글|최종업데이트
 const C = {
-  INFLUENCER : 0,
-  HANDLE     : 1,
-  PLATFORM   : 2,
-  LINK       : 3,
-  DATE       : 4,
+  PLATFORM   : 0,
+  INFLUENCER : 1,
+  HANDLE     : 2,
+  DATE       : 3,
+  LINK       : 4,
   VIEWS      : 5,
   LIKES      : 6,
   COMMENTS   : 7,
-  KEYWORDS   : 8,
-  UPDATED    : 9,
+  UPDATED    : 8,
+  KEYWORDS   : 9,
 }
 
 // Keyword badge colours (cycles through this list)
@@ -42,7 +42,7 @@ interface MonitoringData {
 
 export default function Monitoring() {
   const [data,    setData]    = useState<MonitoringData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const [keywords,   setKeywords]   = useState<string[]>([])
   const [kwEditMode, setKwEditMode] = useState(false)
@@ -269,7 +269,14 @@ export default function Monitoring() {
       </div>
 
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
-      {!loading && data?.error && <div className="empty">오류: {data.error}</div>}
+      {!loading && data?.error && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--radius)',
+          color: '#b91c1c', padding: '16px 20px', marginBottom: 16, fontSize: 13,
+        }}>
+          ⚠️ {data.error}
+        </div>
+      )}
       {!loading && !data?.error && (
         filteredRows.length === 0
           ? <div className="empty">감지된 리뷰가 없습니다.</div>
