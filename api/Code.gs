@@ -55,6 +55,7 @@ const FEATURE_ROUTERS = [
   routeMonitoring,
   routeTrend,
   routeBeautyNews,
+  route17Track,
 ];
 
 function _dispatch(action, p, body) {

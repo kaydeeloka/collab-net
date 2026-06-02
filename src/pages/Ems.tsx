@@ -41,13 +41,12 @@ interface TrackingEvent {
 interface TrackingDetail {
   ok: boolean
   error?: string
-  regiNo?: string
-  senderName?: string
-  receiveName?: string
-  trackState?: string
-  expressType?: string
+  number?: string
+  carrier?: string
   statusLabel?: string
   statusColor?: string
+  lastTime?: string
+  lastEvent?: string
   history?: TrackingEvent[]
 }
 
@@ -116,7 +115,7 @@ export default function Ems() {
     setShowDetailModal(true)
     setDetailLoading(true)
     try {
-      const res = await gasPost<TrackingDetail>({ action: 'getTrackingDetail', number: emsNum })
+      const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
       setDetailData(res)
     } catch (e: unknown) {
       setDetailData({ ok: false, error: (e as Error).message })
@@ -344,8 +343,12 @@ export default function Ems() {
                                     <button onClick={() => { setTrackingForm({ rowId: row.rowId, emsNum: row.emsNum, arrival: row.usArrival === '—' ? '' : row.usArrival, registered: row.registered === '—' ? 'No' : row.registered, status: row.statusText || 'Preparing' }); setTrackingName(row.name); setShowTrackingModal(true) }}
                                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue-dk)', fontSize: 13 }}>✎</button>
                                   </div>
-                                  <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${encodeURIComponent(row.emsNum)}#`} target="_blank"
-                                    style={{ fontSize: 11, color: 'var(--blue-dk)' }}>↗ 우체국 조회</a>
+                                  <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
+                                    <a href={`https://t.17track.net/en#nums=${encodeURIComponent(row.emsNum)}`} target="_blank"
+                                      style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
+                                    <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${encodeURIComponent(row.emsNum)}#`} target="_blank"
+                                      style={{ fontSize: 11, color: 'var(--gray-5)' }}>↗ 우체국</a>
+                                  </div>
                                 </div>
                               )
                               : <button onClick={() => { setTrackingForm({ rowId: row.rowId, emsNum: '', arrival: '', registered: 'No', status: 'Preparing' }); setTrackingName(row.name); setShowTrackingModal(true) }}
@@ -485,9 +488,15 @@ export default function Ems() {
 
       {/* Tracking Detail Modal */}
       <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={`배송 상세 조회 — ${detailNum}`}>
+        <div style={{ marginBottom: 12 }}>
+          <a href={`https://t.17track.net/en#nums=${encodeURIComponent(detailNum)}`} target="_blank"
+            style={{ fontSize: 12, color: 'var(--blue-dk)', fontWeight: 600 }}>
+            ↗ 17track에서 전체 조회
+          </a>
+        </div>
         {detailLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0' }}>
-            <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>Korea Post API 조회 중...</span>
+            <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>17track 조회 중...</span>
           </div>
         )}
         {!detailLoading && detailData && !detailData.ok && (
@@ -499,8 +508,8 @@ export default function Ems() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <span style={{ background: detailData.statusColor, color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{detailData.statusLabel}</span>
-              <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{detailData.expressType}</span>
-              <span style={{ fontSize: 12, color: 'var(--gray-5)', marginLeft: 'auto' }}>수신: {detailData.receiveName}</span>
+              {detailData.carrier && <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{detailData.carrier}</span>}
+              {detailData.lastTime && <span style={{ fontSize: 12, color: 'var(--gray-5)', marginLeft: 'auto' }}>{detailData.lastTime}</span>}
             </div>
             <div style={{ position: 'relative', paddingLeft: 24 }}>
               <div style={{ position: 'absolute', left: 7, top: 0, bottom: 0, width: 2, background: 'var(--gray-2)' }} />
