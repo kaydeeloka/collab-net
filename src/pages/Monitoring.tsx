@@ -1,72 +1,128 @@
-import { useEffect, useState } from 'react'
-import { gasGet } from '../lib/api'
+import { useEffect, useState, useCallback } from 'react'
+import { gasGet, gasPost } from '../lib/api'
 import { fmtNum } from '../lib/utils'
 import Spinner from '../components/Spinner'
 
-const DEFAULT_KEYWORDS = ['MiMuse', '미뮤즈', '#MiMuse', '#미뮤즈', 'mimuse', 'MiMuse Beauty']
-const DEFAULT_BRANDS = ['Laneige', 'Innisfree', 'COSRX', 'Glow Recipe', 'Some By Mi']
-
-function loadMonCfg<T>(key: string, def: T): T {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
+// Column indices matching the GAS/Python sheet layout
+const C = {
+  INFLUENCER : 0,
+  HANDLE     : 1,
+  PLATFORM   : 2,
+  LINK       : 3,
+  DATE       : 4,
+  VIEWS      : 5,
+  LIKES      : 6,
+  COMMENTS   : 7,
+  KEYWORDS   : 8,
+  UPDATED    : 9,
 }
-function saveMonCfg<T>(key: string, val: T) { try { localStorage.setItem(key, JSON.stringify(val)) } catch {} }
+
+// Keyword badge colours (cycles through this list)
+const KW_COLORS = [
+  '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#10b981', '#ef4444', '#06b6d4', '#84cc16',
+]
+
+interface MonStats {
+  totalInfluencers : number
+  totalReviews     : number
+  totalViews       : number
+  totalLikes       : number
+  totalComments    : number
+  keywordCounts    : Record<string, number>
+  lastRun          : string
+}
 
 interface MonitoringData {
-  error?: string
-  stats?: { totalInfluencers?: number; mentions?: number }
-  rows?: string[][]
-  headers?: string[]
+  error?   : string
+  headers? : string[]
+  rows?    : string[][]
+  stats?   : MonStats
 }
 
 export default function Monitoring() {
-  const [data, setData] = useState<MonitoringData | null>(null)
+  const [data,    setData]    = useState<MonitoringData | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const [keywords, setKeywords] = useState<string[]>(() => loadMonCfg('mon_keywords', DEFAULT_KEYWORDS))
-  const [brands, setBrands] = useState<string[]>(() => loadMonCfg('mon_brands', DEFAULT_BRANDS))
-
+  const [keywords,   setKeywords]   = useState<string[]>([])
   const [kwEditMode, setKwEditMode] = useState(false)
-  const [bcEditMode, setBcEditMode] = useState(false)
-  const [newKw, setNewKw] = useState('')
-  const [newBc, setNewBc] = useState('')
+  const [newKw,      setNewKw]      = useState('')
+  const [kwSaving,   setKwSaving]   = useState(false)
 
-  const [searchQuery, setSearchQuery] = useState('')
-  const [platformFilter, setPlatformFilter] = useState('all')
-  const [mentionFilter, setMentionFilter] = useState('all')
+  const [searchQuery,     setSearchQuery]     = useState('')
+  const [platformFilter,  setPlatformFilter]  = useState('all')
+  const [keywordFilter,   setKeywordFilter]   = useState('all')
 
-  const [sortCol, setSortCol] = useState('')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  // Map keyword → stable colour for consistent badge colours
+  const kwColorMap = useCallback((kw: string) => {
+    const idx = keywords.indexOf(kw)
+    return KW_COLORS[(idx >= 0 ? idx : kw.charCodeAt(0)) % KW_COLORS.length]
+  }, [keywords])
 
-  useEffect(() => { loadMonitoring() }, [])
+  useEffect(() => {
+    loadMonitoring()
+    loadKeywords()
+  }, [])
 
   async function loadMonitoring() {
     setLoading(true)
     try {
       const d: MonitoringData = await gasGet('getMonitoringData')
       setData(d)
-    } catch (e: unknown) { setData({ error: (e as Error).message }) }
+    } catch (e: unknown) {
+      setData({ error: (e as Error).message })
+    }
     setLoading(false)
   }
 
-  function getColMap(headers: string[]): Record<string, number> {
-    const m: Record<string, number> = {}
-    headers.forEach((h, i) => { m[h.trim().toLowerCase()] = i })
-    return m
+  async function loadKeywords() {
+    try {
+      const kws: string[] = await gasGet('getMonitoringKeywords')
+      setKeywords(kws)
+    } catch {
+      // keep empty
+    }
   }
 
-  const headers = data?.headers || []
-  const cm = getColMap(headers)
-  const rows = (data?.rows || []).filter(r => r && (r[0] || r[1]))
-
-  const filteredRows = rows.filter(r => {
-    const platform = (r[cm['platform'] ?? 2] || '').toLowerCase()
-    if (platformFilter !== 'all') {
-      if (platformFilter === 'tiktok' && !platform.includes('tiktok')) return false
-      if (platformFilter === 'instagram' && !platform.includes('instagram')) return false
+  async function saveKeywords(next: string[]) {
+    setKwSaving(true)
+    try {
+      await gasPost({ action: 'saveMonitoringKeywords', keywords: next })
+    } catch {
+      // silently fail — keywords are still shown from local state
     }
-    const mention = (r[cm['mention'] ?? cm['mimuse mention'] ?? 3] || '').toLowerCase()
-    if (mentionFilter === 'yes' && !mention.includes('yes')) return false
-    if (mentionFilter === 'no' && mention.includes('yes')) return false
+    setKwSaving(false)
+  }
+
+  function addKeyword() {
+    const kw = newKw.trim()
+    if (!kw || keywords.includes(kw)) { setNewKw(''); return }
+    const next = [...keywords, kw]
+    setKeywords(next)
+    setNewKw('')
+    saveKeywords(next)
+  }
+
+  function removeKeyword(kw: string) {
+    const next = keywords.filter(k => k !== kw)
+    setKeywords(next)
+    saveKeywords(next)
+  }
+
+  const rows         = (data?.rows || []).filter(r => r && (r[C.INFLUENCER] || r[C.HANDLE]))
+  const stats        = data?.stats
+  const keywordCounts = stats?.keywordCounts || {}
+
+  const reviewRows = rows.filter(r => r[C.LINK] && r[C.LINK].startsWith('http'))
+
+  const filteredRows = reviewRows.filter(r => {
+    const platform = (r[C.PLATFORM] || '').toLowerCase()
+    if (platformFilter === 'tiktok'    && !platform.includes('tiktok'))    return false
+    if (platformFilter === 'instagram' && !platform.includes('instagram')) return false
+
+    const kws = (r[C.KEYWORDS] || '').toLowerCase()
+    if (keywordFilter !== 'all' && !kws.includes(keywordFilter.toLowerCase())) return false
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (!r.join(' ').toLowerCase().includes(q)) return false
@@ -74,120 +130,140 @@ export default function Monitoring() {
     return true
   })
 
-  const stats = data?.stats || {}
-  const total = stats.totalInfluencers ?? rows.length
-  const mentioned = stats.mentions ?? rows.filter(r => (r[cm['mention'] ?? 3] || '').toLowerCase().includes('yes')).length
-
-  function addKeyword() {
-    if (!newKw.trim() || keywords.includes(newKw.trim())) { setNewKw(''); return }
-    const next = [...keywords, newKw.trim()]
-    setKeywords(next); saveMonCfg('mon_keywords', next); setNewKw('')
-  }
-  function removeKeyword(kw: string) {
-    const next = keywords.filter(k => k !== kw)
-    setKeywords(next); saveMonCfg('mon_keywords', next)
-  }
-  function addBrand() {
-    if (!newBc.trim() || brands.includes(newBc.trim())) { setNewBc(''); return }
-    const next = [...brands, newBc.trim()]
-    setBrands(next); saveMonCfg('mon_brands', next); setNewBc('')
-  }
-  function removeBrand(b: string) {
-    const next = brands.filter(k => k !== b)
-    setBrands(next); saveMonCfg('mon_brands', next)
-  }
-
   return (
     <div className="page page--fill">
+      {/* Banner */}
       <div className="page-banner">
         <span className="page-banner-deco">📡</span>
         <div>
-          <div className="page-banner-title">인플루언서 실시간 모니터링 시스템</div>
-          <div className="page-banner-desc">협업 크리에이터의 TikTok &amp; Instagram 콘텐츠를 자동으로 스캔하여 MiMuse 브랜드 언급 여부를 실시간으로 추적합니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={loadMonitoring}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침 (Sync)</button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="cards">
-        <div className="card"><div className="card-label">모니터링 중</div><div className="card-value">{total}</div></div>
-        <div className="card highlight"><div className="card-label">MiMuse 언급</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{mentioned}</div></div>
-        <div className="card"><div className="card-label">미언급</div><div className="card-value">{total - mentioned}</div></div>
-      </div>
-
-      {/* Keywords & Brand Collab */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        {[
-          {
-            title: '모니터링 키워드', editMode: kwEditMode, setEdit: setKwEditMode,
-            items: keywords, newVal: newKw, setNewVal: setNewKw, onAdd: addKeyword, onRemove: removeKeyword,
-            storageKey: 'mon_keywords', defaults: DEFAULT_KEYWORDS,
-            placeholder: '키워드 입력 후 Enter 또는 + 추가',
-          },
-          {
-            title: '브랜드 협업 목록', editMode: bcEditMode, setEdit: setBcEditMode,
-            items: brands, newVal: newBc, setNewVal: setNewBc, onAdd: addBrand, onRemove: removeBrand,
-            storageKey: 'mon_brands', defaults: DEFAULT_BRANDS,
-            placeholder: '브랜드명 입력 후 Enter 또는 + 추가',
-          },
-        ].map(cfg => (
-          <div key={cfg.title} style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{cfg.title}</div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {!cfg.editMode
-                  ? <button className="cfg-btn" onClick={() => cfg.setEdit(true)}>편집</button>
-                  : <>
-                    <button className="cfg-btn" onClick={() => { cfg.onAdd(); }}>+ 추가</button>
-                    <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => cfg.setEdit(false)}>저장</button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => {
-                      if (confirm('초기화하시겠습니까?')) {
-                        if (cfg.storageKey === 'mon_keywords') { setKeywords([...DEFAULT_KEYWORDS]); saveMonCfg('mon_keywords', DEFAULT_KEYWORDS) }
-                        else { setBrands([...DEFAULT_BRANDS]); saveMonCfg('mon_brands', DEFAULT_BRANDS) }
-                      }
-                    }}>↺</button>
-                  </>
-                }
-              </div>
-            </div>
-            <div>
-              {cfg.items.map(item => (
-                <div key={item} className="cfg-item">
-                  <span style={{ flex: 1, fontSize: 13 }}>{item}</span>
-                  {cfg.editMode && (
-                    <button onClick={() => cfg.onRemove(item)}
-                      style={{ background: 'none', border: 'none', color: 'var(--gray-5)', cursor: 'pointer', fontSize: 13, padding: '0 4px' }}>✕</button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {cfg.editMode && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <input className="mon-add-input" placeholder={cfg.placeholder} value={cfg.newVal} onChange={e => cfg.setNewVal(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); cfg.onAdd() } }} />
-                <button className="cfg-btn" onClick={cfg.onAdd}>추가</button>
-              </div>
+          <div className="page-banner-title">인플루언서 리뷰 모니터링</div>
+          <div className="page-banner-desc">
+            Apify로 최대 50명의 인플루언서 콘텐츠를 스캔하여 키워드 감지 결과를 실시간 추적합니다.
+            {stats?.lastRun && stats.lastRun !== '-' && (
+              <span style={{ marginLeft: 10, color: 'var(--gray-5)', fontSize: 11 }}>
+                마지막 실행: {stats.lastRun}
+              </span>
             )}
           </div>
-        ))}
+        </div>
+        <div className="page-banner-actions">
+          <button className="page-banner-btn page-banner-btn--secondary" onClick={loadMonitoring}>
+            <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+          </button>
+        </div>
+      </div>
+
+      {/* Stats cards */}
+      <div className="cards">
+        <div className="card">
+          <div className="card-label">모니터링 인플루언서</div>
+          <div className="card-value">{stats?.totalInfluencers ?? 0}</div>
+        </div>
+        <div className="card highlight">
+          <div className="card-label">리뷰 감지됨</div>
+          <div className="card-value" style={{ color: 'var(--blue-dk)' }}>{stats?.totalReviews ?? 0}</div>
+        </div>
+        <div className="card">
+          <div className="card-label">총 조회수</div>
+          <div className="card-value">{fmtNum(stats?.totalViews ?? 0)}</div>
+        </div>
+        <div className="card">
+          <div className="card-label">총 좋아요수</div>
+          <div className="card-value">{fmtNum(stats?.totalLikes ?? 0)}</div>
+        </div>
+        <div className="card">
+          <div className="card-label">총 댓글수</div>
+          <div className="card-value">{fmtNum(stats?.totalComments ?? 0)}</div>
+        </div>
+      </div>
+
+      {/* Keyword manager + keyword hit summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+
+        {/* Keyword config */}
+        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+              감지 키워드 설정
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {kwSaving && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>저장 중…</span>}
+              {!kwEditMode
+                ? <button className="cfg-btn" onClick={() => setKwEditMode(true)}>편집</button>
+                : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }}
+                    onClick={() => setKwEditMode(false)}>완료</button>
+              }
+            </div>
+          </div>
+          <div>
+            {keywords.map((kw, i) => (
+              <div key={kw} className="cfg-item">
+                <span style={{
+                  flex: 1, fontSize: 12, fontWeight: 600,
+                  color: KW_COLORS[i % KW_COLORS.length],
+                  background: KW_COLORS[i % KW_COLORS.length] + '18',
+                  padding: '2px 8px', borderRadius: 20,
+                }}>{kw}</span>
+                {kwEditMode && (
+                  <button onClick={() => removeKeyword(kw)}
+                    style={{ background: 'none', border: 'none', color: 'var(--gray-5)', cursor: 'pointer', fontSize: 13, padding: '0 4px' }}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+          {kwEditMode && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <input className="mon-add-input" placeholder="키워드 입력 후 Enter"
+                value={newKw} onChange={e => setNewKw(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }} />
+              <button className="cfg-btn" onClick={addKeyword}>추가</button>
+            </div>
+          )}
+        </div>
+
+        {/* Keyword hit counts */}
+        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>
+            키워드별 감지 횟수
+          </div>
+          {Object.keys(keywordCounts).length === 0 ? (
+            <div style={{ color: 'var(--gray-4)', fontSize: 13 }}>감지된 키워드 없음</div>
+          ) : (
+            Object.entries(keywordCounts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([kw, cnt]) => (
+                <div key={kw} className="cfg-item" style={{ justifyContent: 'space-between' }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 600,
+                    color: kwColorMap(kw),
+                    background: kwColorMap(kw) + '18',
+                    padding: '2px 8px', borderRadius: 20,
+                  }}>{kw}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>{cnt}회</span>
+                </div>
+              ))
+          )}
+        </div>
       </div>
 
       {/* Filters */}
       <div className="filters" style={{ marginBottom: 16 }}>
-        <input type="text" placeholder="이름, 핸들, 키워드로 검색..." value={searchQuery}
+        <input type="text" placeholder="인플루언서명, 핸들, 키워드 검색..." value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 200, maxWidth: 320 }} />
         <div className="filter-group">
           <label>플랫폼:</label>
           {[['all', '전체'], ['tiktok', 'TikTok'], ['instagram', 'Instagram']].map(([v, l]) => (
-            <button key={v} className={'ems-filter-btn' + (platformFilter === v ? ' active' : '')} onClick={() => setPlatformFilter(v)}>{l}</button>
+            <button key={v} className={'ems-filter-btn' + (platformFilter === v ? ' active' : '')}
+              onClick={() => setPlatformFilter(v)}>{l}</button>
           ))}
         </div>
         <div className="filter-group">
-          <label>언급 여부:</label>
-          {[['all', '전체'], ['yes', '언급'], ['no', '미언급']].map(([v, l]) => (
-            <button key={v} className={'ems-filter-btn' + (mentionFilter === v ? ' active' : '')} onClick={() => setMentionFilter(v)}>{l}</button>
+          <label>키워드:</label>
+          <button className={'ems-filter-btn' + (keywordFilter === 'all' ? ' active' : '')}
+            onClick={() => setKeywordFilter('all')}>전체</button>
+          {keywords.map(kw => (
+            <button key={kw} className={'ems-filter-btn' + (keywordFilter === kw ? ' active' : '')}
+              onClick={() => setKeywordFilter(keywordFilter === kw ? 'all' : kw)}>{kw}</button>
           ))}
         </div>
       </div>
@@ -196,55 +272,88 @@ export default function Monitoring() {
       {!loading && data?.error && <div className="empty">오류: {data.error}</div>}
       {!loading && !data?.error && (
         filteredRows.length === 0
-          ? <div className="empty">데이터가 없습니다.</div>
+          ? <div className="empty">감지된 리뷰가 없습니다.</div>
           : (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    {headers.length > 0
-                      ? headers.map(h => <th key={h}>{h}</th>)
-                      : ['핸들', '이름', '플랫폼', '언급 여부', '마지막 콘텐츠', '링크'].map(h => <th key={h}>{h}</th>)}
-                    </tr>
+                    <th>인플루언서명</th>
+                    <th>리뷰콘텐츠링크</th>
+                    <th>업로드일자</th>
+                    <th className="num">조회수</th>
+                    <th className="num">좋아요수</th>
+                    <th className="num">댓글수</th>
+                    <th>감지 키워드</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {filteredRows.map((r, i) => {
-                    const mentionCol = cm['mention'] ?? cm['mimuse mention'] ?? 3
-                    const mentioned = (r[mentionCol] || '').toLowerCase().includes('yes')
+                    const handle   = (r[C.HANDLE]   || '').replace(/^@/, '')
+                    const platform = (r[C.PLATFORM]  || '').toLowerCase()
+                    const isTikTok = platform.includes('tiktok')
+                    const profileUrl = isTikTok
+                      ? `https://www.tiktok.com/@${handle}`
+                      : `https://www.instagram.com/${handle}`
+
+                    const detectedKws = (r[C.KEYWORDS] || '').split(',').map(k => k.trim()).filter(Boolean)
+
                     return (
-                      <tr key={i} className={mentioned ? 'mentioned' : ''}>
-                        {headers.length > 0
-                          ? headers.map((h, ci) => {
-                              const cell = r[ci] || ''
-                              const hl = h.toLowerCase()
-                              if (hl === 'platform') {
-                                const pl = cell.toLowerCase()
-                                return <td key={ci}>
-                                  {pl.includes('tiktok') ? <span className="platform-badge platform-tiktok">TikTok</span>
-                                    : pl.includes('instagram') ? <span className="platform-badge platform-instagram">Instagram</span>
-                                    : <span>{cell}</span>}
-                                </td>
+                      <tr key={i}>
+                        {/* 인플루언서명 */}
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{r[C.INFLUENCER] || '—'}</div>
+                          {handle && (
+                            <a href={profileUrl} target="_blank" rel="noopener"
+                              style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>
+                              @{handle}
+                              {isTikTok
+                                ? <span className="platform-badge platform-tiktok" style={{ marginLeft: 4, fontSize: 9 }}>TK</span>
+                                : <span className="platform-badge platform-instagram" style={{ marginLeft: 4, fontSize: 9 }}>IG</span>
                               }
-                              if (hl.includes('mention')) {
-                                return <td key={ci}>
-                                  {cell.toLowerCase().includes('yes')
-                                    ? <span className="mention-badge">✓ MiMuse 언급</span>
-                                    : <span className="no-mention">—</span>}
-                                </td>
-                              }
-                              if (hl.includes('link') || hl.includes('url') || hl.includes('video')) {
-                                return <td key={ci}>{cell ? <a href={cell} target="_blank" rel="noopener" className="video-link">↗ 보기</a> : '—'}</td>
-                              }
-                              if (hl.includes('follower') || hl.includes('view') || hl.includes('like')) {
-                                return <td key={ci} className="num">{cell ? fmtNum(cell) : '—'}</td>
-                              }
-                              if (hl.includes('handle') || hl.includes('@')) {
-                                return <td key={ci}><a href={`https://www.tiktok.com/@${cell}`} target="_blank" rel="noopener" style={{ color: 'var(--gray-8)', textDecoration: 'none', fontWeight: 500 }}>@{cell}</a></td>
-                              }
-                              return <td key={ci}>{cell || '—'}</td>
-                            })
-                          : <td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)' }}>{r.join(' | ')}</td>
-                        }
+                            </a>
+                          )}
+                        </td>
+
+                        {/* 리뷰콘텐츠링크 */}
+                        <td>
+                          {r[C.LINK]
+                            ? <a href={r[C.LINK]} target="_blank" rel="noopener" className="video-link">↗ 콘텐츠 보기</a>
+                            : '—'}
+                        </td>
+
+                        {/* 업로드일자 */}
+                        <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
+                          {r[C.DATE] || '—'}
+                        </td>
+
+                        {/* 조회수 */}
+                        <td className="num">{r[C.VIEWS] ? fmtNum(r[C.VIEWS]) : '—'}</td>
+
+                        {/* 좋아요수 */}
+                        <td className="num">{r[C.LIKES] ? fmtNum(r[C.LIKES]) : '—'}</td>
+
+                        {/* 댓글수 */}
+                        <td className="num">{r[C.COMMENTS] ? fmtNum(r[C.COMMENTS]) : '—'}</td>
+
+                        {/* 감지 키워드 */}
+                        <td>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {detectedKws.length === 0
+                              ? <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>—</span>
+                              : detectedKws.map(kw => (
+                                <span key={kw} style={{
+                                  fontSize: 11, fontWeight: 600,
+                                  color: kwColorMap(kw),
+                                  background: kwColorMap(kw) + '20',
+                                  border: `1px solid ${kwColorMap(kw)}40`,
+                                  padding: '2px 7px', borderRadius: 20,
+                                  whiteSpace: 'nowrap',
+                                }}>{kw}</span>
+                              ))
+                            }
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}

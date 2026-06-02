@@ -331,7 +331,7 @@ export default function Ems() {
                     <tr>
                       <th>No</th><th>이름</th><th>플랫폼</th><th>팔로워</th><th>이메일</th>
                       <th>협찬품</th><th>배송 주소</th><th>EMS 번호</th>
-                      <th>US 도착</th><th>통관</th><th>상태</th><th>마지막 업데이트</th>
+                      <th>상태</th><th>마지막 업데이트</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -380,14 +380,6 @@ export default function Ems() {
                                   style={{ padding: '3px 10px', background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
                                   + 운송장 입력
                                 </button>}
-                          </td>
-                          <td style={{ fontSize: 12 }}>{row.usArrival}</td>
-                          <td>
-                            {row.registered === '—'
-                              ? <span style={{ color: '#aaa' }}>—</span>
-                              : row.registered === 'Yes'
-                              ? <span style={{ background: '#d1fae5', color: '#065f46', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>Pass</span>
-                              : <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>Pending</span>}
                           </td>
                           <td>
                             {row.statusText

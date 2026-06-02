@@ -1,14 +1,14 @@
 // ============================================================
 //  차수 관리 (Phase Management)
 //  Active spreadsheet ID is stored in Script Properties:
-//    ACTIVE_PHASE        — e.g. "2차"
+//    ACTIVE_PHASE        — e.g. "1차"
 //    ACTIVE_OUTREACH_ID  — Google Spreadsheet ID for active phase
 //    PHASES              — JSON array of all phase records
 // ============================================================
 
 function getPhaseInfo() {
   const props            = PropertiesService.getScriptProperties();
-  const activePhase      = props.getProperty('ACTIVE_PHASE') || '2차';
+  const activePhase      = props.getProperty('ACTIVE_PHASE') || '1차';
   const phases           = JSON.parse(props.getProperty('PHASES') || '[]');
   const activeOutreachId = getActiveOutreachId();
   return {
@@ -112,7 +112,7 @@ function createNewPhase(phaseName) {
     // Archive current phase, then activate new one
     const props        = PropertiesService.getScriptProperties();
     const phases       = JSON.parse(props.getProperty('PHASES') || '[]');
-    const currentPhase = props.getProperty('ACTIVE_PHASE') || '2차';
+    const currentPhase = props.getProperty('ACTIVE_PHASE') || '1차';
     const currentId    = getActiveOutreachId();
 
     if (!phases.find(function(p) { return p.name === currentPhase; })) {
@@ -131,12 +131,12 @@ function createNewPhase(phaseName) {
 }
 
 /**
- * Allowed spreadsheet IDs for the dashboard: legacy 1·2차, every ID in PHASES, and the current active ID.
+ * Allowed spreadsheet IDs for the dashboard: legacy 1·1차, every ID in PHASES, and the current active ID.
  */
 function _collectAllowedOutreachIds(props, phases) {
   const allowed = {};
   allowed[PHASE1_SHEET_ID] = true;
-  allowed[PHASE2_SHEET_ID] = true;
+  allowed[PHASE1_SHEET_ID] = true;
   var cur = (props.getProperty('ACTIVE_OUTREACH_ID') || '').toString().trim();
   if (cur) allowed[cur] = true;
   for (var i = 0; i < phases.length; i++) {
@@ -148,13 +148,12 @@ function _collectAllowedOutreachIds(props, phases) {
 
 function _resolvePhaseLabelForOutreachId(id, props, phases) {
   if (id === PHASE1_SHEET_ID) return '1차';
-  if (id === PHASE2_SHEET_ID) return '2차';
   for (var i = phases.length - 1; i >= 0; i--) {
     if ((phases[i].outreachId || '').toString().trim() === id) {
       return phases[i].name || '차수';
     }
   }
-  return props.getProperty('ACTIVE_PHASE') || '2차';
+  return props.getProperty('ACTIVE_PHASE') || '1차';
 }
 
 /** Switch which spreadsheet all GAS readers use (Script Property ACTIVE_OUTREACH_ID). */
@@ -168,16 +167,6 @@ function setActiveDatabase(outreachId) {
 
   if (!allowed[id]) {
     return { error: '허용되지 않은 스프레드시트 ID입니다. 대시보드에 등록된 DB만 선택할 수 있습니다.' };
-  }
-
-  var curId = (props.getProperty('ACTIVE_OUTREACH_ID') || '').toString().trim();
-  if (id === curId) {
-    return {
-      ok: true,
-      activePhase: props.getProperty('ACTIVE_PHASE') || '2차',
-      activeOutreachId: id,
-      unchanged: true,
-    };
   }
 
   var phaseLabel = _resolvePhaseLabelForOutreachId(id, props, phases);
@@ -211,8 +200,8 @@ function deletePhase(phaseName, trashSheet) {
     if (activeId === PHASE1_SHEET_ID) {
       var fallback = phases.length > 0 ? phases[phases.length - 1] : null;
       var fid = fallback && (fallback.outreachId || '').toString().trim();
-      props.setProperty('ACTIVE_OUTREACH_ID', fid || PHASE2_SHEET_ID);
-      props.setProperty('ACTIVE_PHASE', fallback ? (fallback.name || '2차') : '2차');
+      props.setProperty('ACTIVE_OUTREACH_ID', fid || PHASE1_SHEET_ID);
+      props.setProperty('ACTIVE_PHASE', fallback ? (fallback.name || '1차') : '1차');
     }
     return { ok: true, removed: '1차', activePhase: props.getProperty('ACTIVE_PHASE'), activeOutreachId: props.getProperty('ACTIVE_OUTREACH_ID') };
   }
@@ -253,10 +242,10 @@ function deletePhase(phaseName, trashSheet) {
     var fid      = fallback && (fallback.outreachId || '').toString().trim();
     if (fid) {
       props.setProperty('ACTIVE_OUTREACH_ID', fid);
-      props.setProperty('ACTIVE_PHASE', fallback.name || '2차');
+      props.setProperty('ACTIVE_PHASE', fallback.name || '1차');
     } else {
-      props.setProperty('ACTIVE_OUTREACH_ID', PHASE2_SHEET_ID);
-      props.setProperty('ACTIVE_PHASE', '2차');
+      props.setProperty('ACTIVE_OUTREACH_ID', PHASE1_SHEET_ID);
+      props.setProperty('ACTIVE_PHASE', '1차');
     }
   }
 
@@ -268,6 +257,38 @@ function deletePhase(phaseName, trashSheet) {
   };
 }
 
+/**
+ * Link an existing spreadsheet to a phase name (no new sheet created).
+ * If outreachId is omitted, uses PHASE1_SHEET_ID (1차 데이터베이스).
+ */
+function linkPhase(phaseName, outreachId) {
+  var name = (phaseName || '').toString().trim();
+  if (!name) return { error: '차수 이름이 필요합니다.' };
+
+  var id = (outreachId || '').toString().trim() || PHASE1_SHEET_ID;
+
+  var props  = PropertiesService.getScriptProperties();
+  var phases = JSON.parse(props.getProperty('PHASES') || '[]');
+
+  if (phases.find(function(p) { return p.name === name; })) {
+    return { error: '「' + name + '」은(는) 이미 등록된 차수 이름입니다.' };
+  }
+
+  phases.push({ name: name, outreachId: id, linkedAt: new Date().toISOString() });
+  props.setProperty('PHASES', JSON.stringify(phases));
+
+  return { ok: true, phaseName: name, outreachId: id };
+}
+
+/** Wipe all stored phase records and reset active DB to 1차. */
+function clearPhases() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('PHASES', '[]');
+  props.setProperty('ACTIVE_PHASE', '1차');
+  props.setProperty('ACTIVE_OUTREACH_ID', PHASE1_SHEET_ID);
+  return { ok: true, activePhase: '1차', activeOutreachId: PHASE1_SHEET_ID };
+}
+
 function routePhase(action, p, body) {
   const b = body || {};
   switch (action) {
@@ -275,6 +296,8 @@ function routePhase(action, p, body) {
     case 'createNewPhase':    return createNewPhase(b.phaseName);
     case 'setActiveDatabase': return setActiveDatabase(b.outreachId);
     case 'deletePhase':       return deletePhase(b.phaseName, !!b.trashSheet);
+    case 'linkPhase':         return linkPhase(b.phaseName, b.outreachId);
+    case 'clearPhases':       return clearPhases();
     default: return null;
   }
 }

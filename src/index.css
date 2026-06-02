@@ -143,7 +143,19 @@ td {
 
 /* ── Badges ── */
 .platform-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+.platform-tiktok { background: #010101; color: #fff; }
+.platform-instagram { background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); color: #fff; }
 .mention-badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: var(--blue); color: #fff; }
+.no-mention { color: var(--gray-3); }
+.video-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--blue-lt); color: var(--blue-dk);
+  font-size: 12px; font-weight: 700; text-decoration: none;
+  border: 1px solid var(--blue); transition: background .15s;
+}
+.video-link:hover { background: var(--blue); color: #fff; }
+.mentioned { background: #f0f8ff !important; }
 
 /* ── Empty & Loader states ── */
 .empty {

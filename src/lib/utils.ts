@@ -31,25 +31,21 @@ export function buildPhaseDbOptions(data: {
   activeOutreachId?: string
   activePhase?: string
 }): { id: string; label: string }[] {
-  const activeId = (data.activeOutreachId || '').trim()
   const p1 = (data.phase1SheetId || '').trim()
-  const seen = new Set<string>()
   const opts: { id: string; label: string }[] = []
 
+  // 1차 always appears first — even if the same ID is reused by a phase entry
+  if (p1) opts.push({ id: p1, label: '1차' })
+
+  // Additional linked phases (skip exact 1차 duplicate only)
   ;(data.phases || []).forEach(p => {
     const id = (p.outreachId || '').toString().trim()
-    if (!id || seen.has(id)) return
-    seen.add(id)
-    opts.push({ id, label: p.name || '차수' })
+    const label = (p.name || '차수').trim()
+    if (!id) return
+    // Allow same ID as 1차 if the label is different (user can switch label without changing DB)
+    if (id === p1 && label === '1차') return
+    opts.push({ id, label })
   })
-
-  if (p1 && !seen.has(p1)) {
-    opts.push({ id: p1, label: '1차' })
-    seen.add(p1)
-  }
-  if (activeId && !seen.has(activeId)) {
-    opts.push({ id: activeId, label: data.activePhase || '현재' })
-  }
 
   opts.sort((a, b) => phaseNum(b.label) - phaseNum(a.label))
   return opts

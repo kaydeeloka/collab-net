@@ -2,8 +2,11 @@
 //  MiMuse Dashboard — Shared constants + API entry point
 // ============================================================
 
-const PHASE1_SHEET_ID      = '1xjxGH0sU5pB9WeXevGZBuP-ADvdZHkA2W-jUi727Hm0'; // 1차 레거시 DB
-const PHASE2_SHEET_ID      = '1BVXABKCmUN6ovMUTH2bmWI1zBUXsp11QZxYVD2MsrK0';
+const PHASE1_SHEET_ID      = '1xjxGH0sU5pB9WeXevGZBuP-ADvdZHkA2W-jUi727Hm0'; // 1차 DB
+
+// Monitoring spreadsheet — separate from the outreach DB (populated by influencer_monitor_apify.py)
+// Set MONITORING_SHEET_ID in Script Properties (Project Settings → Script Properties)
+const MONITORING_SHEET_ID = PropertiesService.getScriptProperties().getProperty('MONITORING_SHEET_ID') || '';
 
 const SHEET_K_BEAUTY       = 'K-뷰티';
 const SHEET_GENERAL_BEAUTY = '일반뷰티';
@@ -38,9 +41,9 @@ const COL_TOTAL        = 16;
 function getActiveOutreachId() {
   try {
     const id = PropertiesService.getScriptProperties().getProperty('ACTIVE_OUTREACH_ID');
-    return id || PHASE2_SHEET_ID;
+    return id || PHASE1_SHEET_ID;
   } catch (e) {
-    return PHASE2_SHEET_ID;
+    return PHASE1_SHEET_ID;
   }
 }
 

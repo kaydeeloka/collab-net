@@ -40,6 +40,12 @@ export default function Dashboard() {
   const [newPhaseStatus, setNewPhaseStatus] = useState('')
   const [newPhaseLoading, setNewPhaseLoading] = useState(false)
 
+  const [showLinkPhase, setShowLinkPhase] = useState(false)
+  const [linkName, setLinkName] = useState('')
+  const [linkId, setLinkId] = useState('')
+  const [linkStatus, setLinkStatus] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
+
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState('')
   const [deleteTrash, setDeleteTrash] = useState(false)
@@ -127,7 +133,11 @@ export default function Dashboard() {
 
   async function switchDatabase(id: string) {
     if (!id || id === activeDbId) return
-    reloadAll()
+    // Set spinners only — do NOT start loads yet (race condition: old GETs can overwrite new data)
+    setStatsListup(SPINNER_HTML)
+    setStatsOutreach(SPINNER_HTML)
+    setStatsEms(SPINNER_HTML)
+    setStatsMonitoring(SPINNER_HTML)
     try {
       const r: { error?: string } = await gasPost({ action: 'setActiveDatabase', outreachId: id })
       if (r.error) { showToast(r.error, 'error'); return }
@@ -157,6 +167,30 @@ export default function Dashboard() {
       setNewPhaseStatus('오류: ' + (err as Error).message)
     } finally {
       setNewPhaseLoading(false)
+    }
+  }
+
+  async function confirmLinkPhase() {
+    const name = linkName.trim()
+    if (!name) return
+    setLinkLoading(true)
+    setLinkStatus('연결 중...')
+    try {
+      const result: { error?: string } = await gasPost({ action: 'linkPhase', phaseName: name, outreachId: linkId.trim() || undefined })
+      if (result.error) { setLinkStatus('오류: ' + result.error); return }
+      setLinkStatus('완료!')
+      await loadPhaseInfo()
+      setTimeout(() => {
+        setShowLinkPhase(false)
+        setLinkName('')
+        setLinkId('')
+        setLinkStatus('')
+        showToast(`「${name}」 연결 완료`, 'success')
+      }, 500)
+    } catch (e: unknown) {
+      setLinkStatus('오류: ' + (e as Error).message)
+    } finally {
+      setLinkLoading(false)
     }
   }
 
@@ -237,7 +271,13 @@ export default function Dashboard() {
               </>
             )}
           </div>
-          <button className="new-phase-btn" onClick={() => setShowNewPhase(true)}>+ 새 차수 시작</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="new-phase-btn" onClick={() => setShowNewPhase(true)}>+ 새 차수 시작</button>
+            <button className="new-phase-btn" style={{ background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)' }}
+              onClick={() => { setShowLinkPhase(true); setLinkName(''); setLinkId('') }}>
+              🔗 기존 DB 연결
+            </button>
+          </div>
         </div>
 
         {phaseInfo && (
@@ -355,6 +395,43 @@ export default function Dashboard() {
         {newPhaseStatus && (
           <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>
             {newPhaseStatus}
+          </div>
+        )}
+      </Modal>
+
+      {/* Link Existing DB Modal */}
+      <Modal open={showLinkPhase} onClose={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }} title="기존 DB 연결">
+        <div className="modal-desc">
+          새 스프레드시트를 만들지 않고 <strong>기존 Google Sheets</strong>를 차수로 등록합니다.<br />
+          스프레드시트 ID를 비워두면 <strong>1차 데이터베이스</strong>로 연결됩니다.
+        </div>
+        <label className="modal-label">차수 이름</label>
+        <input
+          className="modal-input"
+          type="text"
+          placeholder="예: 테스트용, 1.5차"
+          maxLength={30}
+          value={linkName}
+          onChange={e => setLinkName(e.target.value)}
+          autoFocus
+        />
+        <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(비우면 1차 DB 사용)</span></label>
+        <input
+          className="modal-input"
+          type="text"
+          placeholder="Google Sheets 스프레드시트 ID"
+          value={linkId}
+          onChange={e => setLinkId(e.target.value)}
+        />
+        <div className="modal-actions">
+          <button className="modal-btn-cancel" onClick={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }}>취소</button>
+          <button className="modal-btn-confirm" onClick={confirmLinkPhase} disabled={linkLoading || !linkName.trim()}>
+            {linkLoading ? '연결 중...' : '연결'}
+          </button>
+        </div>
+        {linkStatus && (
+          <div className="modal-status" style={{ color: linkStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>
+            {linkStatus}
           </div>
         )}
       </Modal>
