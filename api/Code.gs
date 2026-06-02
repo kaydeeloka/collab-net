@@ -28,6 +28,7 @@ const COL_FOLLOW_RATIO = 7;
 const COL_TOTAL_LIKES  = 8;
 const COL_VIDEO_COUNT  = 9;
 const COL_AVG_VIEWS    = 10;
+const COL_TOTAL_VIEWS  = 10;
 const COL_ENGAGE_RATE  = 11;
 const COL_BIO          = 12;
 const COL_PROFILE_URL  = 13;
@@ -48,7 +49,6 @@ function getActiveOutreachId() {
 // Feature routers — each file owns its own routeXxx(action, p, body)
 const FEATURE_ROUTERS = [
   routeListup,
-  routeTcmListup,
   routeOutreach,
   routeOutlook,
   routeConfirmed,

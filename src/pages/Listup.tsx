@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { gasGet, gasPost } from '../lib/api'
-import { fmtNum, escHtml } from '../lib/utils'
+import { fmtNum } from '../lib/utils'
 import Spinner from '../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../components/ConfirmToast'
 
-type ListupTab = 'settings' | 'apify' | 'search' | 'database'
+type ListupTab = 'settings' | 'apify' | 'database'
 
 const DEFAULT_KBEAUTY_KEYWORDS = ['glassskin','kbeauty','koreanbeauty','koreanskincare','kbeautyreview','kbeautyroutine','koreanskincaeroutine','kbeautyproducts','kbeautyaddict','koreanmakeup','oliveyoung','kbeautyskincare']
 const DEFAULT_BEAUTY_KEYWORDS  = ['beautyreview','skincare','makeuptips','beautycreator','beautytok','makeuphaul','beautyhacks','beautyinfluencer']
@@ -74,15 +74,6 @@ export default function Listup() {
   const [apifyResults, setApifyResults] = useState<string[][] | null>(null)
   const [apifyRunId, setApifyRunId] = useState('')
   const [apifyDatasetId, setApifyDatasetId] = useState('')
-
-  // TCM state
-  const [tcmTier, setTcmTier] = useState('')
-  const [tcmKeyword, setTcmKeyword] = useState('')
-  const [tcmTargetCount, setTcmTargetCount] = useState(20)
-  const [tcmLoading, setTcmLoading] = useState(false)
-  const [tcmStatus, setTcmStatus] = useState('')
-  const [tcmResults, setTcmResults] = useState<string[][] | null>(null)
-  const [tcmCategory, setTcmCategory] = useState('')
 
   // DB state
   const [listupData, setListupData] = useState<InfluencerData | null>(null)
@@ -156,41 +147,6 @@ export default function Listup() {
         })
         setListupData({ ...updated })
       }
-    } catch (e: unknown) { alert('오류: ' + (e as Error).message) }
-  }
-
-  // TCM search
-  async function startTcmSearch() {
-    if (!tcmTier) { setTcmStatus('티어를 먼저 선택하세요.'); return }
-    if (!tcmKeyword) { setTcmStatus('키워드를 선택하세요.'); return }
-    setTcmLoading(true)
-    setTcmStatus('탐색 중...')
-    setTcmResults(null)
-    try {
-      const tier = tiers.find(t => t.rank === tcmTier) || {}
-      const res: { error?: string; rows?: string[][]; category?: string; stats?: Record<string, unknown>; tierLabel?: string } = await gasPost({
-        action: 'tcmRunSearch',
-        params: { tierRank: tcmTier, targetCount: tcmTargetCount, keyword: tcmKeyword, minF: (tier as Tier).minF, maxF: (tier as Tier).maxF },
-      })
-      if (res.error) { setTcmStatus('오류: ' + res.error); return }
-      setTcmResults(res.rows || [])
-      setTcmCategory(res.category || '')
-      const st = res.stats || {}
-      setTcmStatus(`완료: ${(res.rows || []).length}명 신규 (${res.tierLabel || tcmTier})`)
-    } catch (e: unknown) { setTcmStatus('오류: ' + (e as Error).message) }
-    setTcmLoading(false)
-  }
-
-  async function saveTcmToSheet() {
-    if (!tcmResults?.length) return
-    const kRows = tcmCategory === 'K-뷰티' ? tcmResults : []
-    const bRows = tcmCategory === '뷰티' ? tcmResults : []
-    try {
-      const res: { error?: string; kCount?: number; bCount?: number; kDupes?: number; bDupes?: number } = await gasPost({ action: 'tcmSaveToSheet', kRows, bRows })
-      if (res.error) { alert('오류: ' + res.error); return }
-      const saved = (res.kCount || 0) + (res.bCount || 0)
-      const dupes = (res.kDupes || 0) + (res.bDupes || 0)
-      alert(`${saved}명 저장${dupes > 0 ? ` (${dupes}명 중복 제외)` : ''}`)
     } catch (e: unknown) { alert('오류: ' + (e as Error).message) }
   }
 
@@ -283,15 +239,13 @@ export default function Listup() {
     )
   }
 
-  const tcmKws = tcmTier ? (tiers.find(t => t.rank === tcmTier)?.tags === 'kbeauty' ? kbeautyKws : beautyKws) : []
-
   return (
     <div className="page page--fill" id="page-listup">
       <div className="page-banner">
         <span className="page-banner-deco">👥</span>
         <div>
           <div className="page-banner-title">인플루언서 리스트업 &amp; 크리에이터 DB 관리</div>
-          <div className="page-banner-desc">Apify 및 TCM을 통해 조건에 맞는 TikTok/Instagram 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
+          <div className="page-banner-desc">Apify를 통해 조건에 맞는 TikTok/Instagram 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
         </div>
         <div className="page-banner-actions">
           <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('apify')}>Apify 탐색</button>
@@ -301,9 +255,9 @@ export default function Listup() {
       </div>
 
       <div className="ftab-bar">
-        {(['settings', 'apify', 'search', 'database'] as ListupTab[]).map((t, i) => (
+        {(['settings', 'apify', 'database'] as ListupTab[]).map((t, i) => (
           <button key={t} className={'ftab' + (activeTab === t ? ' active' : '')} onClick={() => switchTab(t)}>
-            {['크리에이터 조건', 'Apify 탐색', 'TCM 탐색', '인플루언서 DB'][i]}
+            {['크리에이터 조건', 'Apify 탐색', '인플루언서 DB'][i]}
           </button>
         ))}
       </div>
@@ -415,7 +369,7 @@ export default function Listup() {
 
             {/* Keywords */}
             <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 16 }}>키워드 설정 — Apify · TCM 공통</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 16 }}>키워드 설정 — Apify 탐색 공통</div>
               {[
                 { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, storageKey: 'mm_kbeauty_kws', defaults: DEFAULT_KBEAUTY_KEYWORDS },
                 { key: 'beauty', label: '일반뷰티 키워드', kws: beautyKws, editMode: beautyEdit, setEdit: setBeautyEdit, newKw: newBeautyKw, setNewKw: setNewBeautyKw, setKws: setBeautyKws, storageKey: 'mm_beauty_kws', defaults: DEFAULT_BEAUTY_KEYWORDS },
@@ -509,73 +463,6 @@ export default function Listup() {
               <div className="listup-empty-title">티어를 선택하고 Find Creators를 누르세요</div>
               <div className="listup-empty-desc">왼쪽 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.<br />탐색은 클라우드에서 실행되며 2~5분 소요됩니다.</div>
             </div>
-          </div>
-        )}
-
-        {/* TCM Tab */}
-        {activeTab === 'search' && (
-          <div>
-            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>TikTok Creator Marketplace 자동 탐색</div>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 8 }}>탐색할 티어 선택</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {tiers.map(t => (
-                    <button key={t.rank} className={'tcm-tier-btn' + (tcmTier === t.rank ? ' active' : '')} onClick={() => { setTcmTier(t.rank); setTcmKeyword('') }}>
-                      {t.rank}<br /><small>{t.label}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {tcmTier && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 8 }}>검색 키워드 선택</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {tcmKws.map(kw => (
-                      <button key={kw} className={'tcm-kw-btn' + (tcmKeyword === kw ? ' active' : '')} onClick={() => setTcmKeyword(kw)}>{kw}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="filters" style={{ marginBottom: 0 }}>
-                <div className="filter-group">
-                  <label>목표 인원 (이메일 보유)</label>
-                  <input type="number" value={tcmTargetCount} min={5} max={200} style={{ width: 65 }} onChange={e => setTcmTargetCount(+e.target.value)} />
-                </div>
-                <button className="listup-find-btn" onClick={startTcmSearch} disabled={tcmLoading}>TCM 탐색</button>
-                <button className="listup-update-btn" onClick={saveTcmToSheet} disabled={!tcmResults?.length} style={{ opacity: tcmResults?.length ? 1 : .5 }}>시트 저장</button>
-                <span style={{ fontSize: 13, color: 'var(--gray-5)', marginLeft: 4 }}>{tcmLoading && <Spinner sm />} {tcmStatus}</span>
-              </div>
-            </div>
-            {tcmLoading && <div className="loader"><Spinner /></div>}
-            {!tcmLoading && !tcmResults && (
-              <div className="listup-empty-state">
-                <div className="listup-empty-icon">📱</div>
-                <div className="listup-empty-title">티어 선택 후 목표 인원을 입력하고 TCM 탐색 버튼을 누르세요</div>
-              </div>
-            )}
-            {!tcmLoading && tcmResults && tcmResults.length === 0 && <div className="empty">결과가 없습니다.</div>}
-            {!tcmLoading && tcmResults && tcmResults.length > 0 && (
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 10 }}>총 <strong>{tcmResults.length}</strong>명</div>
-                <div className="table-wrap">
-                  <table>
-                    <thead><tr><th>순위</th><th>핸들</th><th>이름</th><th>팔로워</th><th>이메일</th></tr></thead>
-                    <tbody>
-                      {tcmResults.map((r, i) => (
-                        <tr key={i}>
-                          <td><strong>{escHtml(r[1])}</strong></td>
-                          <td>{r[13] ? <a href={r[13]} target="_blank" rel="noopener" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>@{r[2]}</a> : `@${r[2]}`}</td>
-                          <td>{r[3]}</td>
-                          <td className="num">{fmtNum(r[5])}</td>
-                          <td>{r[4] ? <a href={`mailto:${r[4]}`} style={{ color: '#1558b0' }}>{r[4]}</a> : <span style={{ color: 'var(--gray-5)' }}>없음</span>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

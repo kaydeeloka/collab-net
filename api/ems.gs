@@ -6,13 +6,16 @@
 //    EPOST_API_KEY  — 우정사업본부 Open API 인증키 (Decoding 키)
 // ============================================================
 
-// Cloud Run relay in Seoul (asia-northeast3) — proxies to Korea Post API to bypass IP block
-// Replace with your actual Cloud Run URL after deployment
+// Korea Post Open API — GAS cannot reach openapi.epost.go.kr directly (Korean IP restriction).
+// Requests are proxied through a Cloud Run instance in Seoul (asia-northeast3).
 const EPOST_RELAY_URL = 'https://epost-relay-239942119193.asia-northeast3.run.app/track';
-const EPOST_ENDPOINT = 'https://openapi.epost.go.kr/trace/retrieveLongitudinalCombinedService/retrieveLongitudinalCombinedService/getLongitudinalCombinedList';
 
 function _epostApiKey() {
   return PropertiesService.getScriptProperties().getProperty('EPOST_API_KEY');
+}
+
+function _epostUrl(number) {
+  return EPOST_RELAY_URL + '?rgist=' + encodeURIComponent(number);
 }
 
 // ── Status mapping — Korean Post status text → standard label ──
@@ -53,7 +56,7 @@ function _mapEpostStatus(statusText) {
 // 3. View → Logs
 function debugEpostRaw() {
   const number = 'EB091380751KR'; // ← change to real tracking number
-  const url = EPOST_RELAY_URL + '?rgist=' + encodeURIComponent(number);
+  const url = _epostUrl(number);
 
   Logger.log('Request URL: ' + url);
   const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
@@ -66,12 +69,12 @@ function debugEpostRaw() {
 // Note: the API has typos in field names — 'statue' (not status),
 // 'locaiont' (not location), 'detaileTrackList' (not detailTrackList)
 function _epostFetch(number) {
-  const url = EPOST_RELAY_URL + '?rgist=' + encodeURIComponent(number);
+  const url = _epostUrl(number);
 
   try {
     const res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     const code = res.getResponseCode();
-    if (code !== 200) return { error: 'Relay HTTP ' + code };
+    if (code !== 200) return { error: 'HTTP ' + code };
 
     const xml  = res.getContentText();
     const doc  = XmlService.parse(xml);
@@ -129,7 +132,7 @@ function _epostFetch(number) {
 // ── Full tracking detail — returns complete event history ─────
 function getTrackingDetail(number) {
   if (!number) return { ok: false, error: 'Missing tracking number' };
-  const url = EPOST_RELAY_URL + '?rgist=' + encodeURIComponent(number);
+  const url = _epostUrl(number);
 
   try {
     const res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true });

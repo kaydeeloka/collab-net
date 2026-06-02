@@ -15,7 +15,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
+    "baseUrl": "https://mimuse-automation-dashboard.vercel.app/",
     "paths": {
       "@/*": ["./src/*"]
     }
