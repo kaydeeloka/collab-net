@@ -35,8 +35,8 @@ function _expectedPhaseTabNames() {
 function createNewPhase(phaseName) {
   if (!phaseName) return { error: '차수 이름을 입력하세요.' };
   try {
-    /** K-뷰티 / 일반뷰티 공통 1행 헤더 — TCM_LISTUP_HEADERS (tcm-listup.gs) */
-    const LIST_HEADERS = TCM_LISTUP_HEADERS;
+    /** K-뷰티 / 일반뷰티 공통 1행 헤더 — LISTUP_HEADERS (tcm-listup.gs) */
+    const LIST_HEADERS = LISTUP_HEADERS;
 
     /** 배송리스트 — 수령·주소 정보 */
     const DELIVERY_HEADERS = [

@@ -13,9 +13,9 @@ const SHEET_DELIVERY_TRACK = '배송추적';
 const SHEET_MONITORING     = '모니터링';
 
 // Standard influencer sheet column indices (0-based)
-// Matches TCM_LISTUP_HEADERS exactly:
+// Matches LISTUP_HEADERS exactly (16 columns):
 // Timestamp | 순위 | Handle | Display Name | Email | Followers | Following |
-// Following Ratio (%) | Total Likes | Video Count | Avg Views |
+// Following Ratio (%) | Total Likes | Video Count |
 // Engagement Rate (%) | Bio | Profile URL | Outreach | Reply Body | Reply Date
 const COL_TIMESTAMP    = 0;
 const COL_RANK         = 1;
@@ -27,15 +27,13 @@ const COL_FOLLOWING    = 6;
 const COL_FOLLOW_RATIO = 7;
 const COL_TOTAL_LIKES  = 8;
 const COL_VIDEO_COUNT  = 9;
-const COL_AVG_VIEWS    = 10;
-const COL_TOTAL_VIEWS  = 10;
-const COL_ENGAGE_RATE  = 11;
-const COL_BIO          = 12;
-const COL_PROFILE_URL  = 13;
-const COL_OUTREACH     = 14;
-const COL_REPLY_BODY   = 15;
-const COL_REPLY_DATE   = 16;
-const COL_TOTAL        = 17;
+const COL_ENGAGE_RATE  = 10;
+const COL_BIO          = 11;
+const COL_PROFILE_URL  = 12;
+const COL_OUTREACH     = 13;
+const COL_REPLY_BODY   = 14;
+const COL_REPLY_DATE   = 15;
+const COL_TOTAL        = 16;
 
 function getActiveOutreachId() {
   try {

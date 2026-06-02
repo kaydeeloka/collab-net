@@ -218,7 +218,7 @@ export default function Listup() {
                       return cell && cell.includes('@')
                         ? <td key={ci} style={{ background: bg || undefined }}><a href={`mailto:${cell}`} style={{ color: '#1558b0', fontSize: 13 }}>{cell}</a></td>
                         : <td key={ci} style={{ background: bg || undefined }}><span style={{ color: 'var(--gray-5)' }}>{cell || '—'}</span></td>
-                    if ([C.followers, C.following, C.avgView, C.totalLikes, C.videoCount].includes(ci) && !isNaN(parseFloat(cell.replace(/,/g, ''))))
+                    if ([C.followers, C.following, C.totalLikes, C.videoCount, C.engRate].includes(ci) && !isNaN(parseFloat(cell.replace(/,/g, ''))))
                       return <td key={ci} className="num" style={{ background: bg || undefined }}>{fmtNum(cell)}</td>
                     return <td key={ci} style={{ background: bg || undefined }}>{cell}</td>
                   })}

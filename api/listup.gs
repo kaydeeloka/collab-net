@@ -3,6 +3,15 @@
 //  Requires Script Property: APIFY_TOKEN
 // ============================================================
 
+// 16 columns — must match the K-뷰티 / 일반뷰티 sheet headers exactly
+const LISTUP_HEADERS = [
+  'Timestamp', '순위', 'Handle', 'Display Name', 'Email',
+  'Followers', 'Following', 'Following Ratio (%)',
+  'Total Likes', 'Video Count',
+  'Engagement Rate (%)', 'Bio', 'Profile URL',
+  'Outreach', 'Reply Body', 'Reply Date',
+];
+
 function getInfluencerList() {
   try {
     const ss = SpreadsheetApp.openById(getActiveOutreachId());
@@ -10,7 +19,7 @@ function getInfluencerList() {
     const kb = _readInfluencerTab(ss, SHEET_K_BEAUTY);
     const be = _readInfluencerTab(ss, SHEET_GENERAL_BEAUTY);
 
-    // All sheets use the standard 17-column header — colIdx is fixed
+    // All sheets use the standard 16-column header — colIdx is fixed
     const colIdx = kb.colIdx;
 
     const combined = [
@@ -28,7 +37,7 @@ function getInfluencerList() {
       });
       const totalFollowers = items.reduce((s, x) => s + (parseInt(x.row[COL_FOLLOWERS]) || 0), 0);
       result[tier] = {
-        headers  : TCM_LISTUP_HEADERS.slice(),
+        headers  : LISTUP_HEADERS.slice(),
         rows     : items.map(x => x.row),
         rowNums  : items.map(x => x.sheetRow),
         sheetNames: items.map(x => x.sheetName),
@@ -56,7 +65,7 @@ function _readInfluencerTab(ss, tabName) {
   const totalFollowers = rowsWithIdx.reduce((s, { row: r }) => s + (parseInt(r[COL_FOLLOWERS]) || 0), 0);
 
   return {
-    headers : TCM_LISTUP_HEADERS.slice(),
+    headers : LISTUP_HEADERS.slice(),
     rows    : rowsWithIdx.map(x => x.row.map(c => c.toString())),
     rowNums : rowsWithIdx.map(x => x.sheetRow),
     colIdx  : {
@@ -64,12 +73,12 @@ function _readInfluencerTab(ss, tabName) {
       handle    : COL_HANDLE,
       followers : COL_FOLLOWERS,
       following : COL_FOLLOWING,
-      avgView   : COL_AVG_VIEWS,
       rank      : COL_RANK,
       email     : COL_EMAIL,
       outreach  : COL_OUTREACH,
       totalLikes: COL_TOTAL_LIKES,
       videoCount: COL_VIDEO_COUNT,
+      engRate   : COL_ENGAGE_RATE,
     },
     stats   : { total: rowsWithIdx.length, totalFollowers },
     sheetTabName,
@@ -200,7 +209,7 @@ function appendCreatorsToSheet(creators, rank, sheetName) {
     var ws = ss.getSheetByName(target);
     if (!ws) return { error: (sheetName || '시트') + '를 찾을 수 없습니다.' };
     // Always write the canonical headers to row 1
-    ws.getRange(1, 1, 1, TCM_LISTUP_HEADERS.length).setValues([TCM_LISTUP_HEADERS]);
+    ws.getRange(1, 1, 1, LISTUP_HEADERS.length).setValues([LISTUP_HEADERS]);
     ws.setFrozenRows(1);
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     const rows = creators.map(c => [
@@ -214,7 +223,6 @@ function appendCreatorsToSheet(creators, rank, sheetName) {
       c.ratio,      // Following Ratio (%)
       c.totalLikes, // Total Likes
       c.videoCount, // Video Count
-      c.avgViews,   // Avg Views
       c.engRate,    // Engagement Rate (%)
       c.bio,        // Bio
       c.profileUrl, // Profile URL

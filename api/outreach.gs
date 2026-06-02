@@ -86,7 +86,7 @@ function getOutreachData() {
       const sent    = items.filter(x => ['yes','reply','negotiate','reject','accept'].includes((x.row[COL_OUTREACH] || '').toLowerCase())).length;
       const replied = items.filter(x => ['reply','negotiate','reject','accept'].includes((x.row[COL_OUTREACH] || '').toLowerCase())).length;
       result[tier] = {
-        headers  : TCM_LISTUP_HEADERS.slice(),
+        headers  : LISTUP_HEADERS.slice(),
         rows     : items.map(x => x.row),
         rowNums  : items.map(x => x.sheetRow),
         sheetNames: items.map(x => x.sheetName),
