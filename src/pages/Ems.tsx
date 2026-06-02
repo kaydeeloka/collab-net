@@ -41,6 +41,7 @@ interface TrackingEvent {
 interface TrackingDetail {
   ok: boolean
   error?: string
+  pending?: boolean
   number?: string
   carrier?: string
   statusLabel?: string
@@ -204,47 +205,71 @@ export default function Ems() {
   const tcm = trackingData ? buildColMap(trackingData.headers || []) : {}
   const ccm = clientData ? buildColMap(clientData.headers || []) : {}
 
-  const clientMap: Record<string, string[]> = {}
+  // Build client lookups — by email AND by name (fallback)
+  const clientByEmail: Record<string, string[]> = {}
+  const clientByName: Record<string, string[]> = {}
   ;(clientData?.rows || []).forEach(r => {
-    const key = (r[ccm['e-mail'] ?? ccm['email'] ?? 5] || '').trim().toLowerCase()
-    if (key) clientMap[key] = r
+    const email = (r[ccm['e-mail'] ?? ccm['email'] ?? 5] || '').trim().toLowerCase()
+    const name  = (r[ccm['name'] ?? 3] || '').trim().toLowerCase()
+    if (email) clientByEmail[email] = r
+    if (name)  clientByName[name]   = r
   })
-  const trackingMap: Record<string, string[]> = {}
+
   const emailCol = trackingData?.emailCol ?? tcm['email address'] ?? tcm['email'] ?? -1
-  ;(trackingData?.rows || []).forEach((r, i) => {
-    const key = emailCol >= 0 ? (r[emailCol] || '').trim().toLowerCase() : '__row_' + i
-    if (key) trackingMap[key] = r
-  })
+  const trackingRows = trackingData?.rows || []
 
-  let allEmails = Array.from(new Set([...Object.keys(clientMap), ...Object.keys(trackingMap)]))
-  if (allEmails.length === 0 && (trackingData?.rows || []).length > 0) {
-    ;(trackingData?.rows || []).forEach((r, i) => { const k = '__row_' + i; trackingMap[k] = r; allEmails.push(k) })
-  }
+  // Track which clients have been matched so we don't show them as "client-only"
+  const matchedClientEmails = new Set<string>()
 
-  const statusColors = trackingData?.statusColors || STATUS_COLORS
+  const trackingCombined: CombinedRow[] = trackingRows.map((t, i) => {
+    const tEmail = emailCol >= 0 ? (t[emailCol] || '').trim().toLowerCase() : ''
+    const tName  = (t[tcm['name'] ?? 0] || '').trim().toLowerCase()
 
-  const combinedRows: CombinedRow[] = allEmails.map(email => {
-    const c = clientMap[email] || null
-    const t = trackingMap[email] || null
-    const statusText = t ? (t[tcm['status'] ?? 5] || '') : ''
+    // Match client: email first, then name fallback
+    const c = (tEmail && clientByEmail[tEmail]) || (tName && clientByName[tName]) || null
 
+    if (c) {
+      const cEmail = (c[ccm['e-mail'] ?? ccm['email'] ?? 5] || '').trim().toLowerCase()
+      if (cEmail) matchedClientEmails.add(cEmail)
+    }
+
+    const email = tEmail || `__row_${i}`
+    const statusText = t[tcm['status'] ?? 4] || ''
     return {
       email,
-      name: (c ? c[ccm['name'] ?? 3] : '') || (t ? t[tcm['name'] ?? 1] : '') || '',
+      name: (t[tcm['name'] ?? 0] || '') || (c ? c[ccm['name'] ?? 3] : '') || '',
       handle: c ? (c[ccm['handle'] ?? ccm['account'] ?? 1] || '') : '',
       platform: c ? (c[ccm['platform'] ?? 0] || '') : '',
       follower: c ? (c[ccm['followers'] ?? ccm['follower'] ?? 2] || '—') : '—',
       fullAddr: c ? [c[ccm['address line 1'] ?? 6], c[ccm['address line 2'] ?? 7], c[ccm['city'] ?? 8], ((c[ccm['state'] ?? 9] || '') + ' ' + (c[ccm['zip'] ?? 10] || '')).trim(), c[ccm['country'] ?? 11]].filter(Boolean).join(', ') : '',
       product: c ? (c[ccm['product'] ?? ccm['협찬품'] ?? 13] || '') : '',
-      rowId: t ? (t[tcm['no'] ?? 0] || '') : '',
-      emsNum: t ? (t[tcm['ems number'] ?? tcm['ems_number'] ?? 2] || '') : '',
-      usArrival: t ? (t[tcm['us arrival'] ?? 3] || '—') : '—',
-      registered: t ? (t[tcm['registered?'] ?? tcm['registered'] ?? 4] || 'No') : '—',
+      rowId: t[tcm['no'] ?? 0] || String(i + 1),
+      emsNum: t[tcm['ems number'] ?? tcm['ems_number'] ?? 1] || '',
+      usArrival: t[tcm['us arrival'] ?? 2] || '—',
+      registered: t[tcm['registered?'] ?? tcm['registered'] ?? 3] || 'No',
       statusText,
-      lastUpdate: t ? (t[tcm['last update'] ?? 6] || '—') : '—',
-      emailSent: t ? (t[tcm['email sent?'] ?? tcm['email sent'] ?? 7] || 'No') : '—',
+      lastUpdate: t[tcm['last update (17track)'] ?? tcm['last update'] ?? 5] || '—',
+      emailSent: t[tcm['email sent?'] ?? tcm['email sent'] ?? 6] || 'No',
     }
-  }).filter(row => {
+  })
+
+  // Client-only rows: clients with no matching tracking row
+  const clientOnlyCombined: CombinedRow[] = Object.entries(clientByEmail)
+    .filter(([email]) => !matchedClientEmails.has(email))
+    .map(([email, c]) => ({
+      email,
+      name: c[ccm['name'] ?? 3] || '',
+      handle: c[ccm['handle'] ?? ccm['account'] ?? 1] || '',
+      platform: c[ccm['platform'] ?? 0] || '',
+      follower: c[ccm['followers'] ?? ccm['follower'] ?? 2] || '—',
+      fullAddr: [c[ccm['address line 1'] ?? 6], c[ccm['address line 2'] ?? 7], c[ccm['city'] ?? 8], ((c[ccm['state'] ?? 9] || '') + ' ' + (c[ccm['zip'] ?? 10] || '')).trim(), c[ccm['country'] ?? 11]].filter(Boolean).join(', '),
+      product: c[ccm['product'] ?? ccm['협찬품'] ?? 13] || '',
+      rowId: '', emsNum: '', usArrival: '—', registered: '—', statusText: '', lastUpdate: '—', emailSent: '—',
+    }))
+
+  const statusColors = trackingData?.statusColors || STATUS_COLORS
+
+  const combinedRows: CombinedRow[] = [...trackingCombined, ...clientOnlyCombined].filter(row => {
     if (filterStatus !== 'all' && row.statusText !== filterStatus) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -346,7 +371,7 @@ export default function Ems() {
                                   <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
                                     <a href={`https://t.17track.net/en#nums=${encodeURIComponent(row.emsNum)}`} target="_blank"
                                       style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
-                                    <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${encodeURIComponent(row.emsNum)}#`} target="_blank"
+                                    <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${row.emsNum}`} target="_blank"
                                       style={{ fontSize: 11, color: 'var(--gray-5)' }}>↗ 우체국</a>
                                   </div>
                                 </div>
@@ -487,44 +512,75 @@ export default function Ems() {
       </Modal>
 
       {/* Tracking Detail Modal */}
-      <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={`배송 상세 조회 — ${detailNum}`}>
-        <div style={{ marginBottom: 12 }}>
-          <a href={`https://t.17track.net/en#nums=${encodeURIComponent(detailNum)}`} target="_blank"
-            style={{ fontSize: 12, color: 'var(--blue-dk)', fontWeight: 600 }}>
-            ↗ 17track에서 전체 조회
-          </a>
-        </div>
+      <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={detailNum}>
         {detailLoading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0' }}>
-            <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>17track 조회 중...</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '24px 0' }}>
+            <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>조회 중...</span>
           </div>
         )}
+
         {!detailLoading && detailData && !detailData.ok && (
-          <div style={{ color: '#e53935', background: '#fde8e8', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
-            오류: {detailData.error}
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              maxHeight: 200, overflowY: 'auto', background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
+              {detailData.error}
+            </div>
+            <a href={`https://t.17track.net/en#nums=${encodeURIComponent(detailNum)}`} target="_blank"
+              style={{ display: 'inline-block', background: '#1e88e5', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+              ↗ 17track에서 조회
+            </a>
           </div>
         )}
-        {!detailLoading && detailData?.ok && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ background: detailData.statusColor, color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{detailData.statusLabel}</span>
-              {detailData.carrier && <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{detailData.carrier}</span>}
-              {detailData.lastTime && <span style={{ fontSize: 12, color: 'var(--gray-5)', marginLeft: 'auto' }}>{detailData.lastTime}</span>}
-            </div>
-            <div style={{ position: 'relative', paddingLeft: 24 }}>
-              <div style={{ position: 'absolute', left: 7, top: 0, bottom: 0, width: 2, background: 'var(--gray-2)' }} />
-              {(detailData.history || []).slice().reverse().map((evt, i) => (
-                <div key={i} style={{ position: 'relative', marginBottom: 14 }}>
-                  <div style={{ position: 'absolute', left: -20, top: 4, width: 10, height: 10, borderRadius: '50%', background: i === 0 ? detailData.statusColor! : 'var(--gray-3)', border: '2px solid #fff', boxShadow: '0 0 0 1px var(--gray-3)' }} />
-                  <div style={{ fontSize: 11, color: 'var(--gray-5)', marginBottom: 2 }}>{evt.date} {evt.time}</div>
-                  <div style={{ fontSize: 13, fontWeight: i === 0 ? 700 : 400, color: i === 0 ? 'var(--gray-8)' : 'var(--gray-6)' }}>{evt.status}</div>
-                  {evt.location && <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{evt.location}</div>}
-                  {evt.remark && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2, fontStyle: 'italic' }}>{evt.remark}</div>}
+
+        {!detailLoading && detailData?.ok && (() => {
+          const events = (detailData.history || []).slice().reverse()
+          const latest = events[0]
+          return (
+            <div>
+              {/* Status header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: detailData.statusColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ color: '#fff', fontSize: 16 }}>✓</span>
                 </div>
-              ))}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--gray-8)' }}>{detailData.statusLabel}</div>
+                  {detailData.carrier && <div style={{ fontSize: 12, color: 'var(--gray-5)' }}>{detailData.carrier}</div>}
+                </div>
+                <a href={`https://t.17track.net/en#nums=${encodeURIComponent(detailNum)}`} target="_blank"
+                  style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--blue-dk)', textDecoration: 'none' }}>↗ 17track</a>
+              </div>
+              {detailData.lastTime && (
+                <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 16, paddingLeft: 46 }}>
+                  Last update: {detailData.lastTime}
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 16, marginBottom: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)', marginBottom: 14 }}>Shipping Events</div>
+              </div>
+
+              <div style={{ position: 'relative', paddingLeft: 28 }}>
+                <div style={{ position: 'absolute', left: 8, top: 4, bottom: 4, width: 2, background: 'var(--gray-2)' }} />
+                {events.map((evt, i) => (
+                  <div key={i} style={{ position: 'relative', marginBottom: 20 }}>
+                    <div style={{
+                      position: 'absolute', left: -24, top: 2, width: 14, height: 14, borderRadius: '50%',
+                      background: i === 0 ? detailData.statusColor! : '#fff',
+                      border: `2px solid ${i === 0 ? detailData.statusColor! : 'var(--gray-3)'}`,
+                    }} />
+                    <div style={{ fontSize: 13, fontWeight: i === 0 ? 700 : 500, color: i === 0 ? detailData.statusColor! : 'var(--blue-dk)', marginBottom: 2 }}>
+                      {evt.status}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
+                      {evt.date}{evt.time ? ' ' + evt.time : ''}
+                    </div>
+                    {evt.location && <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{evt.location}</div>}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </Modal>
     </div>
   )
