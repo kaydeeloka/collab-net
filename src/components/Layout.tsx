@@ -20,18 +20,18 @@ interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefi
 
 const GROUPS: SideGroup[] = [
   {
-    label: 'HOME', icon: <Home size={18} />, defaultTo: '/', prefix: '/',
+    label: 'HOME', icon: <Home size={22} />, defaultTo: '/', prefix: '/',
     children: [],
   },
   {
-    label: 'TREND', icon: <TrendingUp size={18} />, defaultTo: '/trend/news', prefix: '/trend',
+    label: 'TREND', icon: <TrendingUp size={22} />, defaultTo: '/trend/news', prefix: '/trend',
     children: [
       { to: '/trend/news',   label: '뉴스 트렌드 분석' },
       { to: '/trend/tiktok', label: '틱톡 트렌드 분석' },
     ],
   },
   {
-    label: 'INFLUENCER', icon: <Users size={18} />, defaultTo: '/influencer/search', prefix: '/influencer',
+    label: 'INFLUENCER', icon: <Users size={22} />, defaultTo: '/influencer/search', prefix: '/influencer',
     children: [
       {
         to: '/influencer/search', label: '인플루언서 서치',
@@ -59,7 +59,7 @@ const GROUPS: SideGroup[] = [
     ],
   },
   {
-    label: 'BRAND', icon: <Building2 size={18} />, defaultTo: '/brand/db', prefix: '/brand',
+    label: 'BRAND', icon: <Building2 size={22} />, defaultTo: '/brand/db', prefix: '/brand',
     children: [
       {
         to: '/brand/db', label: '브랜드 DB',
@@ -86,7 +86,7 @@ const GROUPS: SideGroup[] = [
     ],
   },
   {
-    label: 'KIT', icon: <Package size={18} />, defaultTo: '/kit/ems', prefix: '/kit',
+    label: 'KIT', icon: <Package size={22} />, defaultTo: '/kit/ems', prefix: '/kit',
     children: [
       {
         to: '/kit/ems', label: 'EMS 배송 추적',
@@ -105,7 +105,7 @@ const GROUPS: SideGroup[] = [
     ],
   },
   {
-    label: 'MONITORING', icon: <Activity size={18} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
+    label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
     children: [
       {
         to: '/monitoring/reviews', label: '리뷰 모니터링',
@@ -285,7 +285,7 @@ export default function Layout() {
             onClick={() => setCollapsed(c => !c)}
             title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
           >
-            {collapsed ? '›' : '‹'}
+            {collapsed ? '☰' : '‹'}
           </button>
         </div>
 
@@ -341,14 +341,14 @@ export default function Layout() {
             className="sidebar-website-btn"
             title="미뮤즈 웹사이트"
           >
-            {collapsed ? <Globe size={20} /> : '미뮤즈 웹사이트'}
+            {collapsed ? <Globe size={22} /> : '미뮤즈 웹사이트'}
           </a>
           <button
             className="sidebar-phase-btn"
             onClick={() => setShowManage(true)}
             title="차수 관리"
           >
-            {collapsed ? <Settings size={20} /> : '차수관리'}
+            {collapsed ? <Settings size={22} /> : '차수관리'}
           </button>
         </div>
       </aside>
