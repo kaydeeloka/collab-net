@@ -1,35 +1,37 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Home, TrendingUp, Users, Building2, Package, Activity } from 'lucide-react'
 import { gasGet } from '../lib/api'
 import { useKrClock } from '../lib/utils'
 
-interface PhaseInfo    { ok: boolean; activePhase?: string }
-interface NavSubChild  { label: string; to: string }
-interface NavChild     { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
-interface NavGroup     { label: string; children: NavChild[] }
+interface PhaseInfo   { ok: boolean; activePhase?: string }
+interface NavSubChild { label: string; to: string }
+interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
+interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
 
-const NAV: NavGroup[] = [
+const GROUPS: SideGroup[] = [
   {
-    label: 'HOME',
+    label: 'HOME', icon: <Home size={18} />, defaultTo: '/', prefix: '/',
     children: [
-      { to: '/',                       label: '대시보드',              end: true },
-      { to: '/home/dday',              label: 'D-DAY (발송/마감)'               },
-      { to: '/home/trend-summary',     label: '오늘의 트렌드 요약'              },
-      { to: '/home/influencer-status', label: '인플루언서 현황'                 },
-      { to: '/home/brand-status',      label: '브랜드 현황'                     },
-      { to: '/home/delivery-status',   label: '배송 현황'                       },
-      { to: '/home/review-upload',     label: '리뷰 업로드 현황'                },
+      { to: '/',                       label: '대시보드',          end: true },
+      { to: '/home/dday',              label: 'D-DAY (발송/마감)'           },
+      { to: '/home/trend-summary',     label: '오늘의 트렌드 요약'          },
+      { to: '/home/influencer-status', label: '인플루언서 현황'             },
+      { to: '/home/brand-status',      label: '브랜드 현황'                 },
+      { to: '/home/delivery-status',   label: '배송 현황'                   },
+      { to: '/home/review-upload',     label: '리뷰 업로드 현황'            },
     ],
   },
   {
-    label: 'TREND',
+    label: 'TREND', icon: <TrendingUp size={18} />, defaultTo: '/trend/news', prefix: '/trend',
     children: [
       { to: '/trend/news',   label: '뉴스 트렌드 분석' },
       { to: '/trend/tiktok', label: '틱톡 트렌드 분석' },
     ],
   },
   {
-    label: 'INFLUENCER',
+    label: 'INFLUENCER', icon: <Users size={18} />, defaultTo: '/influencer/search', prefix: '/influencer',
     children: [
       {
         to: '/influencer/search', label: '인플루언서 서치',
@@ -57,7 +59,7 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'BRAND',
+    label: 'BRAND', icon: <Building2 size={18} />, defaultTo: '/brand/db', prefix: '/brand',
     children: [
       {
         to: '/brand/db', label: '브랜드 DB',
@@ -84,7 +86,7 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'KIT',
+    label: 'KIT', icon: <Package size={18} />, defaultTo: '/kit/ems', prefix: '/kit',
     children: [
       {
         to: '/kit/ems', label: 'EMS 배송 추적',
@@ -103,7 +105,7 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'MONITORING',
+    label: 'MONITORING', icon: <Activity size={18} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
     children: [
       {
         to: '/monitoring/reviews', label: '리뷰 모니터링',
@@ -131,20 +133,24 @@ const NAV: NavGroup[] = [
   },
 ]
 
-function isGroupActive(group: NavGroup, pathname: string) {
-  return group.children.some(c =>
-    c.end ? pathname === c.to : pathname === c.to || pathname.startsWith(c.to + '/')
-  )
+function getActiveGroup(pathname: string) {
+  if (pathname === '/' || pathname.startsWith('/home/')) return 'HOME'
+  for (const g of GROUPS) {
+    if (g.prefix !== '/' && pathname.startsWith(g.prefix)) return g.label
+  }
+  return null
 }
 
 export default function Layout() {
-  const [phaseBadge, setPhaseBadge]   = useState('—')
-  const [navClock,   setNavClock]     = useState('')
-  const [openGroup,  setOpenGroup]    = useState<string | null>(null)
-  const [openSub,    setOpenSub]      = useState<string | null>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const getKrTime  = useKrClock()
+  const [collapsed,     setCollapsed]     = useState(false)
+  const [sideExpanded,  setSideExpanded]  = useState<string | null>(null)
+  const [phaseBadge,    setPhaseBadge]    = useState('—')
+  const [navClock,      setNavClock]      = useState('')
+  const [openSub,       setOpenSub]       = useState<string | null>(null)
+  const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const getKrTime = useKrClock()
   const { pathname } = useLocation()
+  const navigate     = useNavigate()
 
   useEffect(() => {
     const tick = () => { const t = getKrTime(); setNavClock(t.navDate + '  ' + t.navTime) }
@@ -157,112 +163,149 @@ export default function Layout() {
       .catch(() => {})
   }, [])
 
-  // Auto-expand sub-accordion to match current path
+  // Auto-expand the active group in the sidebar when navigating
   useEffect(() => {
-    for (const g of NAV) {
-      for (const c of g.children) {
-        if (c.sub?.some(s => pathname === s.to || pathname.startsWith(s.to + '/'))) {
-          setOpenSub(c.to); return
-        }
-      }
-    }
+    setSideExpanded(getActiveGroup(pathname))
   }, [pathname])
 
-  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
+  useEffect(() => { setOpenSub(null) }, [pathname])
+  useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
 
-  const onEnter = (label: string) => {
-    if (closeTimer.current) clearTimeout(closeTimer.current)
-    setOpenGroup(label)
+  const activeLabel = getActiveGroup(pathname)
+  const activeGroup = GROUPS.find(g => g.label === activeLabel)
+
+  const onSubEnter = (to: string) => {
+    if (subTimer.current) clearTimeout(subTimer.current)
+    setOpenSub(to)
   }
-  const onLeave = () => {
-    closeTimer.current = setTimeout(() => setOpenGroup(null), 200)
+  const onSubLeave = () => {
+    subTimer.current = setTimeout(() => setOpenSub(null), 200)
   }
 
   return (
-    <>
-      <nav>
-        <img className="logo" src="/img/logo-03.png" alt="MiMuse" />
-        <div className="tabs">
-          {NAV.map(group => {
-            const active = isGroupActive(group, pathname)
-            const isOpen = openGroup === group.label
+    <div className={`app-layout${collapsed ? ' app-layout--collapsed' : ''}`}>
+
+      {/* ── Sidebar ── */}
+      <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
+
+        <div className="sidebar-header">
+          {!collapsed && <img className="sidebar-logo" src="/img/logo-03.png" alt="MiMuse" />}
+          <button
+            className="sidebar-toggle"
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
+          >
+            {collapsed ? '›' : '‹'}
+          </button>
+        </div>
+
+        <div className="sidebar-nav">
+          {GROUPS.map(group => {
+            const isActive   = activeLabel === group.label
+            const isExpanded = sideExpanded === group.label && !collapsed
             return (
-              <div
-                key={group.label}
-                className="nav-group"
-                onMouseEnter={() => onEnter(group.label)}
-                onMouseLeave={onLeave}
-              >
+              <div key={group.label} className="sidebar-group">
                 <button
-                  className={'tab' + (active ? ' active' : '')}
-                  onClick={() => setOpenGroup(isOpen ? null : group.label)}
-                  aria-expanded={isOpen}
+                  className={`sidebar-item${isActive ? ' active' : ''}`}
+                  title={collapsed ? group.label : undefined}
+                  onClick={() => {
+                    if (collapsed) { navigate(group.defaultTo); return }
+                    // toggle accordion; navigate to default only when opening
+                    if (!isExpanded) navigate(group.defaultTo)
+                    setSideExpanded(isExpanded ? null : group.label)
+                  }}
                 >
-                  {group.label}<span className="nav-chevron">▾</span>
+                  <span className="sidebar-icon">{group.icon}</span>
+                  <span className="sidebar-label">{group.label}</span>
+                  {!collapsed && (
+                    <span className="sidebar-arrow">{isExpanded ? '▴' : '▾'}</span>
+                  )}
                 </button>
 
-                {isOpen && (
-                  <div className="nav-dropdown">
-                    {group.children.map(child => {
-                      const hasSub  = !!child.sub?.length
-                      const subOpen = openSub === child.to
-                      return (
-                        <div key={child.to}>
-                          <div className="nav-dd-row">
-                            <NavLink
-                              to={child.to}
-                              end={child.end}
-                              onClick={() => hasSub && setOpenSub(subOpen ? null : child.to)}
-                              className={({ isActive }) =>
-                                'nav-dropdown-item' + (isActive ? ' active' : '')
-                              }
-                            >
-                              {child.label}
-                            </NavLink>
-                            {hasSub && (
-                              <button
-                                className="nav-sub-toggle"
-                                onClick={e => {
-                                  e.preventDefault(); e.stopPropagation()
-                                  setOpenSub(subOpen ? null : child.to)
-                                }}
-                                aria-label="toggle sub-menu"
-                              >
-                                {subOpen ? '▴' : '▾'}
-                              </button>
-                            )}
-                          </div>
-
-                          {hasSub && subOpen && (
-                            <div className="nav-dropdown-sub">
-                              {child.sub!.map(s => (
-                                <NavLink
-                                  key={s.to}
-                                  to={s.to}
-                                  className={({ isActive }) =>
-                                    'nav-dropdown-subitem' + (isActive ? ' active' : '')
-                                  }
-                                >
-                                  <span className="nav-dot">•</span>{s.label}
-                                </NavLink>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                {isExpanded && (
+                  <div className="sidebar-children">
+                    {group.children.map(child => (
+                      <NavLink
+                        key={child.to}
+                        to={child.to}
+                        end={child.end}
+                        className={({ isActive }) =>
+                          'sidebar-child' + (isActive ? ' active' : '')
+                        }
+                      >
+                        {child.label}
+                      </NavLink>
+                    ))}
                   </div>
                 )}
               </div>
             )
           })}
         </div>
-        <div className="nav-right">
-          <span className="nav-clock">{navClock}</span>
-          <span className="phase-badge-nav">{phaseBadge}</span>
+
+        <div className="sidebar-footer">
+          {!collapsed && (
+            <>
+              <div className="sidebar-clock">{navClock}</div>
+              <span className="phase-badge-nav">{phaseBadge}</span>
+            </>
+          )}
         </div>
-      </nav>
-      <Outlet />
-    </>
+      </aside>
+
+      {/* ── Main ── */}
+      <div className="main-area">
+
+        {/* Sticky children tab bar */}
+        {activeGroup && (
+          <div className="children-bar">
+            {activeGroup.children.map(child => {
+              const hasSub  = !!child.sub?.length
+              const subOpen = openSub === child.to
+              return (
+                <div
+                  key={child.to}
+                  className="children-bar-group"
+                  onMouseEnter={() => hasSub && onSubEnter(child.to)}
+                  onMouseLeave={() => hasSub && onSubLeave()}
+                >
+                  <NavLink
+                    to={child.to}
+                    end={child.end}
+                    className={({ isActive }) => 'children-bar-tab' + (isActive ? ' active' : '')}
+                  >
+                    {child.label}
+                    {hasSub && <span className="nav-chevron">▾</span>}
+                  </NavLink>
+
+                  {hasSub && subOpen && (
+                    <div className="children-bar-dropdown">
+                      {child.sub!.map(s => (
+                        <NavLink
+                          key={s.to}
+                          to={s.to}
+                          className={({ isActive }) =>
+                            'children-bar-sub-item' + (isActive ? ' active' : '')
+                          }
+                        >
+                          <span className="nav-dot">•</span>{s.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            <div className="children-bar-right">
+              <span className="nav-clock">{navClock}</span>
+              <span className="phase-badge-nav">{phaseBadge}</span>
+            </div>
+          </div>
+        )}
+
+        <Outlet />
+      </div>
+    </div>
   )
 }

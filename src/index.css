@@ -38,85 +38,145 @@ body {
 :focus-visible { outline: 2px solid var(--blue-dk); outline-offset: 2px; }
 button { font-family: inherit; }
 
-/* ── Navigation ── */
-nav {
+/* ── Sidebar + App Layout ── */
+.app-layout { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 200px; flex-shrink: 0;
   background: var(--gray-0);
-  border-bottom: 2px solid var(--blue);
-  padding: 0 28px;
-  display: flex; align-items: center; gap: 32px;
-  height: 58px; position: sticky; top: 0; z-index: 100;
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  border-right: 1px solid var(--gray-3);
+  box-shadow: 2px 0 8px rgba(0,0,0,.05);
+  display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; height: 100vh;
+  z-index: 200; transition: width .25s ease; overflow: hidden;
 }
-.logo { height: 36px; width: auto; }
-.tabs { display: flex; gap: 3px; flex-wrap: wrap; }
-.tab {
-  padding: 7px 16px; border-radius: 20px;
-  font-size: 14px; font-weight: 500; color: var(--gray-5);
-  border: none; background: none;
-  transition: background .15s, color .15s;
-  white-space: nowrap; text-decoration: none; display: inline-block; cursor: pointer;
+.sidebar--collapsed { width: 60px; }
+
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px; height: 56px;
+  border-bottom: 2px solid var(--blue); flex-shrink: 0;
 }
-.tab:hover { background: var(--yellow-lt); color: var(--gray-8); }
-.tab.active { background: var(--yellow); color: var(--gray-8); font-weight: 700; }
+.sidebar-logo { height: 28px; width: auto; flex: 1; min-width: 0; opacity: 1; transition: opacity .2s; }
+.sidebar--collapsed .sidebar-logo { opacity: 0; width: 0; }
 
-/* ── Dropdown nav groups ── */
-.nav-group { position: relative; }
-.nav-chevron { font-size: 9px; opacity: .45; margin-left: 3px; }
-
-.nav-dropdown {
-  position: absolute; top: 100%; left: 0;
-  background: var(--gray-0); border-radius: var(--radius);
-  box-shadow: var(--shadow-md); border: 1px solid var(--gray-3);
-  min-width: 230px; padding: 4px 0;
-  z-index: 200;
+.sidebar-toggle {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border: 1px solid var(--gray-3); border-radius: 8px;
+  background: var(--gray-1); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: var(--gray-6); line-height: 1;
+  transition: background .15s, color .15s, border-color .15s;
 }
+.sidebar-toggle:hover { background: var(--yellow-lt); color: var(--gray-8); border-color: var(--yellow-md); }
 
-/* child row: link + optional toggle arrow */
-.nav-dd-row { display: flex; align-items: stretch; }
-.nav-dropdown-item {
-  flex: 1; display: block; padding: 9px 12px 9px 18px;
-  font-size: 13px; color: var(--gray-6);
-  text-decoration: none; white-space: nowrap;
-  transition: background .1s, color .1s;
+.sidebar-nav { flex: 1; padding: 10px 0; overflow-y: auto; }
+
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 18px; width: 100%;
+  border: none; border-left: 3px solid transparent;
+  background: none; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: .6px;
+  color: var(--gray-5); white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+  text-align: left;
 }
-.nav-dropdown-item:hover { background: var(--yellow-lt); color: var(--gray-8); }
-.nav-dropdown-item.active { background: var(--yellow); color: var(--gray-8); font-weight: 700; }
-
-.nav-sub-toggle {
-  padding: 0 12px; background: none; border: none;
-  cursor: pointer; font-size: 9px; color: var(--gray-5);
-  flex-shrink: 0; transition: color .1s;
+.sidebar-item:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.sidebar-item.active {
+  background: var(--yellow); color: var(--gray-8);
+  border-left-color: var(--yellow-text);
 }
-.nav-sub-toggle:hover { color: var(--gray-8); }
+.sidebar-icon { font-size: 18px; flex-shrink: 0; width: 22px; text-align: center; }
+.sidebar-label { flex: 1; transition: opacity .2s; }
+.sidebar--collapsed .sidebar-label { opacity: 0; }
 
-/* sub-children (accordion) */
-.nav-dropdown-sub {
+.sidebar-arrow { font-size: 9px; opacity: .45; margin-left: auto; flex-shrink: 0; }
+
+.sidebar-children {
   background: var(--gray-1);
-  border-top: 1px solid var(--gray-2); border-bottom: 1px solid var(--gray-2);
+  border-top: 1px solid var(--gray-2);
+  border-bottom: 1px solid var(--gray-2);
 }
-.nav-dropdown-subitem {
-  display: flex; align-items: center; gap: 7px;
-  padding: 7px 18px 7px 28px;
-  font-size: 12px; color: var(--gray-5);
+.sidebar-child {
+  display: block;
+  padding: 13px 16px 13px 52px;
+  font-size: 12px; font-weight: 500; color: var(--gray-5);
+  text-decoration: none; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  border-left: 3px solid transparent;
+  transition: background .1s, color .1s;
+}
+.sidebar-child:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.sidebar-child.active {
+  background: var(--yellow); color: var(--gray-8);
+  font-weight: 700; border-left-color: var(--yellow-text);
+}
+
+.sidebar-footer {
+  padding: 12px 16px; border-top: 1px solid var(--gray-3); flex-shrink: 0;
+}
+.sidebar-clock { font-size: 11px; color: var(--gray-5); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+
+/* ── Main area ── */
+.main-area {
+  flex: 1; margin-left: 200px;
+  transition: margin-left .25s ease;
+  display: flex; flex-direction: column; min-height: 100vh;
+}
+.app-layout.app-layout--collapsed .main-area { margin-left: 60px; }
+
+/* ── Sticky children tab bar ── */
+.children-bar {
+  background: var(--gray-0); border-bottom: 2px solid var(--blue);
+  padding: 0 24px; display: flex; align-items: center; gap: 3px;
+  height: 56px; position: sticky; top: 0; z-index: 150;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06); flex-shrink: 0;
+  /* no overflow here — lets child dropdowns render in front */
+}
+.children-bar-right {
+  margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+
+.children-bar-group { position: relative; }
+.children-bar-tab {
+  display: flex; align-items: center; gap: 3px;
+  padding: 6px 14px; border-radius: 18px;
+  font-size: 13px; font-weight: 500; color: var(--gray-5);
+  text-decoration: none; white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.children-bar-tab:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.children-bar-tab.active { background: var(--yellow); color: var(--gray-8); font-weight: 700; }
+
+.children-bar-dropdown {
+  position: absolute; top: 100%; left: 0;
+  background: var(--gray-0); border: 1px solid var(--gray-3);
+  border-radius: var(--radius); box-shadow: var(--shadow-md);
+  min-width: 230px; padding: 4px 0; z-index: 200;
+}
+.children-bar-sub-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; font-size: 12px; color: var(--gray-6);
   text-decoration: none; white-space: nowrap;
   transition: background .1s, color .1s;
 }
-.nav-dropdown-subitem:hover { background: var(--yellow-lt); color: var(--gray-8); }
-.nav-dropdown-subitem.active { color: var(--blue-dk); font-weight: 700; }
+.children-bar-sub-item:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.children-bar-sub-item.active { color: var(--blue-dk); font-weight: 700; }
+
+/* shared util classes kept for existing pages */
+.nav-chevron { font-size: 9px; opacity: .45; margin-left: 2px; }
 .nav-dot { font-size: 10px; color: var(--gray-4, #bbb); flex-shrink: 0; }
-
-.page { padding: 24px 28px; max-width: 1350px; margin: 0 auto; }
-.page--fill { min-height: calc(100vh - 58px); }
-
+.nav-clock { font-size: 12px; color: var(--gray-5); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .phase-badge-nav {
-  margin-left: auto; font-size: 12px; padding: 4px 12px;
+  font-size: 12px; padding: 4px 12px;
   background: var(--yellow); border-radius: 12px;
   font-weight: 700; color: var(--yellow-text); white-space: nowrap;
   border: 1px solid var(--yellow-md);
 }
-.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.nav-right .phase-badge-nav { margin-left: 0; }
-.nav-clock { font-size: 12px; color: var(--gray-5); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.page { padding: 24px 28px; max-width: 1350px; margin: 0 auto; }
+.page--fill { min-height: calc(100vh - 56px); }
 
 /* ── Stat Cards ── */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
