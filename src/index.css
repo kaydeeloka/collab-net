@@ -789,6 +789,13 @@ td {
   font-family: inherit; transition: border-color .15s;
 }
 .mon-add-input:focus { border-color: var(--teal); background: var(--white); }
+.inline-select {
+  font-size: 11px; padding: 2px 6px; border-radius: 4px;
+  border: 1px solid var(--surface-md); background: var(--gray-0);
+  color: var(--gray-7); cursor: pointer; font-family: inherit;
+  min-width: 72px; max-width: 130px;
+}
+.inline-select:focus { outline: none; border-color: var(--teal); }
 
 /* ─────────────────────────────────────
    ARCHIVE / TRENDS

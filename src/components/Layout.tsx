@@ -397,6 +397,23 @@ export default function Layout() {
               )
             })}
 
+            <div className="children-bar-right">
+              {dbOptions.length > 0 ? (
+                <select
+                  className="phase-select"
+                  value={activeDbId}
+                  onChange={e => switchPhase(e.target.value)}
+                  title="차수 전환"
+                >
+                  {dbOptions.map(o => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="phase-badge-nav">{phaseBadge}</span>
+              )}
+            </div>
+
           </div>
         )}
 

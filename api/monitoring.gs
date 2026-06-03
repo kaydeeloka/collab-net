@@ -16,7 +16,13 @@ const MON_C = {
   KEYWORDS   : 9,  // 감지 키워드 (optional, may not exist)
 };
 
-const DEFAULT_MON_KEYWORDS = ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', '#mimuse', '#미뮤즈', 'MiMuse Beauty'];
+const DEFAULT_BRAND_KEYWORDS = {
+  mimuse:  ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', '#mimuse', '#미뮤즈', 'MiMuse Beauty'],
+  aesthen: ['aesthen', '#aesthen'],
+  joodoc:  ['joodoc', '#joodoc'],
+  nesh:    ['nesh', '#nesh'],
+  varuza:  ['varuza', '#varuza'],
+};
 
 function getMonitoringData() {
   try {
@@ -37,7 +43,10 @@ function getMonitoringData() {
     if (all.length < 2) return _emptyMonitoring('데이터가 없습니다.');
 
     const headers = all[0].map(h => h.toString());
-    const rows    = all.slice(1).map(r => r.map(c => c.toString()));
+    const rows    = all.slice(1).map(r => r.map(c => {
+      if (c instanceof Date) return Utilities.formatDate(c, 'Asia/Seoul', 'yyyy-MM-dd');
+      return c.toString();
+    }));
 
     const C = MON_C;
 
@@ -78,14 +87,23 @@ function getMonitoringData() {
 }
 
 function getMonitoringKeywords() {
-  const props  = PropertiesService.getScriptProperties();
-  const stored = props.getProperty('MONITORING_KEYWORDS');
-  return stored ? JSON.parse(stored) : DEFAULT_MON_KEYWORDS;
+  const props = PropertiesService.getScriptProperties();
+  // New per-brand format
+  const stored = props.getProperty('MONITORING_BRAND_KEYWORDS');
+  if (stored) return JSON.parse(stored);
+  // Backwards compat: migrate old flat array to per-brand under mimuse
+  const oldStored = props.getProperty('MONITORING_KEYWORDS');
+  if (oldStored) return Object.assign({}, DEFAULT_BRAND_KEYWORDS, { mimuse: JSON.parse(oldStored) });
+  return DEFAULT_BRAND_KEYWORDS;
 }
 
-function saveMonitoringKeywords(keywords) {
+function saveMonitoringKeywords(brandKeywords) {
+  // Accept both old flat array (legacy) and new per-brand object
+  const toSave = Array.isArray(brandKeywords)
+    ? Object.assign({}, DEFAULT_BRAND_KEYWORDS, { mimuse: brandKeywords })
+    : brandKeywords;
   PropertiesService.getScriptProperties()
-    .setProperty('MONITORING_KEYWORDS', JSON.stringify(keywords));
+    .setProperty('MONITORING_BRAND_KEYWORDS', JSON.stringify(toSave));
   return { ok: true };
 }
 
@@ -110,7 +128,7 @@ function routeMonitoring(action, p, body) {
   switch (action) {
     case 'getMonitoringData'      : return getMonitoringData();
     case 'getMonitoringKeywords'  : return getMonitoringKeywords();
-    case 'saveMonitoringKeywords' : return saveMonitoringKeywords((body || {}).keywords || []);
+    case 'saveMonitoringKeywords' : return saveMonitoringKeywords((body || {}).brandKeywords || (body || {}).keywords || {});
     default                       : return null;
   }
 }
