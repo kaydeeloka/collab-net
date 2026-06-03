@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { gasGet, gasPost } from '../lib/api'
-import { useToast } from '../contexts/ToastContext'
-import Spinner from '../components/Spinner'
+import { gasGet, gasPost } from '../../../lib/api'
+import { useToast } from '../../../contexts/ToastContext'
+import Spinner from '../../../components/Spinner'
 
 interface ConfirmedData {
   ok?: boolean

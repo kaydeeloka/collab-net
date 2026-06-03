@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { gasGet, gasPost } from '../lib/api'
-import { fmtNum } from '../lib/utils'
-import Spinner from '../components/Spinner'
+import { gasGet, gasPost } from '../../../lib/api'
+import { fmtNum } from '../../../lib/utils'
+import Spinner from '../../../components/Spinner'
 
 // Column indices — matches sheet: 플랫폼|계정|핸들|영상일|링크|조회수|좋아요|댓글|최종업데이트
 const C = {

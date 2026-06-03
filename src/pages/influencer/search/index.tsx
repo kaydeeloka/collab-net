@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { gasGet, gasPost } from '../lib/api'
-import { fmtNum } from '../lib/utils'
-import Spinner from '../components/Spinner'
-import ConfirmToast, { useConfirmToast } from '../components/ConfirmToast'
+import { gasGet, gasPost } from '../../../lib/api'
+import { fmtNum } from '../../../lib/utils'
+import Spinner from '../../../components/Spinner'
+import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 
 type ListupTab = 'settings' | 'apify' | 'database'
 

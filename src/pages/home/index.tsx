@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { gasGet, gasPost } from '../lib/api'
-import { fmtNum, phaseNum, buildPhaseDbOptions, escHtml, useKrClock } from '../lib/utils'
-import { useToast } from '../contexts/ToastContext'
-import Modal from '../components/Modal'
-import Spinner from '../components/Spinner'
+import { gasGet, gasPost } from '../../lib/api'
+import { fmtNum, phaseNum, buildPhaseDbOptions, escHtml, useKrClock } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
+import Modal from '../../components/Modal'
+import Spinner from '../../components/Spinner'
 
 interface PhaseInfo {
   ok: boolean

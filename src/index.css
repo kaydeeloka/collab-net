@@ -59,6 +59,52 @@ nav {
 .tab:hover { background: var(--yellow-lt); color: var(--gray-8); }
 .tab.active { background: var(--yellow); color: var(--gray-8); font-weight: 700; }
 
+/* ── Dropdown nav groups ── */
+.nav-group { position: relative; }
+.nav-chevron { font-size: 9px; opacity: .45; margin-left: 3px; }
+
+.nav-dropdown {
+  position: absolute; top: 100%; left: 0;
+  background: var(--gray-0); border-radius: var(--radius);
+  box-shadow: var(--shadow-md); border: 1px solid var(--gray-3);
+  min-width: 230px; padding: 4px 0;
+  z-index: 200;
+}
+
+/* child row: link + optional toggle arrow */
+.nav-dd-row { display: flex; align-items: stretch; }
+.nav-dropdown-item {
+  flex: 1; display: block; padding: 9px 12px 9px 18px;
+  font-size: 13px; color: var(--gray-6);
+  text-decoration: none; white-space: nowrap;
+  transition: background .1s, color .1s;
+}
+.nav-dropdown-item:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.nav-dropdown-item.active { background: var(--yellow); color: var(--gray-8); font-weight: 700; }
+
+.nav-sub-toggle {
+  padding: 0 12px; background: none; border: none;
+  cursor: pointer; font-size: 9px; color: var(--gray-5);
+  flex-shrink: 0; transition: color .1s;
+}
+.nav-sub-toggle:hover { color: var(--gray-8); }
+
+/* sub-children (accordion) */
+.nav-dropdown-sub {
+  background: var(--gray-1);
+  border-top: 1px solid var(--gray-2); border-bottom: 1px solid var(--gray-2);
+}
+.nav-dropdown-subitem {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 18px 7px 28px;
+  font-size: 12px; color: var(--gray-5);
+  text-decoration: none; white-space: nowrap;
+  transition: background .1s, color .1s;
+}
+.nav-dropdown-subitem:hover { background: var(--yellow-lt); color: var(--gray-8); }
+.nav-dropdown-subitem.active { color: var(--blue-dk); font-weight: 700; }
+.nav-dot { font-size: 10px; color: var(--gray-4, #bbb); flex-shrink: 0; }
+
 .page { padding: 24px 28px; max-width: 1350px; margin: 0 auto; }
 .page--fill { min-height: calc(100vh - 58px); }
 

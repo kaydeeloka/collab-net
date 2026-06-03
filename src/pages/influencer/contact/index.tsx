@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { gasGet, gasPost } from '../lib/api'
-import { fmtNum, escHtml } from '../lib/utils'
-import { useToast } from '../contexts/ToastContext'
-import Spinner from '../components/Spinner'
+import { gasGet, gasPost } from '../../../lib/api'
+import { fmtNum, escHtml } from '../../../lib/utils'
+import { useToast } from '../../../contexts/ToastContext'
+import Spinner from '../../../components/Spinner'
 
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
 

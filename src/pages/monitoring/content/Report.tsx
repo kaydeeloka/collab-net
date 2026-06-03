@@ -1,0 +1,29 @@
+export default function ContentReport() {
+  return (
+    <div className="page page--fill">
+      <div className="page-banner">
+        <span className="page-banner-deco">📋</span>
+        <div>
+          <div className="page-banner-title">최종 수치 확인 후 리포트 작성</div>
+          <div className="page-banner-desc">최종 수치를 기반으로 캠페인 성과 리포트를 작성합니다.</div>
+        </div>
+      </div>
+      <div className="cards">
+        <div className="card"><div className="card-label">리포트 작성 완료</div><div className="card-value">—</div></div>
+        <div className="card"><div className="card-label">작성 중</div><div className="card-value">—</div></div>
+        <div className="card highlight"><div className="card-label">총 리뷰 수</div><div className="card-value">—</div></div>
+        <div className="card"><div className="card-label">총 조회수</div><div className="card-value">—</div></div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>리포트명</th><th>차수</th><th>브랜드</th><th>작성 상태</th><th>리포트 링크</th><th>작성일</th></tr>
+          </thead>
+          <tbody>
+            <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>데이터 없음</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

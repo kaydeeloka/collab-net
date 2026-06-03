@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { gasGet, gasPost } from '../lib/api'
-import { useToast } from '../contexts/ToastContext'
-import Spinner from '../components/Spinner'
-import Modal from '../components/Modal'
+import { gasGet, gasPost } from '../../../lib/api'
+import { useToast } from '../../../contexts/ToastContext'
+import Spinner from '../../../components/Spinner'
+import Modal from '../../../components/Modal'
 
 interface EmsStats {
   total?: number
