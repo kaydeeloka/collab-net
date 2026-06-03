@@ -57,18 +57,18 @@ button { font-family: inherit; }
   padding: 0 14px; height: 56px;
   border-bottom: 2px solid var(--blue); flex-shrink: 0;
 }
-.sidebar-logo { height: 28px; width: auto; flex: 1; min-width: 0; opacity: 1; transition: opacity .2s; }
+.sidebar-logo { height: 40px; width: auto; flex: 1; min-width: 0; opacity: 1; transition: opacity .2s; }
 .sidebar--collapsed .sidebar-logo { opacity: 0; width: 0; }
 
 .sidebar-toggle {
   width: 32px; height: 32px; flex-shrink: 0;
-  border: 1px solid var(--gray-3); border-radius: 8px;
-  background: var(--gray-1); cursor: pointer;
+  border: none; border-radius: 8px;
+  background: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 700; color: var(--gray-6); line-height: 1;
-  transition: background .15s, color .15s, border-color .15s;
+  font-size: 18px; font-weight: 700; color: var(--gray-5); line-height: 1;
+  transition: color .15s;
 }
-.sidebar-toggle:hover { background: var(--yellow-lt); color: var(--gray-8); border-color: var(--yellow-md); }
+.sidebar-toggle:hover { color: var(--gray-8); }
 
 .sidebar-nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 
@@ -118,13 +118,25 @@ button { font-family: inherit; }
 }
 .sidebar-clock { font-size: 11px; color: var(--gray-5); font-variant-numeric: tabular-nums; margin-bottom: 8px; }
 
+.sidebar-website-btn,
 .sidebar-phase-btn {
-  display: flex; align-items: center; gap: 8px;
-  background: none; border: none; cursor: pointer; padding: 0; width: 100%;
+  display: block; width: 100%; text-align: center;
+  padding: 6px 12px; border-radius: 12px; border: 1px solid;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  text-decoration: none; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, opacity .15s;
 }
-.sidebar-phase-btn--collapsed { justify-content: center; }
-.sidebar-phase-manage-txt { font-size: 11px; color: var(--gray-5); white-space: nowrap; }
-.sidebar-phase-btn:hover .sidebar-phase-manage-txt { color: var(--gray-8); }
+
+.sidebar-website-btn {
+  margin-bottom: 8px;
+  background: var(--gray-1); color: var(--gray-6); border-color: var(--gray-3);
+}
+.sidebar-website-btn:hover { background: var(--blue-lt); color: var(--blue-dk); border-color: var(--blue); }
+
+.sidebar-phase-btn {
+  background: var(--yellow); color: var(--yellow-text); border-color: var(--yellow-md);
+}
+.sidebar-phase-btn:hover { opacity: .8; }
 
 /* Phase select in children bar */
 .phase-select {

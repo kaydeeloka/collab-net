@@ -52,7 +52,7 @@ export default function Lock() {
       background: 'linear-gradient(135deg, #fffde7 0%, #f8f9fb 50%, #edf3f6 100%)',
     }}>
       <div style={{ textAlign: 'center', width: 320 }} onClick={() => inputRef.current?.focus()}>
-        <img src="/img/logo-03.png" alt="MiMuse" style={{ height: 72, borderRadius: 20, marginBottom: 16 }} />
+        <img src="/img/logo-black.svg" alt="MiMuse" style={{ height: 72, borderRadius: 20, marginBottom: 16 }} />
         <p style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>beautyproject@cranecomm.com</p>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#333', marginBottom: 28 }}>
           Your MiMuse Dashboard is locked

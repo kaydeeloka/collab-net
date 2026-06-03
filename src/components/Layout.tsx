@@ -22,7 +22,6 @@ const GROUPS: SideGroup[] = [
   {
     label: 'HOME', icon: <Home size={18} />, defaultTo: '/', prefix: '/',
     children: [
-      { to: '/',                       label: '대시보드',          end: true },
       { to: '/home/dday',              label: 'D-DAY (발송/마감)'           },
       { to: '/home/trend-summary',     label: '오늘의 트렌드 요약'          },
       { to: '/home/influencer-status', label: '인플루언서 현황'             },
@@ -287,7 +286,7 @@ export default function Layout() {
       <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
 
         <div className="sidebar-header">
-          {!collapsed && <img className="sidebar-logo" src="/img/logo-03.png" alt="MiMuse" />}
+          {!collapsed && <img className="sidebar-logo" src="/img/logo-black.svg" alt="MiMuse" />}
           <button
             className="sidebar-toggle"
             onClick={() => setCollapsed(c => !c)}
@@ -343,13 +342,21 @@ export default function Layout() {
 
         <div className="sidebar-footer">
           {!collapsed && <div className="sidebar-clock">{navClock}</div>}
+          <a
+            href="https://mimuse.imweb.me/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sidebar-website-btn"
+            title="미뮤즈 웹사이트"
+          >
+            {collapsed ? '🌐' : '미뮤즈 웹사이트'}
+          </a>
           <button
-            className={`sidebar-phase-btn${collapsed ? ' sidebar-phase-btn--collapsed' : ''}`}
+            className="sidebar-phase-btn"
             onClick={() => setShowManage(true)}
             title="차수 관리"
           >
-            <span className="phase-badge-nav">{phaseBadge}</span>
-            {!collapsed && <span className="sidebar-phase-manage-txt">차수 관리</span>}
+            차수관리
           </button>
         </div>
       </aside>
