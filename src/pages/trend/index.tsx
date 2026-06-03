@@ -178,7 +178,7 @@ export default function Trends() {
       const htmlBody = buildEmailHtml(bnReport)
       const result: { ok: boolean; sent?: number; error?: string } = await gasPost({ action: 'sendBeautyNewsEmail', recipients: rcpts, htmlBody, subject })
       if (!result.ok) throw new Error(result.error || '발송 실패')
-      setEmailStatus('✓ ' + result.sent + '명에게 발송 완료')
+      setEmailStatus('완료 — ' + result.sent + '명에게 발송 완료')
     } catch (e: unknown) {
       setEmailStatus('오류: ' + (e as Error).message)
     }
@@ -213,7 +213,7 @@ export default function Trends() {
     }
     if (data.keywords) {
       h += `<div style="background:#fff3cd;border-radius:6px;padding:16px;margin-top:24px">`
-      h += `<h3 style="margin-top:0;font-size:15px">✨ 트렌드 키워드</h3>`
+      h += `<h3 style="margin-top:0;font-size:15px">트렌드 키워드</h3>`
       h += `<div style="font-size:13px;line-height:1.8">${data.keywords.replace(/\n/g, '<br>')}</div>`
       h += `</div>`
     }
@@ -243,7 +243,7 @@ export default function Trends() {
           <div>
             <div className="bn-engine-card">
               <div className="bn-engine-left">
-                <span className="bn-engine-icon">⚡</span>
+                <span className="bn-engine-icon">◆</span>
                 <div>
                   <div className="bn-engine-title">뷰티 뉴스 AI 분석 엔진</div>
                   <div className="bn-engine-desc">Google News RSS + Groq AI · 최근 7일 미국 뷰티 트렌드</div>
@@ -253,7 +253,7 @@ export default function Trends() {
                 <span className="bn-status" style={{ color: bnStatusColor }}>{bnStatus}</span>
                 {bnLive && <span className="bn-live-badge visible">LIVE ANALYSIS</span>}
                 <button className="bn-run-btn" onClick={startAnalysis} disabled={bnRunning}>
-                  {bnRunning ? '분석 중...' : '⚡ 분석 시작'}
+                  {bnRunning ? '분석 중...' : '분석 시작'}
                 </button>
               </div>
             </div>
@@ -272,7 +272,7 @@ export default function Trends() {
                   )}
                   {!bnLoading && !bnReport && (
                     <div className="bn-empty-cats">
-                      {['🧴 스킨케어', '💋 메이크업', '🚿 퍼스널케어', '🇰🇷 K-뷰티', '✨ 기타'].map(cat => (
+                      {['스킨케어', '메이크업', '퍼스널케어', 'K-뷰티', '기타'].map(cat => (
                         <div key={cat} style={{ marginBottom: 16 }}>
                           <div className="bn-ph-cat-title">{cat}</div>
                           <div className="bn-ph-cat-body">아직 분석 결과가 없습니다.</div>
@@ -287,7 +287,7 @@ export default function Trends() {
               <div className="bn-sidebar">
                 <div className="bn-email-panel">
                   <div className="bn-email-header">
-                    <span className="bn-email-icon">✉️</span>
+                    <span className="bn-email-icon">@</span>
                     <span className="bn-email-title">이메일 발송</span>
                   </div>
                   <div className="bn-recipients">
@@ -306,7 +306,7 @@ export default function Trends() {
                       </label>
                     ))}
                   </div>
-                  <div className="bn-email-status" style={{ color: emailStatus.startsWith('✓') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
+                  <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
                     {emailStatus}
                   </div>
                   <button className="bn-send-btn" onClick={sendNewsEmail} disabled={emailSending}>
@@ -350,7 +350,7 @@ export default function Trends() {
                                   <div key={a.dateKey} className="bn-archive-item" onClick={() => loadArchive(a.dateKey)}>
                                     <div className="bn-archive-item-date">{a.date || a.dateKey}</div>
                                     {savedLabel && <div className="bn-archive-item-saved">{savedLabel}</div>}
-                                    <button className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.dateKey) }}>✕</button>
+                                    <button className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.dateKey) }}>×</button>
                                   </div>
                                 )
                               })}
@@ -449,7 +449,7 @@ function ReportBody({ data }: { data: ReportData }) {
       })}
       {data.keywords && (
         <div className="bn-keywords-section">
-          <div className="bn-keywords-title">✨ 트렌드 키워드</div>
+          <div className="bn-keywords-title">트렌드 키워드</div>
           <div className="bn-keywords-body" dangerouslySetInnerHTML={{ __html: data.keywords.replace(/\n/g, '<br>') }} />
         </div>
       )}

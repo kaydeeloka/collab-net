@@ -206,7 +206,7 @@ export default function Monitoring() {
                 }}>{kw}</span>
                 {kwEditMode && (
                   <button onClick={() => removeKeyword(kw)}
-                    style={{ background: 'none', border: 'none', color: 'var(--gray-5)', cursor: 'pointer', fontSize: 13, padding: '0 4px' }}>✕</button>
+                    style={{ background: 'none', border: 'none', color: 'var(--gray-5)', cursor: 'pointer', fontSize: 13, padding: '0 4px' }}>×</button>
                 )}
               </div>
             ))}
@@ -274,7 +274,7 @@ export default function Monitoring() {
           background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--radius)',
           color: '#b91c1c', padding: '16px 20px', marginBottom: 16, fontSize: 13,
         }}>
-          ⚠️ {data.error}
+          ! {data.error}
         </div>
       )}
       {!loading && !data?.error && (

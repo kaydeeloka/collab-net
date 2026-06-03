@@ -470,11 +470,11 @@ export default function Outreach() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <button onClick={sendEmailDirectly} disabled={sendingEmail}
                     style={{ padding: '10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    {sendingEmail ? '발송 중...' : '✉ 이메일 즉시 전송'}
+                    {sendingEmail ? '발송 중...' : '이메일 즉시 전송'}
                   </button>
                   <button onClick={markAsSent}
                     style={{ padding: '10px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    ✓ 발송 완료로 확정
+                    발송 완료로 확정
                   </button>
                 </div>
               </div>

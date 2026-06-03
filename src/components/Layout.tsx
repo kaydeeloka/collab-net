@@ -348,7 +348,7 @@ export default function Layout() {
             onClick={() => setShowManage(true)}
             title="차수 관리"
           >
-            {collapsed ? <Settings size={22} /> : '차수관리'}
+            {collapsed ? <Settings size={22} /> : '차수 관리'}
           </button>
         </div>
       </aside>
@@ -357,7 +357,7 @@ export default function Layout() {
       <div className="main-area">
 
         {/* Sticky children tab bar */}
-        {activeGroup && (
+        {activeGroup && activeGroup.children.length > 0 && (
           <div className="children-bar">
             {activeGroup.children.map(child => {
               const hasSub  = !!child.sub?.length
@@ -397,24 +397,10 @@ export default function Layout() {
               )
             })}
 
-            {dbOptions.length > 0 && (
-              <div className="children-bar-right">
-                <select
-                  className="phase-select"
-                  value={activeDbId}
-                  onChange={e => switchPhase(e.target.value)}
-                  title="차수 전환"
-                >
-                  {dbOptions.map(o => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
         )}
 
-        <Outlet />
+        <Outlet context={{ dbOptions, activeDbId, switchPhase }} />
       </div>
 
       {/* ── Phase Management modal ── */}
@@ -429,7 +415,7 @@ export default function Layout() {
           </button>
           <button className="new-phase-btn" style={{ background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)' }}
             onClick={() => { setShowManage(false); setLinkName(''); setLinkId(''); setShowLinkPhase(true) }}>
-            🔗 기존 DB 연결
+            기존 DB 연결
           </button>
         </div>
         {phaseList.length > 0 && (
@@ -470,7 +456,7 @@ export default function Layout() {
       <Modal open={showLinkPhase} onClose={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }} title="기존 DB 연결">
         <div className="modal-desc">새 스프레드시트를 만들지 않고 <strong>기존 Google Sheets</strong>를 차수로 등록합니다.</div>
         <label className="modal-label">차수 이름</label>
-        <input className="modal-input" type="text" placeholder="예: 테스트용, 1.5차" maxLength={30}
+        <input className="modal-input" type="text" placeholder="예: 테스트, 1.5차" maxLength={30}
           value={linkName} onChange={e => setLinkName(e.target.value)} autoFocus />
         <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(비우면 1차 DB 사용)</span></label>
         <input className="modal-input" type="text" placeholder="Google Sheets 스프레드시트 ID"

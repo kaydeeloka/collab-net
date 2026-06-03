@@ -301,7 +301,7 @@ export default function Listup() {
                               : fc.desc}
                           </td>
                           {filterEditMode && (
-                            <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>✕</button></td>
+                            <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
                           )}
                         </tr>
                       ))}
@@ -316,7 +316,7 @@ export default function Listup() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 티어 설정</div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cfg-btn" onClick={() => { if (tierEditMode) { saveCfg('mm_tiers', tiers) } setTierEditMode(!tierEditMode) }}>
-                      {tierEditMode ? '✓ 완료' : '편집'}
+                      {tierEditMode ? '완료' : '편집'}
                     </button>
                     <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('순위표를 기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveCfg('mm_tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
                   </div>
@@ -344,7 +344,7 @@ export default function Listup() {
                                   <option value="beauty">일반뷰티</option>
                                 </select>
                               </td>
-                              <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${t.label}" 티어를 삭제할까요?`, () => setTiers(prev => prev.filter((_, j) => j !== i)))}>✕</button></td>
+                              <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${t.label}" 티어를 삭제할까요?`, () => setTiers(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
                             </>
                           ) : (
                             <>
@@ -378,7 +378,7 @@ export default function Listup() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-7)' }}>{label}</div>
                     <div style={{ display: 'flex', gap: 5 }}>
-                      <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '✓ 완료' : '편집'}</button>
+                      <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
                       <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본 키워드로 초기화하시겠습니까?')) { setKws([...defaults]); saveCfg(storageKey, defaults); setEdit(false) } }}>↺</button>
                     </div>
                   </div>

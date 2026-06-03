@@ -154,9 +154,9 @@ export default function Confirmed() {
                               onChange={e => updateField(email, 'contentUpload', e.target.value)}
                               style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}
                             >
-                              <option value="Pending">⏳ 대기</option>
-                              <option value="Yes">✓ 완료</option>
-                              <option value="No">✕ 미업로드</option>
+                              <option value="Pending">대기</option>
+                              <option value="Yes">완료</option>
+                              <option value="No">미업로드</option>
                             </select>
                           </td>
                           <td>
