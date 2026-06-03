@@ -2,10 +2,18 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity } from 'lucide-react'
-import { gasGet } from '../lib/api'
-import { useKrClock } from '../lib/utils'
+import { gasGet, gasPost } from '../lib/api'
+import { phaseNum, buildPhaseDbOptions, escHtml, useKrClock } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
+import Modal from '../components/Modal'
 
-interface PhaseInfo   { ok: boolean; activePhase?: string }
+interface PhaseInfo {
+  ok: boolean
+  activePhase?    : string
+  activeOutreachId?: string
+  phase1SheetId?  : string
+  phases?         : { name?: string; outreachId?: string }[]
+}
 interface NavSubChild { label: string; to: string }
 interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
 interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
@@ -142,9 +150,10 @@ function getActiveGroup(pathname: string) {
 }
 
 export default function Layout() {
+  const { showToast } = useToast()
+
   const [collapsed,     setCollapsed]     = useState(false)
   const [sideExpanded,  setSideExpanded]  = useState<string | null>(null)
-  const [phaseBadge,    setPhaseBadge]    = useState('—')
   const [navClock,      setNavClock]      = useState('')
   const [openSub,       setOpenSub]       = useState<string | null>(null)
   const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -152,16 +161,105 @@ export default function Layout() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
 
+  // ── Phase state ──
+  const [phaseInfo,    setPhaseInfo]    = useState<PhaseInfo | null>(null)
+  const [activeDbId,   setActiveDbId]   = useState('')
+
+  // Phase management modals
+  const [showManage,     setShowManage]     = useState(false)
+  const [showNewPhase,   setShowNewPhase]   = useState(false)
+  const [newPhaseName,   setNewPhaseName]   = useState('')
+  const [newPhaseStatus, setNewPhaseStatus] = useState('')
+  const [newPhaseLoading,setNewPhaseLoading]= useState(false)
+
+  const [showLinkPhase,  setShowLinkPhase]  = useState(false)
+  const [linkName,       setLinkName]       = useState('')
+  const [linkId,         setLinkId]         = useState('')
+  const [linkStatus,     setLinkStatus]     = useState('')
+  const [linkLoading,    setLinkLoading]    = useState(false)
+
+  const [showDeleteModal,setShowDeleteModal]= useState(false)
+  const [deleteTarget,   setDeleteTarget]   = useState('')
+  const [deleteTrash,    setDeleteTrash]    = useState(false)
+  const [deleteLoading,  setDeleteLoading]  = useState(false)
+
+  async function loadPhaseInfo() {
+    try {
+      const d = await gasGet<PhaseInfo>('getPhaseInfo')
+      if (d.ok) {
+        setPhaseInfo(d)
+        setActiveDbId((d.activeOutreachId || '').trim())
+      }
+    } catch {}
+  }
+
+  async function switchPhase(id: string) {
+    if (!id || id === activeDbId) return
+    try {
+      const r: { error?: string } = await gasPost({ action: 'setActiveDatabase', outreachId: id })
+      if (r.error) { showToast(r.error, 'error'); return }
+      window.location.reload()
+    } catch (e: unknown) { showToast((e as Error).message, 'error') }
+  }
+
+  async function confirmNewPhase() {
+    const name = newPhaseName.trim()
+    if (!name) return
+    setNewPhaseLoading(true)
+    setNewPhaseStatus('새 스프레드시트 생성 중... (약 10~20초 소요)')
+    try {
+      const r: { error?: string } = await gasPost({ action: 'createNewPhase', phaseName: name })
+      if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
+      setNewPhaseStatus('완료!')
+      setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 600)
+    } catch (e: unknown) {
+      setNewPhaseStatus('오류: ' + (e as Error).message)
+    } finally { setNewPhaseLoading(false) }
+  }
+
+  async function confirmLinkPhase() {
+    const name = linkName.trim()
+    if (!name) return
+    setLinkLoading(true); setLinkStatus('연결 중...')
+    try {
+      const r: { error?: string } = await gasPost({ action: 'linkPhase', phaseName: name, outreachId: linkId.trim() || undefined })
+      if (r.error) { setLinkStatus('오류: ' + r.error); return }
+      setLinkStatus('완료!')
+      setTimeout(() => { showToast(`「${name}」 연결 완료`, 'success'); window.location.reload() }, 500)
+    } catch (e: unknown) {
+      setLinkStatus('오류: ' + (e as Error).message)
+    } finally { setLinkLoading(false) }
+  }
+
+  async function executeDeletePhase() {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    try {
+      const r: { error?: string } = await gasPost({ action: 'deletePhase', phaseName: deleteTarget, trashSheet: deleteTrash })
+      setShowDeleteModal(false)
+      if (r.error) { showToast(r.error, 'error'); return }
+      showToast(`「${deleteTarget}」 삭제 완료`, 'success')
+      window.location.reload()
+    } catch (e: unknown) {
+      setShowDeleteModal(false); showToast((e as Error).message, 'error')
+    } finally { setDeleteLoading(false) }
+  }
+
+  const phaseBadge = phaseInfo?.activePhase || '—'
+  const dbOptions  = phaseInfo ? buildPhaseDbOptions(phaseInfo) : []
+  const phaseList  = (() => {
+    const list = [...(phaseInfo?.phases || [])]
+    const p1id = (phaseInfo?.phase1SheetId || '').trim()
+    if (p1id && !list.find(p => p.name === '1차')) list.push({ name: '1차', outreachId: p1id })
+    return list.sort((a, b) => phaseNum(b.name || '') - phaseNum(a.name || ''))
+  })()
+
   useEffect(() => {
     const tick = () => { const t = getKrTime(); setNavClock(t.navDate + '  ' + t.navTime) }
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
   }, [])
 
-  useEffect(() => {
-    gasGet<PhaseInfo>('getPhaseInfo')
-      .then(d => { if (d.ok) setPhaseBadge(d.activePhase || '—') })
-      .catch(() => {})
-  }, [])
+  useEffect(() => { loadPhaseInfo() }, [])
 
   // Auto-expand the active group in the sidebar when navigating
   useEffect(() => {
@@ -244,12 +342,15 @@ export default function Layout() {
         </div>
 
         <div className="sidebar-footer">
-          {!collapsed && (
-            <>
-              <div className="sidebar-clock">{navClock}</div>
-              <span className="phase-badge-nav">{phaseBadge}</span>
-            </>
-          )}
+          {!collapsed && <div className="sidebar-clock">{navClock}</div>}
+          <button
+            className={`sidebar-phase-btn${collapsed ? ' sidebar-phase-btn--collapsed' : ''}`}
+            onClick={() => setShowManage(true)}
+            title="차수 관리"
+          >
+            <span className="phase-badge-nav">{phaseBadge}</span>
+            {!collapsed && <span className="sidebar-phase-manage-txt">차수 관리</span>}
+          </button>
         </div>
       </aside>
 
@@ -298,14 +399,109 @@ export default function Layout() {
             })}
 
             <div className="children-bar-right">
+              {dbOptions.length > 0 && (
+                <select
+                  className="phase-select"
+                  value={activeDbId}
+                  onChange={e => switchPhase(e.target.value)}
+                  title="차수 전환"
+                >
+                  {dbOptions.map(o => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              )}
               <span className="nav-clock">{navClock}</span>
-              <span className="phase-badge-nav">{phaseBadge}</span>
             </div>
           </div>
         )}
 
         <Outlet />
       </div>
+
+      {/* ── Phase Management modal ── */}
+      <Modal open={showManage} onClose={() => setShowManage(false)} title="차수 관리">
+        <div style={{ marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>현재 차수</span>
+          <span className="phase-badge-nav" style={{ marginLeft: 8 }}>{phaseBadge}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button className="new-phase-btn" onClick={() => { setShowManage(false); setShowNewPhase(true) }}>
+            + 새 차수 시작
+          </button>
+          <button className="new-phase-btn" style={{ background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)' }}
+            onClick={() => { setShowManage(false); setLinkName(''); setLinkId(''); setShowLinkPhase(true) }}>
+            🔗 기존 DB 연결
+          </button>
+        </div>
+        {phaseList.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8 }}>차수 목록</div>
+            {phaseList.map(p => (
+              <div key={p.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--gray-2)' }}>
+                <span style={{ fontSize: 13 }}>{p.name}</span>
+                <button
+                  style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                  onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setDeleteTrash(false); setShowDeleteModal(true) }}
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+      </Modal>
+
+      {/* New Phase */}
+      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }} title="새 차수 시작">
+        <div className="modal-desc">현재 차수 데이터는 <strong>Google Sheets에 그대로 보관</strong>됩니다.<br />새 빈 데이터베이스(스프레드시트)가 자동 생성됩니다.</div>
+        <label className="modal-label">새 차수 이름</label>
+        <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
+          value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') confirmNewPhase() }} autoFocus />
+        <div className="modal-actions">
+          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }}>취소</button>
+          <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading}>
+            {newPhaseLoading ? '생성 중...' : '생성'}
+          </button>
+        </div>
+        {newPhaseStatus && <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{newPhaseStatus}</div>}
+      </Modal>
+
+      {/* Link Existing DB */}
+      <Modal open={showLinkPhase} onClose={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }} title="기존 DB 연결">
+        <div className="modal-desc">새 스프레드시트를 만들지 않고 <strong>기존 Google Sheets</strong>를 차수로 등록합니다.</div>
+        <label className="modal-label">차수 이름</label>
+        <input className="modal-input" type="text" placeholder="예: 테스트용, 1.5차" maxLength={30}
+          value={linkName} onChange={e => setLinkName(e.target.value)} autoFocus />
+        <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(비우면 1차 DB 사용)</span></label>
+        <input className="modal-input" type="text" placeholder="Google Sheets 스프레드시트 ID"
+          value={linkId} onChange={e => setLinkId(e.target.value)} />
+        <div className="modal-actions">
+          <button className="modal-btn-cancel" onClick={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }}>취소</button>
+          <button className="modal-btn-confirm" onClick={confirmLinkPhase} disabled={linkLoading || !linkName.trim()}>
+            {linkLoading ? '연결 중...' : '연결'}
+          </button>
+        </div>
+        {linkStatus && <div className="modal-status" style={{ color: linkStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{linkStatus}</div>}
+      </Modal>
+
+      {/* Delete Phase */}
+      <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="차수 삭제" titleColor="var(--red)">
+        <div className="modal-desc" dangerouslySetInnerHTML={{ __html: `「<strong>${escHtml(deleteTarget)}</strong>」 차수 데이터베이스를 삭제하시겠습니까?` }} />
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, fontWeight: 600, color: 'var(--red)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={deleteTrash} onChange={e => setDeleteTrash(e.target.checked)} style={{ width: 15, height: 15 }} />
+          시트도 삭제 (Google Drive 휴지통으로 이동)
+        </label>
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <button className="modal-btn-cancel" onClick={() => setShowDeleteModal(false)}>취소</button>
+          <button className="modal-btn-confirm" style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
+            onClick={executeDeletePhase} disabled={deleteLoading}>
+            {deleteLoading ? '삭제 중…' : '삭제'}
+          </button>
+        </div>
+      </Modal>
+
     </div>
   )
 }
