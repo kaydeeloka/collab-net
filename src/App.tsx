@@ -13,14 +13,6 @@ import Confirmed   from './pages/influencer/confirmed'
 import Ems         from './pages/kit/ems'
 import Monitoring  from './pages/monitoring/reviews'
 
-// HOME
-import DDay               from './pages/home/DDay'
-import TrendSummary       from './pages/home/TrendSummary'
-import InfluencerStatus   from './pages/home/InfluencerStatus'
-import BrandStatus        from './pages/home/BrandStatus'
-import DeliveryStatus     from './pages/home/DeliveryStatus'
-import ReviewUpload       from './pages/home/ReviewUpload'
-
 // TREND
 import TiktokTrend from './pages/trend/TiktokTrend'
 
@@ -83,12 +75,12 @@ export default function App() {
 
                 {/* ── HOME ── */}
                 <Route path="/"                         element={<Dashboard />} />
-                <Route path="/home/dday"                element={<DDay />} />
-                <Route path="/home/trend-summary"       element={<TrendSummary />} />
-                <Route path="/home/influencer-status"   element={<InfluencerStatus />} />
-                <Route path="/home/brand-status"        element={<BrandStatus />} />
-                <Route path="/home/delivery-status"     element={<DeliveryStatus />} />
-                <Route path="/home/review-upload"       element={<ReviewUpload />} />
+                <Route path="/home/dday"                element={<Navigate to="/" replace />} />
+                <Route path="/home/trend-summary"       element={<Navigate to="/" replace />} />
+                <Route path="/home/influencer-status"   element={<Navigate to="/" replace />} />
+                <Route path="/home/brand-status"        element={<Navigate to="/" replace />} />
+                <Route path="/home/delivery-status"     element={<Navigate to="/" replace />} />
+                <Route path="/home/review-upload"       element={<Navigate to="/" replace />} />
 
                 {/* ── TREND ── */}
                 <Route path="/trend/news"               element={<Trends />} />

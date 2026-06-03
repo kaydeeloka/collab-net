@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Home, TrendingUp, Users, Building2, Package, Activity } from 'lucide-react'
+import { Home, TrendingUp, Users, Building2, Package, Activity, Globe, Settings } from 'lucide-react'
 import { gasGet, gasPost } from '../lib/api'
 import { phaseNum, buildPhaseDbOptions, escHtml, useKrClock } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
@@ -21,14 +21,7 @@ interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefi
 const GROUPS: SideGroup[] = [
   {
     label: 'HOME', icon: <Home size={18} />, defaultTo: '/', prefix: '/',
-    children: [
-      { to: '/home/dday',              label: 'D-DAY (발송/마감)'           },
-      { to: '/home/trend-summary',     label: '오늘의 트렌드 요약'          },
-      { to: '/home/influencer-status', label: '인플루언서 현황'             },
-      { to: '/home/brand-status',      label: '브랜드 현황'                 },
-      { to: '/home/delivery-status',   label: '배송 현황'                   },
-      { to: '/home/review-upload',     label: '리뷰 업로드 현황'            },
-    ],
+    children: [],
   },
   {
     label: 'TREND', icon: <TrendingUp size={18} />, defaultTo: '/trend/news', prefix: '/trend',
@@ -306,15 +299,14 @@ export default function Layout() {
                   className={`sidebar-item${isActive ? ' active' : ''}`}
                   title={collapsed ? group.label : undefined}
                   onClick={() => {
-                    if (collapsed) { navigate(group.defaultTo); return }
-                    // toggle accordion; navigate to default only when opening
+                    if (collapsed || group.children.length === 0) { navigate(group.defaultTo); return }
                     if (!isExpanded) navigate(group.defaultTo)
                     setSideExpanded(isExpanded ? null : group.label)
                   }}
                 >
                   <span className="sidebar-icon">{group.icon}</span>
                   <span className="sidebar-label">{group.label}</span>
-                  {!collapsed && (
+                  {!collapsed && group.children.length > 0 && (
                     <span className="sidebar-arrow">{isExpanded ? '▴' : '▾'}</span>
                   )}
                 </button>
@@ -349,14 +341,14 @@ export default function Layout() {
             className="sidebar-website-btn"
             title="미뮤즈 웹사이트"
           >
-            {collapsed ? '🌐' : '미뮤즈 웹사이트'}
+            {collapsed ? <Globe size={20} /> : '미뮤즈 웹사이트'}
           </a>
           <button
             className="sidebar-phase-btn"
             onClick={() => setShowManage(true)}
             title="차수 관리"
           >
-            차수관리
+            {collapsed ? <Settings size={20} /> : '차수관리'}
           </button>
         </div>
       </aside>
@@ -405,8 +397,8 @@ export default function Layout() {
               )
             })}
 
-            <div className="children-bar-right">
-              {dbOptions.length > 0 && (
+            {dbOptions.length > 0 && (
+              <div className="children-bar-right">
                 <select
                   className="phase-select"
                   value={activeDbId}
@@ -417,9 +409,8 @@ export default function Layout() {
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
-              )}
-              <span className="nav-clock">{navClock}</span>
-            </div>
+              </div>
+            )}
           </div>
         )}
 
