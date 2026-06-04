@@ -17,7 +17,8 @@ const C = {
   VIEWS    : 9,
   LIKES    : 10,
   COMMENTS : 11,
-  UPDATED  : 12,
+  KEYWORDS : 12,
+  UPDATED  : 13,
 }
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
@@ -113,6 +114,10 @@ export default function Monitoring() {
   const [scrapeMsg,      setScrapeMsg]      = useState('')
   const [runPending,     setRunPending]     = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const [manualRunId,    setManualRunId]    = useState('')
+  const [manualLoading,  setManualLoading]  = useState(false)
+  const [manualMsg,      setManualMsg]      = useState('')
 
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -227,6 +232,29 @@ export default function Monitoring() {
     setScrapeMsg('')
   }
 
+  async function processManualRun() {
+    const id = manualRunId.trim()
+    if (!id) return
+    setManualLoading(true)
+    setManualMsg('')
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; matched?: number }>({
+        action: 'processApifyRunById',
+        runId: id,
+      })
+      if (r.error) {
+        setManualMsg('오류: ' + r.error)
+      } else {
+        setManualMsg(r.message || '완료')
+        await loadMonitoring()
+      }
+    } catch (e: unknown) {
+      setManualMsg('오류: ' + (e as Error).message)
+    } finally {
+      setManualLoading(false)
+    }
+  }
+
   async function saveKeywords(next: Record<string, string[]>) {
     setKwSaving(true)
     try {
@@ -329,6 +357,33 @@ export default function Monitoring() {
         </div>
       )}
 
+      {/* Manual run ID processor */}
+      <div style={{
+        background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+        padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', whiteSpace: 'nowrap' }}>
+          Run ID로 처리
+        </span>
+        <input
+          type="text"
+          placeholder="Apify Run ID (예: dneoZLDX0POvzg1Gz)"
+          value={manualRunId}
+          onChange={e => setManualRunId(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') processManualRun() }}
+          style={{ flex: 1, minWidth: 220, fontSize: 12 }}
+        />
+        <button className="page-banner-btn" onClick={processManualRun} disabled={manualLoading || !manualRunId.trim()}
+          style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)', whiteSpace: 'nowrap' }}>
+          {manualLoading ? '처리 중…' : '결과 적용'}
+        </button>
+        {manualMsg && (
+          <span style={{ fontSize: 12, color: manualMsg.startsWith('오류') ? '#b91c1c' : '#166534', width: '100%' }}>
+            {manualMsg}
+          </span>
+        )}
+      </div>
+
       {/* Stats cards */}
       <div className="cards">
         <div className="card">
@@ -353,8 +408,131 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {/* 키워드 설정 */}
-      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 20 }}>
+      {/* Apify workflow diagram */}
+      {(() => {
+        const running = runPending
+        // A run has completed before if lastRun is a real date string
+        const lastRun = stats?.lastRun ?? ''
+        const hasRan  = !!lastRun && lastRun !== '-' && lastRun !== '아직 실행 안 됨'
+
+        type StepState = 'done' | 'active' | 'idle'
+        const steps: { icon: string; label: string; sub: string; state: StepState }[] = [
+          {
+            icon: '📋',
+            label: '핸들 수집',
+            sub: `${stats?.totalInfluencers ?? 0}명 인플루언서`,
+            state: (running || hasRan) ? 'done' : 'idle',
+          },
+          {
+            icon: '🚀',
+            label: 'Apify 실행',
+            sub: 'clockworks 스크래퍼',
+            state: running ? 'active' : hasRan ? 'done' : 'idle',
+          },
+          {
+            icon: '⏳',
+            label: '완료 대기',
+            sub: '최대 50개 프로필',
+            state: running ? 'active' : hasRan ? 'done' : 'idle',
+          },
+          {
+            icon: '🔎',
+            label: '키워드 필터링',
+            sub: 'mimuse · aesthen · nesh…',
+            state: running ? 'idle' : hasRan ? 'done' : 'idle',
+          },
+          {
+            icon: '📊',
+            label: '시트 업데이트',
+            sub: `${stats?.totalReviews ?? 0}개 리뷰 감지`,
+            state: running ? 'idle' : hasRan ? 'done' : 'idle',
+          },
+        ]
+
+        const colors: Record<StepState, { bg: string; border: string; icon: string; label: string; sub: string }> = {
+          done:   { bg: '#fefce8', border: '#fde047', icon: '#ca8a04', label: '#a16207', sub: '#facc15' },
+          active: { bg: '#eff6ff', border: '#93c5fd', icon: '#2563eb', label: '#1d4ed8', sub: '#60a5fa' },
+          idle:   { bg: 'var(--gray-0)', border: 'var(--gray-2)', icon: 'var(--gray-4)', label: 'var(--gray-5)', sub: 'var(--gray-3)' },
+        }
+
+        return (
+          <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '16px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>
+              Apify 워크플로우
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              {steps.map((step, i) => {
+                const c = colors[step.state]
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      flex: 1, minWidth: 0,
+                      background: c.bg, border: `1px solid ${c.border}`,
+                      borderRadius: 10, padding: '10px 12px',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      position: 'relative',
+                    }}>
+                      {step.state === 'active' && (
+                        <span style={{
+                          position: 'absolute', top: 5, right: 7,
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: '#3b82f6',
+                          boxShadow: '0 0 0 2px #bfdbfe',
+                          animation: 'pulse 1.5s infinite',
+                        }} />
+                      )}
+                      {step.state === 'done' && (
+                        <span style={{
+                          position: 'absolute', top: 5, right: 7,
+                          fontSize: 9, color: '#ca8a04', fontWeight: 800,
+                        }}>✓</span>
+                      )}
+                      <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: c.label, textAlign: 'center', whiteSpace: 'nowrap' }}>{step.label}</span>
+                      <span style={{ fontSize: 10, color: c.sub, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{step.sub}</span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div style={{ width: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 14, color: 'var(--gray-3)', userSelect: 'none' }}>›</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 키워드 설정 + 브랜드 횟수 side by side */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
+
+      {/* Brand count panel — left side */}
+      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '14px 20px', minWidth: 200 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>
+          브랜드 횟수
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {BRANDS.map(brand => {
+            const count = (stats?.brandCounts?.[brand.toLowerCase()] ?? stats?.brandCounts?.[brand]) ?? 0
+            return (
+              <div key={brand} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
+                  background: BRAND_COLORS[brand] + '18', color: BRAND_COLORS[brand],
+                  border: `1px solid ${BRAND_COLORS[brand]}44`,
+                }}>{brand}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? 'var(--gray-7)' : 'var(--gray-3)' }}>
+                  {count}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 키워드 설정 — right side */}
+      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
             키워드 설정
@@ -436,29 +614,7 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {/* Brand count panel */}
-      {stats?.brandCounts && Object.keys(stats.brandCounts).length > 0 && (
-        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '14px 20px', marginBottom: 20, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', whiteSpace: 'nowrap' }}>
-            브랜드 횟수
-          </div>
-          {BRANDS.map(brand => {
-            const count = stats.brandCounts[brand.toLowerCase()] ?? stats.brandCounts[brand] ?? 0
-            return (
-              <div key={brand} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{
-                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
-                  background: BRAND_COLORS[brand] + '18', color: BRAND_COLORS[brand],
-                  border: `1px solid ${BRAND_COLORS[brand]}44`,
-                }}>{brand}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? 'var(--gray-7)' : 'var(--gray-3)' }}>
-                  {count}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      </div>{/* end flex row wrapper */}
 
       {/* Delete confirmation toast */}
       {pendingDelete && (
@@ -538,6 +694,7 @@ export default function Monitoring() {
                     <th className="num">조회수</th>
                     <th className="num">좋아요 수</th>
                     <th className="num">댓글 수</th>
+                    <th>감지된 키워드</th>
                     <th>모니터링 실행일</th>
                   </tr>
                 </thead>
@@ -552,7 +709,7 @@ export default function Monitoring() {
                       ? `https://www.tiktok.com/@${handle}`
                       : `https://www.instagram.com/${handle}`
                     const runDate     = r[C.UPDATED] || ''
-                    const showRunDate = runDate && !runDate.startsWith('http')
+                    const showRunDate = (runDate && !runDate.startsWith('http')) ? runDate : ''
 
                     const rKey     = rowKey(r)
                     const extras   = rowExtras[rKey] || {}
@@ -667,6 +824,31 @@ export default function Monitoring() {
 
                         {/* 댓글 수 */}
                         <td className="num">{r[C.COMMENTS] ? fmtNum(r[C.COMMENTS]) : '—'}</td>
+
+                        {/* 감지된 키워드 */}
+                        <td>
+                          {r[C.KEYWORDS]
+                            ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                {r[C.KEYWORDS].split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
+                                  const kwLow = kw.toLowerCase()
+                                  const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
+                                  const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
+                                  const c = isMimuse
+                                    ? BRAND_COLORS.mimuse
+                                    : brandIdx >= 0
+                                      ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length]
+                                      : 'var(--gray-5)'
+                                  return (
+                                    <span key={kw} style={{
+                                      fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20,
+                                      background: c + '18', color: c,
+                                      border: `1px solid ${c}44`, whiteSpace: 'nowrap',
+                                    }}>{kw}</span>
+                                  )
+                                })}
+                              </div>
+                            : '—'}
+                        </td>
 
                         {/* 모니터링 실행일 */}
                         <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>

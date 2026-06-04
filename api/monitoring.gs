@@ -3,7 +3,7 @@
 // ============================================================
 
 // Column indices (0-based) — matches 모니터링 sheet:
-// no.|platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|모니터링 실행일
+// no.|platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|감지된 키워드|모니터링 실행일
 const MON_C = {
   NO       : 0,   // A — row number
   PLATFORM : 1,   // B — TikTok / Instagram
@@ -17,7 +17,8 @@ const MON_C = {
   VIEWS    : 9,   // J — 조회수                    ← scraper fills
   LIKES    : 10,  // K — 좋아요 수                 ← scraper fills
   COMMENTS : 11,  // L — 댓글 수                   ← scraper fills
-  UPDATED  : 12,  // M — 모니터링 실행일             ← scraper fills
+  KEYWORDS : 12,  // M — 감지된 키워드              ← scraper fills
+  UPDATED  : 13,  // N — 모니터링 실행일             ← scraper fills
 };
 
 const DEFAULT_BRAND_KEYWORDS = {
@@ -281,10 +282,11 @@ function _writeMonitoringResults(token, datasetId) {
       ].filter(Boolean).join(' ').toLowerCase();
     }
 
-    // Build handle -> first keyword-matching video map.
-    // Apify can return either nested objects OR flat dot-notation keys depending on how
-    // the dataset is fetched — handle both formats.
-    const videoByHandle = {};
+    // Build handle -> [all keyword-matching videos] map.
+    // Supports multiple videos per influencer — each sheet row with the same handle
+    // gets the next video in sequence (row 1 → video 0, row 2 → video 1, …).
+    // Apify can return nested objects OR flat dot-notation keys — handle both.
+    const videosByHandle = {};
     items.forEach(function(item) {
       if (!keywords.some(function(kw) { return itemText(item).includes(kw); })) return;
       const meta     = item.authorMeta || {};
@@ -293,15 +295,16 @@ function _writeMonitoringResults(token, datasetId) {
         item['authorMeta.name'] ||       // flat export format
         item.uniqueId || ''
       ).toString().toLowerCase();
-      if (!uniqueId || videoByHandle[uniqueId]) return;
-      videoByHandle[uniqueId] = item;
+      if (!uniqueId) return;
+      if (!videosByHandle[uniqueId]) videosByHandle[uniqueId] = [];
+      videosByHandle[uniqueId].push(item);
     });
 
-    if (items.length > 0 && Object.keys(videoByHandle).length === 0) {
+    if (items.length > 0 && Object.keys(videosByHandle).length === 0) {
       Logger.log('경고: 키워드 매칭 0개. 첫 번째 아이템 구조: ' + JSON.stringify(Object.keys(items[0])));
     }
 
-    Logger.log('기간 내 영상: ' + items.length + '개 | 키워드 매칭: ' + Object.keys(videoByHandle).length + '개 핸들');
+    Logger.log('기간 내 영상: ' + items.length + '개 | 키워드 매칭: ' + Object.keys(videosByHandle).length + '개 핸들');
 
     const ws = _getMonitoringSheet();
     if (!ws) return { error: '모니터링 시트를 찾을 수 없습니다.' };
@@ -309,12 +312,18 @@ function _writeMonitoringResults(token, datasetId) {
     const C = MON_C;
     const dataRange = ws.getDataRange();
     const allValues = dataRange.getValues();
+    const handleIdx = {};  // tracks how many rows we've filled per handle
     var updated = 0;
 
     for (var i = 1; i < allValues.length; i++) {
       const handle = (allValues[i][C.HANDLE] || '').toString().trim().replace(/^@/, '').toLowerCase();
-      const video  = videoByHandle[handle];
-      if (!video) continue;
+      const videos = videosByHandle[handle];
+      if (!videos || !videos.length) continue;
+
+      if (handleIdx[handle] === undefined) handleIdx[handle] = 0;
+      const video = videos[handleIdx[handle]];
+      if (!video) continue;  // more sheet rows than matched videos — leave blank
+      handleIdx[handle]++;
 
       var videoDate = '';
       if (video.createTimeISO) {
@@ -323,24 +332,33 @@ function _writeMonitoringResults(token, datasetId) {
         videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
       }
 
-      const videoUrl = video.webVideoUrl || video.videoUrl || '';
-      const s        = video.stats || {};
-      const views    = video.playCount    || s.playCount    || 0;
-      const likes    = video.diggCount    || s.diggCount    || 0;
-      const comments = video.commentCount || s.commentCount || 0;
+      const videoUrl    = video.webVideoUrl || video.videoUrl || '';
+      const s           = video.stats || {};
+      const views       = video.playCount    || s.playCount    || 0;
+      const likes       = video.diggCount    || s.diggCount    || 0;
+      const comments    = video.commentCount || s.commentCount || 0;
+      const matchedKws  = keywords.filter(function(kw) { return itemText(video).includes(kw); });
 
-      allValues[i][C.MEDIA]    = 'video';  // TikTok content is always video
+      allValues[i][C.MEDIA]    = 'video';
       allValues[i][C.DATE]     = videoDate;
       allValues[i][C.LINK]     = videoUrl;
       allValues[i][C.VIEWS]    = views;
       allValues[i][C.LIKES]    = likes;
       allValues[i][C.COMMENTS] = comments;
       allValues[i][C.UPDATED]  = runDate;
+      allValues[i][C.KEYWORDS] = matchedKws.join(', ');
       updated++;
     }
 
     if (updated > 0) {
-      dataRange.setValues(allValues);
+      // Pad every row to the required column width so setValues doesn't throw
+      // a dimension mismatch when new columns (KEYWORDS, UPDATED) extend past
+      // the original getDataRange() width.
+      const requiredCols = C.UPDATED + 1;
+      allValues.forEach(function(row) {
+        while (row.length < requiredCols) row.push('');
+      });
+      ws.getRange(1, 1, allValues.length, requiredCols).setValues(allValues);
     }
 
     Logger.log('업데이트된 행: ' + updated + '개');
@@ -525,6 +543,29 @@ function deduplicateMonitoringSheet() {
   Logger.log('정리 완료: ' + dataRows.length + '행 → ' + kept.length + '행 (중복 ' + (dataRows.length - kept.length) + '개 삭제)');
 }
 
+// Process any already-completed Apify run by ID — useful when the auto-poll
+// missed the result or when you want to re-apply filtering on a past run.
+function processApifyRunById(runId) {
+  const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
+  if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
+  if (!runId) return { error: 'runId가 필요합니다.' };
+
+  try {
+    const statusRes = UrlFetchApp.fetch(
+      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+      { muteHttpExceptions: true }
+    );
+    const runData = JSON.parse(statusRes.getContentText()).data;
+    if (!runData) return { error: 'Run 정보를 가져올 수 없습니다: ' + runId };
+    if (runData.status !== 'SUCCEEDED') {
+      return { error: 'Run 상태가 SUCCEEDED가 아닙니다 (현재 상태: ' + runData.status + ')' };
+    }
+    return _writeMonitoringResults(token, runData.defaultDatasetId);
+  } catch (e) {
+    return { error: e.toString() };
+  }
+}
+
 function routeMonitoring(action, p, body) {
   switch (action) {
     case 'getMonitoringData'      : return getMonitoringData();
@@ -534,6 +575,7 @@ function routeMonitoring(action, p, body) {
     case 'runMonitoringScrape'    : return runMonitoringScrape();
     case 'checkMonitoringRun'     : return checkMonitoringRun();
     case 'resetMonitoringRun'     : return resetMonitoringRun();
+    case 'processApifyRunById'    : return processApifyRunById((body || {}).runId || '');
     default                       : return null;
   }
 }
