@@ -18,6 +18,17 @@ function StatCell({ html }: StatSnippet) {
 const SPINNER_HTML = '<div class="fstat"><div class="fstat-val"><span class="spinner spinner--sm"></span></div><div class="fstat-lbl">로딩 중</div></div>'
 const DB_TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
 
+const DISPATCH_DATE  = new Date('2026-08-18T00:00:00+09:00')   // 발송일
+const DEADLINE_DATE  = new Date('2026-12-31T00:00:00+09:00')   // 프로젝트 마감일 (수정 필요)
+
+function calcDday(target: Date): string {
+  const now   = new Date()
+  const diff  = Math.ceil((target.getTime() - now.getTime()) / 86_400_000)
+  if (diff > 0)  return `D-${diff}`
+  if (diff === 0) return 'D-Day'
+  return `D+${Math.abs(diff)}`
+}
+
 function statError(msg: string) {
   return `<div style="font-size:11px;color:#c00">오류: ${String(msg).substring(0, 60)}</div>`
 }
@@ -85,7 +96,8 @@ export default function Dashboard() {
       const brandTotal  = s.totalBrandReviews || 0
       setStatsMonitoring(
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${s.totalReviews || 0}<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> / ${s.reviewInfluencers || 0}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
-        `<div class="fstat"><div class="fstat-val">${brandTotal}<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> / 미뮤즈 ${mimuseCount}</span></div><div class="fstat-lbl">브랜드 리뷰</div></div>`
+        `<div class="fstat"><div class="fstat-val">${brandTotal}</div><div class="fstat-lbl">브랜드 리뷰</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mimuseCount}</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
       )
     } catch (e: unknown) { setStatsMonitoring(statError((e as Error).message)) }
   }, [])
@@ -123,18 +135,65 @@ export default function Dashboard() {
       </div>
 
       {/* ── D-DAY ── */}
-      <div className="page-banner" style={{ marginBottom: 32 }}>
-        <span className="page-banner-deco">📅</span>
-        <div style={{ flex: 1 }}>
-          <div className="page-banner-title">D-DAY (발송/마감)</div>
-          <div className="page-banner-desc">캠페인 발송일 및 마감일 D-DAY 현황을 관리합니다.</div>
-          <div className="cards" style={{ marginTop: 16, marginBottom: 0 }}>
-            <div className="card highlight"><div className="card-label">발송 D-DAY</div><div className="card-value">—</div></div>
-            <div className="card"><div className="card-label">마감 D-DAY</div><div className="card-value">—</div></div>
-            <div className="card"><div className="card-label">진행 중 캠페인</div><div className="card-value">—</div></div>
+      {(() => {
+        const now          = new Date()
+        const pastDispatch = now >= DISPATCH_DATE
+        const mainDate     = pastDispatch ? DEADLINE_DATE : DISPATCH_DATE
+        const diff         = Math.ceil((mainDate.getTime() - now.getTime()) / 86_400_000)
+        const dday         = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
+        const accent       = pastDispatch ? '#3b82f6' : '#f59e0b'
+        const months       = Math.floor(Math.max(diff, 0) / 30)
+        const days         = Math.max(diff, 0) % 30
+        const phase        = dbOptions.find(o => o.id === activeDbId)?.label
+        return (
+          <div style={{
+            background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+            padding: '22px 28px', marginBottom: 28,
+            display: 'flex', alignItems: 'center', gap: 0,
+            borderLeft: `4px solid ${accent}`,
+          }}>
+            {/* Big number */}
+            <div style={{ minWidth: 140, paddingRight: 28 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>
+                {pastDispatch ? '마감까지' : '발송까지'}
+              </div>
+              <div style={{ fontSize: 48, fontWeight: 800, letterSpacing: '-2px', lineHeight: 1, color: accent }}>{dday}</div>
+              {diff > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 6 }}>
+                  {months > 0 && <span>{months}개월 </span>}{days}일
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--gray-2)', margin: '0 28px' }} />
+
+            {/* Date details */}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 4 }}>
+                {pastDispatch ? '프로젝트 마감' : '2026년 8월 18일'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--gray-5)' }}>
+                {pastDispatch ? '발송 완료 · 프로젝트 마감 카운트다운 중' : '키트 발송 예정일 · 발송 준비를 완료해주세요'}
+              </div>
+            </div>
+
+            {/* Phase */}
+            {phase && (
+              <>
+                <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--gray-2)', margin: '0 28px' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '1px' }}>현재 차수</div>
+                  <div style={{
+                    fontSize: 17, fontWeight: 700, padding: '5px 18px', borderRadius: 8,
+                    background: accent + '15', color: accent, border: `1.5px solid ${accent}55`,
+                  }}>{phase}</div>
+                </div>
+              </>
+            )}
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* ── Feature cards ── */}
       <div className="features-grid features-grid--4" style={{ marginBottom: 32 }}>
@@ -166,8 +225,9 @@ export default function Dashboard() {
           <div className="feature-card-header">
             <div className="feature-icon"><Package size={26} /></div>
             <div>
+              
               <div className="feature-title">EMS 배송 트래킹</div>
-              <div className="feature-desc">국제 배송 현황 실시간 추적 (17track API)</div>
+              <div className="feature-desc">국제 배송 현황 실시간 추적</div>
             </div>
           </div>
           <StatCell html={statsEms} />
