@@ -61,10 +61,15 @@ interface MonitoringData {
 }
 
 type RowExtras = {
-  media?  : string
-  content?: string
-  brand?  : string
-  repost? : string
+  media?    : string
+  content?  : string
+  brand?    : string
+  repost?   : string
+  link?     : string
+  views?    : string
+  likes?    : string
+  comments? : string
+  date?     : string
 }
 
 function findVideoLink(r: string[]): string {
@@ -118,6 +123,8 @@ export default function Monitoring() {
   const [manualRunId,    setManualRunId]    = useState('')
   const [manualLoading,  setManualLoading]  = useState(false)
   const [manualMsg,      setManualMsg]      = useState('')
+
+  const [tableEditMode,  setTableEditMode]  = useState(false)
 
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -232,6 +239,20 @@ export default function Monitoring() {
     setScrapeMsg('')
   }
 
+  async function runDedup() {
+    if (!confirm('중복 행을 제거할까요? (handle + date + link 기준)')) return
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; removed?: number; remaining?: number }>({
+        action: 'deduplicateMonitoringSheet',
+      })
+      if (r.error) { setScrapeMsg('오류: ' + r.error); return }
+      setScrapeMsg(`중복 제거 완료 — ${r.removed}개 삭제, ${r.remaining}개 남음`)
+      await loadMonitoring()
+    } catch (e: unknown) {
+      setScrapeMsg('오류: ' + (e as Error).message)
+    }
+  }
+
   async function processManualRun() {
     const id = manualRunId.trim()
     if (!id) return
@@ -294,13 +315,12 @@ export default function Monitoring() {
 
   const filteredRows = rows.filter(r => {
     const platform = (r[C.PLATFORM] || '').toLowerCase()
-    if (platformFilter === 'tiktok'    && !platform.includes('tiktok'))    return false
-    if (platformFilter === 'instagram' && !platform.includes('instagram')) return false
+    if (platformFilter !== 'all' && !platform.includes(platformFilter)) return false
 
     if (brandFilter !== 'all') {
       const extras   = rowExtras[rowKey(r)] || {}
-      const rowBrand = extras.brand || r[C.BRAND] || ''
-      if (rowBrand.toLowerCase() !== brandFilter.toLowerCase()) return false
+      const rowBrand = (extras.brand || r[C.BRAND] || '').toLowerCase()
+      if (rowBrand !== brandFilter.toLowerCase()) return false
     }
 
     const hasLink = !!findVideoLink(r)
@@ -642,27 +662,34 @@ export default function Monitoring() {
           onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 280 }} />
         <div className="filter-group">
           <label>플랫폼:</label>
-          {[['all', '전체'], ['tiktok', 'TikTok'], ['instagram', 'Instagram']].map(([v, l]) => (
-            <button key={v} className={'ems-filter-btn' + (platformFilter === v ? ' active' : '')}
-              onClick={() => setPlatformFilter(v)}>{l}</button>
-          ))}
+          <select className="inline-select" value={platformFilter} onChange={e => setPlatformFilter(e.target.value)}>
+            <option value="all">전체</option>
+            <option value="tiktok">TikTok</option>
+            <option value="instagram">Instagram</option>
+            <option value="blog">Blog</option>
+          </select>
         </div>
         <div className="filter-group">
           <label>브랜드:</label>
-          <button className={'ems-filter-btn' + (brandFilter === 'all' ? ' active' : '')}
-            onClick={() => setBrandFilter('all')}>전체</button>
-          {BRANDS.map(brand => (
-            <button key={brand}
-              className={'ems-filter-btn' + (brandFilter === brand ? ' active' : '')}
-              onClick={() => setBrandFilter(brandFilter === brand ? 'all' : brand)}>{brand}</button>
-          ))}
+          <select className="inline-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
+            <option value="all">전체</option>
+            {BRANDS.map(brand => <option key={brand} value={brand}>{brand}</option>)}
+          </select>
         </div>
         <div className="filter-group">
           <label>상태:</label>
-          {([['all', '전체'], ['matched', '데이터 있음'], ['pending', '대기중']] as [string, string][]).map(([v, l]) => (
-            <button key={v} className={'ems-filter-btn' + (statusFilter === v ? ' active' : '')}
-              onClick={() => setStatusFilter(v)}>{l}</button>
-          ))}
+          <select className="inline-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="all">전체</option>
+            <option value="matched">데이터 있음</option>
+            <option value="pending">대기중</option>
+          </select>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          {!tableEditMode
+            ? <button className="cfg-btn" onClick={() => setTableEditMode(true)}>편집</button>
+            : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }}
+                onClick={() => setTableEditMode(false)}>완료</button>
+          }
         </div>
       </div>
 
@@ -702,19 +729,33 @@ export default function Monitoring() {
                   {filteredRows.map((r, i) => {
                     const handle   = (r[C.HANDLE]   || '').replace(/^@/, '')
                     const platform = (r[C.PLATFORM] || '').toLowerCase()
-                    const link     = findVideoLink(r)
+                    const rKey     = rowKey(r)
+                    const extras   = rowExtras[rKey] || {}
+
+                    const link     = extras.link || findVideoLink(r)
                     const hasLink  = !!link
-                    const isTikTok = platform.includes('tiktok') || link.toLowerCase().includes('tiktok.com')
+                    const isTikTok    = platform.includes('tiktok')    || link.toLowerCase().includes('tiktok.com')
+                    const isInstagram = platform.includes('instagram') || link.toLowerCase().includes('instagram.com')
                     const profileUrl = isTikTok
                       ? `https://www.tiktok.com/@${handle}`
-                      : `https://www.instagram.com/${handle}`
+                      : isInstagram
+                        ? `https://www.instagram.com/${handle}`
+                        : ''
+
+                    const rowDate     = extras.date     || r[C.DATE]     || ''
+                    const rowViews    = extras.views    || r[C.VIEWS]    || ''
+                    const rowLikes    = extras.likes    || r[C.LIKES]    || ''
+                    const rowComments = extras.comments || r[C.COMMENTS] || ''
                     const runDate     = r[C.UPDATED] || ''
                     const showRunDate = (runDate && !runDate.startsWith('http')) ? runDate : ''
 
-                    const rKey     = rowKey(r)
-                    const extras   = rowExtras[rKey] || {}
-                    const rowBrand = extras.brand || r[C.BRAND] || ''
-                    const rowColor = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
+                    const rowBrand    = (extras.brand || r[C.BRAND] || '').toLowerCase()
+                    const rowColor    = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
+                    const rowRepost   = extras.repost  || r[C.REPOST]  || ''
+                    const rowMedia    = (extras.media   || r[C.MEDIA]   || '').toLowerCase()
+                    const rowContent  = (extras.content || r[C.CONTENT] || '').toLowerCase()
+
+                    const ed = tableEditMode
 
                     return (
                       <tr key={i} style={{ opacity: hasLink ? 1 : 0.6 }}>
@@ -726,7 +767,9 @@ export default function Monitoring() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                             {isTikTok
                               ? <span className="platform-badge platform-tiktok">TikTok</span>
-                              : <span className="platform-badge platform-instagram">Instagram</span>
+                              : isInstagram
+                                ? <span className="platform-badge platform-instagram">Instagram</span>
+                                : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>
                             }
                             {!hasLink && (
                               <span style={{
@@ -737,95 +780,135 @@ export default function Monitoring() {
                           </div>
                           {handle && (
                             <div style={{ marginTop: 3 }}>
-                              <a href={profileUrl} target="_blank" rel="noopener"
-                                style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>
-                                @{handle}
-                              </a>
+                              {profileUrl
+                                ? <a href={profileUrl} target="_blank" rel="noopener"
+                                    style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>
+                                    @{handle}
+                                  </a>
+                                : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{handle}</span>
+                              }
                             </div>
                           )}
                         </td>
 
                         {/* date */}
                         <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
-                          {fmtDate(r[C.DATE] || '')}
+                          {ed
+                            ? <input type="date" value={rowDate} className="inline-select"
+                                style={{ width: 120, fontSize: 11 }}
+                                onChange={e => updateRowExtra(rKey, 'date', e.target.value)} />
+                            : fmtDate(rowDate) || '—'
+                          }
                         </td>
 
                         {/* media */}
                         <td>
-                          <select
-                            value={extras.media || r[C.MEDIA] || ''}
-                            onChange={e => updateRowExtra(rKey, 'media', e.target.value)}
-                            className="inline-select"
-                          >
-                            <option value="">—</option>
-                            {MEDIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
+                          {ed
+                            ? <select value={rowMedia} onChange={e => updateRowExtra(rKey, 'media', e.target.value)} className="inline-select">
+                                <option value="">—</option>
+                                {MEDIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            : <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{rowMedia || '—'}</span>
+                          }
                         </td>
 
                         {/* content */}
                         <td>
-                          <select
-                            value={extras.content || r[C.CONTENT] || ''}
-                            onChange={e => updateRowExtra(rKey, 'content', e.target.value)}
-                            className="inline-select"
-                          >
-                            <option value="">—</option>
-                            {CONTENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
+                          {ed
+                            ? <select value={rowContent} onChange={e => updateRowExtra(rKey, 'content', e.target.value)} className="inline-select">
+                                <option value="">—</option>
+                                {CONTENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            : <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{rowContent || '—'}</span>
+                          }
                         </td>
 
                         {/* brand */}
                         <td>
-                          <select
-                            value={rowBrand}
-                            onChange={e => updateRowExtra(rKey, 'brand', e.target.value)}
-                            className="inline-select"
-                            style={{
-                              color: rowBrand ? rowColor : 'var(--gray-4)',
-                              border: `1px solid ${rowBrand ? rowColor : 'var(--gray-2)'}`,
-                              background: rowBrand ? rowColor + '18' : 'var(--gray-0)',
-                              fontWeight: rowBrand ? 600 : 400,
-                            }}
-                          >
-                            <option value="">—</option>
-                            {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                          </select>
+                          {ed
+                            ? <select value={rowBrand} onChange={e => updateRowExtra(rKey, 'brand', e.target.value)} className="inline-select"
+                                style={{
+                                  color: rowBrand ? rowColor : 'var(--gray-4)',
+                                  border: `1px solid ${rowBrand ? rowColor : 'var(--gray-2)'}`,
+                                  background: rowBrand ? rowColor + '18' : 'var(--gray-0)',
+                                  fontWeight: rowBrand ? 600 : 400,
+                                }}>
+                                <option value="">—</option>
+                                {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                              </select>
+                            : rowBrand
+                              ? <span style={{
+                                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
+                                  background: rowColor + '18', color: rowColor, border: `1px solid ${rowColor}44`,
+                                }}>{rowBrand}</span>
+                              : <span style={{ color: 'var(--gray-3)' }}>—</span>
+                          }
                         </td>
 
                         {/* repost */}
                         <td>
-                          <select
-                            value={extras.repost || r[C.REPOST] || ''}
-                            onChange={e => updateRowExtra(rKey, 'repost', e.target.value)}
-                            className="inline-select"
-                            style={{
-                              color: extras.repost === 'Y' ? 'var(--green)' : extras.repost === 'N' ? '#ef4444' : 'var(--gray-4)',
-                              fontWeight: extras.repost ? 600 : 400,
-                            }}
-                          >
-                            <option value="">—</option>
-                            <option value="Y">Y</option>
-                            <option value="N">N</option>
-                          </select>
+                          {ed
+                            ? <select value={rowRepost} onChange={e => updateRowExtra(rKey, 'repost', e.target.value)} className="inline-select"
+                                style={{
+                                  color: rowRepost === 'O' ? 'var(--green)' : rowRepost === '▲' ? '#ef4444' : 'var(--gray-4)',
+                                  fontWeight: rowRepost ? 600 : 400,
+                                }}>
+                                <option value="">—</option>
+                                <option value="O">O</option>
+                                <option value="▲">▲</option>
+                              </select>
+                            : <span style={{
+                                fontSize: 12, fontWeight: 600,
+                                color: rowRepost === 'O' ? 'var(--green)' : rowRepost === '▲' ? '#ef4444' : 'var(--gray-3)',
+                              }}>
+                                {rowRepost || '—'}
+                              </span>
+                          }
                         </td>
 
                         {/* review link */}
                         <td>
-                          {link
-                            ? <a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
-                            : '—'}
+                          {ed
+                            ? <input type="text" value={extras.link ?? findVideoLink(r)} placeholder="https://…" className="inline-select"
+                                style={{ width: 160, fontSize: 11 }}
+                                onChange={e => updateRowExtra(rKey, 'link', e.target.value)} />
+                            : link
+                              ? <a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                              : '—'
+                          }
                         </td>
 
                         {/* 조회수 */}
-                        <td className="num">{r[C.VIEWS] ? fmtNum(r[C.VIEWS]) : '—'}</td>
+                        <td className="num">
+                          {ed
+                            ? <input type="number" value={rowViews} className="inline-select"
+                                style={{ width: 70, fontSize: 11, textAlign: 'right' }}
+                                onChange={e => updateRowExtra(rKey, 'views', e.target.value)} />
+                            : rowViews ? fmtNum(rowViews) : '—'
+                          }
+                        </td>
 
                         {/* 좋아요 수 */}
-                        <td className="num">{r[C.LIKES] ? fmtNum(r[C.LIKES]) : '—'}</td>
+                        <td className="num">
+                          {ed
+                            ? <input type="number" value={rowLikes} className="inline-select"
+                                style={{ width: 70, fontSize: 11, textAlign: 'right' }}
+                                onChange={e => updateRowExtra(rKey, 'likes', e.target.value)} />
+                            : rowLikes ? fmtNum(rowLikes) : '—'
+                          }
+                        </td>
 
                         {/* 댓글 수 */}
-                        <td className="num">{r[C.COMMENTS] ? fmtNum(r[C.COMMENTS]) : '—'}</td>
+                        <td className="num">
+                          {ed
+                            ? <input type="number" value={rowComments} className="inline-select"
+                                style={{ width: 70, fontSize: 11, textAlign: 'right' }}
+                                onChange={e => updateRowExtra(rKey, 'comments', e.target.value)} />
+                            : rowComments ? fmtNum(rowComments) : '—'
+                          }
+                        </td>
 
-                        {/* 감지된 키워드 */}
+                        {/* 감지된 키워드 — always read-only */}
                         <td>
                           {r[C.KEYWORDS]
                             ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -850,7 +933,7 @@ export default function Monitoring() {
                             : '—'}
                         </td>
 
-                        {/* 모니터링 실행일 */}
+                        {/* 모니터링 실행일 — always read-only */}
                         <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
                           {showRunDate || '—'}
                         </td>

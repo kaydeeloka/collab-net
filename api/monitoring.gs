@@ -23,7 +23,7 @@ const MON_C = {
 
 const DEFAULT_BRAND_KEYWORDS = {
   mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
-  brands: ['aesthen', 'joodoc', 'nesh', 'varuza'],
+  brands: ['aesthein', 'joodoc', 'nesh', 'varuza'],
 };
 
 // ── Read ─────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ function getMonitoringData() {
     let ws;
     if (monId) {
       const mss = SpreadsheetApp.openById(monId);
-      ws = mss.getSheetByName(SHEET_MONITORING) || mss.getSheetByName('모니터링') || mss.getSheets()[0];
+      ws = mss.getSheetByName(SHEET_MONITORING) || mss.getSheetByName('모니터링');
     } else {
       const ss = SpreadsheetApp.openById(getActiveOutreachId());
       ws = ss.getSheetByName(SHEET_MONITORING) || ss.getSheetByName('모니터링');
@@ -505,9 +505,42 @@ function debugMonitoringSetup() {
   }
 }
 
-// Run once from the GAS Script Editor to remove duplicate handle rows.
-// Keeps the row with the most scraped data (has a link > has a date > first seen).
+// Remove exact duplicate rows — only removes rows where handle + date + link
+// are all identical. Safe for influencers with multiple legitimate videos.
 function deduplicateMonitoringSheet() {
+  const ws = _getMonitoringSheet();
+  if (!ws) { Logger.log('❌ 모니터링 시트 없음'); return; }
+
+  const allValues = ws.getDataRange().getValues();
+  const header    = allValues[0];
+  const dataRows  = allValues.slice(1);
+
+  const C    = MON_C;
+  const seen = {};
+  const kept = [];
+
+  dataRows.forEach(function(row) {
+    const handle = (row[C.HANDLE] || '').toString().trim().toLowerCase();
+    const date   = (row[C.DATE]   || '').toString().trim();
+    const link   = (row[C.LINK]   || '').toString().trim();
+    // Use handle+date+link as unique key; rows with no handle are always kept
+    const key = handle ? (handle + '|' + date + '|' + link) : null;
+    if (!key || !seen[key]) {
+      if (key) seen[key] = true;
+      kept.push(row);
+    }
+  });
+
+  const removed = dataRows.length - kept.length;
+  const newData = [header].concat(kept);
+  ws.clearContents();
+  ws.getRange(1, 1, newData.length, newData[0].length).setValues(newData);
+  Logger.log('정리 완료: ' + dataRows.length + '행 → ' + kept.length + '행 (중복 ' + removed + '개 삭제)');
+  return { ok: true, removed: removed, remaining: kept.length };
+}
+
+// ── OLD single-handle dedup (kept for reference, not used) ────
+function deduplicateByHandleOnly() {
   const ws = _getMonitoringSheet();
   if (!ws) { Logger.log('❌ 모니터링 시트 없음'); return; }
 
@@ -575,7 +608,8 @@ function routeMonitoring(action, p, body) {
     case 'runMonitoringScrape'    : return runMonitoringScrape();
     case 'checkMonitoringRun'     : return checkMonitoringRun();
     case 'resetMonitoringRun'     : return resetMonitoringRun();
-    case 'processApifyRunById'    : return processApifyRunById((body || {}).runId || '');
-    default                       : return null;
+    case 'processApifyRunById'       : return processApifyRunById((body || {}).runId || '');
+    case 'deduplicateMonitoringSheet': return deduplicateMonitoringSheet();
+    default                          : return null;
   }
 }
