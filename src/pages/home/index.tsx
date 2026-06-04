@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { ClipboardList, Mail, Package, BarChart2, TrendingUp, Users, Building2, FileText } from 'lucide-react'
+import { ClipboardList, Package, BarChart2, TrendingUp, Users, Building2, FileText } from 'lucide-react'
 import { gasGet } from '../../lib/api'
-import { fmtNum, useKrClock } from '../../lib/utils'
+import { useKrClock } from '../../lib/utils'
 import PageSection from '../../components/PageSection'
-
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -40,41 +39,54 @@ export default function Dashboard() {
 
   const loadListupStats = useCallback(async () => {
     try {
-      const data: Record<string, { stats?: { total?: number; totalFollowers?: number } }> = await gasGet('getInfluencerList')
-      if ((data as { error?: string }).error) { setStatsListup(statError((data as { error?: string }).error!)); return }
-      let total = 0, totalF = 0
-      DB_TIERS.forEach(t => { const d = data[t] || {}; total += d.stats?.total || 0; totalF += d.stats?.totalFollowers || 0 })
-      setStatsListup(`<div class="fstat"><div class="fstat-val" style="color:var(--yellow-text)">${total}</div><div class="fstat-lbl">인플루언서</div></div><div class="fstat"><div class="fstat-val">${fmtNum(totalF)}</div><div class="fstat-lbl">총 팔로워</div></div>`)
+      const [outreach, confirmed] = await Promise.all([
+        gasGet<Record<string, { stats?: { total?: number; sent?: number; replied?: number } }>>('getOutreachData'),
+        gasGet<{ rows?: unknown[][] }>('getConfirmedInfluencers'),
+      ])
+      let total = 0, sent = 0, replied = 0
+      DB_TIERS.forEach(t => { const s = (outreach[t] || {}).stats || {}; total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0 })
+      const confirmedCount = (confirmed.rows || []).length
+      const recruitPct = Math.round(confirmedCount / 50 * 100)
+      setStatsListup(
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:11px;font-weight:500;color:var(--gray-5)">/${total}</span></div><div class="fstat-lbl">컨택 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">신규 회신</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${recruitPct}%<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> (${confirmedCount}/50)</span></div><div class="fstat-lbl">모집 완료</div></div>`
+      )
     } catch (e: unknown) { setStatsListup(statError((e as Error).message)) }
   }, [])
 
   const loadOutreachStats = useCallback(async () => {
-    try {
-      const data: Record<string, { stats?: { total?: number; sent?: number; replied?: number } }> = await gasGet('getOutreachData')
-      if ((data as { error?: string }).error) { setStatsOutreach(statError((data as { error?: string }).error!)); return }
-      let total = 0, sent = 0, replied = 0
-      DB_TIERS.forEach(t => { const s = (data[t] || {}).stats || {}; total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0 })
-      const pct = total > 0 ? Math.round(sent / total * 100) : 0
-      setStatsOutreach(`<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}</div><div class="fstat-lbl">발송 완료</div></div><div class="fstat"><div class="fstat-val">${total - sent}</div><div class="fstat-lbl">미발송</div></div><div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">답장 수신</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${pct}%</div><div class="fstat-lbl">발송률</div></div>`)
-    } catch (e: unknown) { setStatsOutreach(statError((e as Error).message)) }
+    // Brand listup — no dedicated API yet; show placeholders
+    setStatsOutreach(
+      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">컨택 완료/차수</div></div>` +
+      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">신규 회신</div></div>` +
+      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">확정 브랜드</div></div>`
+    )
   }, [])
 
   const loadEmsStats = useCallback(async () => {
     try {
-      const data: { error?: string; stats?: { delivered?: number; inTransit?: number; total?: number } } = await gasGet('getEmsData')
+      const data: { error?: string; stats?: { delivered?: number; exception?: number; pending?: number; total?: number } } = await gasGet('getEmsData')
       if (data.error) { setStatsEms(statError(data.error)); return }
       const s = data.stats || {}
-      setStatsEms(`<div class="fstat"><div class="fstat-val" style="color:var(--green)">${s.delivered || 0}</div><div class="fstat-lbl">배송 완료</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${s.inTransit || 0}</div><div class="fstat-lbl">배송 중</div></div><div class="fstat"><div class="fstat-val">${s.total || 0}</div><div class="fstat-lbl">전체</div></div>`)
+      const problem = (s.exception || 0)
+      setStatsEms(
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${s.delivered || 0}</div><div class="fstat-lbl">배송 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#e53935">${problem}</div><div class="fstat-lbl">오류/미수취</div></div>`
+      )
     } catch (e: unknown) { setStatsEms(statError((e as Error).message)) }
   }, [])
 
   const loadMonitoringStats = useCallback(async () => {
     try {
-      const data: { stats?: { totalInfluencers?: number; mentions?: number }; rows?: unknown[] } = await gasGet('getMonitoringData')
+      const data: { stats?: { totalReviews?: number; reviewInfluencers?: number; totalBrandReviews?: number; brandCounts?: Record<string, number> }; rows?: unknown[] } = await gasGet('getMonitoringData')
       const s = data.stats || {}
-      const total    = s.totalInfluencers ?? (data.rows || []).length
-      const mentioned = s.mentions || 0
-      setStatsMonitoring(`<div class="fstat"><div class="fstat-val">${total}</div><div class="fstat-lbl">모니터링 중</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mentioned}</div><div class="fstat-lbl">MiMuse 언급</div></div>`)
+      const mimuseCount = s.brandCounts?.mimuse || 0
+      const brandTotal  = s.totalBrandReviews || 0
+      setStatsMonitoring(
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${s.totalReviews || 0}<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> / ${s.reviewInfluencers || 0}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
+        `<div class="fstat"><div class="fstat-val">${brandTotal}<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> / 미뮤즈 ${mimuseCount}</span></div><div class="fstat-lbl">브랜드 리뷰</div></div>`
+      )
     } catch (e: unknown) { setStatsMonitoring(statError((e as Error).message)) }
   }, [])
 
@@ -93,20 +105,12 @@ export default function Dashboard() {
         <div>
           <div className="hero-eyebrow">
             {dbOptions.length > 0 ? (
-              <select
-                className="phase-select"
-                value={activeDbId}
-                onChange={e => switchPhase(e.target.value)}
-                title="차수 전환"
-              >
-                {dbOptions.map(o => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
+              <select className="phase-select" value={activeDbId} onChange={e => switchPhase(e.target.value)} title="차수 전환">
+                {dbOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
             ) : (
               <span className="hero-live-pill">LIVE</span>
             )}
-            <span className="hero-eyebrow-text">인플루언서 마케팅 자동화 시스템</span>
           </div>
           <h1>MiMuse 자동화 대시보드</h1>
           <p>차수별 인플루언서 마케팅 현황을 한눈에 확인하세요</p>
@@ -133,7 +137,6 @@ export default function Dashboard() {
       </div>
 
       {/* ── Feature cards ── */}
-      <div className="section-title--dash">QUICK ACCESS</div>
       <div className="features-grid features-grid--4" style={{ marginBottom: 32 }}>
         <Link className="feature-card highlight" to="/influencer/search">
           <div className="feature-card-header">
@@ -144,19 +147,19 @@ export default function Dashboard() {
             </div>
           </div>
           <StatCell html={statsListup} />
-          <div className="feature-go">데이터베이스 보기</div>
+          <div className="feature-go">인플루언서 보기 →</div>
         </Link>
 
-        <Link className="feature-card" to="/influencer/contact">
+        <Link className="feature-card" to="/brand/contact">
           <div className="feature-card-header">
-            <div className="feature-icon"><Mail size={26} /></div>
+            <div className="feature-icon"><Building2 size={26} /></div>
             <div>
-              <div className="feature-title">아웃리치</div>
-              <div className="feature-desc">이메일 발송 현황 및 인플루언서 컨택 관리</div>
+              <div className="feature-title">브랜드 리스트업</div>
+              <div className="feature-desc">브랜드 컨택 현황 및 확정 브랜드 관리</div>
             </div>
           </div>
           <StatCell html={statsOutreach} />
-          <div className="feature-go">아웃리치 보기</div>
+          <div className="feature-go">브랜드 보기 →</div>
         </Link>
 
         <Link className="feature-card green-top" to="/kit/ems">
@@ -168,7 +171,7 @@ export default function Dashboard() {
             </div>
           </div>
           <StatCell html={statsEms} />
-          <div className="feature-go">배송 현황 보기</div>
+          <div className="feature-go">배송 현황 보기 →</div>
         </Link>
 
         <Link className="feature-card" to="/monitoring/reviews">
@@ -180,82 +183,21 @@ export default function Dashboard() {
             </div>
           </div>
           <StatCell html={statsMonitoring} />
-          <div className="feature-go">모니터링 보기</div>
+          <div className="feature-go">모니터링 보기 →</div>
         </Link>
       </div>
 
-      {/* ── Status overview sections ── */}
-      <div className="section-title--dash" style={{ marginBottom: 16 }}>현황 요약</div>
+      {/* ── Trend sections ── */}
 
-      <PageSection icon={<TrendingUp size={20} />} title="오늘의 트렌드 요약" desc="뉴스·틱톡 트렌드 분석 결과를 한눈에 요약합니다." defaultOpen={false}>
-        <div className="cards">
-          <div className="card"><div className="card-label">뉴스 키워드</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">틱톡 인기 해시태그</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">급상승 트렌드</div><div className="card-value">—</div></div>
-        </div>
-      </PageSection>
-
-      <PageSection icon={<Users size={20} />} title="인플루언서 현황"
-        stats={[
-          { label: '서치 완료', value: '—' },
-          { label: '컨택 진행', value: '—' },
-          { label: '확정', value: '—', highlight: true },
-          { label: '리뷰 업로드', value: '—' },
-        ]}
-        defaultOpen={false}>
-        <div className="cards" style={{ marginBottom: 0 }}>
-          <div className="card"><div className="card-label">서치 완료</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">컨택 진행</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">확정</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">리뷰 업로드</div><div className="card-value">—</div></div>
-        </div>
-      </PageSection>
-
-      <PageSection icon={<Building2 size={20} />} title="브랜드 현황"
-        stats={[
-          { label: '총 브랜드', value: '—' },
-          { label: '컨택 진행', value: '—' },
-          { label: '확정', value: '—', highlight: true },
-          { label: '자료 수집', value: '—' },
-        ]}
-        defaultOpen={false}>
-        <div className="cards" style={{ marginBottom: 0 }}>
-          <div className="card"><div className="card-label">총 브랜드</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">컨택 진행</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">확정</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">자료 수집 완료</div><div className="card-value">—</div></div>
-        </div>
-      </PageSection>
-
-      <PageSection icon={<Package size={20} />} title="배송 현황"
-        stats={[
-          { label: '총 발송', value: '—' },
-          { label: '배송 중', value: '—' },
-          { label: '도착 완료', value: '—', highlight: true },
-          { label: '미수취', value: '—' },
-        ]}
-        defaultOpen={false}>
-        <div className="cards" style={{ marginBottom: 0 }}>
-          <div className="card"><div className="card-label">총 발송</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">배송 중</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">도착 완료</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">미수취 / 오류</div><div className="card-value">—</div></div>
-        </div>
-      </PageSection>
-
-      <PageSection icon={<FileText size={20} />} title="리뷰 업로드 현황"
-        stats={[
-          { label: '업로드 완료', value: '—', highlight: true },
-          { label: '미업로드', value: '—' },
-          { label: '업로드율', value: '—%' },
-        ]}
-        defaultOpen={false}>
-        <div className="cards" style={{ marginBottom: 0 }}>
-          <div className="card"><div className="card-label">업로드 완료</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">미업로드</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">업로드율</div><div className="card-value">—%</div></div>
-        </div>
-      </PageSection>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <TrendingUp size={16} style={{ color: 'var(--gray-5)' }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-6)' }}>오늘의 트렌드</span>
+      </div>
+      <div className="cards" style={{ marginBottom: 24 }}>
+        <div className="card"><div className="card-label">뉴스 키워드</div><div className="card-value">—</div></div>
+        <div className="card highlight"><div className="card-label">틱톡 인기 해시태그</div><div className="card-value">—</div></div>
+        <div className="card"><div className="card-label">급상승 트렌드</div><div className="card-value">—</div></div>
+      </div>
 
     </div>
   )

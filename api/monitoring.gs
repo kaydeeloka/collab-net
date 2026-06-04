@@ -56,8 +56,9 @@ function getMonitoringData() {
     const lastRunRow = rows.find(r => r[C.UPDATED] && !r[C.UPDATED].startsWith('http'));
     const lastRun    = lastRunRow ? lastRunRow[C.UPDATED] : '아직 실행 안 됨';
 
-    const reviewRows  = rows.filter(r => r[C.LINK] && r[C.LINK].startsWith('http'));
-    const influencers = [...new Set(rows.map(r => r[C.HANDLE]).filter(n => n))];
+    const reviewRows       = rows.filter(r => r[C.LINK] && r[C.LINK].startsWith('http'));
+    const influencers      = [...new Set(rows.map(r => r[C.HANDLE]).filter(n => n))];
+    const reviewInfluencers = [...new Set(reviewRows.map(r => r[C.HANDLE]).filter(n => n))].length;
     const totalViews    = reviewRows.reduce((s, r) => s + (parseInt(r[C.VIEWS])    || 0), 0);
     const totalLikes    = reviewRows.reduce((s, r) => s + (parseInt(r[C.LIKES])    || 0), 0);
     const totalComments = reviewRows.reduce((s, r) => s + (parseInt(r[C.COMMENTS]) || 0), 0);
@@ -68,6 +69,7 @@ function getMonitoringData() {
       if (!brand) return;
       brandCounts[brand] = (brandCounts[brand] || 0) + 1;
     });
+    const totalBrandReviews = Object.values(brandCounts).reduce((s, n) => s + (n as number), 0);
 
     // Also return current run status for the frontend
     const runId = PropertiesService.getScriptProperties().getProperty('MON_RUN_ID');
@@ -78,12 +80,14 @@ function getMonitoringData() {
       rows,
       runStatus,
       stats: {
-        totalInfluencers : influencers.length,
-        totalReviews     : reviewRows.length,
+        totalInfluencers  : influencers.length,
+        totalReviews      : reviewRows.length,
+        reviewInfluencers,
         totalViews,
         totalLikes,
         totalComments,
         brandCounts,
+        totalBrandReviews,
         lastRun,
       }
     };

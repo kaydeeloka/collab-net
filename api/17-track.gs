@@ -208,10 +208,12 @@ function getEmsData() {
       .filter(function(row) { return (row[C.tracking] || '').toString().trim(); })
       .map(function(row) { return row.map(fmt); });
 
-    var ACTIVE    = ['Info Received', 'In Transit', 'Out for Delivery', 'Pick Up'];
-    var delivered = responseRows.filter(function(r) { return r[C.status] === 'Delivered'; }).length;
-    var inTransit = responseRows.filter(function(r) { return ACTIVE.includes(r[C.status]); }).length;
-    var pending   = responseRows.length - delivered - inTransit;
+    var ACTIVE     = ['Info Received', 'In Transit', 'Out for Delivery', 'Pick Up'];
+    var PROBLEM    = ['Exception', 'Delivery Failure', 'DeliveryFailure', 'Expired'];
+    var delivered  = responseRows.filter(function(r) { return r[C.status] === 'Delivered'; }).length;
+    var inTransit  = responseRows.filter(function(r) { return ACTIVE.includes(r[C.status]); }).length;
+    var exception  = responseRows.filter(function(r) { return PROBLEM.includes(r[C.status]); }).length;
+    var pending    = responseRows.length - delivered - inTransit;
 
     var statusColors = {};
     Object.values(TRACK17_STATUS).forEach(function(v) { statusColors[v.label] = v.color; });
@@ -219,7 +221,7 @@ function getEmsData() {
     return {
       headers: all[0].map(function(h) { return h.toString(); }),
       rows: responseRows, colIdx: C, emailCol: C.email,
-      stats: { total: responseRows.length, delivered, inTransit, pending },
+      stats: { total: responseRows.length, delivered, inTransit, pending, exception },
       statusColors,
     };
   } catch (e) {
