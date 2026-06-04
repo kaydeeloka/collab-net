@@ -40,7 +40,7 @@ const BRAND_COLORS: Record<Brand, string> = {
 }
 
 const MEDIA_OPTIONS   = ['photo', 'video']
-const CONTENT_OPTIONS = ['review video', 'unboxing', 'haul', 'tutorial', 'sponsored', 'other']
+const CONTENT_OPTIONS = ['review video', 'unboxing','other']
 
 interface MonStats {
   totalInfluencers : number
