@@ -1,31 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { gasGet, gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 
+// Matches 모니터링 sheet: no.|platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|모니터링 실행일
 const C = {
-  PLATFORM   : 0,
-  INFLUENCER : 1,
-  HANDLE     : 2,
-  DATE       : 3,
-  LINK       : 4,
-  VIEWS      : 5,
-  LIKES      : 6,
-  COMMENTS   : 7,
-  UPDATED    : 8,
-  KEYWORDS   : 9,
+  NO       : 0,
+  PLATFORM : 1,
+  HANDLE   : 2,
+  DATE     : 3,
+  MEDIA    : 4,
+  CONTENT  : 5,
+  BRAND    : 6,
+  REPOST   : 7,
+  LINK     : 8,
+  VIEWS    : 9,
+  LIKES    : 10,
+  COMMENTS : 11,
+  UPDATED  : 12,
 }
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
 
-const DEFAULT_BRAND_KEYWORDS: Record<Brand, string[]> = {
-  mimuse:  ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', '#mimuse', '#미뮤즈', 'MiMuse Beauty'],
-  aesthen: ['aesthen', '#aesthen'],
-  joodoc:  ['joodoc', '#joodoc'],
-  nesh:    ['nesh', '#nesh'],
-  varuza:  ['varuza', '#varuza'],
+const DEFAULT_BRAND_KEYWORDS: Record<string, string[]> = {
+  mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
+  brands: ['aesthen', 'joodoc', 'nesh', 'varuza'],
 }
+
+const BRANDS_KW_COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#f97316', '#06b6d4', '#3b82f6', '#e11d48']
 
 const BRAND_COLORS: Record<Brand, string> = {
   mimuse:  '#3b82f6',
@@ -44,15 +47,16 @@ interface MonStats {
   totalViews       : number
   totalLikes       : number
   totalComments    : number
-  keywordCounts    : Record<string, number>
+  brandCounts      : Record<string, number>
   lastRun          : string
 }
 
 interface MonitoringData {
-  error?   : string
-  headers? : string[]
-  rows?    : string[][]
-  stats?   : MonStats
+  error?     : string
+  headers?   : string[]
+  rows?      : string[][]
+  stats?     : MonStats
+  runStatus? : string | null
 }
 
 type RowExtras = {
@@ -62,42 +66,58 @@ type RowExtras = {
   repost? : string
 }
 
+function findVideoLink(r: string[]): string {
+  for (const val of r) {
+    if (typeof val === 'string' && val.startsWith('http') && (
+      val.includes('/video/') ||
+      val.includes('/reel/') ||
+      val.includes('/p/')    ||
+      val.includes('youtu')
+    )) return val
+  }
+  return ''
+}
+
+function rowKey(r: string[]): string {
+  return [r[C.HANDLE], r[C.DATE], r[C.LINK]].filter(Boolean).join('|') || r.slice(0, 5).join('|')
+}
+
 function fmtDate(val: string): string {
   if (!val) return '—'
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
   const d = new Date(val)
   if (isNaN(d.getTime())) return val
-  return d.toISOString().slice(0, 10)
-}
-
-function detectBrand(keywords: string, brandKws: Record<string, string[]>): string {
-  if (!keywords) return ''
-  const kwLower = keywords.toLowerCase()
-  for (const brand of BRANDS) {
-    const kws = brandKws[brand] || []
-    if (kws.some(k => kwLower.includes(k.toLowerCase()))) return brand
-  }
-  return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function Monitoring() {
   const [data,    setData]    = useState<MonitoringData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [brandKws,   setBrandKws]   = useState<Record<string, string[]>>(DEFAULT_BRAND_KEYWORDS)
-  const [kwBrandTab, setKwBrandTab] = useState<Brand>('mimuse')
-  const [kwEditMode, setKwEditMode] = useState(false)
-  const [newKw,      setNewKw]      = useState('')
-  const [kwSaving,   setKwSaving]   = useState(false)
+  const [brandKws,      setBrandKws]      = useState<Record<string, string[]>>(DEFAULT_BRAND_KEYWORDS)
+  const [kwEditMode,    setKwEditMode]    = useState(false)
+  const [newMimuseKw,   setNewMimuseKw]  = useState('')
+  const [newBrandsKw,   setNewBrandsKw]  = useState('')
+  const [kwSaving,      setKwSaving]     = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ brand: string; kw: string } | null>(null)
 
   const [rowExtras, setRowExtras] = useState<Record<string, RowExtras>>(() => {
     try { return JSON.parse(localStorage.getItem('monitoring_row_extras') || '{}') }
     catch { return {} }
   })
 
+  const [scrapeLoading,  setScrapeLoading]  = useState(false)
+  const [scrapeMsg,      setScrapeMsg]      = useState('')
+  const [runPending,     setRunPending]     = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [brandFilter,    setBrandFilter]    = useState('all')
+  const [statusFilter,   setStatusFilter]   = useState('all')  // all | matched | pending
 
   useEffect(() => {
     loadMonitoring()
@@ -109,6 +129,10 @@ export default function Monitoring() {
     try {
       const d: MonitoringData = await gasGet('getMonitoringData')
       setData(d)
+      if (d.runStatus === 'RUNNING') {
+        setScrapeMsg('스크래핑 진행 중… — 자동으로 결과를 확인합니다.')
+        setRunPending(true)
+      }
     } catch (e: unknown) {
       setData({ error: (e as Error).message })
     }
@@ -121,11 +145,86 @@ export default function Monitoring() {
       if (Array.isArray(kws)) {
         setBrandKws({ ...DEFAULT_BRAND_KEYWORDS, mimuse: kws as string[] })
       } else {
-        setBrandKws({ ...DEFAULT_BRAND_KEYWORDS, ...(kws as Record<string, string[]>) })
+        const loaded = kws as Record<string, string[]>
+        // Migrate old per-brand format → flat brands array
+        if (!loaded.brands && (loaded.aesthen || loaded.joodoc || loaded.nesh || loaded.varuza)) {
+          const brands = [...new Set([
+            ...(loaded.aesthen || []), ...(loaded.joodoc || []),
+            ...(loaded.nesh    || []), ...(loaded.varuza || []),
+          ])]
+          setBrandKws({ mimuse: loaded.mimuse || DEFAULT_BRAND_KEYWORDS.mimuse, brands })
+        } else {
+          setBrandKws({ ...DEFAULT_BRAND_KEYWORDS, ...loaded })
+        }
       }
     } catch {
       // keep defaults
     }
+  }
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+  }
+
+  async function pollOnce() {
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; status?: string }>({ action: 'checkMonitoringRun' })
+      if (r.error) {
+        stopPolling(); setRunPending(false)
+        setScrapeMsg('오류: ' + r.error)
+        return
+      }
+      if (r.status && r.status !== 'SUCCEEDED') {
+        setScrapeMsg('스크래핑 중… (' + r.status + ') — 자동으로 결과를 확인합니다.')
+        return
+      }
+      // Done
+      stopPolling(); setRunPending(false)
+      setScrapeMsg(r.message || '완료')
+      await loadMonitoring()
+    } catch {
+      // network hiccup — keep polling
+      setScrapeMsg('스크래핑 중… — 결과를 기다리는 중입니다.')
+    }
+  }
+
+  function startPolling() {
+    stopPolling()
+    pollOnce()
+    pollRef.current = setInterval(pollOnce, 30000)
+  }
+
+  useEffect(() => {
+    if (runPending) startPolling()
+    else stopPolling()
+    return stopPolling
+  }, [runPending])
+
+  async function startScrape() {
+    setScrapeLoading(true)
+    setScrapeMsg('')
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; profiles?: number; handles?: string[] }>({
+        action: 'runMonitoringScrape',
+      })
+      if (r.error) { setScrapeMsg('오류: ' + r.error); return }
+      const handleList = r.handles?.length ? ` (${r.handles.join(', ')})` : ''
+      setScrapeMsg((r.message || '') + handleList + ' — 자동으로 결과를 확인합니다.')
+      setRunPending(true)
+    } catch (e: unknown) {
+      setScrapeMsg('오류: ' + (e as Error).message)
+    } finally {
+      setScrapeLoading(false)
+    }
+  }
+
+  async function resetScrape() {
+    try {
+      await gasPost({ action: 'resetMonitoringRun' })
+    } catch { /* ignore */ }
+    stopPolling()
+    setRunPending(false)
+    setScrapeMsg('')
   }
 
   async function saveKeywords(next: Record<string, string[]>) {
@@ -138,20 +237,19 @@ export default function Monitoring() {
     setKwSaving(false)
   }
 
-  function addKeyword() {
-    const kw = newKw.trim()
-    if (!kw) { setNewKw(''); return }
-    const current = brandKws[kwBrandTab] || []
-    if (current.includes(kw)) { setNewKw(''); return }
-    const next = { ...brandKws, [kwBrandTab]: [...current, kw] }
+  function addKeyword(brand: string, kw: string, clear: () => void) {
+    const trimmed = kw.trim()
+    if (!trimmed) { clear(); return }
+    const current = brandKws[brand] || []
+    if (current.includes(trimmed)) { clear(); return }
+    const next = { ...brandKws, [brand]: [...current, trimmed] }
     setBrandKws(next)
-    setNewKw('')
+    clear()
     saveKeywords(next)
   }
 
-  function removeKeyword(kw: string) {
-    const current = brandKws[kwBrandTab] || []
-    const next = { ...brandKws, [kwBrandTab]: current.filter(k => k !== kw) }
+  function removeKeyword(brand: string, kw: string) {
+    const next = { ...brandKws, [brand]: (brandKws[brand] || []).filter(k => k !== kw) }
     setBrandKws(next)
     saveKeywords(next)
   }
@@ -162,10 +260,9 @@ export default function Monitoring() {
     localStorage.setItem('monitoring_row_extras', JSON.stringify(next))
   }
 
-  const stats         = data?.stats
-  const keywordCounts = stats?.keywordCounts || {}
+  const stats = data?.stats
 
-  const rows = (data?.rows || []).filter(r => r && (r[C.INFLUENCER] || r[C.HANDLE]))
+  const rows = (data?.rows || []).filter(r => r && r[C.HANDLE])
 
   const filteredRows = rows.filter(r => {
     const platform = (r[C.PLATFORM] || '').toLowerCase()
@@ -173,11 +270,14 @@ export default function Monitoring() {
     if (platformFilter === 'instagram' && !platform.includes('instagram')) return false
 
     if (brandFilter !== 'all') {
-      const extras    = rowExtras[r[C.LINK]] || {}
-      const autoBrand = detectBrand(r[C.KEYWORDS] || '', brandKws)
-      const rowBrand  = extras.brand || autoBrand
-      if (rowBrand !== brandFilter) return false
+      const extras   = rowExtras[rowKey(r)] || {}
+      const rowBrand = extras.brand || r[C.BRAND] || ''
+      if (rowBrand.toLowerCase() !== brandFilter.toLowerCase()) return false
     }
+
+    const hasLink = !!findVideoLink(r)
+    if (statusFilter === 'matched' && !hasLink) return false
+    if (statusFilter === 'pending' && hasLink)  return false
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -185,9 +285,6 @@ export default function Monitoring() {
     }
     return true
   })
-
-  const currentBrandKws = brandKws[kwBrandTab] || []
-  const brandColor      = BRAND_COLORS[kwBrandTab]
 
   return (
     <div className="page page--fill">
@@ -206,11 +303,31 @@ export default function Monitoring() {
           </div>
         </div>
         <div className="page-banner-actions">
+          {runPending && (
+            <button className="page-banner-btn" onClick={resetScrape}
+              style={{ background: 'var(--yellow)', color: 'var(--yellow-text)', borderColor: 'var(--yellow-md)' }}>
+              취소
+            </button>
+          )}
+          <button className="page-banner-btn" onClick={startScrape} disabled={scrapeLoading || runPending}
+            style={{ background: 'var(--teal)', color: '#fff', borderColor: 'var(--teal)' }}>
+            {scrapeLoading && !runPending ? '실행 중…' : '모니터링 실행'}
+          </button>
           <button className="page-banner-btn page-banner-btn--secondary" onClick={loadMonitoring}>
             <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
           </button>
         </div>
       </div>
+      {scrapeMsg && (
+        <div style={{
+          background: scrapeMsg.startsWith('오류') ? '#fef2f2' : '#f0fdf4',
+          border: `1px solid ${scrapeMsg.startsWith('오류') ? '#fca5a5' : '#86efac'}`,
+          borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 12,
+          fontSize: 13, color: scrapeMsg.startsWith('오류') ? '#b91c1c' : '#166534',
+        }}>
+          {scrapeMsg}
+        </div>
+      )}
 
       {/* Stats cards */}
       <div className="cards">
@@ -236,71 +353,132 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {/* Brand keyword config */}
-      <div style={{ marginBottom: 20 }}>
-
-        {/* Brand keyword config */}
-        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              브랜드별 감지 키워드
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {kwSaving && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>저장 중…</span>}
-              {!kwEditMode
-                ? <button className="cfg-btn" onClick={() => setKwEditMode(true)}>편집</button>
-                : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }}
-                    onClick={() => setKwEditMode(false)}>완료</button>
-              }
-            </div>
+      {/* 키워드 설정 */}
+      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>
+            키워드 설정
           </div>
-
-          {/* Brand tabs */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
-            {BRANDS.map(brand => (
-              <button key={brand} onClick={() => setKwBrandTab(brand)} style={{
-                fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
-                border: `1px solid ${BRAND_COLORS[brand]}`,
-                background: kwBrandTab === brand ? BRAND_COLORS[brand] : BRAND_COLORS[brand] + '18',
-                color: kwBrandTab === brand ? '#fff' : BRAND_COLORS[brand],
-                cursor: 'pointer',
-              }}>{brand}</button>
-            ))}
-          </div>
-
-          {/* Keywords for selected brand */}
-          <div>
-            {currentBrandKws.length === 0
-              ? <div style={{ color: 'var(--gray-4)', fontSize: 12 }}>키워드 없음</div>
-              : currentBrandKws.map(kw => (
-                <div key={kw} className="cfg-item">
-                  <span style={{
-                    flex: 1, fontSize: 12, fontWeight: 600,
-                    color: brandColor,
-                    background: brandColor + '18',
-                    padding: '2px 8px', borderRadius: 20,
-                  }}>{kw}</span>
-                  {kwEditMode && (
-                    <button onClick={() => removeKeyword(kw)}
-                      style={{ background: 'none', border: 'none', color: 'var(--gray-5)', cursor: 'pointer', fontSize: 13, padding: '0 4px' }}>×</button>
-                  )}
-                </div>
-              ))
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {kwSaving && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>저장 중…</span>}
+            {!kwEditMode
+              ? <button className="cfg-btn" onClick={() => setKwEditMode(true)}>편집</button>
+              : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }}
+                  onClick={() => setKwEditMode(false)}>완료</button>
             }
           </div>
-          {kwEditMode && (
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <input className="mon-add-input"
-                placeholder={`${kwBrandTab} 키워드 입력 후 Enter`}
-                value={newKw}
-                onChange={e => setNewKw(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword() } }} />
-              <button className="cfg-btn" onClick={addKeyword}>추가</button>
-            </div>
-          )}
         </div>
 
+        {/* MiMuse keywords */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: BRAND_COLORS.mimuse, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+            MiMuse
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(brandKws.mimuse || []).map(kw => (
+              <span key={kw} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 2,
+                fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                background: BRAND_COLORS.mimuse + '18', color: BRAND_COLORS.mimuse,
+                border: `1px solid ${BRAND_COLORS.mimuse}44`,
+              }}>
+                {kw}
+                {kwEditMode && (
+                  <button onClick={() => setPendingDelete({ brand: 'mimuse', kw })}
+                    style={{ background: 'none', border: 'none', color: BRAND_COLORS.mimuse, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+                )}
+              </span>
+            ))}
+            {kwEditMode && (
+              <span style={{ display: 'inline-flex', gap: 4 }}>
+                <input className="mon-add-input" placeholder="키워드 추가" value={newMimuseKw}
+                  onChange={e => setNewMimuseKw(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw('')) } }}
+                  style={{ width: 110 }} />
+                <button className="cfg-btn" onClick={() => addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw(''))}>+</button>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Brand keywords — flat list, each keyword gets a cycling color */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+            브랜드
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(brandKws.brands || []).map((kw, idx) => {
+              const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+              return (
+                <span key={kw} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 2,
+                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                  background: c + '18', color: c, border: `1px solid ${c}44`,
+                }}>
+                  {kw}
+                  {kwEditMode && (
+                    <button onClick={() => setPendingDelete({ brand: 'brands', kw })}
+                      style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+                  )}
+                </span>
+              )
+            })}
+            {kwEditMode && (
+              <span style={{ display: 'inline-flex', gap: 4 }}>
+                <input className="mon-add-input" placeholder="키워드 추가" value={newBrandsKw}
+                  onChange={e => setNewBrandsKw(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('brands', newBrandsKw, () => setNewBrandsKw('')) } }}
+                  style={{ width: 110 }} />
+                <button className="cfg-btn" onClick={() => addKeyword('brands', newBrandsKw, () => setNewBrandsKw(''))}>+</button>
+              </span>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Brand count panel */}
+      {stats?.brandCounts && Object.keys(stats.brandCounts).length > 0 && (
+        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '14px 20px', marginBottom: 20, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', whiteSpace: 'nowrap' }}>
+            브랜드 횟수
+          </div>
+          {BRANDS.map(brand => {
+            const count = stats.brandCounts[brand.toLowerCase()] ?? stats.brandCounts[brand] ?? 0
+            return (
+              <div key={brand} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
+                  background: BRAND_COLORS[brand] + '18', color: BRAND_COLORS[brand],
+                  border: `1px solid ${BRAND_COLORS[brand]}44`,
+                }}>{brand}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? 'var(--gray-7)' : 'var(--gray-3)' }}>
+                  {count}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Delete confirmation toast */}
+      {pendingDelete && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--gray-8, #1f2937)', color: '#fff', borderRadius: 10,
+          padding: '12px 18px', display: 'flex', gap: 12, alignItems: 'center',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)', zIndex: 1000, fontSize: 12, whiteSpace: 'nowrap',
+        }}>
+          <span>"{pendingDelete.kw}" 키워드를 삭제할까요?</span>
+          <button onClick={() => { removeKeyword(pendingDelete.brand, pendingDelete.kw); setPendingDelete(null) }}
+            style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+            삭제
+          </button>
+          <button onClick={() => setPendingDelete(null)}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 11 }}>
+            취소
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="filters" style={{ marginBottom: 16 }}>
@@ -321,6 +499,13 @@ export default function Monitoring() {
             <button key={brand}
               className={'ems-filter-btn' + (brandFilter === brand ? ' active' : '')}
               onClick={() => setBrandFilter(brandFilter === brand ? 'all' : brand)}>{brand}</button>
+          ))}
+        </div>
+        <div className="filter-group">
+          <label>상태:</label>
+          {([['all', '전체'], ['matched', '데이터 있음'], ['pending', '대기중']] as [string, string][]).map(([v, l]) => (
+            <button key={v} className={'ems-filter-btn' + (statusFilter === v ? ' active' : '')}
+              onClick={() => setStatusFilter(v)}>{l}</button>
           ))}
         </div>
       </div>
@@ -359,32 +544,40 @@ export default function Monitoring() {
                 <tbody>
                   {filteredRows.map((r, i) => {
                     const handle   = (r[C.HANDLE]   || '').replace(/^@/, '')
-                    // Column 1 (INFLUENCER) stores the actual content platform (TikTok/Instagram)
-                    const contentPlatform = (r[C.INFLUENCER] || '').toLowerCase()
-                    const link     = (r[C.LINK] || '').toLowerCase()
-                    const isTikTok = contentPlatform.includes('tiktok') || link.includes('tiktok.com')
+                    const platform = (r[C.PLATFORM] || '').toLowerCase()
+                    const link     = findVideoLink(r)
+                    const hasLink  = !!link
+                    const isTikTok = platform.includes('tiktok') || link.toLowerCase().includes('tiktok.com')
                     const profileUrl = isTikTok
                       ? `https://www.tiktok.com/@${handle}`
                       : `https://www.instagram.com/${handle}`
-                    const runDate  = r[C.UPDATED] || ''
+                    const runDate     = r[C.UPDATED] || ''
                     const showRunDate = runDate && !runDate.startsWith('http')
 
-                    const extras    = rowExtras[r[C.LINK]] || {}
-                    const autoBrand = detectBrand(r[C.KEYWORDS] || '', brandKws)
-                    const rowBrand  = extras.brand || autoBrand
-                    const rowColor  = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
+                    const rKey     = rowKey(r)
+                    const extras   = rowExtras[rKey] || {}
+                    const rowBrand = extras.brand || r[C.BRAND] || ''
+                    const rowColor = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
 
                     return (
-                      <tr key={i}>
+                      <tr key={i} style={{ opacity: hasLink ? 1 : 0.6 }}>
                         {/* no. */}
                         <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i + 1}</td>
 
                         {/* account */}
                         <td>
-                          {isTikTok
-                            ? <span className="platform-badge platform-tiktok">TikTok</span>
-                            : <span className="platform-badge platform-instagram">Instagram</span>
-                          }
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                            {isTikTok
+                              ? <span className="platform-badge platform-tiktok">TikTok</span>
+                              : <span className="platform-badge platform-instagram">Instagram</span>
+                            }
+                            {!hasLink && (
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
+                                background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047',
+                              }}>대기중</span>
+                            )}
+                          </div>
                           {handle && (
                             <div style={{ marginTop: 3 }}>
                               <a href={profileUrl} target="_blank" rel="noopener"
@@ -403,8 +596,8 @@ export default function Monitoring() {
                         {/* media */}
                         <td>
                           <select
-                            value={extras.media || ''}
-                            onChange={e => updateRowExtra(r[C.LINK], 'media', e.target.value)}
+                            value={extras.media || r[C.MEDIA] || ''}
+                            onChange={e => updateRowExtra(rKey, 'media', e.target.value)}
                             className="inline-select"
                           >
                             <option value="">—</option>
@@ -415,8 +608,8 @@ export default function Monitoring() {
                         {/* content */}
                         <td>
                           <select
-                            value={extras.content || ''}
-                            onChange={e => updateRowExtra(r[C.LINK], 'content', e.target.value)}
+                            value={extras.content || r[C.CONTENT] || ''}
+                            onChange={e => updateRowExtra(rKey, 'content', e.target.value)}
                             className="inline-select"
                           >
                             <option value="">—</option>
@@ -428,7 +621,7 @@ export default function Monitoring() {
                         <td>
                           <select
                             value={rowBrand}
-                            onChange={e => updateRowExtra(r[C.LINK], 'brand', e.target.value)}
+                            onChange={e => updateRowExtra(rKey, 'brand', e.target.value)}
                             className="inline-select"
                             style={{
                               color: rowBrand ? rowColor : 'var(--gray-4)',
@@ -445,8 +638,8 @@ export default function Monitoring() {
                         {/* repost */}
                         <td>
                           <select
-                            value={extras.repost || ''}
-                            onChange={e => updateRowExtra(r[C.LINK], 'repost', e.target.value)}
+                            value={extras.repost || r[C.REPOST] || ''}
+                            onChange={e => updateRowExtra(rKey, 'repost', e.target.value)}
                             className="inline-select"
                             style={{
                               color: extras.repost === 'Y' ? 'var(--green)' : extras.repost === 'N' ? '#ef4444' : 'var(--gray-4)',
@@ -461,8 +654,8 @@ export default function Monitoring() {
 
                         {/* review link */}
                         <td>
-                          {r[C.LINK]
-                            ? <a href={r[C.LINK]} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                          {link
+                            ? <a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
                             : '—'}
                         </td>
 
