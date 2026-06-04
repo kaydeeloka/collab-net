@@ -56,7 +56,7 @@ html { scroll-behavior: smooth; }
 
 body {
   font-family: 'Pretendard', -apple-system, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-  background: var(--surface);
+  background: #eef2f7;
   color: var(--ink);
   font-size: 14px;
   line-height: 1.6;
@@ -247,7 +247,7 @@ a { text-decoration: none; }
   flex: 1; margin-left: 240px;
   transition: margin-left .28s cubic-bezier(.4,0,.2,1);
   display: flex; flex-direction: column; min-height: 100vh;
-  background: var(--surface);
+  background: #eef2f7;
 }
 .app-layout.app-layout--collapsed .main-area { margin-left: 64px; }
 
@@ -692,10 +692,10 @@ td {
 .feature-icon { flex-shrink: 0; display: flex; align-items: center; color: var(--teal-dk); }
 .feature-title { font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 4px; letter-spacing: -.2px; }
 .feature-desc { font-size: 12px; color: var(--teal-dk); line-height: 1.55; }
-.feature-stats { display: flex; gap: 16px; flex-wrap: wrap; }
-.fstat { text-align: center; }
+.feature-stats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-evenly; align-items: center; flex: 1; }
+.fstat { text-align: center; flex: 1; min-width: 0; }
 .fstat-val { font-size: 20px; font-weight: 800; color: var(--ink); line-height: 1; }
-.fstat-lbl { font-size: 11px; color: var(--teal-dk); margin-top: 3px; }
+.fstat-lbl { font-size: 11px; color: var(--teal-dk); margin-top: 3px; white-space: nowrap; }
 .feature-go { font-size: 12px; font-weight: 700; color: var(--teal-dk); margin-top: auto; }
 
 /* ─────────────────────────────────────

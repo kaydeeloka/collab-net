@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { ClipboardList, Package, BarChart2, TrendingUp, Users, Building2, FileText } from 'lucide-react'
+import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { gasGet } from '../../lib/api'
 import { useKrClock } from '../../lib/utils'
-import PageSection from '../../components/PageSection'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -59,7 +58,7 @@ export default function Dashboard() {
       const confirmedCount = (confirmed.rows || []).length
       const recruitPct = Math.round(confirmedCount / 50 * 100)
       setStatsListup(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:11px;font-weight:500;color:var(--gray-5)">/${total}</span></div><div class="fstat-lbl">컨택 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:11px;font-weight:500;color:var(--gray-5)">/${total}명</span></div><div class="fstat-lbl">컨택 완료</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">신규 회신</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${recruitPct}%<span style="font-size:11px;font-weight:500;color:var(--gray-5)"> (${confirmedCount}/50)</span></div><div class="fstat-lbl">모집 완료</div></div>`
       )
@@ -67,11 +66,12 @@ export default function Dashboard() {
   }, [])
 
   const loadOutreachStats = useCallback(async () => {
-    // Brand listup — no dedicated API yet; show placeholders
+    // Brand listup — no dedicated API yet; dummy data placeholder
     setStatsOutreach(
-      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">컨택 완료/차수</div></div>` +
-      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">신규 회신</div></div>` +
-      `<div class="fstat"><div class="fstat-val" style="color:var(--gray-4)">—</div><div class="fstat-lbl">확정 브랜드</div></div>`
+      `<div class="fstat"><div class="fstat-val" style="color:var(--green)">0<span style="font-size:11px;font-weight:500;color:var(--gray-5)">/50명</span></div><div class="fstat-lbl">컨택 완료</div></div>` +
+      `<div class="fstat"><div class="fstat-val" style="color:#d97706">0</div><div class="fstat-lbl">신규 회신</div></div>` +
+      `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0</div><div class="fstat-lbl">확정 브랜드</div></div>` +
+      `<div style="font-size:9px;color:var(--gray-3);margin-top:2px;width:100%">* 더미 데이터</div>`
     )
   }, [])
 
@@ -113,24 +113,76 @@ export default function Dashboard() {
     <div className="page">
 
       {/* ── Hero ── */}
-      <div className="hero">
-        <div>
-          <div className="hero-eyebrow">
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f2744 100%)',
+        borderRadius: 16, padding: '28px 32px', marginBottom: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {/* Subtle background glow */}
+        <div style={{
+          position: 'absolute', top: -40, right: 120, width: 220, height: 220,
+          borderRadius: '50%', background: 'rgba(99,102,241,0.12)', pointerEvents: 'none',
+          filter: 'blur(40px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: -30, right: 0, width: 160, height: 160,
+          borderRadius: '50%', background: 'rgba(59,130,246,0.10)', pointerEvents: 'none',
+          filter: 'blur(35px)',
+        }} />
+
+        {/* Left: title */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             {dbOptions.length > 0 ? (
-              <select className="phase-select" value={activeDbId} onChange={e => switchPhase(e.target.value)} title="차수 전환">
-                {dbOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <select
+                  value={activeDbId}
+                  onChange={e => switchPhase(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)', color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20,
+                    padding: '3px 28px 3px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    outline: 'none', appearance: 'none', WebkitAppearance: 'none',
+                  }}
+                >
+                  {dbOptions.map(o => <option key={o.id} value={o.id} style={{ background: '#1e293b' }}>{o.label}</option>)}
+                </select>
+                <span style={{ position: 'absolute', right: 10, pointerEvents: 'none', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>▾</span>
+              </div>
             ) : (
-              <span className="hero-live-pill">LIVE</span>
+              <span style={{
+                background: 'rgba(16,185,129,0.2)', color: '#34d399',
+                border: '1px solid rgba(16,185,129,0.3)', borderRadius: 20,
+                padding: '3px 12px', fontSize: 11, fontWeight: 800, letterSpacing: '1px',
+              }}>LIVE</span>
             )}
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>
+              인플루언서 마케팅 자동화 시스템
+            </span>
           </div>
-          <h1>MiMuse 자동화 대시보드</h1>
-          <p>차수별 인플루언서 마케팅 현황을 한눈에 확인하세요</p>
+          <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 6 }}>
+            MiMuse 자동화 대시보드
+          </div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
+            차수별 인플루언서 마케팅 현황을 한눈에 확인하세요
+          </div>
         </div>
-        <div className="hero-clock">
-          <div className="hero-clock-date">{clock.date}</div>
-          <div className="hero-clock-time">{clock.time}</div>
-          <div className="hero-clock-tz">Korea Standard Time</div>
+
+        {/* Right: clock */}
+        <div style={{ position: 'relative', zIndex: 1, textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 4, letterSpacing: '.3px' }}>
+            {clock.date}
+          </div>
+          <div style={{
+            fontSize: 38, fontWeight: 800, color: '#fff', letterSpacing: '-1.5px',
+            lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+          }}>
+            {clock.time}
+          </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 5, letterSpacing: '1px', textTransform: 'uppercase' }}>
+            Korea Standard Time
+          </div>
         </div>
       </div>
 
@@ -168,95 +220,110 @@ export default function Dashboard() {
             {/* Divider */}
             <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--gray-2)', margin: '0 28px' }} />
 
-            {/* Date details */}
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 4 }}>
-                {pastDispatch ? '프로젝트 마감' : '2026년 8월 18일'}
+            {/* Date details + phase inline */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-8)' }}>
+                  {pastDispatch ? '프로젝트 마감' : '2026년 8월 18일'}
+                </div>
+                {phase && (
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 6,
+                    background: accent + '15', color: accent, border: `1.5px solid ${accent}44`,
+                  }}>{phase}</span>
+                )}
               </div>
               <div style={{ fontSize: 12, color: 'var(--gray-5)' }}>
                 {pastDispatch ? '발송 완료 · 프로젝트 마감 카운트다운 중' : '키트 발송 예정일 · 발송 준비를 완료해주세요'}
               </div>
             </div>
-
-            {/* Phase */}
-            {phase && (
-              <>
-                <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--gray-2)', margin: '0 28px' }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '1px' }}>현재 차수</div>
-                  <div style={{
-                    fontSize: 17, fontWeight: 700, padding: '5px 18px', borderRadius: 8,
-                    background: accent + '15', color: accent, border: `1.5px solid ${accent}55`,
-                  }}>{phase}</div>
-                </div>
-              </>
-            )}
           </div>
         )
       })()}
 
-      {/* ── Feature cards ── */}
-      <div className="features-grid features-grid--4" style={{ marginBottom: 32 }}>
-        <Link className="feature-card highlight" to="/influencer/search">
-          <div className="feature-card-header">
-            <div className="feature-icon"><ClipboardList size={26} /></div>
-            <div>
-              <div className="feature-title">인플루언서 리스트업</div>
-              <div className="feature-desc">TikTok 크리에이터 탐색 및 인플루언서 데이터베이스 관리</div>
-            </div>
+      {/* ── Status cards 2×2 ── */}
+      {(() => {
+        const cards = [
+          {
+            to: '/influencer/search', icon: <ClipboardList size={20} />,
+            title: '인플루언서 리스트업', desc: 'TikTok 크리에이터 탐색 · DB 관리',
+            stats: statsListup, color: '#3b82f6', go: '인플루언서 보기',
+          },
+          {
+            to: '/brand/contact', icon: <Building2 size={20} />,
+            title: '브랜드 리스트업', desc: '브랜드 컨택 현황 · 확정 브랜드 관리',
+            stats: statsOutreach, color: '#8b5cf6', go: '브랜드 보기',
+          },
+          {
+            to: '/kit/ems', icon: <Package size={20} />,
+            title: 'EMS 배송 트래킹', desc: '키트 배송 현황 ',
+            stats: statsEms, color: '#10b981', go: '배송 현황 보기',
+          },
+          {
+            to: '/monitoring/reviews', icon: <BarChart2 size={20} />,
+            title: '인플루언서 모니터링', desc: '콘텐츠 성과 · MiMuse 언급 분석',
+            stats: statsMonitoring, color: '#f97316', go: '모니터링 보기',
+          },
+        ]
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+            {cards.map(c => (
+              <Link key={c.to} to={c.to} style={{ textDecoration: 'none' }}>
+                <div style={{
+                  background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+                  padding: '20px 22px', borderTop: `3px solid ${c.color}`,
+                  transition: 'box-shadow .15s, transform .15s',
+                  display: 'flex', flexDirection: 'column', gap: 14, height: '100%',
+                }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.10)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--shadow)'; (e.currentTarget as HTMLDivElement).style.transform = 'none' }}
+                >
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: c.color + '15', color: c.color, flexShrink: 0,
+                    }}>{c.icon}</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{c.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 1 }}>{c.desc}</div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <StatCell html={c.stats} />
+
+                  {/* Footer */}
+                  <div style={{
+                    fontSize: 12, fontWeight: 600, color: c.color,
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    borderTop: '1px solid var(--gray-1)', paddingTop: 10, marginTop: 'auto',
+                  }}>
+                    {c.go} <span style={{ fontSize: 14 }}>→</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
-          <StatCell html={statsListup} />
-          <div className="feature-go">인플루언서 보기 →</div>
-        </Link>
+        )
+      })()}
 
-        <Link className="feature-card" to="/brand/contact">
-          <div className="feature-card-header">
-            <div className="feature-icon"><Building2 size={26} /></div>
-            <div>
-              <div className="feature-title">브랜드 리스트업</div>
-              <div className="feature-desc">브랜드 컨택 현황 및 확정 브랜드 관리</div>
-            </div>
+      {/* ── Trend ── */}
+      <div style={{
+        background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+        padding: '18px 22px', marginBottom: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TrendingUp size={15} color="#10b981" />
           </div>
-          <StatCell html={statsOutreach} />
-          <div className="feature-go">브랜드 보기 →</div>
-        </Link>
-
-        <Link className="feature-card green-top" to="/kit/ems">
-          <div className="feature-card-header">
-            <div className="feature-icon"><Package size={26} /></div>
-            <div>
-              
-              <div className="feature-title">EMS 배송 트래킹</div>
-              <div className="feature-desc">국제 배송 현황 실시간 추적</div>
-            </div>
-          </div>
-          <StatCell html={statsEms} />
-          <div className="feature-go">배송 현황 보기 →</div>
-        </Link>
-
-        <Link className="feature-card" to="/monitoring/reviews">
-          <div className="feature-card-header">
-            <div className="feature-icon"><BarChart2 size={26} /></div>
-            <div>
-              <div className="feature-title">인플루언서 모니터링</div>
-              <div className="feature-desc">콘텐츠 성과 및 MiMuse 언급 모니터링</div>
-            </div>
-          </div>
-          <StatCell html={statsMonitoring} />
-          <div className="feature-go">모니터링 보기 →</div>
-        </Link>
-      </div>
-
-      {/* ── Trend sections ── */}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <TrendingUp size={16} style={{ color: 'var(--gray-5)' }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-6)' }}>오늘의 트렌드</span>
-      </div>
-      <div className="cards" style={{ marginBottom: 24 }}>
-        <div className="card"><div className="card-label">뉴스 키워드</div><div className="card-value">—</div></div>
-        <div className="card highlight"><div className="card-label">틱톡 인기 해시태그</div><div className="card-value">—</div></div>
-        <div className="card"><div className="card-label">급상승 트렌드</div><div className="card-value">—</div></div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>오늘의 트렌드</span>
+        </div>
+        <div className="cards" style={{ marginBottom: 0 }}>
+          <div className="card"><div className="card-label">뉴스 키워드</div><div className="card-value">—</div></div>
+          <div className="card highlight"><div className="card-label">틱톡 인기 해시태그</div><div className="card-value">—</div></div>
+          <div className="card"><div className="card-label">급상승 트렌드</div><div className="card-value">—</div></div>
+        </div>
       </div>
 
     </div>
