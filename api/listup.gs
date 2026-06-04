@@ -90,9 +90,17 @@ function startCreatorSearch(params) {
     const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
     if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요. (프로젝트 설정 → 스크립트 속성)' };
 
+    const queries        = params.tags || [];
+    const targetCreators = params.targetCreators || 100;
+    const queryCount     = Math.max(queries.length, 1);
+    // Each search query returns posts, not unique creators.
+    // Assume ~25% unique creator rate per post → need 4× posts to hit the target.
+    // Distribute evenly across all queries, cap at 200 per Apify limit.
+    const postsPerQuery  = Math.min(Math.ceil(targetCreators / queryCount / 0.25), 200);
+
     const runInput = {
-      hashtags:                      params.tags || [],
-      resultsPerPage:                Math.min(params.postsPerTag || 90, 200),
+      searchQueries:                 queries,
+      resultsPerPage:                postsPerQuery,
       region:                        'US',
       shouldDownloadVideos:          false,
       shouldDownloadCovers:          false,
@@ -134,13 +142,30 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
       'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500',
       { muteHttpExceptions: true }
     );
-    const items      = JSON.parse(res.getContentText());
+    const items = JSON.parse(res.getContentText());
+
+    // Build existing handle set from both sheets so results are pre-filtered
+    const existingHandles = new Set();
+    try {
+      const ss         = SpreadsheetApp.openById(getActiveOutreachId());
+      const handleCol  = LISTUP_HEADERS.indexOf('Handle');
+      [SHEET_K_BEAUTY, SHEET_GENERAL_BEAUTY].forEach(function(tab) {
+        var sheet = ss.getSheetByName(tab);
+        if (!sheet) return;
+        sheet.getDataRange().getValues().slice(1).forEach(function(row) {
+          var h = (row[handleCol] || '').toString().trim().toLowerCase();
+          if (h) existingHandles.add(h);
+        });
+      });
+    } catch (e) { Logger.log('기존 핸들 읽기 오류 (무시): ' + e); }
+
     const creatorsMap = {};
 
     for (const item of items) {
       const meta      = item.authorMeta || {};
       const handle    = meta.name;
       if (!handle) continue;
+      if (existingHandles.has(handle.toLowerCase())) continue;  // already in DB
       const followers = meta.fans || 0;
       if (followerMin && followers < followerMin) continue;
       if (followerMax && followers > followerMax) continue;
@@ -195,8 +220,9 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
       };
     });
 
-    const limited = maxCreators > 0 ? creators.slice(0, maxCreators) : creators;
-    return { ok: true, creators: limited };
+    const limited      = maxCreators > 0 ? creators.slice(0, maxCreators) : creators;
+    const dedupSkipped = existingHandles.size;
+    return { ok: true, creators: limited, dedupSkipped: dedupSkipped };
   } catch (e) {
     return { error: e.toString() };
   }
@@ -204,15 +230,40 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
 
 function appendCreatorsToSheet(creators, rank, sheetName) {
   try {
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
-    var target = sheetName || SHEET_K_BEAUTY;
-    var ws = ss.getSheetByName(target);
+    const ss     = SpreadsheetApp.openById(getActiveOutreachId());
+    var target   = sheetName || SHEET_K_BEAUTY;
+    var ws       = ss.getSheetByName(target);
     if (!ws) return { error: (sheetName || '시트') + '를 찾을 수 없습니다.' };
+
+    // Build a set of ALL existing handles across BOTH sheets to deduplicate
+    // across tiers (e.g. same creator already in K-뷰티 shouldn't appear in 일반뷰티).
+    const handleCol = LISTUP_HEADERS.indexOf('Handle');
+    const existingHandles = new Set();
+    [SHEET_K_BEAUTY, SHEET_GENERAL_BEAUTY].forEach(function(tab) {
+      var sheet = ss.getSheetByName(tab);
+      if (!sheet) return;
+      var data = sheet.getDataRange().getValues();
+      data.slice(1).forEach(function(row) {
+        var h = (row[handleCol] || '').toString().trim().toLowerCase();
+        if (h) existingHandles.add(h);
+      });
+    });
+
+    // Only keep creators not already in any sheet
+    var newCreators = creators.filter(function(c) {
+      return !existingHandles.has((c.handle || '').toString().trim().toLowerCase());
+    });
+    var skipped = creators.length - newCreators.length;
+
+    if (newCreators.length === 0) {
+      return { ok: true, count: 0, skipped: skipped, message: '새로운 크리에이터가 없습니다 — 전체 ' + skipped + '명이 이미 DB에 있습니다.' };
+    }
+
     // Always write the canonical headers to row 1
     ws.getRange(1, 1, 1, LISTUP_HEADERS.length).setValues([LISTUP_HEADERS]);
     ws.setFrozenRows(1);
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const rows = creators.map(c => [
+    const rows = newCreators.map(function(c) { return [
       today,        // Timestamp
       rank,         // 순위
       c.handle,     // Handle
@@ -229,9 +280,10 @@ function appendCreatorsToSheet(creators, rank, sheetName) {
       '',           // Outreach
       '',           // Reply Body
       '',           // Reply Date
-    ]);
+    ]; });
     ws.getRange(ws.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
-    return { ok: true, count: creators.length };
+    return { ok: true, count: newCreators.length, skipped: skipped,
+      message: newCreators.length + '명 추가 완료 (' + skipped + '명은 이미 DB에 있어 건너뜀)' };
   } catch (e) {
     return { error: e.toString() };
   }

@@ -552,15 +552,17 @@ export default function Ems() {
               </div>
 
               <div style={{ position: 'relative', paddingLeft: 28 }}>
-                <div style={{ position: 'absolute', left: 8, top: 4, bottom: 4, width: 2, background: 'var(--gray-2)' }} />
-                {events.map((evt, i) => (
+                <div style={{ position: 'absolute', left: 8, top: 4, bottom: 4, width: 2, background: detailData.statusColor! + '44' }} />
+                {events.map((evt, i) => {
+                  const isLatest = i === events.length - 1
+                  return (
                   <div key={i} style={{ position: 'relative', marginBottom: 20 }}>
                     <div style={{
                       position: 'absolute', left: -24, top: 2, width: 14, height: 14, borderRadius: '50%',
-                      background: i === 0 ? detailData.statusColor! : '#fff',
-                      border: `2px solid ${i === 0 ? detailData.statusColor! : 'var(--gray-3)'}`,
+                      background: isLatest ? detailData.statusColor! : '#fff',
+                      border: `2px solid ${detailData.statusColor!}`,
                     }} />
-                    <div style={{ fontSize: 13, fontWeight: i === 0 ? 700 : 500, color: i === 0 ? detailData.statusColor! : 'var(--blue-dk)', marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: isLatest ? 700 : 400, color: isLatest ? detailData.statusColor! : 'var(--gray-6)', marginBottom: 2 }}>
                       {evt.status}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
@@ -568,7 +570,8 @@ export default function Ems() {
                     </div>
                     {evt.location && <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{evt.location}</div>}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )

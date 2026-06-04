@@ -6,8 +6,8 @@ import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 
 type ListupTab = 'settings' | 'apify' | 'database'
 
-const DEFAULT_KBEAUTY_KEYWORDS = ['glassskin','kbeauty','koreanbeauty','koreanskincare','kbeautyreview','kbeautyroutine','koreanskincaeroutine','kbeautyproducts','kbeautyaddict','koreanmakeup','oliveyoung','kbeautyskincare']
-const DEFAULT_BEAUTY_KEYWORDS  = ['beautyreview','skincare','makeuptips','beautycreator','beautytok','makeuphaul','beautyhacks','beautyinfluencer']
+const DEFAULT_KBEAUTY_KEYWORDS = ['glass skin','kbeauty','korean beauty','korean skincare','kbeauty review','kbeauty routine','korean skincare routine','kbeauty products','kbeauty addict','korean makeup','olive young','kbeauty skincare']
+const DEFAULT_BEAUTY_KEYWORDS  = ['beauty review','skincare','makeup tips','beauty creator','beautytok','makeup haul','beauty hacks','beauty influencer']
 const DEFAULT_TIERS = [
   { rank:'1순위', label:'마이크로 (10K~50K)',  minF:10000,  maxF:50000,  tags:'kbeauty', category:'K-뷰티' },
   { rank:'2순위', label:'마이크로 (10K~50K)',  minF:10000,  maxF:50000,  tags:'beauty',  category:'일반뷰티' },
@@ -68,12 +68,13 @@ export default function Listup() {
 
   // Apify state
   const [apifyTierIdx, setApifyTierIdx] = useState<number | null>(null)
-  const [apifyPostsPerTag, setApifyPostsPerTag] = useState(20)
+  const [targetCreators, setTargetCreators] = useState(100)
   const [apifyStatus, setApifyStatus] = useState('')
   const [apifyLoading, setApifyLoading] = useState(false)
   const [apifyResults, setApifyResults] = useState<string[][] | null>(null)
   const [apifyRunId, setApifyRunId] = useState('')
   const [apifyDatasetId, setApifyDatasetId] = useState('')
+  const [apifyUsedTags, setApifyUsedTags] = useState<string[]>([])
 
   // DB state
   const [listupData, setListupData] = useState<InfluencerData | null>(null)
@@ -408,6 +409,104 @@ export default function Listup() {
         {/* Apify Tab */}
         {activeTab === 'apify' && (
           <div>
+
+            {/* Workflow diagram */}
+            {(() => {
+              const hasRun     = !!apifyRunId
+              const isLoading  = apifyLoading
+              const hasResults = !!apifyResults && apifyResults.length > 0
+
+              type SS = 'done' | 'active' | 'idle'
+              const steps: { icon: string; label: string; sub: string; state: SS }[] = [
+                {
+                  icon: '🎯', label: '티어 선택',
+                  sub: apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '미선택',
+                  state: apifyTierIdx !== null ? 'done' : 'idle',
+                },
+                {
+                  icon: '🚀', label: 'Apify 실행',
+                  sub: apifyUsedTags.length ? `${apifyUsedTags.length}개 키워드 · 목표 ${targetCreators}명` : 'clockworks~tiktok-scraper',
+                  state: isLoading ? 'active' : hasRun ? 'done' : 'idle',
+                },
+                {
+                  icon: '⏳', label: '완료 대기',
+                  sub: hasRun ? `Run: ${apifyRunId.slice(0, 8)}…` : '대기 중',
+                  state: isLoading ? 'active' : hasRun ? 'done' : 'idle',
+                },
+                {
+                  icon: '🔎', label: '크리에이터 필터링',
+                  sub: hasResults ? `${apifyResults.length}명 감지` : '팔로워·참여율 기준',
+                  state: isLoading ? 'idle' : hasResults ? 'done' : 'idle',
+                },
+                {
+                  icon: '📊', label: '시트 저장',
+                  sub: 'K-뷰티 / 일반뷰티',
+                  state: isLoading ? 'idle' : hasResults ? 'done' : 'idle',
+                },
+              ]
+
+              const colors: Record<SS, { bg: string; border: string; label: string; sub: string }> = {
+                done:   { bg: '#fefce8', border: '#fde047', label: '#a16207', sub: '#ca8a04' },
+                active: { bg: '#eff6ff', border: '#93c5fd', label: '#1d4ed8', sub: '#60a5fa' },
+                idle:   { bg: 'var(--gray-0)', border: 'var(--gray-2)', label: 'var(--gray-5)', sub: 'var(--gray-3)' },
+              }
+
+              return (
+                <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '16px 20px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>
+                    Apify 워크플로우
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {steps.map((step, i) => {
+                      const c = colors[step.state]
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            flex: 1, minWidth: 0, position: 'relative',
+                            background: c.bg, border: `1px solid ${c.border}`,
+                            borderRadius: 10, padding: '10px 12px',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          }}>
+                            {step.state === 'active' && (
+                              <span style={{ position: 'absolute', top: 5, right: 7, width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 0 2px #bfdbfe' }} />
+                            )}
+                            {step.state === 'done' && (
+                              <span style={{ position: 'absolute', top: 5, right: 7, fontSize: 9, color: '#ca8a04', fontWeight: 800 }}>✓</span>
+                            )}
+                            <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: c.label, textAlign: 'center', whiteSpace: 'nowrap' }}>{step.label}</span>
+                            <span style={{ fontSize: 10, color: c.sub, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{step.sub}</span>
+                          </div>
+                          {i < steps.length - 1 && (
+                            <div style={{ width: 20, flexShrink: 0, textAlign: 'center' }}>
+                              <span style={{ fontSize: 14, color: 'var(--gray-3)' }}>›</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Keywords used in last run */}
+            {apifyUsedTags.length > 0 && (
+              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '12px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
+                  마지막 실행에 사용된 키워드 ({apifyUsedTags.length}개)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {apifyUsedTags.map(kw => (
+                    <span key={kw} style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
+                      background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd',
+                    }}>{kw}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 10 }}>우선순위 등급표 — 행을 클릭해 티어 선택</div>
@@ -429,21 +528,44 @@ export default function Listup() {
               </div>
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 12 }}>키워드는 <strong>크리에이터 조건</strong> 탭에서 편집하세요.</div>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 8, fontWeight: 600 }}>K-뷰티 키워드</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{kbeautyKws.map(t => <span key={t} className="tag-pill active">#{t}</span>)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 8, fontWeight: 600 }}>일반뷰티 키워드</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{beautyKws.map(t => <span key={t} className="tag-pill">#{t}</span>)}</div>
-                </div>
+                {(() => {
+                  const chosenTag = apifyTierIdx !== null ? tiers[apifyTierIdx]?.tags : null
+                  const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
+                  const yellow = { background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)' }
+                  const kbChosen = chosenTag === 'kbeauty'
+                  const beChosen = chosenTag === 'beauty'
+                  return (
+                    <>
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: kbChosen ? 'var(--yellow-text)' : 'var(--gray-5)' }}>
+                          K-뷰티 키워드 {kbChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {kbeautyKws.map(t => (
+                            <span key={t} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, ...(kbChosen ? yellow : blue) }}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: beChosen ? 'var(--yellow-text)' : 'var(--gray-5)' }}>
+                          일반뷰티 키워드 {beChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {beautyKws.map(t => (
+                            <span key={t} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, ...(beChosen ? yellow : blue) }}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             </div>
             <div className="filters" style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
               <div className="filter-group">
-                <label>포스트 수/태그</label>
-                <input type="number" value={apifyPostsPerTag} min={10} max={200} style={{ width: 60 }} onChange={e => setApifyPostsPerTag(+e.target.value)} />
+                <label>목표 인플루언서 수 (명)</label>
+                <input type="number" value={targetCreators} min={10} max={1000} step={10} style={{ width: 70 }} onChange={e => setTargetCreators(+e.target.value)} />
               </div>
               <button className="listup-find-btn" disabled={apifyLoading || apifyTierIdx === null} onClick={async () => {
                 if (apifyTierIdx === null) return
@@ -451,7 +573,8 @@ export default function Listup() {
                 setApifyLoading(true); setApifyStatus('탐색 중...')
                 try {
                   const tags = tier.tags === 'kbeauty' ? kbeautyKws : beautyKws
-                  const res: { error?: string; runId?: string } = await gasPost({ action: 'startCreatorSearch', hashtags: tags, postsPerTag: apifyPostsPerTag, followerMin: tier.minF, followerMax: tier.maxF, rank: tier.rank, sheetName: tier.category === 'K-뷰티' ? 'K-뷰티' : '일반뷰티' })
+                  setApifyUsedTags(tags)
+                  const res: { error?: string; runId?: string } = await gasPost({ action: 'startCreatorSearch', hashtags: tags, targetCreators, followerMin: tier.minF, followerMax: tier.maxF, rank: tier.rank, sheetName: tier.category === 'K-뷰티' ? 'K-뷰티' : '일반뷰티' })
                   if (res.error) { setApifyStatus('오류: ' + res.error) } else { setApifyRunId(res.runId || ''); setApifyStatus('탐색 시작됨. Run ID: ' + res.runId) }
                 } catch (e: unknown) { setApifyStatus('오류: ' + (e as Error).message) }
                 setApifyLoading(false)
