@@ -70,7 +70,7 @@ a { text-decoration: none; }
 /* ─────────────────────────────────────
    LAYOUT
 ───────────────────────────────────── */
-.app-layout { display: flex; min-height: 100vh; }
+.app-layout { display: flex; min-height: 100vh; overflow-x: hidden; width: 100%; }
 
 /* ─────────────────────────────────────
    SIDEBAR
@@ -247,10 +247,11 @@ a { text-decoration: none; }
   flex: 1; margin-left: 240px;
   transition: margin-left .28s cubic-bezier(.4,0,.2,1);
   display: flex; flex-direction: column; min-height: 100vh;
+  min-width: 0; max-width: calc(100vw - 240px);
   background: #eef2f7;
 }
+.app-layout.app-layout--collapsed .main-area { max-width: calc(100vw - 64px); }
 .app-layout.app-layout--collapsed .main-area { margin-left: 64px; }
-
 /* ─────────────────────────────────────
    CHILDREN TAB BAR
 ───────────────────────────────────── */

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { gasGet, gasPost } from '../../lib/api'
-import { escHtml } from '../../lib/utils'
-import Spinner from '../../components/Spinner'
+import { gasGet, gasPost } from '../../../lib/api'
+import { escHtml } from '../../../lib/utils'
+import Spinner from '../../../components/Spinner'
 
 interface ArchiveItem {
   dateKey: string

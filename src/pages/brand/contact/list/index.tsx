@@ -8,15 +8,28 @@ export default function BrandContactList() {
           <div className="page-banner-desc">이번 차수 브랜드 컨택 대상 목록을 관리합니다.</div>
         </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr><th>브랜드명</th><th>카테고리</th><th>컨택 방법</th><th>우선순위</th><th>담당자</th><th>비고</th></tr>
-          </thead>
-          <tbody>
-            <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>데이터 없음</td></tr>
-          </tbody>
-        </table>
+      <WipBlock />
+    </div>
+  )
+}
+
+function WipBlock() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      flex: 1, minHeight: 320, gap: 14,
+      background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+      padding: 48,
+    }}>
+      <div style={{ fontSize: 44, lineHeight: 1 }}>🚧</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-7)', letterSpacing: '-0.5px' }}>개발중</div>
+      <div style={{ fontSize: 13, color: 'var(--gray-4)', textAlign: 'center', lineHeight: 1.7 }}>
+        이 페이지는 현재 개발 중입니다.<br />곧 서비스될 예정입니다.
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? '#3b82f6' : 'var(--gray-3)' }} />
+        ))}
       </div>
     </div>
   )

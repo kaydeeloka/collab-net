@@ -8,15 +8,28 @@ export default function BrandContactTemplate() {
           <div className="page-banner-desc">브랜드 컨택에 사용할 이메일 · DM 템플릿을 작성하거나 선택합니다.</div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
-        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-5)', marginBottom: 12 }}>템플릿 목록</div>
-          <div style={{ color: 'var(--gray-4)', fontSize: 13 }}>저장된 템플릿 없음</div>
-        </div>
-        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-5)', marginBottom: 12 }}>템플릿 편집</div>
-          <div style={{ height: 320, background: 'var(--gray-1)', borderRadius: 8, border: '1px solid var(--gray-3)' }} />
-        </div>
+      <WipBlock />
+    </div>
+  )
+}
+
+function WipBlock() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      flex: 1, minHeight: 320, gap: 14,
+      background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+      padding: 48,
+    }}>
+      <div style={{ fontSize: 44, lineHeight: 1 }}>🚧</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-7)', letterSpacing: '-0.5px' }}>개발중</div>
+      <div style={{ fontSize: 13, color: 'var(--gray-4)', textAlign: 'center', lineHeight: 1.7 }}>
+        이 페이지는 현재 개발 중입니다.<br />곧 서비스될 예정입니다.
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? '#3b82f6' : 'var(--gray-3)' }} />
+        ))}
       </div>
     </div>
   )
