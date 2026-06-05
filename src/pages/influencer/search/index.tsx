@@ -3,6 +3,7 @@ import { gasGet, gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
+import { addToContactList } from '../../../lib/contactList'
 
 type ListupTab = 'search' | 'database'
 
@@ -77,6 +78,7 @@ export default function Listup() {
   const [apifyUsedTags, setApifyUsedTags] = useState<string[]>([])
 
   // DB state
+  const [contactAdded, setContactAdded] = useState<Set<string>>(new Set())
   const [listupData, setListupData] = useState<InfluencerData | null>(null)
   const [listupLoaded, setListupLoaded] = useState(false)
   const [listupLoading, setListupLoading] = useState(false)
@@ -216,7 +218,7 @@ export default function Listup() {
           <thead>
             <tr>
               {orderedCols.map(i => <th key={i}>{hdr[i]}</th>)}
-              <th>관리</th>
+              <th>컨택 대상</th>
             </tr>
           </thead>
           <tbody>
@@ -257,12 +259,41 @@ export default function Listup() {
                     return <td key={ci} style={{ background: bg || undefined }}>{cell}</td>
                   })}
                   <td>
-                    {rowNums[i] && (
-                      <button
-                        onClick={() => deleteDbRow(tier, rowNums[i], sheetNames[i])}
-                        style={{ padding: '3px 10px', background: '#fee', border: '1px solid #fcc', borderRadius: 4, fontSize: 13, cursor: 'pointer', color: '#c00' }}
-                      >✗</button>
-                    )}
+                    {(() => {
+                      const handle = r[C.handle] || ''
+                      const isAdded = contactAdded.has(handle)
+                      return (
+                        <button
+                          disabled={isAdded}
+                          onClick={async () => {
+                            const ok = addToContactList({
+                              name:      r[C.name] || r[C.displayName] || handle,
+                              handle,
+                              email:     r[C.email] || '',
+                              followers: r[C.followers] ? String(r[C.followers]) : '',
+                              avgViews:  r[C.avgView]   ? String(r[C.avgView])   : '',
+                            })
+                            if (ok) {
+                              setContactAdded(prev => new Set(prev).add(handle))
+                              if (rowNums[i] && sheetNames[i]) {
+                                try {
+                                  await gasPost({ action: 'markOutreachState', sheetRow: rowNums[i], sheetName: sheetNames[i], value: 'target' })
+                                } catch { /* silently fail — local state already updated */ }
+                              }
+                            }
+                          }}
+                          style={{
+                            padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6,
+                            cursor: isAdded ? 'default' : 'pointer',
+                            background: isAdded ? 'var(--gray-1)' : 'var(--blue-dk)',
+                            color:      isAdded ? 'var(--gray-4)' : '#fff',
+                            border:     isAdded ? '1px solid var(--gray-3)' : 'none',
+                            whiteSpace: 'nowrap',
+                          }}>
+                          {isAdded ? '추가됨' : '컨택 대상'}
+                        </button>
+                      )
+                    })()}
                   </td>
                 </tr>
               )

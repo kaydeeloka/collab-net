@@ -420,11 +420,14 @@ a { text-decoration: none; }
   background: var(--white);
   border-radius: var(--r);
   box-shadow: var(--sh);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
   border: 1px solid var(--surface-md);
 }
 table { width: 100%; border-collapse: collapse; table-layout: auto; min-width: 600px; }
 thead th {
+  position: sticky; top: 0; z-index: 1;
   background: #f0f5f8;
   padding: 13px 18px;
   text-align: left; font-size: 11px; font-weight: 700;
