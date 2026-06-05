@@ -157,7 +157,7 @@ export default function ContactTemplate() {
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {CATEGORIES.map(cat => {
-              const catTemplates = templates.map((t: any, i: number) => ({ t, i })).filter(({ t }) => (t.category || '기타') === cat)
+              const catTemplates = templates.map((t: any, i: number) => ({ t, i })).filter(({ t }: { t: any; i: number }) => (t.category || '기타') === cat)
               if (catTemplates.length === 0) return null
               const c = CATEGORY_COLORS[cat]
               const collapsed = collapsedCats.has(cat)
@@ -169,7 +169,7 @@ export default function ContactTemplate() {
                     <span>{cat} <span style={{ fontWeight: 400, opacity: 0.7 }}>({catTemplates.length})</span></span>
                     <span style={{ fontSize: 10 }}>{collapsed ? '▸' : '▾'}</span>
                   </div>
-                  {!collapsed && catTemplates.map(({ t, i }) => (
+                  {!collapsed && catTemplates.map(({ t, i }: { t: any; i: number }) => (
                     <div key={t.id} onClick={() => setSelectedIdx(i)}
                       style={{
                         padding: '14px 18px', cursor: 'pointer', borderBottom: '1px solid var(--gray-2)',

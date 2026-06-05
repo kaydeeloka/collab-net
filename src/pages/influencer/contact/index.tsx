@@ -11,7 +11,7 @@ const STATUS_OPTIONS = [
   { value: 'yes',       label: '완료',  bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'reply',     label: '답장',      bg: '#fef3c7', color: '#d97706' },
   { value: 'negotiate', label: '협의중',    bg: '#d1fae5', color: '#065f46' },
-  { value: 'accept',    label: '수락확정',  bg: '#bbf7d0', color: '#14532d' },
+  { value: 'accept',    label: '확정',      bg: '#bbf7d0', color: '#14532d' },
   { value: 'reject',    label: '거절',      bg: '#fee2e2', color: '#991b1b' },
 ]
 
