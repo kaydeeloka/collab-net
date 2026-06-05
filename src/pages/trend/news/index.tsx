@@ -44,10 +44,7 @@ interface TrendDraft {
   body: string
 }
 
-type Panel = 'briefing' | 'trends'
-
 export default function Trends() {
-  const [panel, setPanel] = useState<Panel>('briefing')
 
   // Beauty News state
   const [bnStatus, setBnStatus] = useState('')
@@ -231,22 +228,15 @@ export default function Trends() {
         </div>
       </div>
 
-      <div className="ftab-bar">
-        <button className={'ftab' + (panel === 'briefing' ? ' active' : '')} onClick={() => setPanel('briefing')}>뷰티 뉴스</button>
-        <button className={'ftab' + (panel === 'trends' ? ' active' : '')} onClick={() => setPanel('trends')}>틱톡 트렌드</button>
-      </div>
-
-      <div className="ftab-content">
-
-        {/* Beauty News Panel */}
-        {panel === 'briefing' && (
-          <div>
+      {/* ── 아카이브뉴스 ── */}
+      <div>
+        <div>
             <div className="bn-engine-card">
               <div className="bn-engine-left">
                 <span className="bn-engine-icon">◆</span>
                 <div>
                   <div className="bn-engine-title">뷰티 뉴스 AI 분석 엔진</div>
-                  <div className="bn-engine-desc">Google News RSS + Groq AI · 최근 7일 미국 뷰티 트렌드</div>
+                  <div className="bn-engine-desc">최근 7일 미국 뷰티 트렌드</div>
                 </div>
               </div>
               <div className="bn-engine-right">
@@ -363,52 +353,7 @@ export default function Trends() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* TikTok Trends Panel */}
-        {panel === 'trends' && (
-          <div className="archive-layout">
-            <div className="archive-sidebar">
-              {trendLoading && <div className="loader"><Spinner /></div>}
-              {!trendLoading && trendDrafts.length === 0 && (
-                <div className="empty" style={{ padding: 24 }}>
-                  트렌드 리포트 없음<br />
-                  <small style={{ fontSize: 11, color: 'var(--gray-5)' }}>
-                    Outlook 초안에 제목에 '트렌드' 또는 'trend'를 포함한 초안을 작성하면 자동 표시됩니다
-                  </small>
-                </div>
-              )}
-              {!trendLoading && trendDrafts.length > 0 && (
-                <>
-                  <div className="archive-sidebar-hdr">
-                    리포트 <span className="archive-count">{trendDrafts.length}</span>
-                  </div>
-                  {trendDrafts.map((d, i) => (
-                    <div
-                      key={i}
-                      className={'archive-item' + (trendSelected === i ? ' active' : '')}
-                      onClick={() => setTrendSelected(i)}
-                    >
-                      <div className="archive-item-date">{d.date}</div>
-                      <div className="archive-item-label">{d.subject}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-            <div className="archive-content-wrap">
-              {trendDrafts.length === 0
-                ? <div className="archive-placeholder">← 날짜를 선택하세요</div>
-                : <iframe
-                    ref={iframeRef}
-                    style={{ width: '100%', height: '100%', minHeight: 500, border: 'none' }}
-                    sandbox="allow-same-origin"
-                  />
-              }
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )

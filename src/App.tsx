@@ -6,7 +6,7 @@ import Layout from './components/Layout'
 
 import Lock        from './pages/Lock'
 import Dashboard   from './pages/home'
-import Trends      from './pages/trend'
+import Trends      from './pages/trend/news'
 import Listup      from './pages/influencer/search'
 import Outreach    from './pages/influencer/contact'
 import Confirmed   from './pages/influencer/confirmed'
@@ -14,54 +14,54 @@ import Ems         from './pages/kit/ems'
 import Monitoring  from './pages/monitoring/reviews'
 
 // TREND
-import TiktokTrend from './pages/trend/TiktokTrend'
+import TiktokTrend from './pages/trend/tiktok'
 
 // INFLUENCER — search
-import SearchSettings from './pages/influencer/search/Settings'
-import SearchExplore  from './pages/influencer/search/Explore'
-import SearchDbList   from './pages/influencer/search/DbList'
+import SearchSettings from './pages/influencer/search/settings'
+import SearchExplore  from './pages/influencer/search/explore'
+import SearchDbList   from './pages/influencer/search/db'
 // INFLUENCER — contact
-import ContactList      from './pages/influencer/contact/List'
-import ContactTemplate  from './pages/influencer/contact/Template'
-import ContactCompleted from './pages/influencer/contact/Completed'
+import ContactList      from './pages/influencer/contact/list'
+import ContactTemplate  from './pages/influencer/contact/template'
+import ContactCompleted from './pages/influencer/contact/completed'
 // INFLUENCER — confirmed
-import ConfirmedShipping       from './pages/influencer/confirmed/Shipping'
-import ConfirmedMonitoringLink from './pages/influencer/confirmed/MonitoringLink'
+import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
+import ConfirmedMonitoringLink from './pages/influencer/confirmed/monitoring'
 
 // BRAND — db
-import BrandDb       from './pages/brand/db/index'
-import BrandDbMail   from './pages/brand/db/Mail'
-import BrandDbContacts from './pages/brand/db/Contacts'
+import BrandDb         from './pages/brand/db'
+import BrandDbMail     from './pages/brand/db/mail'
+import BrandDbContacts from './pages/brand/db/contacts'
 // BRAND — contact
-import BrandContact          from './pages/brand/contact/index'
-import BrandContactList      from './pages/brand/contact/List'
-import BrandContactTemplate  from './pages/brand/contact/Template'
-import BrandContactCompleted from './pages/brand/contact/Completed'
+import BrandContact          from './pages/brand/contact'
+import BrandContactList      from './pages/brand/contact/list'
+import BrandContactTemplate  from './pages/brand/contact/template'
+import BrandContactCompleted from './pages/brand/contact/completed'
 // BRAND — confirmed
-import BrandConfirmed        from './pages/brand/confirmed/index'
-import BrandConfirmedFolders from './pages/brand/confirmed/Folders'
-import BrandConfirmedFiles   from './pages/brand/confirmed/Files'
+import BrandConfirmed        from './pages/brand/confirmed'
+import BrandConfirmedFolders from './pages/brand/confirmed/folders'
+import BrandConfirmedFiles   from './pages/brand/confirmed/files'
 
 // KIT — ems
-import EmsDaily   from './pages/kit/ems/Daily'
-import EmsCheck   from './pages/kit/ems/Check'
-import EmsPending from './pages/kit/ems/Pending'
+import EmsDaily   from './pages/kit/ems/daily'
+import EmsCheck   from './pages/kit/ems/check'
+import EmsPending from './pages/kit/ems/pending'
 // KIT — design-archive
-import DesignArchive       from './pages/kit/design-archive/index'
-import DesignArchiveOrders from './pages/kit/design-archive/Orders'
+import DesignArchive       from './pages/kit/design-archive'
+import DesignArchiveOrders from './pages/kit/design-archive/orders'
 
 // MONITORING — reviews
-import ReviewsUploadStatus from './pages/monitoring/reviews/UploadStatus'
-import ReviewsManualCheck  from './pages/monitoring/reviews/ManualCheck'
-import ReviewsBrandCheck   from './pages/monitoring/reviews/BrandCheck'
+import ReviewsUploadStatus from './pages/monitoring/reviews/upload-status'
+import ReviewsManualCheck  from './pages/monitoring/reviews/manual-check'
+import ReviewsBrandCheck   from './pages/monitoring/reviews/brand-check'
 // MONITORING — content
-import ReviewContent   from './pages/monitoring/content/index'
-import ContentFollowup from './pages/monitoring/content/Followup'
-import ContentReport   from './pages/monitoring/content/Report'
+import ReviewContent   from './pages/monitoring/content'
+import ContentFollowup from './pages/monitoring/content/followup'
+import ContentReport   from './pages/monitoring/content/report'
 // MONITORING — reports
-import ReportArchive from './pages/monitoring/reports/index'
-import ReportsBrand  from './pages/monitoring/reports/Brand'
-import ReportsAll    from './pages/monitoring/reports/All'
+import ReportArchive from './pages/monitoring/reports'
+import ReportsBrand  from './pages/monitoring/reports/brand'
+import ReportsAll    from './pages/monitoring/reports/all'
 
 export default function App() {
   return (
