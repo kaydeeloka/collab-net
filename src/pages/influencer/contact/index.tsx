@@ -115,7 +115,7 @@ export default function Outreach() {
 
   // 컨택 완료 / 확정 — GAS backend
   const [outreachData, setOutreachData] = useState<OutreachData | null>(null)
-  const [gasLoading,   setGasLoading]   = useState(false)
+  const [gasLoading,   setGasLoading]   = useState(true)
   const [gasError,     setGasError]     = useState('')
 
   // Email draft
@@ -235,10 +235,15 @@ export default function Outreach() {
     background: 'var(--gray-1)', position: 'sticky', top: 0, zIndex: 1,
   }
 
-  // ── GAS row table (for 컨택 완료 / 확정) ──
-  function GasTable({ rows, actions }: { rows: GasRow[]; actions: (r: GasRow) => React.ReactNode }) {
-    if (gasLoading) return <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>
-    if (gasError)   return <div style={{ padding: 24, color: '#b91c1c', fontSize: 13 }}>{gasError}</div>
+  // ── GAS row table renderer (called as a function, NOT as a JSX component) ──
+  function renderGasRows(rows: GasRow[], actions: (r: GasRow) => React.ReactNode) {
+    if (gasLoading) return (
+      <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <Spinner />
+        <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span>
+      </div>
+    )
+    if (gasError) return <div style={{ padding: 24, color: '#b91c1c', fontSize: 13 }}>{gasError}</div>
     if (rows.length === 0) return <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>데이터가 없습니다.</div>
     return (
       <div style={{ overflowX: 'auto' }}>
@@ -450,7 +455,7 @@ export default function Outreach() {
               ↻ 새로고침
             </button>
           </div>
-          <GasTable rows={gasCompleted} actions={r => (
+          {renderGasRows(gasCompleted, r => (
             <>
               <button onClick={() => gasUpdateStatus(r, 'accept')}
                 style={{ padding: '4px 10px', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
@@ -461,7 +466,7 @@ export default function Outreach() {
                 ✗ 거절
               </button>
             </>
-          )} />
+          ))}
         </div>
       )}
 
@@ -477,11 +482,11 @@ export default function Outreach() {
               ↻ 새로고침
             </button>
           </div>
-          <GasTable rows={gasConfirmed} actions={r => (
+          {renderGasRows(gasConfirmed, () => (
             <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>
               확정
             </span>
-          )} />
+          ))}
         </div>
       )}
     </div>
