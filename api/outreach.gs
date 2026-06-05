@@ -6,18 +6,26 @@
 // All sheets (K-뷰티, 일반뷰티, new-phase sheets) share this exact layout.
 function _buildOutreachColIdx() {
   return {
-    name      : COL_DISPLAY_NAME,
-    handle    : COL_HANDLE,
-    email     : COL_EMAIL,
-    sent      : COL_OUTREACH,
-    outreach  : COL_OUTREACH,
-    sentDate  : -1,
-    rank      : COL_RANK,
-    follower  : COL_FOLLOWERS,
-    videoCount: COL_VIDEO_COUNT,
-    reply     : -1,
-    replyBody : COL_REPLY_BODY,
-    replyDate : COL_REPLY_DATE,
+    name        : COL_DISPLAY_NAME,
+    displayName : COL_DISPLAY_NAME,
+    handle      : COL_HANDLE,
+    email       : COL_EMAIL,
+    sent        : COL_OUTREACH,
+    outreach    : COL_OUTREACH,
+    sentDate    : -1,
+    rank        : COL_RANK,
+    followers   : COL_FOLLOWERS,
+    follower    : COL_FOLLOWERS,
+    following   : COL_FOLLOWING,
+    totalLikes  : COL_TOTAL_LIKES,
+    videoCount  : COL_VIDEO_COUNT,
+    engRate     : COL_ENGAGE_RATE,
+    bio         : COL_BIO,
+    profileUrl  : COL_PROFILE_URL,
+    avgView     : COL_AVG_VIEWS,
+    reply       : -1,
+    replyBody   : COL_REPLY_BODY,
+    replyDate   : COL_REPLY_DATE,
   };
 }
 
