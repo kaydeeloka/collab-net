@@ -131,13 +131,13 @@ export default function Monitoring() {
   const [listPage,       setListPage]       = useState(1)
   const MON_PAGE_SIZE = 25
 
-  useEffect(() => { setUploadPage(1) }, [searchQuery, platformFilter, brandFilter, statusFilter])
-  useEffect(() => { setListPage(1) }, [activeTab])
-
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [brandFilter,    setBrandFilter]    = useState('all')
   const [statusFilter,   setStatusFilter]   = useState('all')  // all | matched | pending
+
+  useEffect(() => { setUploadPage(1) }, [searchQuery, platformFilter, brandFilter, statusFilter])
+  useEffect(() => { setListPage(1) }, [activeTab])
 
   useEffect(() => {
     loadMonitoring()
