@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Globe, Settings } from 'lucide-react'
 import { gasGet, gasPost } from '../lib/api'
@@ -147,6 +147,8 @@ export default function Layout() {
   const [collapsed,     setCollapsed]     = useState(false)
   const [sideExpanded,  setSideExpanded]  = useState<string | null>(null)
   const [navClock,      setNavClock]      = useState('')
+  const [openSub,       setOpenSub]       = useState<string | null>(null)
+  const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const getKrTime = useKrClock()
   const { pathname } = useLocation()
   const navigate     = useNavigate()
@@ -256,8 +258,19 @@ export default function Layout() {
     setSideExpanded(getActiveGroup(pathname))
   }, [pathname])
 
+  useEffect(() => { setOpenSub(null) }, [pathname])
+  useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
+
   const activeLabel = getActiveGroup(pathname)
   const activeGroup = GROUPS.find(g => g.label === activeLabel)
+
+  const onSubEnter = (to: string) => {
+    if (subTimer.current) clearTimeout(subTimer.current)
+    setOpenSub(to)
+  }
+  const onSubLeave = () => {
+    subTimer.current = setTimeout(() => setOpenSub(null), 200)
+  }
 
   return (
     <div className={`app-layout${collapsed ? ' app-layout--collapsed' : ''}`}>
@@ -346,16 +359,40 @@ export default function Layout() {
         {/* Sticky children tab bar */}
         {activeGroup && activeGroup.children.length > 0 && (
           <div className="children-bar">
-            {activeGroup.children.map(child => (
-              <NavLink
-                key={child.to}
-                to={child.to}
-                end={child.end}
-                className={({ isActive }) => 'children-bar-tab' + (isActive ? ' active' : '')}
-              >
-                {child.label}
-              </NavLink>
-            ))}
+            {activeGroup.children.map(child => {
+              const hasSub  = !!child.sub?.length
+              const subOpen = openSub === child.to
+              return (
+                <div
+                  key={child.to}
+                  className="children-bar-group"
+                  onMouseEnter={() => hasSub && onSubEnter(child.to)}
+                  onMouseLeave={() => hasSub && onSubLeave()}
+                >
+                  <NavLink
+                    to={child.to}
+                    end={child.end}
+                    className={({ isActive }) => 'children-bar-tab' + (isActive ? ' active' : '')}
+                  >
+                    {child.label}
+                    {hasSub && <span className="nav-chevron">▾</span>}
+                  </NavLink>
+                  {hasSub && subOpen && (
+                    <div className="children-bar-dropdown">
+                      {child.sub!.map(s => (
+                        <NavLink
+                          key={s.to}
+                          to={s.to}
+                          className={({ isActive }) => 'children-bar-sub-item' + (isActive ? ' active' : '')}
+                        >
+                          <span className="nav-dot">•</span>{s.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
 
             <div className="children-bar-right">
               {dbOptions.length > 0 ? (

@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { gasGet } from '../../lib/api'
-import { useKrClock } from '../../lib/utils'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -33,19 +32,13 @@ function statError(msg: string) {
 }
 
 export default function Dashboard() {
-  const getKrTime = useKrClock()
-  const [clock, setClock] = useState(() => getKrTime())
   const { dbOptions, activeDbId, switchPhase } = useOutletContext<PhaseCtx>()
 
   const [statsListup,    setStatsListup]    = useState(SPINNER_HTML)
   const [statsOutreach,  setStatsOutreach]  = useState(SPINNER_HTML)
   const [statsEms,       setStatsEms]       = useState(SPINNER_HTML)
   const [statsMonitoring,setStatsMonitoring]= useState(SPINNER_HTML)
-
-  useEffect(() => {
-    const id = setInterval(() => setClock(getKrTime()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  const [trendKeywords,  setTrendKeywords]  = useState<string | null>(null)
 
   const loadListupStats = useCallback(async () => {
     try {
@@ -110,6 +103,16 @@ export default function Dashboard() {
     loadOutreachStats()
     loadEmsStats()
     loadMonitoringStats()
+    ;(async () => {
+      try {
+        const list: { ok: boolean; archives?: { dateKey: string }[] } = await gasGet('getArchiveList')
+        const latest = list.archives?.[0]?.dateKey
+        if (latest) {
+          const data: { ok: boolean; keywords?: string } = await gasGet('getArchive', { dateKey: latest })
+          if (data.ok && data.keywords) setTrendKeywords(data.keywords)
+        }
+      } catch {}
+    })()
   }, [])
 
   return (
@@ -118,16 +121,17 @@ export default function Dashboard() {
       {/* ── Hero + D-DAY row ── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'stretch' }}>
 
-        {/* Hero — 2/3 */}
+        {/* Hero — 3/4 */}
         <div style={{
           flex: 3, minWidth: 0,
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f2744 100%)',
+          background: '#0d1117',
+          border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: 16, padding: '28px 32px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
           position: 'relative', overflow: 'hidden',
         }}>
-          <div style={{ position: 'absolute', top: -40, right: 120, width: 220, height: 220, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', pointerEvents: 'none', filter: 'blur(40px)' }} />
-          <div style={{ position: 'absolute', bottom: -30, right: 0, width: 160, height: 160, borderRadius: '50%', background: 'rgba(59,130,246,0.10)', pointerEvents: 'none', filter: 'blur(35px)' }} />
+          <div style={{ position: 'absolute', top: -40, right: 120, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,233,160,0.06)', pointerEvents: 'none', filter: 'blur(50px)' }} />
+          <div style={{ position: 'absolute', bottom: -30, right: 0, width: 180, height: 180, borderRadius: '50%', background: 'rgba(159,186,197,0.08)', pointerEvents: 'none', filter: 'blur(40px)' }} />
 
           {/* Left: title */}
           <div style={{ position: 'relative', zIndex: 1 }}>
@@ -144,34 +148,43 @@ export default function Dashboard() {
               )}
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>인플루언서 마케팅 자동화 시스템</span>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 6 }}>MiMuse 자동화 대시보드</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>차수별 인플루언서 마케팅 현황을 한눈에 확인하세요</div>
+            <div style={{ fontSize: 52, fontWeight: 900, color: '#fff', letterSpacing: '-3px', lineHeight: 1, marginBottom: 10 }}>MiMuse 대시보드</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>미국 인플루언서 시딩 프로젝트 Mi Muse 현황을 한눈에 확인하세요</div>
           </div>
 
-          {/* Right: clock */}
-          <div style={{ position: 'relative', zIndex: 1, textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>{clock.date}</div>
-            <div style={{ fontSize: 38, fontWeight: 800, color: '#fff', letterSpacing: '-1.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{clock.time}</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 5, letterSpacing: '1px', textTransform: 'uppercase' }}>Korea Standard Time</div>
-          </div>
+          {/* Right: 발송까지 D-DAY */}
+          {(() => {
+            const now = new Date()
+            const diff = Math.ceil((DISPATCH_DATE.getTime() - now.getTime()) / 86_400_000)
+            const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
+            const done = dbOptions.find(o => o.id === activeDbId)?.label === '1차'
+            return (
+              <div style={{ position: 'relative', zIndex: 1, textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: done ? '#34d399cc' : '#ffe9a0cc', textTransform: 'uppercase', letterSpacing: '2px' }}>발송까지</div>
+                <div style={{ fontSize: 52, fontWeight: 900, color: done ? '#34d399' : '#ffe9a0', letterSpacing: '-3px', lineHeight: 1 }}>{done ? '완료' : dday}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
+                  {done ? '키트 발송 완료' : `${new Date('2026-08-18').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정`}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* D-DAY — 1/3 white card */}
         {(() => {
+          const phase = dbOptions.find(o => o.id === activeDbId)?.label
+          const isDone = phase === '1차'
           const now = new Date()
-          const pastDispatch = now >= DISPATCH_DATE
-          const mainDate = pastDispatch ? DEADLINE_DATE : DISPATCH_DATE
-          const diff = Math.ceil((mainDate.getTime() - now.getTime()) / 86_400_000)
+          const diff = Math.ceil((DEADLINE_DATE.getTime() - now.getTime()) / 86_400_000)
           const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
-          const accent = pastDispatch ? '#3b82f6' : '#f59e0b'
+          const accent = isDone ? '#10b981' : '#9FBAC5'
           const months = Math.floor(Math.max(diff, 0) / 30)
           const days = Math.max(diff, 0) % 30
-          const phase = dbOptions.find(o => o.id === activeDbId)?.label
           return (
             <div style={{
               flex: 1, minWidth: 0,
-              background: 'linear-gradient(145deg, #0f172a 0%, #1a2540 60%, #0f2035 100%)',
-              border: `1px solid ${accent}40`,
+              background: '#0d1117',
+              border: `1px solid ${accent}35`,
               borderRadius: 16,
               padding: '28px 28px',
               display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8,
@@ -180,22 +193,32 @@ export default function Dashboard() {
               {/* glow blob */}
               <div style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 180, height: 180, borderRadius: '50%', background: `${accent}20`, filter: 'blur(50px)', pointerEvents: 'none' }} />
 
-              <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>
-                {pastDispatch ? '마감까지' : '발송까지'}
-              </div>
-              <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>{dday}</div>
-              {diff > 0 && (
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
-                  {months > 0 && <span>{months}개월 </span>}{days}일
-                </div>
+              {isDone ? (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>프로젝트 완료</div>
+                  <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>마감</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>모든 일정이 완료되었습니다</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>
+                    프로젝트마감
+                  </div>
+                  <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>{dday}</div>
+                  {diff > 0 && (
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
+                      {months > 0 && <span>{months}개월 </span>}{days}일
+                    </div>
+                  )}
+                </>
               )}
               <div style={{ borderTop: `1px solid rgba(255,255,255,0.08)`, paddingTop: 14, marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, position: 'relative' }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
-                    {pastDispatch ? '프로젝트 마감' : '2026년 8월 18일'}
+                    {isDone ? '1차 프로젝트' : '2026년 12월 31일'}
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>
-                    {pastDispatch ? '발송 완료 · 마감 카운트다운 중' : '키트 발송 예정일'}
+                    {isDone ? '발송 · 리뷰 · 마감 완료' : '프로젝트 최종 마감일'}
                   </div>
                 </div>
                 {phase && (
@@ -292,10 +315,48 @@ export default function Dashboard() {
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>오늘의 트렌드</span>
         </div>
-        <div className="cards" style={{ marginBottom: 0 }}>
-          <div className="card"><div className="card-label">뉴스 키워드</div><div className="card-value">—</div></div>
-          <div className="card highlight"><div className="card-label">틱톡 인기 해시태그</div><div className="card-value">—</div></div>
-          <div className="card"><div className="card-label">급상승 트렌드</div><div className="card-value">—</div></div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {/* 뉴스 트렌드 */}
+          <div style={{
+            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            border: '1.5px solid var(--teal-lt)', minHeight: 110,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뉴스 트렌드 분석</div>
+              <Link to="/trend/news" style={{
+                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
+                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
+                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
+                transition: 'background .15s',
+              }}>트렌드 보기 →</Link>
+            </div>
+            {trendKeywords ? (
+              <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.8 }}
+                dangerouslySetInnerHTML={{ __html: trendKeywords.replace(/\n/g, '<br>') }}
+              />
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>*주간 '트렌드 키워드 요약' 부분 연동</div>
+            )}
+          </div>
+
+          {/* 틱톡 트렌드 */}
+          <div style={{
+            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            border: '1.5px solid var(--teal-lt)', minHeight: 110,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>틱톡 트렌드 분석</div>
+              <Link to="/trend/tiktok" style={{
+                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
+                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
+                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
+                transition: 'background .15s',
+              }}>트렌드 보기 →</Link>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>*추후 구현</div>
+          </div>
         </div>
       </div>
 
