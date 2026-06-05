@@ -86,6 +86,23 @@ export default function Listup() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
+  // Dashboard stats
+  const [dashStats, setDashStats] = useState<{ total: number; sent: number; replied: number; confirmed: number } | null>(null)
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const [outreach, confirmed] = await Promise.all([
+          gasGet<Record<string, { stats?: { total?: number; sent?: number; replied?: number } }>>('getOutreachData'),
+          gasGet<{ rows?: unknown[] }>('getConfirmedInfluencers'),
+        ])
+        let total = 0, sent = 0, replied = 0
+        DB_TIERS.forEach(t => { const s = (outreach[t] || {}).stats || {}; total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0 })
+        setDashStats({ total, sent, replied, confirmed: (confirmed.rows || []).length })
+      } catch {}
+    })()
+  }, [])
+
   function switchTab(t: ListupTab) {
     setActiveTab(t)
     if (t === 'database' && !listupLoaded) loadListup()
@@ -254,6 +271,36 @@ export default function Listup() {
           <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setListupLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침 (Sync)</button>
         </div>
       </div>
+
+      {dashStats && (
+        <div className="cards" style={{ marginBottom: 16 }}>
+          <div className="card">
+            <div className="card-label">컨택 현황</div>
+            <div className="card-value" style={{ color: 'var(--green)' }}>
+              {dashStats.sent}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / {dashStats.total}</span>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-label">신규 회신</div>
+            <div className="card-value" style={{ color: '#d97706' }}>{dashStats.replied}</div>
+          </div>
+          <div className="card highlight">
+            <div className="card-label">모집 완료</div>
+            <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
+              {dashStats.total > 0 ? Math.round(dashStats.sent / dashStats.total * 100) : 0}%
+            </div>
+          </div>
+          <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>
+            <div className="card-label">확정 인원</div>
+            <div className="card-value" style={{ color: 'var(--teal-dk)' }}>
+              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / 50</span>
+            </div>
+            <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min(dashStats.confirmed / 50 * 100, 100)}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="ftab-bar">
         {(['search', 'database'] as ListupTab[]).map((t, i) => (

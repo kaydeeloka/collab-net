@@ -14,7 +14,7 @@ interface PhaseInfo {
   phase1SheetId?  : string
   phases?         : { name?: string; outreachId?: string }[]
 }
-interface NavSubChild { label: string; to: string }
+interface NavSubChild { label: string; to: string; end?: boolean }
 interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
 interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
 
@@ -37,30 +37,17 @@ const GROUPS: SideGroup[] = [
       {
         to: '/influencer/contact', label: '인플루언서 컨택',
         sub: [
-          { to: '/influencer/contact/list',      label: '컨택 대상 명단' },
-          { to: '/influencer/contact/template',  label: '아웃리치 템플릿 작성 / 선택' },
-          { to: '/influencer/contact/completed', label: '컨택 완료 명단 (답장 체크)' },
+          { to: '/influencer/contact', label: '컨택 리스트', end: true },
+          { to: '/influencer/contact/template', label: '템플릿 관리' },
         ],
       },
-      {
-        to: '/influencer/confirmed', label: '확정 인플루언서 명단',
-        sub: [
-          { to: '/influencer/confirmed/shipping',   label: '배송 주소 구글폼 연동' },
-          { to: '/influencer/confirmed/monitoring', label: '리뷰 모니터링 연동' },
-        ],
-      },
+      { to: '/influencer/confirmed', label: '확정 인플루언서' },
     ],
   },
   {
     label: 'BRAND', icon: <Building2 size={22} />, defaultTo: '/brand/db', prefix: '/brand',
     children: [
-      {
-        to: '/brand/db', label: '브랜드 DB',
-        sub: [
-          { to: '/brand/db/mail',     label: '대표메일 DB' },
-          { to: '/brand/db/contacts', label: '개인 연락처 DB' },
-        ],
-      },
+      { to: '/brand/db', label: '브랜드 DB' },
       {
         to: '/brand/contact', label: '브랜드 컨택',
         sub: [
@@ -157,11 +144,7 @@ export default function Layout() {
   const [newPhaseStatus, setNewPhaseStatus] = useState('')
   const [newPhaseLoading,setNewPhaseLoading]= useState(false)
 
-  const [showLinkPhase,  setShowLinkPhase]  = useState(false)
-  const [linkName,       setLinkName]       = useState('')
   const [linkId,         setLinkId]         = useState('')
-  const [linkStatus,     setLinkStatus]     = useState('')
-  const [linkLoading,    setLinkLoading]    = useState(false)
 
   const [showDeleteModal,setShowDeleteModal]= useState(false)
   const [deleteTarget,   setDeleteTarget]   = useState('')
@@ -191,29 +174,28 @@ export default function Layout() {
     const name = newPhaseName.trim()
     if (!name) return
     setNewPhaseLoading(true)
-    setNewPhaseStatus('새 스프레드시트 생성 중... (약 10~20초 소요)')
-    try {
-      const r: { error?: string } = await gasPost({ action: 'createNewPhase', phaseName: name })
-      if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
-      setNewPhaseStatus('완료!')
-      setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 600)
-    } catch (e: unknown) {
-      setNewPhaseStatus('오류: ' + (e as Error).message)
-    } finally { setNewPhaseLoading(false) }
-  }
-
-  async function confirmLinkPhase() {
-    const name = linkName.trim()
-    if (!name) return
-    setLinkLoading(true); setLinkStatus('연결 중...')
-    try {
-      const r: { error?: string } = await gasPost({ action: 'linkPhase', phaseName: name, outreachId: linkId.trim() || undefined })
-      if (r.error) { setLinkStatus('오류: ' + r.error); return }
-      setLinkStatus('완료!')
-      setTimeout(() => { showToast(`「${name}」 연결 완료`, 'success'); window.location.reload() }, 500)
-    } catch (e: unknown) {
-      setLinkStatus('오류: ' + (e as Error).message)
-    } finally { setLinkLoading(false) }
+    const id = linkId.trim()
+    if (id) {
+      setNewPhaseStatus('기존 DB 연결 중...')
+      try {
+        const r: { error?: string } = await gasPost({ action: 'linkPhase', phaseName: name, outreachId: id })
+        if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
+        setNewPhaseStatus('완료!')
+        setTimeout(() => { showToast(`「${name}」 연결 완료`, 'success'); window.location.reload() }, 500)
+      } catch (e: unknown) {
+        setNewPhaseStatus('오류: ' + (e as Error).message)
+      } finally { setNewPhaseLoading(false) }
+    } else {
+      setNewPhaseStatus('새 스프레드시트 생성 중... (약 10~20초 소요)')
+      try {
+        const r: { error?: string } = await gasPost({ action: 'createNewPhase', phaseName: name })
+        if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
+        setNewPhaseStatus('완료!')
+        setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 600)
+      } catch (e: unknown) {
+        setNewPhaseStatus('오류: ' + (e as Error).message)
+      } finally { setNewPhaseLoading(false) }
+    }
   }
 
   async function executeDeletePhase() {
@@ -376,6 +358,7 @@ export default function Layout() {
                         <NavLink
                           key={s.to}
                           to={s.to}
+                          end={s.end}
                           className={({ isActive }) => 'children-bar-sub-item' + (isActive ? ' active' : '')}
                         >
                           <span className="nav-dot">•</span>{s.label}
@@ -420,10 +403,6 @@ export default function Layout() {
           <button className="new-phase-btn" onClick={() => { setShowManage(false); setShowNewPhase(true) }}>
             + 새 차수 시작
           </button>
-          <button className="new-phase-btn" style={{ background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)' }}
-            onClick={() => { setShowManage(false); setLinkName(''); setLinkId(''); setShowLinkPhase(true) }}>
-            기존 DB 연결
-          </button>
         </div>
         {phaseList.length > 0 && (
           <>
@@ -444,37 +423,22 @@ export default function Layout() {
       </Modal>
 
       {/* New Phase */}
-      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }} title="새 차수 시작">
-        <div className="modal-desc">현재 차수 데이터는 <strong>Google Sheets에 그대로 보관</strong>됩니다.<br />새 빈 데이터베이스(스프레드시트)가 자동 생성됩니다.</div>
-        <label className="modal-label">새 차수 이름</label>
+      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setLinkId(''); setNewPhaseStatus('') }} title="새 차수 시작">
+        <div className="modal-desc">차수 이름을 입력하세요. DB ID를 입력하면 기존 시트에 연결되고, 비워두면 새 스프레드시트가 자동 생성됩니다.</div>
+        <label className="modal-label">차수 이름</label>
         <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
           value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') confirmNewPhase() }} autoFocus />
-        <div className="modal-actions">
-          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }}>취소</button>
-          <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading}>
-            {newPhaseLoading ? '생성 중...' : '생성'}
-          </button>
-        </div>
-        {newPhaseStatus && <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{newPhaseStatus}</div>}
-      </Modal>
-
-      {/* Link Existing DB */}
-      <Modal open={showLinkPhase} onClose={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }} title="기존 DB 연결">
-        <div className="modal-desc">새 스프레드시트를 만들지 않고 <strong>기존 Google Sheets</strong>를 차수로 등록합니다.</div>
-        <label className="modal-label">차수 이름</label>
-        <input className="modal-input" type="text" placeholder="예: 테스트, 1.5차" maxLength={30}
-          value={linkName} onChange={e => setLinkName(e.target.value)} autoFocus />
-        <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(비우면 1차 DB 사용)</span></label>
+        <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(선택 — 비우면 새로 생성)</span></label>
         <input className="modal-input" type="text" placeholder="Google Sheets 스프레드시트 ID"
           value={linkId} onChange={e => setLinkId(e.target.value)} />
         <div className="modal-actions">
-          <button className="modal-btn-cancel" onClick={() => { setShowLinkPhase(false); setLinkName(''); setLinkId(''); setLinkStatus('') }}>취소</button>
-          <button className="modal-btn-confirm" onClick={confirmLinkPhase} disabled={linkLoading || !linkName.trim()}>
-            {linkLoading ? '연결 중...' : '연결'}
+          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setLinkId(''); setNewPhaseStatus('') }}>취소</button>
+          <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading || !newPhaseName.trim()}>
+            {newPhaseLoading ? '처리 중...' : linkId.trim() ? '연결' : '생성'}
           </button>
         </div>
-        {linkStatus && <div className="modal-status" style={{ color: linkStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{linkStatus}</div>}
+        {newPhaseStatus && <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{newPhaseStatus}</div>}
       </Modal>
 
       {/* Delete Phase */}

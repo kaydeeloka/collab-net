@@ -104,9 +104,12 @@ export default function Outreach() {
   const [activeTier, setActiveTier] = useState('1순위')
   const [outreachData, setOutreachData] = useState<OutreachData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [confirmedCount, setConfirmedCount] = useState<number | null>(null)
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [checkedIdxs, setCheckedIdxs] = useState<Set<number>>(new Set())
+  const [bulkTplIdx, setBulkTplIdx] = useState(0)
+  const [bulkSending, setBulkSending] = useState(false)
 
   const [templates, setTemplates] = useState(loadTemplates)
   const [selectedTplIdx, setSelectedTplIdx] = useState(0)
@@ -132,8 +135,12 @@ export default function Outreach() {
   async function loadOutreach() {
     setLoading(true)
     try {
-      const data: OutreachData = await gasGet('getOutreachData')
+      const [data, confirmed] = await Promise.all([
+        gasGet<OutreachData>('getOutreachData'),
+        gasGet<{ rows?: unknown[] }>('getConfirmedInfluencers'),
+      ])
       setOutreachData(data)
+      setConfirmedCount((confirmed.rows || []).length)
     } catch (e: unknown) {
       setOutreachData({ error: (e as Error).message })
     }
@@ -275,6 +282,11 @@ export default function Outreach() {
     return acc
   }, { total: 0, sent: 0, replied: 0 })
 
+  const tierBreakdown = TIERS.map(t => {
+    const s = outreachData ? ((outreachData[t] as TierData)?.stats || {}) : {}
+    return { tier: t.replace('순위', ''), sent: s.sent || 0, total: s.total || 0 }
+  })
+
   return (
     <div className="page page--fill" style={{ paddingLeft: 28, paddingRight: 28 }}>
 
@@ -296,12 +308,50 @@ export default function Outreach() {
       {/* Stats */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && outreachData && !outreachData.error && (
-        <div className="cards" style={{ marginBottom: 28 }}>
-          <div className="card"><div className="card-label">총 인플루언서</div><div className="card-value">{allStats.total}</div></div>
-          <div className="card highlight"><div className="card-label">발송 완료</div><div className="card-value" style={{ color: 'var(--green)' }}>{allStats.sent}</div></div>
-          <div className="card"><div className="card-label">미발송</div><div className="card-value">{allStats.total - allStats.sent}</div></div>
-          <div className="card"><div className="card-label">답장 수신</div><div className="card-value" style={{ color: '#d97706' }}>{allStats.replied}</div></div>
-          <div className="card"><div className="card-label">발송률</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{allStats.total > 0 ? Math.round(allStats.sent / allStats.total * 100) : 0}%</div></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+
+          {/* 전체 타겟 리스트 */}
+          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>전체 타겟 리스트</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{allStats.total}</span>
+              <span style={{ fontSize: 14, color: 'var(--gray-5)' }}>명</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
+              {tierBreakdown.map((t, i) => (
+                <span key={t.tier}>
+                  {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
+                  <span>{t.tier}순위 <strong style={{ color: 'var(--gray-7)' }}>{t.sent}/{t.total}</strong></span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 발송 성과율 */}
+          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>발송 성과율</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{allStats.sent}</span>
+              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {allStats.total} 발송됨</span>
+            </div>
+            <div style={{ height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
+              <div style={{ height: '100%', width: `${allStats.total > 0 ? Math.min(allStats.sent / allStats.total * 100, 100) : 0}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{allStats.total > 0 ? Math.round(allStats.sent / allStats.total * 100) : 0}% 완료</div>
+          </div>
+
+          {/* 답장 수신 통계 */}
+          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--yellow-md)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>답장 수신 통계</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: '#d97706', letterSpacing: '-1px' }}>{allStats.replied}</span>
+              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명 답장</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
+              {allStats.sent > 0 ? Math.round(allStats.replied / allStats.sent * 100) : 0}% 회신율 · 답장 온 크리에이터는 우측 수신함에 표시
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -330,18 +380,42 @@ export default function Outreach() {
 
           {/* Bulk actions */}
           {checkedIdxs.size > 0 && (
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--blue-lt)', background: '#eef3ff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{checkedIdxs.size}명 선택됨</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => { checkedIdxs.forEach(async idx => {
-                  const inf = rows[idx]
-                  if (!inf) return
-                  await gasPost({ action: 'markOutreachState', sheetRow: inf.sheetRow, sheetName: inf.sheetName, value: 'yes' })
-                }); setCheckedIdxs(new Set()); loadOutreach() }}
-                  style={{ padding: '5px 12px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  일괄 발송완료 처리
-                </button>
-              </div>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--blue-lt)', background: '#eef3ff', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{checkedIdxs.size}명 선택됨</span>
+              <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
+                style={{ flex: 1, minWidth: 160, fontSize: 12, border: '1px solid var(--blue)', borderRadius: 8, padding: '6px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit' }}>
+                {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+              </select>
+              <button
+                disabled={bulkSending}
+                onClick={async () => {
+                  const tpl = templates[bulkTplIdx]
+                  if (!tpl) return
+                  setBulkSending(true)
+                  for (const idx of Array.from(checkedIdxs)) {
+                    const inf = rows[idx]
+                    if (!inf || !inf.email) continue
+                    await gasPost({
+                      action: 'sendOutreachEmail',
+                      to: inf.email,
+                      subject: applyPlaceholders(tpl.subject, inf),
+                      body: applyPlaceholders(tpl.body, inf),
+                      sheetRow: inf.sheetRow,
+                      sheetName: inf.sheetName,
+                    })
+                  }
+                  setBulkSending(false)
+                  setCheckedIdxs(new Set())
+                  showToast(`${checkedIdxs.size}명에게 발송 완료`, 'success')
+                  loadOutreach()
+                }}
+                style={{ padding: '6px 14px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                {bulkSending ? '발송 중...' : '일괄 발송'}
+              </button>
+              <button onClick={() => setCheckedIdxs(new Set())}
+                style={{ padding: '6px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                취소
+              </button>
             </div>
           )}
 
@@ -446,24 +520,46 @@ export default function Outreach() {
             </div>
 
             {!selected ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+              <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                 인플루언서 목록에서 대상을 클릭하세요.
               </div>
             ) : (
               <div>
-                {/* Subject */}
+                {/* Template dropdown as 메일 제목 */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>메일 제목</div>
-                  <input value={draftSubject} onChange={e => setDraftSubject(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', outline: 'none' }} />
+                  <select value={selectedTplIdx}
+                    onChange={e => {
+                      const idx = +e.target.value
+                      setSelectedTplIdx(idx)
+                      const tpl = templates[idx]
+                      if (!tpl) return
+                      const rows = getRows()
+                      const inf = selectedIdx !== null ? rows[selectedIdx] : null
+                      setDraftSubject(applyPlaceholders(tpl.subject, inf))
+                      setDraftBody(applyPlaceholders(tpl.body, inf))
+                    }}
+                    style={{ width: '100%', fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 8, padding: '8px 12px', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+                  </select>
                 </div>
 
                 {/* Body */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--yellow-text)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>메일 본문 (수정 가능)</div>
                   <textarea ref={bodyRef} value={draftBody} onChange={e => setDraftBody(e.target.value)}
-                    rows={9}
+                    rows={8}
                     style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--yellow-md)', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
+                </div>
+
+                {/* Placeholder chips */}
+                <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {['{{이름}}', '{{핸들}}', '{{이메일}}', '{{팔로워}}', '{{조회수}}'].map(p => (
+                    <button key={p} onClick={() => insertPlaceholder(p)}
+                      style={{ fontSize: 11, padding: '3px 9px', background: 'var(--gray-1)', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}>
+                      {p}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Actions */}
@@ -479,63 +575,6 @@ export default function Outreach() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Template Master */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--gray-2)', paddingBottom: 10, marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--blue)', display: 'inline-block' }}></span>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>템플릿 설정 마스터</span>
-              </div>
-              <button onClick={createNewTemplate} style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue-dk)', background: 'none', border: 'none', cursor: 'pointer' }}>+ 새 템플릿 추가</button>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', display: 'block', marginBottom: 4 }}>불러올 템플릿 서식</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select value={selectedTplIdx} onChange={e => setSelectedTplIdx(+e.target.value)}
-                  style={{ flex: 1, fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 8, padding: '7px 10px', background: 'var(--gray-1)', outline: 'none' }}>
-                  {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-                </select>
-                <button onClick={deleteTemplate} style={{ padding: '7px 12px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>🗑</button>
-              </div>
-            </div>
-
-            {/* Placeholder chips */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>클릭 시 커서 위치에 치환 구문 삽입</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {['{{이름}}', '{{핸들}}', '{{이메일}}', '{{팔로워}}', '{{조회수}}'].map(p => (
-                  <button key={p} onClick={() => insertPlaceholder(p)}
-                    style={{ fontSize: 11, padding: '4px 10px', background: 'var(--gray-1)', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}>
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 3 }}>서식 관리명</label>
-                <input value={tplName} onChange={e => { setTplName(e.target.value); saveTplState() }}
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 3 }}>이메일 발송 제목</label>
-                <input value={tplSubject} onChange={e => { setTplSubject(e.target.value); saveTplState() }}
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 3 }}>이메일 발송 본문</label>
-                <textarea value={tplBody} rows={7} onChange={e => { setTplBody(e.target.value); saveTplState() }}
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 }} />
-              </div>
-              <button onClick={updateDraftFromTemplate}
-                style={{ padding: '8px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                → 이 템플릿으로 초안 업데이트
-              </button>
-            </div>
           </div>
 
         </div>
