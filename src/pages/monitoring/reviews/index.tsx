@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { gasGet, gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
+import Pagination from '../../../components/Pagination'
 
 // Matches 모니터링 sheet: no.|platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|모니터링 실행일
 const C = {
@@ -126,6 +127,12 @@ export default function Monitoring() {
 
   const [tableEditMode,  setTableEditMode]  = useState(false)
   const [activeTab,      setActiveTab]      = useState<'upload' | 'list'>('upload')
+  const [uploadPage,     setUploadPage]     = useState(1)
+  const [listPage,       setListPage]       = useState(1)
+  const MON_PAGE_SIZE = 25
+
+  useEffect(() => { setUploadPage(1) }, [searchQuery, platformFilter, brandFilter, statusFilter])
+  useEffect(() => { setListPage(1) }, [activeTab])
 
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -578,11 +585,16 @@ export default function Monitoring() {
       )}
 
       {activeTab === 'list' && (() => {
-        const uploadedRows = rows.filter(r => {
+        const uploadedRows   = rows.filter(r => {
           const extras = rowExtras[rowKey(r)] || {}
           return !!(extras.link || findVideoLink(r))
         })
+        const listTotalPages = Math.max(1, Math.ceil(uploadedRows.length / MON_PAGE_SIZE))
+        const listSafePage   = Math.min(listPage, listTotalPages)
+        const listStartIdx   = (listSafePage - 1) * MON_PAGE_SIZE
+        const pagedListRows  = uploadedRows.slice(listStartIdx, listStartIdx + MON_PAGE_SIZE)
         return (
+          <>
           <div className="table-wrap">
             <table>
               <thead>
@@ -598,7 +610,8 @@ export default function Monitoring() {
               <tbody>
                 {uploadedRows.length === 0
                   ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>업로드된 리뷰가 없습니다</td></tr>
-                  : uploadedRows.map((r, i) => {
+                  : pagedListRows.map((r, i) => {
+                      const i_abs = listStartIdx + i
                       const handle   = (r[C.HANDLE] || '').replace(/^@/, '')
                       const platform = (r[C.PLATFORM] || '').toLowerCase()
                       const rKey     = rowKey(r)
@@ -612,7 +625,7 @@ export default function Monitoring() {
                       const rowDate = extras.date || r[C.DATE] || ''
                       return (
                         <tr key={i}>
-                          <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i + 1}</td>
+                          <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i_abs + 1}</td>
                           <td>
                             {isTikTok
                               ? <span className="platform-badge platform-tiktok">TikTok</span>
@@ -639,6 +652,11 @@ export default function Monitoring() {
               </tbody>
             </table>
           </div>
+          <Pagination page={listSafePage} totalPages={listTotalPages} total={uploadedRows.length}
+            startIdx={listStartIdx} endIdx={listStartIdx + pagedListRows.length}
+            onPrev={() => setListPage(p => Math.max(1, p - 1))}
+            onNext={() => setListPage(p => Math.min(listTotalPages, p + 1))} />
+          </>
         )
       })()}
 
@@ -689,10 +707,15 @@ export default function Monitoring() {
           ! {data.error}
         </div>
       )}
-      {!loading && !data?.error && (
-        filteredRows.length === 0
+      {!loading && !data?.error && (() => {
+        const uploadTotalPages = Math.max(1, Math.ceil(filteredRows.length / MON_PAGE_SIZE))
+        const uploadSafePage   = Math.min(uploadPage, uploadTotalPages)
+        const uploadStartIdx   = (uploadSafePage - 1) * MON_PAGE_SIZE
+        const pagedRows        = filteredRows.slice(uploadStartIdx, uploadStartIdx + MON_PAGE_SIZE)
+        return filteredRows.length === 0
           ? <div className="empty">감지된 리뷰가 없습니다.</div>
           : (
+            <>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -713,7 +736,8 @@ export default function Monitoring() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((r, i) => {
+                  {pagedRows.map((r, i) => {
+                    const i_abs = uploadStartIdx + i
                     const handle   = (r[C.HANDLE]   || '').replace(/^@/, '')
                     const platform = (r[C.PLATFORM] || '').toLowerCase()
                     const rKey     = rowKey(r)
@@ -747,7 +771,7 @@ export default function Monitoring() {
                     return (
                       <tr key={i} style={{ opacity: hasLink ? 1 : 0.6 }}>
                         {/* no. */}
-                        <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i_abs + 1}</td>
 
                         {/* account */}
                         <td>
@@ -934,8 +958,13 @@ export default function Monitoring() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={uploadSafePage} totalPages={uploadTotalPages} total={filteredRows.length}
+              startIdx={uploadStartIdx} endIdx={uploadStartIdx + pagedRows.length}
+              onPrev={() => setUploadPage(p => Math.max(1, p - 1))}
+              onNext={() => setUploadPage(p => Math.min(uploadTotalPages, p + 1))} />
+            </>
           )
-      )}
+      })()}
       </>}
     </div>
   )

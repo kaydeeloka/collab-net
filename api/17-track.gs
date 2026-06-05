@@ -93,7 +93,7 @@ function get17TrackInfo(number) {
     var accepted = data.data && data.data.accepted;
     var rejected = (data.data && data.data.rejected) || [];
     if (!accepted || accepted.length === 0) {
-      if (_isColDMarkedY(number)) return { ok: false, error: 'D열이 Y — 등록 건너뜀' };
+      if (_isColDMarkedY(number)) return { ok: false, error: 'The number is not yet registered inside 17track' };
       register17Track([number]);
       return { ok: false, pending: true, error: '운송장을 17track에 등록했습니다. 잠시 후 다시 조회해 주세요.\n\n[raw] ' + rawText.slice(0, 400) };
     }

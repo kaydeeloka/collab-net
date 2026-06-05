@@ -3,7 +3,7 @@ import { gasGet, gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
-import { addToContactList } from '../../../lib/contactList'
+import Pagination from '../../../components/Pagination'
 
 type ListupTab = 'search' | 'database'
 
@@ -87,6 +87,8 @@ export default function Listup() {
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [dbPage, setDbPage] = useState(1)
+  const DB_PAGE_SIZE = 25
 
   // Dashboard stats
   const [dashStats, setDashStats] = useState<{ total: number; sent: number; replied: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
@@ -108,6 +110,8 @@ export default function Listup() {
       } catch {}
     })()
   }, [])
+
+  useEffect(() => { setDbPage(1) }, [currentDbTab, searchTerms, dateFrom, dateTo])
 
   function switchTab(t: ListupTab) {
     setActiveTab(t)
@@ -204,7 +208,7 @@ export default function Listup() {
     if (!td) return null
     const C = td.colIdx || {}
     const hdr = td.headers || []
-    const { rows, rowNums, sheetNames } = getFilteredRows(tier)
+    const { rows: allRows, rowNums: allRowNums, sheetNames: allSheetNames } = getFilteredRows(tier)
     const profileCol = hdr.findIndex(h => h.toLowerCase().includes('profile') && h.toLowerCase().includes('url'))
     const aiCol = hdr.findIndex(h => h.toLowerCase().includes('ai') && h.toLowerCase().includes('분석'))
     const outreachCol = hdr.findIndex(h => h.toLowerCase().trim() === 'outreach')
@@ -212,18 +216,26 @@ export default function Listup() {
     const dateCol = hdr.findIndex(h => { const l = h.toLowerCase(); return l.includes('timestamp') || l.includes('date') || l.includes('추가일') })
     const orderedCols = dateCol > 0 ? [dateCol, ...visCols.filter(i => i !== dateCol)] : visCols
 
+    const totalPages = Math.max(1, Math.ceil(allRows.length / DB_PAGE_SIZE))
+    const safePage   = Math.min(dbPage, totalPages)
+    const startIdx   = (safePage - 1) * DB_PAGE_SIZE
+    const rows       = allRows.slice(startIdx, startIdx + DB_PAGE_SIZE)
+    const rowNums    = allRowNums.slice(startIdx, startIdx + DB_PAGE_SIZE)
+    const sheetNames = allSheetNames.slice(startIdx, startIdx + DB_PAGE_SIZE)
+
     return (
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {orderedCols.map(i => <th key={i}>{hdr[i]}</th>)}
-              <th>컨택 대상</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={orderedCols.length + 1} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
+      <div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {orderedCols.map(i => <th key={i}>{hdr[i]}</th>)}
+                <th>컨택 대상</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={orderedCols.length + 1} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
             ) : rows.map((r, i) => {
               const aiText = aiCol >= 0 ? (r[aiCol] || '') : ''
               let acctBg = ''
@@ -266,21 +278,11 @@ export default function Listup() {
                         <button
                           disabled={isAdded}
                           onClick={async () => {
-                            const ok = addToContactList({
-                              name:      r[C.name] || r[C.displayName] || handle,
-                              handle,
-                              email:     r[C.email] || '',
-                              followers: r[C.followers] ? String(r[C.followers]) : '',
-                              avgViews:  r[C.avgView]   ? String(r[C.avgView])   : '',
-                            })
-                            if (ok) {
-                              setContactAdded(prev => new Set(prev).add(handle))
-                              if (rowNums[i] && sheetNames[i]) {
-                                try {
-                                  await gasPost({ action: 'markOutreachState', sheetRow: rowNums[i], sheetName: sheetNames[i], value: 'target' })
-                                } catch { /* silently fail — local state already updated */ }
-                              }
-                            }
+                            if (!rowNums[i] || !sheetNames[i]) return
+                            try {
+                              const res: { ok?: boolean; error?: string } = await gasPost({ action: 'markOutreachState', sheetRow: rowNums[i], sheetName: sheetNames[i], value: 'target' })
+                              if (res.ok) setContactAdded(prev => new Set(prev).add(handle))
+                            } catch { /* ignore */ }
                           }}
                           style={{
                             padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6,
@@ -300,6 +302,13 @@ export default function Listup() {
             })}
           </tbody>
         </table>
+        </div>
+        <Pagination
+          page={safePage} totalPages={totalPages}
+          total={allRows.length} startIdx={startIdx} endIdx={startIdx + rows.length}
+          onPrev={() => setDbPage(p => Math.max(1, p - 1))}
+          onNext={() => setDbPage(p => Math.min(totalPages, p + 1))}
+        />
       </div>
     )
   }
@@ -339,9 +348,9 @@ export default function Listup() {
             </div>
           </div>
           <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>
-            <div className="card-label">확정 인원</div>
+            <div className="card-label">1차 확정 인원</div>
             <div className="card-value" style={{ color: 'var(--teal-dk)' }}>
-              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> 명 / 50명</span>
+              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / 50</span>
             </div>
             <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${Math.min(dashStats.confirmed / 50 * 100, 100)}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />

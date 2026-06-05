@@ -421,8 +421,6 @@ a { text-decoration: none; }
   border-radius: var(--r);
   box-shadow: var(--sh);
   overflow-x: auto;
-  overflow-y: auto;
-  max-height: calc(100vh - 280px);
   border: 1px solid var(--surface-md);
 }
 table { width: 100%; border-collapse: collapse; table-layout: auto; min-width: 600px; }

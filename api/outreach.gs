@@ -154,7 +154,7 @@ function markOutreachState(sheetRow, sentCol, sheetName, value) {
     const name = (sheetName || '').toString().trim();
     const ws = name ? ss.getSheetByName(name) : null;
     if (!ws) return { ok: false, error: (name || '시트') + '를 찾을 수 없습니다.' };
-    const allowed = ['yes', 'reply', 'negotiate', 'reject', 'accept'];
+    const allowed = ['target', 'yes', 'reply', 'negotiate', 'reject', 'accept'];
     if (!allowed.includes(value)) return { ok: false, error: '올바르지 않은 상태값: ' + value };
     var idx = _detectSheetColIdx(ws);
     var sc  = idx.sent >= 0 ? idx.sent : sentCol;

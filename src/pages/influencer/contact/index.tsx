@@ -2,9 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { gasGet, gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import { useToast } from '../../../contexts/ToastContext'
-import { loadContactList, saveContactList } from '../../../lib/contactList'
-import type { ContactInfluencer } from '../../../lib/contactList'
 import Spinner from '../../../components/Spinner'
+import Pagination from '../../../components/Pagination'
 
 // ─── GAS outreach types ────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
@@ -84,7 +83,7 @@ MiMuse 드림.`,
 function loadTemplates() {
   try { const v = localStorage.getItem('mm_email_templates'); return v ? JSON.parse(v) : DEFAULT_TEMPLATES } catch { return DEFAULT_TEMPLATES }
 }
-function applyPlaceholders(text: string, inf: ContactInfluencer | null) {
+function applyPlaceholders(text: string, inf: GasRow | null) {
   if (!inf) return text
   return text
     .replace(/\{\{이름\}\}/g, inf.name)
@@ -102,23 +101,28 @@ const TABS: { key: ContactTab; label: string }[] = [
   { key: 'accepted', label: '확정 인플루언서' },
 ]
 
+const PAGE_SIZE = 25
+function paginate<T>(items: T[], page: number) {
+  const total      = items.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safe       = Math.min(page, totalPages)
+  const startIdx   = (safe - 1) * PAGE_SIZE
+  return { pageItems: items.slice(startIdx, startIdx + PAGE_SIZE), total, totalPages, page: safe, startIdx, endIdx: Math.min(startIdx + PAGE_SIZE, total) }
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 export default function Outreach() {
   const { showToast } = useToast()
 
-  // Tab
   const [contactTab, setContactTab] = useState<ContactTab>('pending')
 
-  // 컨택 예정 — localStorage
-  const [contactList, setContactList] = useState<ContactInfluencer[]>(loadContactList)
-  const [selectedInf, setSelectedInf] = useState<ContactInfluencer | null>(null)
-
-  // 컨택 완료 / 확정 — GAS backend
+  // GAS data — single load for all tabs
   const [outreachData, setOutreachData] = useState<OutreachData | null>(null)
-  const [gasLoading,   setGasLoading]   = useState(true)
+  const [loading,      setLoading]      = useState(true)
   const [gasError,     setGasError]     = useState('')
 
-  // Email draft
+  // Email draft (컨택 예정)
+  const [selectedRow,    setSelectedRow]    = useState<GasRow | null>(null)
   const [templates,      setTemplates]      = useState(loadTemplates)
   const [selectedTplIdx, setSelectedTplIdx] = useState(0)
   const [draftSubject,   setDraftSubject]   = useState('')
@@ -126,13 +130,15 @@ export default function Outreach() {
   const [sendingEmail,   setSendingEmail]   = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load GAS data when switching to completed / confirmed tabs
-  useEffect(() => {
-    if (contactTab === 'sent' || contactTab === 'accepted') loadOutreach()
-  }, [contactTab])
+  // Pagination
+  const [pendingPage,  setPendingPage]  = useState(1)
+  const [sentPage,     setSentPage]     = useState(1)
+  const [acceptedPage, setAcceptedPage] = useState(1)
+
+  useEffect(() => { loadOutreach() }, [])
 
   async function loadOutreach() {
-    setGasLoading(true)
+    setLoading(true)
     setGasError('')
     try {
       const d = await gasGet<OutreachData>('getOutreachData')
@@ -140,14 +146,47 @@ export default function Outreach() {
     } catch (e: unknown) {
       setGasError((e as Error).message)
     }
-    setGasLoading(false)
+    setLoading(false)
   }
 
-  // GAS rows split by outreach column
-  const allGasRows = outreachData ? flattenOutreach(outreachData) : []
-  const SENT_STATUSES   = ['yes', 'reply', 'negotiate']
-  const gasCompleted  = allGasRows.filter(r => SENT_STATUSES.includes(r.outreach))
-  const gasConfirmed  = allGasRows.filter(r => r.outreach === 'accept')
+  // Derive rows by outreach column value
+  const allRows      = outreachData ? flattenOutreach(outreachData) : []
+  const pendingRows  = allRows.filter(r => r.outreach === 'target')
+  const sentRows     = allRows.filter(r => ['yes', 'reply', 'negotiate'].includes(r.outreach))
+  const acceptedRows = allRows.filter(r => r.outreach === 'accept')
+
+  const countMap: Record<ContactTab, number> = {
+    pending:  pendingRows.length,
+    sent:     sentRows.length,
+    accepted: acceptedRows.length,
+  }
+
+  // Reset pages when tab changes
+  useEffect(() => { setPendingPage(1) },  [pendingRows.length])
+  useEffect(() => { setSentPage(1) },     [sentRows.length])
+  useEffect(() => { setAcceptedPage(1) }, [acceptedRows.length])
+
+  const pp = paginate(pendingRows,  pendingPage)
+  const sp = paginate(sentRows,     sentPage)
+  const ap = paginate(acceptedRows, acceptedPage)
+
+  // ── Draft builder helpers ──
+  useEffect(() => {
+    if (!selectedRow) return
+    const tpl = templates[selectedTplIdx]
+    if (!tpl) return
+    setDraftSubject(applyPlaceholders(tpl.subject, selectedRow))
+    setDraftBody(applyPlaceholders(tpl.body, selectedRow))
+  }, [selectedTplIdx, selectedRow])
+
+  function selectRow(row: GasRow) {
+    setSelectedRow(row)
+    const tpl = templates[selectedTplIdx]
+    if (tpl) {
+      setDraftSubject(applyPlaceholders(tpl.subject, row))
+      setDraftBody(applyPlaceholders(tpl.body, row))
+    }
+  }
 
   async function gasUpdateStatus(row: GasRow, value: string) {
     try {
@@ -159,55 +198,29 @@ export default function Outreach() {
       })
       if (res.error) { showToast(res.error, 'error'); return }
       showToast('상태 업데이트됨', 'success')
+      if (selectedRow?.sheetRow === row.sheetRow) setSelectedRow(null)
       loadOutreach()
     } catch (e: unknown) { showToast((e as Error).message, 'error') }
   }
 
-  // ── 컨택 예정 helpers ──
-  useEffect(() => {
-    if (!selectedInf) return
-    const tpl = templates[selectedTplIdx]
-    if (!tpl) return
-    setDraftSubject(applyPlaceholders(tpl.subject, selectedInf))
-    setDraftBody(applyPlaceholders(tpl.body, selectedInf))
-  }, [selectedTplIdx, selectedInf])
-
-  function selectInf(inf: ContactInfluencer) {
-    setSelectedInf(inf)
-    const tpl = templates[selectedTplIdx]
-    if (tpl) {
-      setDraftSubject(applyPlaceholders(tpl.subject, inf))
-      setDraftBody(applyPlaceholders(tpl.body, inf))
-    }
-  }
-
-  function localUpdateStatus(id: string, status: ContactInfluencer['status']) {
-    const next = contactList.map(x => x.id === id ? { ...x, status } : x)
-    setContactList(next)
-    saveContactList(next)
-    if (selectedInf?.id === id) setSelectedInf(null)
-  }
-
-  function removeFromList(id: string) {
-    const next = contactList.filter(x => x.id !== id)
-    setContactList(next)
-    saveContactList(next)
-    if (selectedInf?.id === id) setSelectedInf(null)
-  }
-
   async function sendEmail() {
-    if (!selectedInf?.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
+    if (!selectedRow?.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
     setSendingEmail(true)
     try {
       const res: { ok?: boolean; error?: string } = await gasPost({
         action: 'sendOutreachEmail',
-        to: selectedInf.email,
+        to: selectedRow.email,
         subject: draftSubject,
         body: draftBody,
+        sheetRow: selectedRow.sheetRow,
+        sheetName: selectedRow.sheetName,
       })
       if (res.error) { showToast(res.error, 'error') } else {
         showToast('발송 완료!', 'success')
-        localUpdateStatus(selectedInf.id, 'sent')
+        // mark as 'yes' on sheet
+        await gasPost({ action: 'markOutreachState', sheetRow: selectedRow.sheetRow, sheetName: selectedRow.sheetName, value: 'yes' })
+        setSelectedRow(null)
+        loadOutreach()
       }
     } catch (e: unknown) { showToast((e as Error).message, 'error') }
     setSendingEmail(false)
@@ -221,13 +234,6 @@ export default function Outreach() {
     setTimeout(() => { ta.selectionStart = ta.selectionEnd = s + ph.length; ta.focus() }, 0)
   }
 
-  const pendingList = contactList.filter(x => x.status === 'pending')
-  const countMap: Record<ContactTab, number> = {
-    pending:  pendingList.length,
-    sent:     gasCompleted.length,
-    accepted: gasConfirmed.length,
-  }
-
   // ── Shared styles ──
   const thStyle: React.CSSProperties = {
     padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700,
@@ -235,52 +241,68 @@ export default function Outreach() {
     background: 'var(--gray-1)', position: 'sticky', top: 0, zIndex: 1,
   }
 
-  // ── GAS row table renderer (called as a function, NOT as a JSX component) ──
-  function renderGasRows(rows: GasRow[], actions: (r: GasRow) => React.ReactNode) {
-    if (gasLoading) return (
+  // ── Loading / error full-card states ──
+  function LoadingState() {
+    return (
       <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <Spinner />
         <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span>
       </div>
     )
+  }
+
+  // ── GAS table renderer (plain function, NOT a React component) ──
+  function renderGasTable(pg: ReturnType<typeof paginate<GasRow>>, allRowsForTab: GasRow[], actions: (r: GasRow) => React.ReactNode, onPrev: () => void, onNext: () => void, onRowClick?: (r: GasRow) => void) {
+    if (loading) return <LoadingState />
     if (gasError) return <div style={{ padding: 24, color: '#b91c1c', fontSize: 13 }}>{gasError}</div>
-    if (rows.length === 0) return <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>데이터가 없습니다.</div>
+    if (allRowsForTab.length === 0) return <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>데이터가 없습니다.</div>
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--gray-3)' }}>
-              <th style={thStyle}>이름</th>
-              <th style={thStyle}>핸들</th>
-              <th style={thStyle}>이메일</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>팔로워</th>
-              <th style={thStyle}>순위</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid var(--gray-2)' }}>
-                <td style={{ padding: '10px 14px', fontWeight: 700, fontSize: 13 }}>{r.name || '—'}</td>
-                <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                  <a href={`https://www.tiktok.com/@${r.handle}`} target="_blank" rel="noopener"
-                    style={{ color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}>
-                    @{r.handle}
-                  </a>
-                </td>
-                <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--gray-6)' }}>{r.email || '—'}</td>
-                <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, textAlign: 'right', color: 'var(--gray-7)' }}>
-                  {r.followers ? fmtNum(r.followers) : '—'}
-                </td>
-                <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--gray-5)' }}>{r.tier}</td>
-                <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>{actions(r)}</div>
-                </td>
+      <>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--gray-3)' }}>
+                <th style={thStyle}>이름</th>
+                <th style={thStyle}>핸들</th>
+                <th style={thStyle}>이메일</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>팔로워</th>
+                <th style={thStyle}>순위</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>액션</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {pg.pageItems.map((r, i) => (
+                <tr key={i}
+                  onClick={() => onRowClick?.(r)}
+                  style={{
+                    borderBottom: '1px solid var(--gray-2)',
+                    cursor: onRowClick ? 'pointer' : 'default',
+                    background: selectedRow?.sheetRow === r.sheetRow ? 'var(--blue-lt)' : undefined,
+                  }}>
+                  <td style={{ padding: '10px 14px', fontWeight: 700, fontSize: 13 }}>{r.name || '—'}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 12 }}>
+                    <a href={`https://www.tiktok.com/@${r.handle}`} target="_blank" rel="noopener"
+                      style={{ color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}
+                      onClick={e => e.stopPropagation()}>
+                      @{r.handle}
+                    </a>
+                  </td>
+                  <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--gray-6)' }}>{r.email || '—'}</td>
+                  <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, textAlign: 'right', color: 'var(--gray-7)' }}>
+                    {r.followers ? fmtNum(r.followers) : '—'}
+                  </td>
+                  <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--gray-5)' }}>{r.tier}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>{actions(r)}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={pg.page} totalPages={pg.totalPages} total={pg.total}
+          startIdx={pg.startIdx} endIdx={pg.endIdx} onPrev={onPrev} onNext={onNext} />
+      </>
     )
   }
 
@@ -312,9 +334,14 @@ export default function Outreach() {
             </button>
           )
         })}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <button onClick={loadOutreach} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--gray-6)' }}>
+            ↻ 새로고침
+          </button>
+        </div>
       </div>
 
-      {/* ── 컨택 예정 (localStorage) ── */}
+      {/* ── 컨택 예정 (GAS outreach = 'contact') ── */}
       {contactTab === 'pending' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
 
@@ -323,72 +350,28 @@ export default function Outreach() {
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>컨택 예정 인플루언서</div>
               <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 4 }}>대상을 클릭해 이메일 초안을 작성하세요.</div>
             </div>
-            {pendingList.length === 0
-              ? <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
-                  DB 리스트에서 인플루언서를 추가하세요.
-                </div>
-              : <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid var(--gray-3)' }}>
-                        <th style={thStyle}>이름</th>
-                        <th style={thStyle}>핸들</th>
-                        <th style={{ ...thStyle, textAlign: 'right' }}>팔로워</th>
-                        <th style={{ ...thStyle, textAlign: 'right' }}>액션</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendingList.map(inf => (
-                        <tr key={inf.id} onClick={() => selectInf(inf)}
-                          style={{
-                            borderBottom: '1px solid var(--gray-2)', cursor: 'pointer',
-                            background: selectedInf?.id === inf.id ? 'var(--blue-lt)' : undefined,
-                          }}>
-                          <td style={{ padding: '10px 14px' }}>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{inf.name || '—'}</div>
-                            {inf.email && <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 2 }}>{inf.email}</div>}
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                            <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener"
-                              style={{ color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}
-                              onClick={e => e.stopPropagation()}>
-                              @{inf.handle}
-                            </a>
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, textAlign: 'right', color: 'var(--gray-7)' }}>
-                            {inf.followers ? fmtNum(inf.followers) : '—'}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                            <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
-                              <button onClick={() => { localUpdateStatus(inf.id, 'sent'); showToast('컨택 완료 처리됨', 'success') }}
-                                style={{ padding: '4px 10px', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                완료
-                              </button>
-                              <button onClick={() => removeFromList(inf.id)}
-                                style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: 'var(--gray-5)' }}>
-                                ✕
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-            }
+            {renderGasTable(pp, pendingRows, r => (
+              <button onClick={() => gasUpdateStatus(r, 'yes')}
+                style={{ padding: '4px 10px', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                완료
+              </button>
+            ),
+            () => setPendingPage(p => Math.max(1, p - 1)),
+            () => setPendingPage(p => Math.min(pp.totalPages, p + 1)),
+            selectRow)}
           </div>
 
           {/* Email draft builder */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--gray-2)', paddingBottom: 12, marginBottom: 16 }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>이메일 초안 빌더</span>
-              {selectedInf && (
+              {selectedRow && (
                 <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--blue-lt)', color: 'var(--blue-dk)', padding: '4px 10px', borderRadius: 999 }}>
-                  {selectedInf.name} 대상
+                  {selectedRow.name} 대상
                 </span>
               )}
             </div>
-            {!selectedInf
+            {!selectedRow
               ? <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                   인플루언서를 클릭하면 초안을 작성할 수 있습니다.
                 </div>
@@ -432,7 +415,7 @@ export default function Outreach() {
                       style={{ padding: '10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                       {sendingEmail ? '발송 중...' : '이메일 즉시 전송'}
                     </button>
-                    <button onClick={() => { localUpdateStatus(selectedInf.id, 'sent'); showToast('컨택 완료 처리됨', 'success') }}
+                    <button onClick={() => gasUpdateStatus(selectedRow, 'yes')}
                       style={{ padding: '10px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                       컨택 완료로 확정
                     </button>
@@ -443,19 +426,14 @@ export default function Outreach() {
         </div>
       )}
 
-      {/* ── 컨택 완료 (GAS: yes / reply / negotiate) ── */}
+      {/* ── 컨택 완료 (GAS outreach = yes / reply / negotiate) ── */}
       {contactTab === 'sent' && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>컨택 완료 인플루언서</div>
-              <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 4 }}>아웃리치 시트의 상태(완료·답장·협의중) 기준으로 표시됩니다.</div>
-            </div>
-            <button onClick={loadOutreach} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--gray-6)' }}>
-              ↻ 새로고침
-            </button>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>컨택 완료 인플루언서</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 4 }}>아웃리치 시트의 완료·답장·협의중 상태 기준으로 표시됩니다.</div>
           </div>
-          {renderGasRows(gasCompleted, r => (
+          {renderGasTable(sp, sentRows, r => (
             <>
               <button onClick={() => gasUpdateStatus(r, 'accept')}
                 style={{ padding: '4px 10px', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
@@ -466,27 +444,26 @@ export default function Outreach() {
                 ✗ 거절
               </button>
             </>
-          ))}
+          ),
+          () => setSentPage(p => Math.max(1, p - 1)),
+          () => setSentPage(p => Math.min(sp.totalPages, p + 1)))}
         </div>
       )}
 
-      {/* ── 확정 인플루언서 (GAS: accept) ── */}
+      {/* ── 확정 인플루언서 (GAS outreach = accept) ── */}
       {contactTab === 'accepted' && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>확정 인플루언서</div>
-              <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 4 }}>아웃리치 시트의 수락 확정 상태 기준으로 표시됩니다.</div>
-            </div>
-            <button onClick={loadOutreach} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--gray-6)' }}>
-              ↻ 새로고침
-            </button>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>확정 인플루언서</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 4 }}>협업이 확정된 인플루언서 명단입니다.</div>
           </div>
-          {renderGasRows(gasConfirmed, () => (
+          {renderGasTable(ap, acceptedRows, () => (
             <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>
               확정
             </span>
-          ))}
+          ),
+          () => setAcceptedPage(p => Math.max(1, p - 1)),
+          () => setAcceptedPage(p => Math.min(ap.totalPages, p + 1)))}
         </div>
       )}
     </div>
