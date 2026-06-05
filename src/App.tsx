@@ -52,6 +52,7 @@ import DesignArchiveOrders from './pages/kit/design-archive/orders'
 import ReviewsUploadStatus from './pages/monitoring/reviews/upload-status'
 import ReviewsManualCheck  from './pages/monitoring/reviews/manual-check'
 import ReviewsBrandCheck   from './pages/monitoring/reviews/brand-check'
+import ReviewsList         from './pages/monitoring/reviews/list'
 // MONITORING — content
 import ReviewContent   from './pages/monitoring/content'
 import ContentFollowup from './pages/monitoring/content/followup'
@@ -120,6 +121,7 @@ export default function App() {
                 <Route path="/monitoring/reviews/upload-status"     element={<ReviewsUploadStatus />} />
                 <Route path="/monitoring/reviews/manual-check"      element={<ReviewsManualCheck />} />
                 <Route path="/monitoring/reviews/brand-check"       element={<ReviewsBrandCheck />} />
+                <Route path="/monitoring/reviews/list"              element={<ReviewsList />} />
                 <Route path="/monitoring/content"                   element={<ReviewContent />} />
                 <Route path="/monitoring/content/followup"          element={<ContentFollowup />} />
                 <Route path="/monitoring/content/report"            element={<ContentReport />} />

@@ -47,7 +47,7 @@ export function buildPhaseDbOptions(data: {
     opts.push({ id, label })
   })
 
-  opts.sort((a, b) => phaseNum(b.label) - phaseNum(a.label))
+  opts.sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
   return opts
 }
 

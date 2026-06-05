@@ -125,6 +125,7 @@ export default function Monitoring() {
   const [manualMsg,      setManualMsg]      = useState('')
 
   const [tableEditMode,  setTableEditMode]  = useState(false)
+  const [activeTab,      setActiveTab]      = useState<'upload' | 'list'>('upload')
 
   const [searchQuery,    setSearchQuery]    = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -428,102 +429,6 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {/* Apify workflow diagram */}
-      {(() => {
-        const running = runPending
-        // A run has completed before if lastRun is a real date string
-        const lastRun = stats?.lastRun ?? ''
-        const hasRan  = !!lastRun && lastRun !== '-' && lastRun !== '아직 실행 안 됨'
-
-        type StepState = 'done' | 'active' | 'idle'
-        const steps: { icon: string; label: string; sub: string; state: StepState }[] = [
-          {
-            icon: '📋',
-            label: '핸들 수집',
-            sub: `${stats?.totalInfluencers ?? 0}명 인플루언서`,
-            state: (running || hasRan) ? 'done' : 'idle',
-          },
-          {
-            icon: '🚀',
-            label: 'Apify 실행',
-            sub: 'clockworks 스크래퍼',
-            state: running ? 'active' : hasRan ? 'done' : 'idle',
-          },
-          {
-            icon: '⏳',
-            label: '완료 대기',
-            sub: '최대 50개 프로필',
-            state: running ? 'active' : hasRan ? 'done' : 'idle',
-          },
-          {
-            icon: '🔎',
-            label: '키워드 필터링',
-            sub: 'mimuse · aesthen · nesh…',
-            state: running ? 'idle' : hasRan ? 'done' : 'idle',
-          },
-          {
-            icon: '📊',
-            label: '시트 업데이트',
-            sub: `${stats?.totalReviews ?? 0}개 리뷰 감지`,
-            state: running ? 'idle' : hasRan ? 'done' : 'idle',
-          },
-        ]
-
-        const colors: Record<StepState, { bg: string; border: string; icon: string; label: string; sub: string }> = {
-          done:   { bg: '#fefce8', border: '#fde047', icon: '#ca8a04', label: '#a16207', sub: '#facc15' },
-          active: { bg: '#eff6ff', border: '#93c5fd', icon: '#2563eb', label: '#1d4ed8', sub: '#60a5fa' },
-          idle:   { bg: 'var(--gray-0)', border: 'var(--gray-2)', icon: 'var(--gray-4)', label: 'var(--gray-5)', sub: 'var(--gray-3)' },
-        }
-
-        return (
-          <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '16px 20px', marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>
-              Apify 워크플로우
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              {steps.map((step, i) => {
-                const c = colors[step.state]
-                return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      flex: 1, minWidth: 0,
-                      background: c.bg, border: `1px solid ${c.border}`,
-                      borderRadius: 10, padding: '10px 12px',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                      position: 'relative',
-                    }}>
-                      {step.state === 'active' && (
-                        <span style={{
-                          position: 'absolute', top: 5, right: 7,
-                          width: 6, height: 6, borderRadius: '50%',
-                          background: '#3b82f6',
-                          boxShadow: '0 0 0 2px #bfdbfe',
-                          animation: 'pulse 1.5s infinite',
-                        }} />
-                      )}
-                      {step.state === 'done' && (
-                        <span style={{
-                          position: 'absolute', top: 5, right: 7,
-                          fontSize: 9, color: '#ca8a04', fontWeight: 800,
-                        }}>✓</span>
-                      )}
-                      <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: c.label, textAlign: 'center', whiteSpace: 'nowrap' }}>{step.label}</span>
-                      <span style={{ fontSize: 10, color: c.sub, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{step.sub}</span>
-                    </div>
-                    {i < steps.length - 1 && (
-                      <div style={{ width: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 14, color: 'var(--gray-3)', userSelect: 'none' }}>›</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
-
       {/* 키워드 설정 + 브랜드 횟수 side by side */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
 
@@ -636,6 +541,22 @@ export default function Monitoring() {
 
       </div>{/* end flex row wrapper */}
 
+      {/* In-page tabs */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--gray-2)', marginBottom: 20 }}>
+        {([['upload', '리뷰 업로드'], ['list', '리뷰 리스트']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            style={{
+              padding: '10px 22px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
+              background: 'transparent',
+              color: activeTab === key ? 'var(--blue-dk)' : 'var(--gray-5)',
+              borderBottom: activeTab === key ? '2px solid var(--blue-dk)' : '2px solid transparent',
+              marginBottom: -2, transition: 'color .15s',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Delete confirmation toast */}
       {pendingDelete && (
         <div style={{
@@ -656,6 +577,72 @@ export default function Monitoring() {
         </div>
       )}
 
+      {activeTab === 'list' && (() => {
+        const uploadedRows = rows.filter(r => {
+          const extras = rowExtras[rowKey(r)] || {}
+          return !!(extras.link || findVideoLink(r))
+        })
+        return (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 36, textAlign: 'center' }}>no.</th>
+                  <th>플랫폼</th>
+                  <th>인플루언서명</th>
+                  <th>업로드일</th>
+                  <th>리뷰 링크</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {uploadedRows.length === 0
+                  ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>업로드된 리뷰가 없습니다</td></tr>
+                  : uploadedRows.map((r, i) => {
+                      const handle   = (r[C.HANDLE] || '').replace(/^@/, '')
+                      const platform = (r[C.PLATFORM] || '').toLowerCase()
+                      const rKey     = rowKey(r)
+                      const extras   = rowExtras[rKey] || {}
+                      const link     = extras.link || findVideoLink(r)
+                      const isTikTok    = platform.includes('tiktok')    || link.toLowerCase().includes('tiktok.com')
+                      const isInstagram = platform.includes('instagram') || link.toLowerCase().includes('instagram.com')
+                      const profileUrl  = isTikTok
+                        ? `https://www.tiktok.com/@${handle}`
+                        : isInstagram ? `https://www.instagram.com/${handle}` : ''
+                      const rowDate = extras.date || r[C.DATE] || ''
+                      return (
+                        <tr key={i}>
+                          <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{i + 1}</td>
+                          <td>
+                            {isTikTok
+                              ? <span className="platform-badge platform-tiktok">TikTok</span>
+                              : isInstagram
+                                ? <span className="platform-badge platform-instagram">Instagram</span>
+                                : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>
+                            }
+                          </td>
+                          <td>
+                            {profileUrl
+                              ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{handle}</a>
+                              : <span style={{ fontSize: 13, fontWeight: 600 }}>{handle || '—'}</span>
+                            }
+                          </td>
+                          <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(rowDate) || '—'}</td>
+                          <td><a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a></td>
+                          <td>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>완료</span>
+                          </td>
+                        </tr>
+                      )
+                    })
+                }
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
+
+      {activeTab === 'upload' && <>
       {/* Filters */}
       <div className="filters" style={{ marginBottom: 16 }}>
         <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
@@ -771,12 +758,16 @@ export default function Monitoring() {
                                 ? <span className="platform-badge platform-instagram">Instagram</span>
                                 : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>
                             }
-                            {!hasLink && (
-                              <span style={{
-                                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
-                                background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047',
-                              }}>대기중</span>
-                            )}
+                            {hasLink
+                              ? <span style={{
+                                  fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
+                                  background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7',
+                                }}>완료</span>
+                              : <span style={{
+                                  fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
+                                  background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047',
+                                }}>미업로드</span>
+                            }
                           </div>
                           {handle && (
                             <div style={{ marginTop: 3 }}>
@@ -945,6 +936,7 @@ export default function Monitoring() {
             </div>
           )
       )}
+      </>}
     </div>
   )
 }

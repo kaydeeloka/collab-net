@@ -51,16 +51,15 @@ const GROUPS: SideGroup[] = [
       {
         to: '/brand/contact', label: '브랜드 컨택',
         sub: [
-          { to: '/brand/contact/list',      label: '컨택 대상 명단' },
-          { to: '/brand/contact/template',  label: '아웃리치 템플릿 작성 / 선택' },
-          { to: '/brand/contact/completed', label: '컨택 완료 명단 (답장 체크)' },
+          { to: '/brand/contact', label: '컨택 리스트', end: true },
+          { to: '/brand/contact/template', label: '템플릿 관리' },
         ],
       },
       {
         to: '/brand/confirmed', label: '확정 브랜드 명단',
         sub: [
-          { to: '/brand/confirmed/folders', label: '브랜드 별 필요 자료 폴더 생성' },
-          { to: '/brand/confirmed/files',   label: '로고 파일 · 제품 성분 파일 등' },
+          { to: '/brand/confirmed/folders', label: '확정 브랜드 관리' },
+          { to: '/brand/confirmed/files',   label: '자료 아카이브' },
         ],
       },
     ],
@@ -71,9 +70,8 @@ const GROUPS: SideGroup[] = [
       {
         to: '/kit/ems', label: 'EMS 배송 추적',
         sub: [
-          { to: '/kit/ems/daily',   label: '각 배송 단계 데일리 추적' },
-          { to: '/kit/ems/check',   label: '도착 건 / 오류 건 수량 체크' },
-          { to: '/kit/ems/pending', label: '미수취 건 · 아웃리치 진행' },
+          { to: '/kit/ems/daily', label: '배송 관리' },
+          { to: '/kit/ems/check', label: '배송 오류 관리' },
         ],
       },
       {
@@ -87,21 +85,7 @@ const GROUPS: SideGroup[] = [
   {
     label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
     children: [
-      {
-        to: '/monitoring/reviews', label: '리뷰 모니터링',
-        sub: [
-          { to: '/monitoring/reviews/upload-status', label: '인플루언서 별 리뷰 업로드 여부' },
-          { to: '/monitoring/reviews/manual-check',  label: '수기 리뷰 체크 기능' },
-          { to: '/monitoring/reviews/brand-check',   label: 'Mi Muse / 브랜드 리뷰 체크란' },
-        ],
-      },
-      {
-        to: '/monitoring/content', label: '리뷰 콘텐츠 수치 확인',
-        sub: [
-          { to: '/monitoring/content/followup', label: '리뷰 콘텐츠 수치 팔로업' },
-          { to: '/monitoring/content/report',   label: '최종 수치 확인 후 리포트 작성' },
-        ],
-      },
+      { to: '/monitoring/reviews', label: '리뷰 모니터링' },
       {
         to: '/monitoring/reports', label: '리포트 아카이브',
         sub: [
@@ -374,11 +358,12 @@ export default function Layout() {
               {dbOptions.length > 0 ? (
                 <select
                   className="phase-select"
-                  value={activeDbId}
-                  onChange={e => switchPhase(e.target.value)}
+                  value=""
+                  onChange={e => { if (e.target.value) switchPhase(e.target.value) }}
                   title="차수 전환"
                 >
-                  {dbOptions.map(o => (
+                  <option value="" disabled>{phaseBadge}</option>
+                  {dbOptions.filter(o => o.id !== activeDbId).map(o => (
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
