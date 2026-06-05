@@ -10,6 +10,7 @@ function _buildOutreachColIdx() {
     handle    : COL_HANDLE,
     email     : COL_EMAIL,
     sent      : COL_OUTREACH,
+    outreach  : COL_OUTREACH,
     sentDate  : -1,
     rank      : COL_RANK,
     follower  : COL_FOLLOWERS,

@@ -87,7 +87,7 @@ export default function Listup() {
   const [dateTo, setDateTo] = useState('')
 
   // Dashboard stats
-  const [dashStats, setDashStats] = useState<{ total: number; sent: number; replied: number; confirmed: number } | null>(null)
+  const [dashStats, setDashStats] = useState<{ total: number; sent: number; replied: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
 
   useEffect(() => {
     ;(async () => {
@@ -97,8 +97,12 @@ export default function Listup() {
           gasGet<{ rows?: unknown[] }>('getConfirmedInfluencers'),
         ])
         let total = 0, sent = 0, replied = 0
-        DB_TIERS.forEach(t => { const s = (outreach[t] || {}).stats || {}; total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0 })
-        setDashStats({ total, sent, replied, confirmed: (confirmed.rows || []).length })
+        const tiers = DB_TIERS.map(t => {
+          const s = (outreach[t] || {}).stats || {}
+          total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0
+          return { rank: t.replace('순위', ''), total: s.total || 0 }
+        })
+        setDashStats({ total, sent, replied, confirmed: (confirmed.rows || []).length, tiers })
       } catch {}
     })()
   }, [])
@@ -135,7 +139,7 @@ export default function Listup() {
         const hide = new Set<number>()
         firstTierData.headers.forEach((h, i) => {
           const l = h.toLowerCase().trim()
-          if (l === 'profile url' || l === 'outreach') hide.add(i)
+          if (l === 'profile url') hide.add(i)
         })
         setHiddenCols(hide)
       }
@@ -201,6 +205,7 @@ export default function Listup() {
     const { rows, rowNums, sheetNames } = getFilteredRows(tier)
     const profileCol = hdr.findIndex(h => h.toLowerCase().includes('profile') && h.toLowerCase().includes('url'))
     const aiCol = hdr.findIndex(h => h.toLowerCase().includes('ai') && h.toLowerCase().includes('분석'))
+    const outreachCol = hdr.findIndex(h => h.toLowerCase().trim() === 'outreach')
     const visCols = hdr.map((_, i) => i).filter(i => !hiddenCols.has(i))
     const dateCol = hdr.findIndex(h => { const l = h.toLowerCase(); return l.includes('timestamp') || l.includes('date') || l.includes('추가일') })
     const orderedCols = dateCol > 0 ? [dateCol, ...visCols.filter(i => i !== dateCol)] : visCols
@@ -239,6 +244,16 @@ export default function Listup() {
                         : <td key={ci} style={{ background: bg || undefined }}><span style={{ color: 'var(--gray-5)' }}>{cell || '—'}</span></td>
                     if ([C.followers, C.following, C.totalLikes, C.videoCount, C.engRate].includes(ci) && !isNaN(parseFloat(cell.replace(/,/g, ''))))
                       return <td key={ci} className="num" style={{ background: bg || undefined }}>{fmtNum(cell)}</td>
+                    if (ci === outreachCol) {
+                      const v = cell.toLowerCase()
+                      const s = v === 'yes' ? { bg: '#dbeafe', color: '#1d4ed8', label: '완료' }
+                              : v === 'reply' ? { bg: '#fef3c7', color: '#d97706', label: '답장' }
+                              : v === 'negotiate' ? { bg: '#d1fae5', color: '#065f46', label: '협의중' }
+                              : v === 'accept' ? { bg: '#bbf7d0', color: '#14532d', label: '수락확정' }
+                              : v === 'reject' ? { bg: '#fee2e2', color: '#991b1b', label: '거절' }
+                              : { bg: '#f1f5f9', color: '#64748b', label: '미발송' }
+                      return <td key={ci}><span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>{s.label}</span></td>
+                    }
                     return <td key={ci} style={{ background: bg || undefined }}>{cell}</td>
                   })}
                   <td>
@@ -275,14 +290,16 @@ export default function Listup() {
       {dashStats && (
         <div className="cards" style={{ marginBottom: 16 }}>
           <div className="card">
-            <div className="card-label">컨택 현황</div>
-            <div className="card-value" style={{ color: 'var(--green)' }}>
-              {dashStats.sent}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / {dashStats.total}</span>
+            <div className="card-label">총 인플루언서</div>
+            <div className="card-value">{dashStats.total}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
+            <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 4 }}>
+              {dashStats.tiers.map((t, i) => (
+                <span key={t.rank}>
+                  {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
+                  <span>{t.rank}순위 <strong style={{ color: 'var(--gray-7)' }}>{t.total}</strong></span>
+                </span>
+              ))}
             </div>
-          </div>
-          <div className="card">
-            <div className="card-label">신규 회신</div>
-            <div className="card-value" style={{ color: '#d97706' }}>{dashStats.replied}</div>
           </div>
           <div className="card highlight">
             <div className="card-label">모집 완료</div>
@@ -293,7 +310,7 @@ export default function Listup() {
           <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>
             <div className="card-label">확정 인원</div>
             <div className="card-value" style={{ color: 'var(--teal-dk)' }}>
-              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / 50</span>
+              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> 명 / 50명</span>
             </div>
             <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${Math.min(dashStats.confirmed / 50 * 100, 100)}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />

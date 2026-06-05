@@ -6,18 +6,17 @@ import Spinner from '../../../components/Spinner'
 
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
 
-const STATUS_LABELS: Record<string, string> = {
-  '': '미발송', yes: '발송완료', reply: '답장', negotiate: '협의중', accept: '수락', reject: '거절',
-}
+const STATUS_OPTIONS = [
+  { value: '',          label: '미발송',    bg: '#f1f5f9', color: '#64748b' },
+  { value: 'yes',       label: '완료',  bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'reply',     label: '답장',      bg: '#fef3c7', color: '#d97706' },
+  { value: 'negotiate', label: '협의중',    bg: '#d1fae5', color: '#065f46' },
+  { value: 'accept',    label: '수락확정',  bg: '#bbf7d0', color: '#14532d' },
+  { value: 'reject',    label: '거절',      bg: '#fee2e2', color: '#991b1b' },
+]
 
-const STATUS_COLORS: Record<string, string> = {
-  '': 'bg-gray-100 text-gray-600',
-  yes: 'bg-blue-100 text-blue-700',
-  reply: 'bg-amber-100 text-amber-700',
-  negotiate: 'bg-green-100 text-green-700',
-  accept: 'bg-emerald-100 text-emerald-700',
-  reject: 'bg-red-100 text-red-700',
-}
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s.label]))
+const STATUS_STYLE: Record<string, { bg: string; color: string }> = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
 
 interface InfluencerRow {
   name: string
@@ -120,6 +119,7 @@ export default function Outreach() {
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
 
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
@@ -168,7 +168,7 @@ export default function Outreach() {
       email: r[C.email] || r[4] || '',
       followers: r[C.followers] || r[5] || '',
       avgViews: r[C.avgView] || r[10] || '',
-      outreach: r[C.outreach] || r[14] || '',
+      outreach: r[C.outreach] || r[C.sent] || r[13] || '',
       replyBody: r[C.replyBody] || r[15] || '',
       replyDate: r[C.replyDate] || r[16] || '',
       sheetRow: (td.rowNums || [])[i],
@@ -240,6 +240,21 @@ export default function Outreach() {
     } catch (e: unknown) { showToast((e as Error).message, 'error') }
   }
 
+  async function updateRowState(inf: InfluencerRow, value: string) {
+    const key = `${inf.sheetName}_${inf.sheetRow}`
+    setStatusOverrides(prev => ({ ...prev, [key]: value }))
+    try {
+      const res: { ok?: boolean; error?: string } = await gasPost({ action: 'markOutreachState', sheetRow: inf.sheetRow, sheetName: inf.sheetName, value })
+      if (res.error) {
+        showToast(res.error, 'error')
+        setStatusOverrides(prev => { const next = { ...prev }; delete next[key]; return next })
+      }
+    } catch (e: unknown) {
+      showToast((e as Error).message, 'error')
+      setStatusOverrides(prev => { const next = { ...prev }; delete next[key]; return next })
+    }
+  }
+
   function insertPlaceholder(placeholder: string) {
     const ta = bodyRef.current
     if (!ta) { setDraftBody(prev => prev + placeholder); return }
@@ -300,7 +315,7 @@ export default function Outreach() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={syncReplies} style={{ padding: '8px 16px', background: '#fef9c3', color: '#92400e', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid #fde68a', cursor: 'pointer' }}>답장 동기화</button>
-            <button onClick={loadOutreach} style={{ padding: '8px 16px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>↻ 새로고침</button>
+            <button onClick={() => { setStatusOverrides({}); loadOutreach() }} style={{ padding: '8px 16px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>↻ 새로고침</button>
           </div>
         </div>
       </div>
@@ -422,18 +437,18 @@ export default function Outreach() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
-                <col style={{ width: 40 }} /><col /><col style={{ width: 90 }} /><col style={{ width: 70 }} /><col style={{ width: 80 }} /><col style={{ width: 120 }} />
+                <col style={{ width: 36 }} /><col /><col style={{ width: 110 }} /><col style={{ width: 68 }} /><col style={{ width: 100 }} /><col style={{ width: 180 }} />
               </colgroup>
               <thead>
                 <tr style={{ background: 'var(--gray-1)', fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '2px solid var(--gray-3)' }}>
                   <th style={{ padding: '10px 8px', textAlign: 'center' }}>
                     <input type="checkbox" onChange={e => setCheckedIdxs(e.target.checked ? new Set(rows.map((_, i) => i)) : new Set())} />
                   </th>
-                  <th style={{ padding: '10px 12px' }}>이름</th>
+                  <th style={{ padding: '10px 14px' }}>이름</th>
                   <th style={{ padding: '10px 12px' }}>핸들</th>
-                  <th style={{ padding: '10px 8px' }}>팔로워</th>
-                  <th style={{ padding: '10px 8px' }}>상태</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>초안 빌드</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'right' }}>팔로워</th>
+                  <th style={{ padding: '10px 10px' }}>상태</th>
+                  <th style={{ padding: '10px 14px', textAlign: 'right' }}>초안 / 액션</th>
                 </tr>
               </thead>
               <tbody>
@@ -444,35 +459,83 @@ export default function Outreach() {
                   <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
                 )}
                 {rows.map((inf, i) => {
-                  const statusKey = (inf.outreach || '').toLowerCase()
+                  const overrideKey = `${inf.sheetName}_${inf.sheetRow}`
+                  const statusKey = (statusOverrides[overrideKey] !== undefined ? statusOverrides[overrideKey] : (inf.outreach || '')).toLowerCase()
                   const isSelected = selectedIdx === i
+                  const s = STATUS_STYLE[statusKey] || STATUS_STYLE['']
+                  const label = STATUS_LABELS[statusKey] || '미발송'
+
                   return (
                     <tr key={i} style={{
                       borderBottom: '1px solid var(--gray-2)', cursor: 'pointer',
                       background: isSelected ? 'var(--blue-lt)' : undefined,
+                      transition: 'background .1s',
                     }} onClick={() => selectInfluencer(i)}>
-                      <td style={{ padding: '8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+
+                      {/* Checkbox */}
+                      <td style={{ padding: '10px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={checkedIdxs.has(i)} onChange={e => {
                           const next = new Set(checkedIdxs)
                           e.target.checked ? next.add(i) : next.delete(i)
                           setCheckedIdxs(next)
                         }} />
                       </td>
-                      <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: 600 }}>{inf.name || '—'}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12 }}>
-                        {inf.handle ? <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener" style={{ color: 'var(--blue-dk)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>@{inf.handle}</a> : '—'}
+
+                      {/* Name + email */}
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{inf.name || '—'}</div>
+                        {inf.email && <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 2 }}>{inf.email}</div>}
                       </td>
-                      <td style={{ padding: '8px', fontSize: 12, textAlign: 'right' }}>{fmtNum(inf.followers)}</td>
-                      <td style={{ padding: '8px' }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: statusKey === 'yes' ? '#dbeafe' : statusKey === 'reply' ? '#fef3c7' : statusKey === 'accept' ? '#d1fae5' : statusKey === 'reject' ? '#fee2e2' : '#f1f5f9', color: statusKey === 'yes' ? '#1d4ed8' : statusKey === 'reply' ? '#d97706' : statusKey === 'accept' ? '#065f46' : statusKey === 'reject' ? '#991b1b' : '#64748b' }}>
-                          {STATUS_LABELS[statusKey] || statusKey || '미발송'}
-                        </span>
+
+                      {/* Handle */}
+                      <td style={{ padding: '10px 12px', fontSize: 12 }}>
+                        {inf.handle ? (
+                          <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}
+                            onClick={e => e.stopPropagation()}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5, flexShrink: 0 }}><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.77 1.52V6.76a4.85 4.85 0 0 1-1-.07z"/></svg>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>{inf.handle}</span>
+                          </a>
+                        ) : '—'}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                        <button onClick={e => { e.stopPropagation(); selectInfluencer(i) }}
-                          style={{ padding: '4px 10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                          초안 빌드
-                        </button>
+
+                      {/* Followers */}
+                      <td style={{ padding: '10px 8px', fontSize: 12, fontWeight: 600, textAlign: 'right', color: 'var(--gray-7)' }}>
+                        {inf.followers ? fmtNum(inf.followers) : '—'}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: '10px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <select value={statusKey} onChange={e => updateRowState(inf, e.target.value)}
+                          style={{ fontSize: 11, fontWeight: 600, border: '1px solid var(--gray-3)', borderRadius: 6, padding: '4px 6px', background: '#fff', color: s.color, outline: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+                          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+
+                      {/* Context actions */}
+                      <td style={{ padding: '10px 14px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                          {statusKey === 'negotiate' ? (
+                            <>
+                              <button onClick={() => { setSelectedIdx(i); updateState('accept') }}
+                                style={{ padding: '4px 10px', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ 수락</button>
+                              <button onClick={() => { setSelectedIdx(i); updateState('reject') }}
+                                style={{ padding: '4px 10px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✗ 거절</button>
+                            </>
+                          ) : statusKey === 'reply' ? (
+                            <button onClick={() => selectInfluencer(i)}
+                              style={{ padding: '4px 10px', background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏ 답장</button>
+                          ) : (
+                            <>
+                              <button onClick={() => selectInfluencer(i)}
+                                style={{ padding: '4px 10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏ 초안 빌드</button>
+                              {statusKey === '' && (
+                                <button onClick={() => updateRowState(inf, 'yes')} title="발송완료 처리"
+                                  style={{ padding: '4px 8px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: 'var(--gray-5)' }}>✓</button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -514,9 +577,9 @@ export default function Outreach() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--gray-2)', paddingBottom: 12, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--yellow-md)', display: 'inline-block' }}></span>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>개인 맞춤형 초안 빌더</span>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>개인 맞춤형 초안 빌더 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue-dk)' }}>(Live)</span></span>
               </div>
-              {selected && <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--blue-lt)', color: 'var(--blue-dk)', padding: '4px 10px', borderRadius: 999 }}>{selected.name} @{selected.handle}</span>}
+              {selected && <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--blue-lt)', color: 'var(--blue-dk)', padding: '4px 10px', borderRadius: 999 }}>{selected.name} 대상</span>}
             </div>
 
             {!selected ? (
@@ -525,9 +588,9 @@ export default function Outreach() {
               </div>
             ) : (
               <div>
-                {/* Template dropdown as 메일 제목 */}
+                {/* Template selector dropdown */}
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>메일 제목</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>템플릿 선택</div>
                   <select value={selectedTplIdx}
                     onChange={e => {
                       const idx = +e.target.value
@@ -544,12 +607,32 @@ export default function Outreach() {
                   </select>
                 </div>
 
+                {/* Processed subject display */}
+                <div style={{ marginBottom: 12, border: '1px solid var(--gray-3)', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--gray-1)', borderBottom: '1px solid var(--gray-2)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px' }}>치환 완료된 메일 제목</span>
+                    <button onClick={() => navigator.clipboard.writeText(draftSubject).then(() => showToast('제목 복사됨', 'success'))}
+                      style={{ fontSize: 11, padding: '2px 8px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', color: 'var(--gray-6)', fontWeight: 600 }}>
+                      📋 복사
+                    </button>
+                  </div>
+                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--gray-8)', lineHeight: 1.5, wordBreak: 'break-all' }}>
+                    {draftSubject || <span style={{ color: 'var(--gray-4)' }}>—</span>}
+                  </div>
+                </div>
+
                 {/* Body */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--yellow-text)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>메일 본문 (수정 가능)</div>
+                <div style={{ marginBottom: 12, border: '1px solid var(--yellow-md)', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#fffbeb', borderBottom: '1px solid var(--yellow-md)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--yellow-text)', textTransform: 'uppercase', letterSpacing: '.5px' }}>실시간 치환된 본문 (수정 가능)</span>
+                    <button onClick={() => navigator.clipboard.writeText(draftBody).then(() => showToast('본문 복사됨', 'success'))}
+                      style={{ fontSize: 11, padding: '2px 8px', background: '#fff', border: '1px solid var(--yellow-md)', borderRadius: 6, cursor: 'pointer', color: 'var(--yellow-text)', fontWeight: 600 }}>
+                      📋 복사
+                    </button>
+                  </div>
                   <textarea ref={bodyRef} value={draftBody} onChange={e => setDraftBody(e.target.value)}
                     rows={8}
-                    style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--yellow-md)', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
+                    style={{ width: '100%', padding: '10px 12px', border: 'none', fontSize: 12, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.6, display: 'block' }} />
                 </div>
 
                 {/* Placeholder chips */}
