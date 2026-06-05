@@ -17,8 +17,6 @@ import Monitoring  from './pages/monitoring/reviews'
 import TiktokTrend from './pages/trend/tiktok'
 
 // INFLUENCER — search
-import SearchSettings from './pages/influencer/search/settings'
-import SearchExplore  from './pages/influencer/search/explore'
 import SearchDbList   from './pages/influencer/search/db'
 // INFLUENCER — contact
 import ContactList      from './pages/influencer/contact/list'
@@ -88,8 +86,6 @@ export default function App() {
 
                 {/* ── INFLUENCER ── */}
                 <Route path="/influencer/search"                    element={<Listup />} />
-                <Route path="/influencer/search/settings"           element={<SearchSettings />} />
-                <Route path="/influencer/search/explore"            element={<SearchExplore />} />
                 <Route path="/influencer/search/db"                 element={<SearchDbList />} />
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/contact/list"              element={<ContactList />} />

@@ -4,7 +4,7 @@ import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 
-type ListupTab = 'settings' | 'apify' | 'database'
+type ListupTab = 'search' | 'database'
 
 const DEFAULT_KBEAUTY_KEYWORDS = ['glass skin','kbeauty','korean beauty','korean skincare','kbeauty review','kbeauty routine','korean skincare routine','kbeauty products','kbeauty addict','korean makeup','olive young','kbeauty skincare']
 const DEFAULT_BEAUTY_KEYWORDS  = ['beauty review','skincare','makeup tips','beauty creator','beautytok','makeup haul','beauty hacks','beauty influencer']
@@ -42,7 +42,7 @@ interface TierData {
 }
 
 export default function Listup() {
-  const [activeTab, setActiveTab] = useState<ListupTab>('settings')
+  const [activeTab, setActiveTab] = useState<ListupTab>('search')
   const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
   // Config state
@@ -90,6 +90,7 @@ export default function Listup() {
     setActiveTab(t)
     if (t === 'database' && !listupLoaded) loadListup()
   }
+
 
   async function loadListup() {
     setListupLoaded(true)
@@ -249,77 +250,81 @@ export default function Listup() {
           <div className="page-banner-desc">Apify를 통해 조건에 맞는 TikTok/Instagram 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
         </div>
         <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('apify')}>Apify 탐색</button>
           <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('database')}>인플루언서 DB</button>
           <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setListupLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침 (Sync)</button>
         </div>
       </div>
 
       <div className="ftab-bar">
-        {(['settings', 'apify', 'database'] as ListupTab[]).map((t, i) => (
+        {(['search', 'database'] as ListupTab[]).map((t, i) => (
           <button key={t} className={'ftab' + (activeTab === t ? ' active' : '')} onClick={() => switchTab(t)}>
-            {['크리에이터 조건', 'Apify 탐색', '인플루언서 DB'][i]}
+            {['인플루언서 찾기', '인플루언서 DB'][i]}
           </button>
         ))}
       </div>
 
       <div className="ftab-content">
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
+        {/* Search Tab — 인플루언서 필터링 조건 only */}
+        {activeTab === 'search' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              {/* Filter conditions */}
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>인플루언서 필터링 조건</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {!filterEditMode
-                      ? <button className="cfg-btn" onClick={() => setFilterEditMode(true)}>편집</button>
-                      : <>
-                        <button className="cfg-btn" onClick={() => setFilterConds(prev => [...prev, { cat: '구분', desc: '내용을 입력하세요' }])}>+ 추가</button>
-                        <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => { saveCfg('mimuse_filter_conds', filterConds); setFilterEditMode(false) }}>저장</button>
-                        <button className="cfg-btn cfg-btn--ghost" title="기본값으로 초기화" onClick={() => { setFilterConds(FILTER_COND_DEFAULT); }}>↺</button>
-                      </>
-                    }
-                  </div>
-                </div>
-                <div className="table-wrap">
-                  <table style={{ minWidth: 0 }}>
-                    <thead><tr><th>NO.</th><th>구분</th><th>내용</th>{filterEditMode && <th></th>}</tr></thead>
-                    <tbody>
-                      {filterConds.map((fc, i) => (
-                        <tr key={i}>
-                          <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>{i + 1}</td>
-                          <td style={{ whiteSpace: 'normal' }}>
-                            {filterEditMode
-                              ? <input className="cfg-input" value={fc.cat} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, cat: e.target.value } : c))} />
-                              : fc.cat}
-                          </td>
-                          <td style={{ whiteSpace: 'normal', maxWidth: 'none', overflow: 'visible' }}>
-                            {filterEditMode
-                              ? <input className="cfg-input" style={{ width: '100%' }} value={fc.desc} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, desc: e.target.value } : c))} />
-                              : fc.desc}
-                          </td>
-                          {filterEditMode && (
-                            <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>인플루언서 필터링 조건</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {!filterEditMode
+                    ? <button className="cfg-btn" onClick={() => setFilterEditMode(true)}>편집</button>
+                    : <>
+                      <button className="cfg-btn" onClick={() => setFilterConds(prev => [...prev, { cat: '구분', desc: '내용을 입력하세요' }])}>+ 추가</button>
+                      <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => { saveCfg('mimuse_filter_conds', filterConds); setFilterEditMode(false) }}>저장</button>
+                      <button className="cfg-btn cfg-btn--ghost" title="기본값으로 초기화" onClick={() => { setFilterConds(FILTER_COND_DEFAULT) }}>↺</button>
+                    </>
+                  }
                 </div>
               </div>
+              <div className="table-wrap">
+                <table style={{ minWidth: 0 }}>
+                  <thead><tr><th>NO.</th><th>구분</th><th>내용</th>{filterEditMode && <th></th>}</tr></thead>
+                  <tbody>
+                    {filterConds.map((fc, i) => (
+                      <tr key={i}>
+                        <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>{i + 1}</td>
+                        <td style={{ whiteSpace: 'normal' }}>
+                          {filterEditMode
+                            ? <input className="cfg-input" value={fc.cat} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, cat: e.target.value } : c))} />
+                            : fc.cat}
+                        </td>
+                        <td style={{ whiteSpace: 'normal', maxWidth: 'none', overflow: 'visible' }}>
+                          {filterEditMode
+                            ? <input className="cfg-input" style={{ width: '100%' }} value={fc.desc} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, desc: e.target.value } : c))} />
+                            : fc.desc}
+                        </td>
+                        {filterEditMode && (
+                          <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
-              {/* Tier table */}
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 티어 설정</div>
+        {/* Apify section (inside search tab) */}
+        {activeTab === 'search' && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+              {/* Editable tier table */}
+              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="cfg-btn" onClick={() => { if (tierEditMode) { saveCfg('mm_tiers', tiers) } setTierEditMode(!tierEditMode) }}>
+                    <button className="cfg-btn" onClick={() => { if (tierEditMode) saveCfg('mm_tiers', tiers); setTierEditMode(!tierEditMode) }}>
                       {tierEditMode ? '완료' : '편집'}
                     </button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('순위표를 기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveCfg('mm_tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveCfg('mm_tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
                   </div>
                 </div>
                 <div className="table-wrap">
@@ -327,16 +332,17 @@ export default function Listup() {
                     <thead><tr><th>순위</th><th>규모</th><th>팔로워 범위</th><th>카테고리</th>{tierEditMode && <th></th>}</tr></thead>
                     <tbody>
                       {tiers.map((t, i) => (
-                        <tr key={i}>
+                        <tr key={i} style={{ cursor: tierEditMode ? undefined : 'pointer', background: apifyTierIdx === i ? 'var(--blue-lt)' : undefined }}
+                          onClick={() => !tierEditMode && setApifyTierIdx(i)}>
                           {tierEditMode ? (
                             <>
                               <td><input className="cfg-input" style={{ width: 60 }} value={t.rank} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, rank: e.target.value } : r))} /></td>
                               <td><input className="cfg-input" style={{ width: 120 }} value={t.label} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, label: e.target.value } : r))} /></td>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <input className="cfg-input" type="number" style={{ width: 70 }} value={t.minF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, minF: +e.target.value } : r))} />
+                                  <input className="cfg-input" type="number" style={{ width: 60 }} value={t.minF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, minF: +e.target.value } : r))} />
                                   <span style={{ color: 'var(--gray-5)', fontSize: 11 }}>~</span>
-                                  <input className="cfg-input" type="number" style={{ width: 70 }} value={t.maxF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, maxF: +e.target.value } : r))} />
+                                  <input className="cfg-input" type="number" style={{ width: 60 }} value={t.maxF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, maxF: +e.target.value } : r))} />
                                 </div>
                               </td>
                               <td>
@@ -351,7 +357,7 @@ export default function Listup() {
                             <>
                               <td><strong>{t.rank}</strong></td>
                               <td>{t.label}</td>
-                              <td style={{ color: 'var(--gray-5)' }}>{(t.minF/1000).toFixed(0)}K ~ {(t.maxF/1000).toFixed(0)}K</td>
+                              <td style={{ color: 'var(--gray-5)' }}>{(t.minF/1000).toFixed(0)}K~{(t.maxF/1000).toFixed(0)}K</td>
                               <td><span className="platform-badge" style={{ background: t.tags === 'kbeauty' ? '#111' : 'var(--blue)', color: '#fff' }}>{t.category}</span></td>
                             </>
                           )}
@@ -361,206 +367,53 @@ export default function Listup() {
                   </table>
                 </div>
                 {tierEditMode && (
-                  <div style={{ marginTop: 8 }}>
-                    <button className="cfg-btn" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setTiers(prev => [...prev, { rank: (prev.length + 1) + '순위', label: '새 티어', minF: 1000, maxF: 10000, tags: 'beauty', category: '일반뷰티' }])}>+ 티어 추가</button>
-                  </div>
+                  <button className="cfg-btn" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setTiers(prev => [...prev, { rank: (prev.length + 1) + '순위', label: '새 티어', minF: 1000, maxF: 10000, tags: 'beauty', category: '일반뷰티' }])}>+ 티어 추가</button>
                 )}
               </div>
-            </div>
 
-            {/* Keywords */}
-            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 16 }}>키워드 설정 — Apify 탐색 공통</div>
-              {[
-                { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, storageKey: 'mm_kbeauty_kws', defaults: DEFAULT_KBEAUTY_KEYWORDS },
-                { key: 'beauty', label: '일반뷰티 키워드', kws: beautyKws, editMode: beautyEdit, setEdit: setBeautyEdit, newKw: newBeautyKw, setNewKw: setNewBeautyKw, setKws: setBeautyKws, storageKey: 'mm_beauty_kws', defaults: DEFAULT_BEAUTY_KEYWORDS },
-              ].map(({ key, label, kws, editMode, setEdit, newKw, setNewKw, setKws, storageKey, defaults }) => (
-                <div key={key} style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-7)' }}>{label}</div>
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
-                      <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본 키워드로 초기화하시겠습니까?')) { setKws([...defaults]); saveCfg(storageKey, defaults); setEdit(false) } }}>↺</button>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {kws.map(kw => (
-                      <span key={kw} className="tag-pill">
-                        {kw}
-                        {editMode && (
-                          <button className="tag-remove" onClick={() => { const next = kws.filter(k => k !== kw); setKws(next); saveCfg(storageKey, next) }}>×</button>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                  {editMode && (
-                    <div className="tag-input-row" style={{ marginTop: 6 }}>
-                      <input className="cfg-input" placeholder="키워드 입력" value={newKw} onChange={e => setNewKw(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { if (!newKw.trim() || kws.includes(newKw.trim())) return; const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') } }} />
-                      <button className="cfg-btn" onClick={() => { if (!newKw.trim() || kws.includes(newKw.trim())) return; const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') }}>추가</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Apify Tab */}
-        {activeTab === 'apify' && (
-          <div>
-
-            {/* Workflow diagram */}
-            {(() => {
-              const hasRun     = !!apifyRunId
-              const isLoading  = apifyLoading
-              const hasResults = !!apifyResults && apifyResults.length > 0
-
-              type SS = 'done' | 'active' | 'idle'
-              const steps: { icon: string; label: string; sub: string; state: SS }[] = [
-                {
-                  icon: '🎯', label: '티어 선택',
-                  sub: apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '미선택',
-                  state: apifyTierIdx !== null ? 'done' : 'idle',
-                },
-                {
-                  icon: '🚀', label: 'Apify 실행',
-                  sub: apifyUsedTags.length ? `${apifyUsedTags.length}개 키워드 · 목표 ${targetCreators}명` : 'clockworks~tiktok-scraper',
-                  state: isLoading ? 'active' : hasRun ? 'done' : 'idle',
-                },
-                {
-                  icon: '⏳', label: '완료 대기',
-                  sub: hasRun ? `Run: ${apifyRunId.slice(0, 8)}…` : '대기 중',
-                  state: isLoading ? 'active' : hasRun ? 'done' : 'idle',
-                },
-                {
-                  icon: '🔎', label: '크리에이터 필터링',
-                  sub: hasResults ? `${apifyResults.length}명 감지` : '팔로워·참여율 기준',
-                  state: isLoading ? 'idle' : hasResults ? 'done' : 'idle',
-                },
-                {
-                  icon: '📊', label: '시트 저장',
-                  sub: 'K-뷰티 / 일반뷰티',
-                  state: isLoading ? 'idle' : hasResults ? 'done' : 'idle',
-                },
-              ]
-
-              const colors: Record<SS, { bg: string; border: string; label: string; sub: string }> = {
-                done:   { bg: '#fefce8', border: '#fde047', label: '#a16207', sub: '#ca8a04' },
-                active: { bg: '#eff6ff', border: '#93c5fd', label: '#1d4ed8', sub: '#60a5fa' },
-                idle:   { bg: 'var(--gray-0)', border: 'var(--gray-2)', label: 'var(--gray-5)', sub: 'var(--gray-3)' },
-              }
-
-              return (
-                <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '16px 20px', marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>
-                    Apify 워크플로우
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    {steps.map((step, i) => {
-                      const c = colors[step.state]
-                      return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                          <div style={{
-                            flex: 1, minWidth: 0, position: 'relative',
-                            background: c.bg, border: `1px solid ${c.border}`,
-                            borderRadius: 10, padding: '10px 12px',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                          }}>
-                            {step.state === 'active' && (
-                              <span style={{ position: 'absolute', top: 5, right: 7, width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 0 2px #bfdbfe' }} />
-                            )}
-                            {step.state === 'done' && (
-                              <span style={{ position: 'absolute', top: 5, right: 7, fontSize: 9, color: '#ca8a04', fontWeight: 800 }}>✓</span>
-                            )}
-                            <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: c.label, textAlign: 'center', whiteSpace: 'nowrap' }}>{step.label}</span>
-                            <span style={{ fontSize: 10, color: c.sub, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{step.sub}</span>
-                          </div>
-                          {i < steps.length - 1 && (
-                            <div style={{ width: 20, flexShrink: 0, textAlign: 'center' }}>
-                              <span style={{ fontSize: 14, color: 'var(--gray-3)' }}>›</span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Keywords used in last run */}
-            {apifyUsedTags.length > 0 && (
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '12px 16px', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
-                  마지막 실행에 사용된 키워드 ({apifyUsedTags.length}개)
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {apifyUsedTags.map(kw => (
-                    <span key={kw} style={{
-                      fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
-                      background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd',
-                    }}>{kw}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              {/* Editable keywords */}
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
-                <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 10 }}>우선순위 등급표 — 행을 클릭해 티어 선택</div>
-                <div className="table-wrap">
-                  <table style={{ minWidth: 0 }}>
-                    <thead><tr><th>순위</th><th>규모</th><th>팔로워</th><th>카테고리</th></tr></thead>
-                    <tbody>
-                      {tiers.map((t, i) => (
-                        <tr key={i} style={{ cursor: 'pointer', background: apifyTierIdx === i ? 'var(--blue-lt)' : undefined }} onClick={() => setApifyTierIdx(i)}>
-                          <td><strong>{t.rank}</strong></td>
-                          <td>{t.label}</td>
-                          <td style={{ color: 'var(--gray-5)' }}>{(t.minF/1000).toFixed(0)}K~{(t.maxF/1000).toFixed(0)}K</td>
-                          <td><span className="platform-badge" style={{ background: t.tags === 'kbeauty' ? '#111' : 'var(--blue)', color: '#fff' }}>{t.category}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
-                <div style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 12 }}>키워드는 <strong>크리에이터 조건</strong> 탭에서 편집하세요.</div>
-                {(() => {
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>키워드 설정</div>
+                {[
+                  { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, storageKey: 'mm_kbeauty_kws', defaults: DEFAULT_KBEAUTY_KEYWORDS },
+                  { key: 'beauty', label: '일반뷰티 키워드', kws: beautyKws, editMode: beautyEdit, setEdit: setBeautyEdit, newKw: newBeautyKw, setNewKw: setNewBeautyKw, setKws: setBeautyKws, storageKey: 'mm_beauty_kws', defaults: DEFAULT_BEAUTY_KEYWORDS },
+                ].map(({ key, label, kws, editMode, setEdit, newKw, setNewKw, setKws, storageKey, defaults }) => {
                   const chosenTag = apifyTierIdx !== null ? tiers[apifyTierIdx]?.tags : null
-                  const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
+                  const isChosen = chosenTag === key
                   const yellow = { background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)' }
-                  const kbChosen = chosenTag === 'kbeauty'
-                  const beChosen = chosenTag === 'beauty'
+                  const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
                   return (
-                    <>
-                      <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: kbChosen ? 'var(--yellow-text)' : 'var(--gray-5)' }}>
-                          K-뷰티 키워드 {kbChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
+                    <div key={key} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: isChosen ? 'var(--yellow-text)' : 'var(--gray-6)' }}>
+                          {label} {isChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          {kbeautyKws.map(t => (
-                            <span key={t} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, ...(kbChosen ? yellow : blue) }}>{t}</span>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: beChosen ? 'var(--yellow-text)' : 'var(--gray-5)' }}>
-                          일반뷰티 키워드 {beChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                          {beautyKws.map(t => (
-                            <span key={t} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, ...(beChosen ? yellow : blue) }}>{t}</span>
-                          ))}
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
+                          <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화?')) { setKws([...defaults]); saveCfg(storageKey, defaults); setEdit(false) } }}>↺</button>
                         </div>
                       </div>
-                    </>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                        {kws.map(kw => (
+                          <span key={kw} className="tag-pill" style={{ ...(isChosen ? yellow : blue) }}>
+                            {kw}
+                            {editMode && <button className="tag-remove" onClick={() => { const next = kws.filter(k => k !== kw); setKws(next); saveCfg(storageKey, next) }}>×</button>}
+                          </span>
+                        ))}
+                      </div>
+                      {editMode && (
+                        <div className="tag-input-row" style={{ marginTop: 6 }}>
+                          <input className="cfg-input" placeholder="키워드 입력" value={newKw} onChange={e => setNewKw(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') } }} />
+                          <button className="cfg-btn" onClick={() => { if (newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') } }}>추가</button>
+                        </div>
+                      )}
+                    </div>
                   )
-                })()}
+                })}
               </div>
             </div>
+
             <div className="filters" style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
               <div className="filter-group">
@@ -584,7 +437,7 @@ export default function Listup() {
             <div className="listup-empty-state">
               <div className="listup-empty-icon">🔍</div>
               <div className="listup-empty-title">티어를 선택하고 Find Creators를 누르세요</div>
-              <div className="listup-empty-desc">왼쪽 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.<br />탐색은 클라우드에서 실행되며 2~5분 소요됩니다.</div>
+              <div className="listup-empty-desc">위 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.<br />탐색은 클라우드에서 실행되며 2~5분 소요됩니다.</div>
             </div>
           </div>
         )}

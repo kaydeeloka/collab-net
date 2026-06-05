@@ -33,14 +33,7 @@ const GROUPS: SideGroup[] = [
   {
     label: 'INFLUENCER', icon: <Users size={22} />, defaultTo: '/influencer/search', prefix: '/influencer',
     children: [
-      {
-        to: '/influencer/search', label: '인플루언서 서치',
-        sub: [
-          { to: '/influencer/search/settings', label: '서치 조건 설정' },
-          { to: '/influencer/search/explore',  label: '조건별 탐색 · 리스트업 연동' },
-          { to: '/influencer/search/db',       label: 'DB 리스트' },
-        ],
-      },
+      { to: '/influencer/search', label: '인플루언서 서치' },
       {
         to: '/influencer/contact', label: '인플루언서 컨택',
         sub: [
