@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
@@ -108,6 +109,7 @@ const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string 
 
 export default function Listup() {
   const { activePhaseId } = usePhase()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<ListupTab>('search')
   const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
@@ -332,9 +334,14 @@ export default function Listup() {
                 ✕
               </button>
             )}
-            <span style={{ marginLeft: 12, fontSize: 13, color: 'var(--gray-5)' }}>
+            <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
               표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
             </span>
+            <button
+              onClick={() => navigate('/influencer/contact')}
+              style={{ marginLeft: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--teal-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              컨택 페이지 →
+            </button>
           </div>
         </div>
         <div className="table-wrap">
@@ -363,7 +370,7 @@ export default function Listup() {
                       <td className="num">{fmtNum(inf.followers)}</td>
                       <td className="num">{fmtNum(inf.following)}</td>
                       <td className="num">{inf.following_ratio || '—'}</td>
-                      <td className="num">{inf.video_count}</td>
+                      <td className="num">{fmtNum(inf.video_count)}</td>
                       <td className="num">{fmtNum(inf.avg_views)}</td>
                       <td className="num">{inf.engagement_rate}%</td>
                       <td>
