@@ -76,12 +76,6 @@ export default function App() {
 
                 {/* ── HOME ── */}
                 <Route path="/"                         element={<Dashboard />} />
-                <Route path="/home/dday"                element={<Navigate to="/" replace />} />
-                <Route path="/home/trend-summary"       element={<Navigate to="/" replace />} />
-                <Route path="/home/influencer-status"   element={<Navigate to="/" replace />} />
-                <Route path="/home/brand-status"        element={<Navigate to="/" replace />} />
-                <Route path="/home/delivery-status"     element={<Navigate to="/" replace />} />
-                <Route path="/home/review-upload"       element={<Navigate to="/" replace />} />
 
                 {/* ── TREND ── */}
                 <Route path="/trend/news"               element={<Trends />} />
@@ -130,14 +124,6 @@ export default function App() {
                 <Route path="/monitoring/reports"                   element={<ReportArchive />} />
                 <Route path="/monitoring/reports/brand"             element={<ReportsBrand />} />
                 <Route path="/monitoring/reports/all"               element={<ReportsAll />} />
-
-                {/* ── old-path redirects ── */}
-                <Route path="/trends"     element={<Navigate to="/trend/news"           replace />} />
-                <Route path="/listup"     element={<Navigate to="/influencer/search"    replace />} />
-                <Route path="/outreach"   element={<Navigate to="/influencer/contact"   replace />} />
-                <Route path="/confirmed"  element={<Navigate to="/influencer/confirmed" replace />} />
-                <Route path="/ems"        element={<Navigate to="/kit/ems"              replace />} />
-                <Route path="/monitoring" element={<Navigate to="/monitoring/reviews"   replace />} />
 
               </Route>
             </Route>

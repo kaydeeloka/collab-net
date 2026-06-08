@@ -246,7 +246,8 @@ a { text-decoration: none; }
 .main-area {
   flex: 1; margin-left: 240px;
   transition: margin-left .28s cubic-bezier(.4,0,.2,1);
-  display: flex; flex-direction: column; min-height: 100vh;
+  display: flex; flex-direction: column;
+  height: 100vh; overflow-y: auto;
   min-width: 0; max-width: calc(100vw - 240px);
   background: #eef2f7;
 }
