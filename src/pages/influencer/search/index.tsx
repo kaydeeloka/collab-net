@@ -146,6 +146,8 @@ export default function Listup() {
   const [currentDbTab, setCurrentDbTab] = useState('전체')
   const [dateFrom, setDateFrom] = useState('')
   const [dbPage, setDbPage] = useState(1)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   // Dashboard stats
   const [dashStats, setDashStats] = useState<{ total: number; sent: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
@@ -264,6 +266,18 @@ export default function Listup() {
     }
   }
 
+  async function bulkMarkTarget() {
+    if (!selected.size) return
+    setBulkLoading(true)
+    const ids = Array.from(selected)
+    const { error } = await supabase.from('influencers').update({ outreach: 'target' }).in('id', ids)
+    if (!error) {
+      setInfluencers(prev => prev.filter(inf => !selected.has(inf.id)))
+      setSelected(new Set())
+    }
+    setBulkLoading(false)
+  }
+
   async function saveToSupabase() {
     if (!apifyResults?.length || !apifyCurrentTier) return
     setApifyLoading(true)
@@ -324,6 +338,20 @@ export default function Listup() {
             <option value="전체">전체</option>
             {DB_TIERS.map(rank => <option key={rank} value={rank}>{rank}</option>)}
           </select>
+          <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
+            표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
+          </span>
+
+          {/* Bulk action — shown when rows are selected */}
+          {selected.size > 0 && (
+            <button
+              onClick={bulkMarkTarget}
+              disabled={bulkLoading}
+              style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}명)`}
+            </button>
+          )}
+
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 600 }}>추가일</span>
             <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDbPage(1) }}
@@ -334,9 +362,6 @@ export default function Listup() {
                 ✕
               </button>
             )}
-            <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
-              표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
-            </span>
             <button
               onClick={() => navigate('/influencer/contact')}
               style={{ marginLeft: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--teal-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -348,6 +373,18 @@ export default function Listup() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input type="checkbox"
+                    checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
+                    onChange={e => {
+                      setSelected(prev => {
+                        const next = new Set(prev)
+                        rows.forEach(r => e.target.checked ? next.add(r.id) : next.delete(r.id))
+                        return next
+                      })
+                    }}
+                  />
+                </th>
                 <th>크리에이터</th><th>이메일</th>
                 <th>팔로워</th><th>팔로잉</th><th>팔로잉 비율</th>
                 <th>영상 수</th><th>평균 조회수</th><th>참여율 (%)</th><th>컨택 대상</th>
@@ -355,11 +392,21 @@ export default function Listup() {
             </thead>
             <tbody>
               {rows.length === 0
-                ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
+                ? <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
                 : rows.map(inf => {
                   const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
                     <tr key={inf.id} style={tc ? { borderLeft: `3px solid ${tc}` } : undefined}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input type="checkbox"
+                          checked={selected.has(inf.id)}
+                          onChange={e => setSelected(prev => {
+                            const next = new Set(prev)
+                            e.target.checked ? next.add(inf.id) : next.delete(inf.id)
+                            return next
+                          })}
+                        />
+                      </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{inf.display_name || inf.handle}</span>
