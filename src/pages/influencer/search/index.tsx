@@ -386,13 +386,13 @@ export default function Listup() {
                   />
                 </th>
                 <th>크리에이터</th><th>이메일</th>
-                <th>팔로워</th><th>팔로잉</th><th>팔로잉 비율</th>
-                <th>영상 수</th><th>평균 조회수</th><th>참여율 (%)</th><th>컨택 대상</th>
+                <th style={{ textAlign: 'right' }}>팔로워</th><th style={{ textAlign: 'right' }}>팔로잉</th><th style={{ textAlign: 'right' }}>팔로잉 비율</th>
+                <th style={{ textAlign: 'right' }}>영상 수</th><th style={{ textAlign: 'right' }}>참여율 (%)</th><th>컨택 대상</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0
-                ? <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
+                ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
                 : rows.map(inf => {
                   const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
@@ -418,13 +418,13 @@ export default function Listup() {
                       <td className="num">{fmtNum(inf.following)}</td>
                       <td className="num">{inf.following_ratio || '—'}</td>
                       <td className="num">{fmtNum(inf.video_count)}</td>
-                      <td className="num">{fmtNum(inf.avg_views)}</td>
+
                       <td className="num">{inf.engagement_rate}%</td>
                       <td>
                         <button
                           onClick={() => markOutreach(inf.id, 'target')}
                           style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer', background: 'var(--blue-dk)', color: '#fff', border: 'none' }}>
-                          컨택 대상
+                          컨택
                         </button>
                       </td>
                     </tr>
