@@ -3,6 +3,7 @@ import { gasGet, gasPost } from '../../../lib/api'
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
+import Pagination from '../../../components/Pagination'
 
 interface EmsStats {
   total?: number
@@ -95,6 +96,8 @@ export default function Ems() {
   const [syncMsg, setSyncMsg] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [page, setPage] = useState(1)
+  const EMS_PAGE_SIZE = 25
 
   // Client Modal
   const [showClientModal, setShowClientModal] = useState(false)
@@ -324,7 +327,13 @@ export default function Ems() {
 
           {combinedRows.length === 0
             ? <div className="empty">데이터가 없습니다.</div>
-            : (
+            : (() => {
+                const totalPages = Math.max(1, Math.ceil(combinedRows.length / EMS_PAGE_SIZE))
+                const safePage   = Math.min(page, totalPages)
+                const startIdx   = (safePage - 1) * EMS_PAGE_SIZE
+                const pagedRows  = combinedRows.slice(startIdx, startIdx + EMS_PAGE_SIZE)
+                return (
+              <>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -335,11 +344,12 @@ export default function Ems() {
                     </tr>
                   </thead>
                   <tbody>
-                    {combinedRows.map((row, i) => {
+                    {pagedRows.map((row, i) => {
+                      const i_abs = startIdx + i
                       const badgeColor = statusColors[row.statusText] || '#888'
                       return (
                         <tr key={i}>
-                          <td style={{ fontSize: 11, color: 'var(--gray-5)' }}>{i + 1}</td>
+                          <td style={{ fontSize: 11, color: 'var(--gray-5)' }}>{i_abs + 1}</td>
                           <td style={{ fontWeight: 600 }}>{row.name || '—'}</td>
                           <td>
                             {row.platform === 'TikTok'
@@ -393,7 +403,13 @@ export default function Ems() {
                   </tbody>
                 </table>
               </div>
-            )}
+              <Pagination page={safePage} totalPages={totalPages} total={combinedRows.length}
+                startIdx={startIdx} endIdx={Math.min(startIdx + EMS_PAGE_SIZE, combinedRows.length)}
+                onPrev={() => setPage(p => Math.max(1, p - 1))}
+                onNext={() => setPage(p => Math.min(totalPages, p + 1))} />
+              </>
+                )
+              })()}
         </>
       )}
 

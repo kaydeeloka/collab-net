@@ -122,59 +122,74 @@ export default function Confirmed() {
                 <table>
                   <thead>
                     <tr>
-                      <th>수락일</th><th>차수</th><th>순위</th><th>Handle</th><th>Display Name</th>
-                      <th>Email</th><th>팔로워</th><th>참여율</th><th>협찬품</th>
-                      <th>콘텐츠 업로드</th><th>업로드 날짜</th><th>포스트 링크</th><th>메모</th><th>삭제</th>
+                      <th style={{ textAlign: 'center' }}>No.</th>
+                      <th>플랫폼</th>
+                      <th>계정</th>
+                      <th style={{ textAlign: 'right' }}>팔로워</th>
+                      <th>NAME</th>
+                      <th>리뷰 업로드</th>
+                      <th>repost</th>
+                      <th>PHONE</th>
+                      <th>E-mail</th>
+                      <th>Address Line 1</th>
+                      <th>Address Line 2</th>
+                      <th>City</th>
+                      <th>State</th>
+                      <th>Zip</th>
+                      <th>Country</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((r, i) => {
-                      const email = get(r, 'email')
-                      const uploadVal = get(r, '콘텐츠 업로드') || 'Pending'
+                      const email     = get(r, 'email')
+                      const handle    = get(r, 'handle')
                       const profileUrl = get(r, 'profile url')
-                      const postLink = get(r, '포스트 링크')
+                      const platform  = get(r, 'platform')
+                      const uploadVal = get(r, '콘텐츠 업로드') || 'Pending'
+                      const isTikTok    = platform.toLowerCase().includes('tiktok')
+                      const isInstagram = platform.toLowerCase().includes('instagram')
                       return (
                         <tr key={i}>
-                          <td style={{ fontSize: 11, color: 'var(--gray-5)' }}>{get(r, '수락일')}</td>
-                          <td><span style={{ display: 'inline-block', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 999, fontSize: 10, fontWeight: 700, padding: '1px 8px' }}>{get(r, '차수')}</span></td>
-                          <td style={{ fontSize: 11, color: 'var(--gray-5)' }}>{get(r, '순위')}</td>
+                          <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)' }}>{i + 1}</td>
                           <td>
-                            {profileUrl
-                              ? <a href={profileUrl} target="_blank" style={{ color: 'var(--blue-dk)' }}>{get(r, 'handle')}</a>
-                              : get(r, 'handle')}
+                            {isTikTok
+                              ? <span className="platform-badge" style={{ background: '#111', color: '#fff' }}>TikTok</span>
+                              : isInstagram
+                              ? <span className="platform-badge" style={{ background: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff' }}>Instagram</span>
+                              : platform
+                              ? <span className="platform-badge" style={{ background: 'var(--gray-2)', color: 'var(--gray-6)' }}>{platform}</span>
+                              : <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>}
                           </td>
-                          <td style={{ fontWeight: 700 }}>{get(r, 'display name')}</td>
-                          <td style={{ fontSize: 11 }}><a href={`mailto:${email}`} style={{ color: 'var(--blue-dk)' }}>{email}</a></td>
-                          <td style={{ fontSize: 11 }}>{get(r, '팔로워')}</td>
-                          <td style={{ fontSize: 11 }}>{get(r, 'engagement rate (%)')}</td>
-                          <td style={{ fontSize: 11 }}>{get(r, '협찬품') || '—'}</td>
                           <td>
-                            <select
-                              value={uploadVal}
-                              onChange={e => updateField(email, 'contentUpload', e.target.value)}
-                              style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}
-                            >
+                            {profileUrl || handle
+                              ? <a href={profileUrl || `https://www.tiktok.com/@${handle}`} target="_blank" rel="noopener"
+                                  style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}>
+                                  @{handle}
+                                </a>
+                              : <span style={{ color: 'var(--gray-4)' }}>—</span>}
+                          </td>
+                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{get(r, '팔로워') || '—'}</td>
+                          <td style={{ fontWeight: 700, fontSize: 13 }}>{get(r, 'display name') || '—'}</td>
+                          <td>
+                            <select value={uploadVal} onChange={e => updateField(email, 'contentUpload', e.target.value)}
+                              style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}>
                               <option value="Pending">대기</option>
                               <option value="Yes">완료</option>
                               <option value="No">미업로드</option>
                             </select>
                           </td>
-                          <td>
-                            <input type="text" placeholder="YYYY-MM-DD" defaultValue={get(r, '업로드 날짜')}
-                              onBlur={e => updateField(email, 'uploadDate', e.target.value)}
-                              style={{ fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 6px', width: '100%', minWidth: 90 }} />
+                          <td style={{ fontSize: 12, textAlign: 'center' }}>{get(r, 'repost') || '—'}</td>
+                          <td style={{ fontSize: 12 }}>{get(r, 'phone') || get(r, '연락처') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>
+                            {email ? <a href={`mailto:${email}`} style={{ color: 'var(--blue-dk)' }}>{email}</a> : '—'}
                           </td>
-                          <td>
-                            <input type="url" placeholder="https://..." defaultValue={postLink}
-                              onBlur={e => updateField(email, 'postLink', e.target.value)}
-                              style={{ fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 6px', width: '100%', minWidth: 100 }} />
-                            {postLink && <><br /><a href={postLink} target="_blank" style={{ color: 'var(--blue-dk)', fontSize: 11 }}>↗ 보기</a></>}
-                          </td>
-                          <td>
-                            <input type="text" placeholder="메모..." defaultValue={get(r, '메모')}
-                              onBlur={e => updateField(email, 'memo', e.target.value)}
-                              style={{ fontSize: 11, border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 6px', width: '100%', minWidth: 80 }} />
-                          </td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'address line 1') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'address line 2') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'city') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'state') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'zip') || '—'}</td>
+                          <td style={{ fontSize: 11 }}>{get(r, 'country') || '—'}</td>
                           <td>
                             <button onClick={() => deleteRow(email)}
                               style={{ fontSize: 10, padding: '2px 8px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer' }}>
