@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
-import { gasGet, gasPost } from '../../../lib/api'
+import { useEffect, useState } from 'react'
+import { gasPost } from '../../../lib/api'
+import { supabase } from '../../../lib/supabase'
+import { usePhase } from '../../../contexts/PhaseContext'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
@@ -16,15 +18,13 @@ const DEFAULT_TIERS = [
   { rank:'4순위', label:'나노 (3K~10K)',       minF:3000,   maxF:9999,   tags:'beauty',  category:'일반뷰티' },
   { rank:'5순위', label:'마이크로 (60K~100K)', minF:60000,  maxF:100000, tags:'kbeauty', category:'K-뷰티' },
 ]
+const DEFAULT_FILTER_CONDS = [
+  { cat: '중복',        desc: '1~5순위까지의 중복 계정 필터링' },
+  { cat: '영상 퀄리티', desc: '영상 콘텐츠 퀄리티 기준 수기 검토 예정' },
+]
 
 const DB_TIERS = ['1순위','2순위','3순위','4순위','5순위']
-
-function loadCfg<T>(key: string, def: T): T {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
-}
-function saveCfg<T>(key: string, val: T) { try { localStorage.setItem(key, JSON.stringify(val)) } catch {} }
-
-interface Tier { rank: string; label: string; minF: number; maxF: number; tags: string; category: string }
+const DB_PAGE_SIZE = 25
 
 const COUNTRY_MAP: Record<string, string> = {
   '':'None (기본)',
@@ -68,102 +68,116 @@ const COUNTRY_MAP: Record<string, string> = {
   'US':'United States','UY':'Uruguay','VE':'Venezuela','VN':'Vietnam',
   'WF':'Wallis and Futuna','YE':'Yemen','ZM':'Zambia','ZW':'Zimbabwe','AX':'Åland Islands',
 }
-interface FilterCond { cat: string; desc: string }
 
+interface Tier        { rank: string; label: string; minF: number; maxF: number; tags: string; category: string }
+interface FilterCond  { cat: string; desc: string }
+interface Influencer  {
+  id: string; created_at: string; phase_id: string; handle: string
+  display_name: string | null; email: string | null; followers: number; following: number
+  following_ratio: string | null; total_likes: number; video_count: number
+  avg_views: number; engagement_rate: number; profile_url: string | null; outreach: string
+}
 interface ApifyCreator {
   handle: string; displayName: string; email: string; followers: number
   following: number; ratio: string; totalLikes: number; videoCount: number
   avgViews: number; engRate: number; bio: string; profileUrl: string
 }
 
-interface InfluencerData {
-  error?: string
-  _debug?: { kbRows: number; beRows: number; rankCol: string; sampleRanks: unknown[] }
-  [key: string]: unknown
+function saveConfig(key: string, value: unknown) {
+  supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
 }
 
-interface TierData {
-  stats?: { total?: number; totalFollowers?: number }
-  headers?: string[]
-  colIdx?: Record<string, number>
-  rows?: string[][]
-  rowNums?: number[]
-  sheetNames?: string[]
+const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  yes:       { bg: '#dbeafe', color: '#1d4ed8', label: '완료' },
+  reply:     { bg: '#fef3c7', color: '#d97706', label: '답장' },
+  negotiate: { bg: '#d1fae5', color: '#065f46', label: '협의중' },
+  accept:    { bg: '#bbf7d0', color: '#14532d', label: '수락확정' },
+  reject:    { bg: '#fee2e2', color: '#991b1b', label: '거절' },
+  target:    { bg: '#ede9fe', color: '#6d28d9', label: '컨택예정' },
+  default:   { bg: '#f1f5f9', color: '#64748b', label: '미발송' },
 }
 
 export default function Listup() {
+  const { activePhaseId } = usePhase()
   const [activeTab, setActiveTab] = useState<ListupTab>('search')
   const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
-  // Config state
-  const [tiers, setTiers] = useState<Tier[]>(() => loadCfg('mm_tiers', DEFAULT_TIERS))
+  // Config state (loaded from Supabase app_config)
+  const [tiers, setTiers] = useState<Tier[]>(DEFAULT_TIERS)
   const [tierEditMode, setTierEditMode] = useState(false)
-  const [kbeautyKws, setKbeautyKws] = useState<string[]>(() => loadCfg('mm_kbeauty_kws', DEFAULT_KBEAUTY_KEYWORDS))
-  const [beautyKws, setBeautyKws] = useState<string[]>(() => loadCfg('mm_beauty_kws', DEFAULT_BEAUTY_KEYWORDS))
+  const [kbeautyKws, setKbeautyKws] = useState<string[]>(DEFAULT_KBEAUTY_KEYWORDS)
+  const [beautyKws, setBeautyKws] = useState<string[]>(DEFAULT_BEAUTY_KEYWORDS)
   const [kbeautyEdit, setKbeautyEdit] = useState(false)
   const [beautyEdit, setBeautyEdit] = useState(false)
   const [newKbeautyKw, setNewKbeautyKw] = useState('')
   const [newBeautyKw, setNewBeautyKw] = useState('')
-
-  const FILTER_COND_DEFAULT: FilterCond[] = [
-    { cat: '중복',        desc: '1~5순위까지의 중복 계정 필터링' },
-    { cat: '영상 퀄리티', desc: '영상 콘텐츠 퀄리티 기준 수기 검토 예정' },
-  ]
-  const [filterConds, setFilterConds] = useState<FilterCond[]>(() => loadCfg<FilterCond[]>('mimuse_filter_conds', FILTER_COND_DEFAULT).filter(fc => fc.cat !== '국가'))
+  const [filterConds, setFilterConds] = useState<FilterCond[]>(DEFAULT_FILTER_CONDS)
   const [filterEditMode, setFilterEditMode] = useState(false)
-  const [maxRatio, setMaxRatio] = useState<number>(() => loadCfg('mm_max_ratio', 70))
-  const [maxUploadDays, setMaxUploadDays] = useState<number>(() => loadCfg('mm_max_upload_days', 30))
-  const [proxyCountry, setProxyCountry] = useState<string>(() => loadCfg('mm_proxy_country', 'US'))
+  const [maxRatio, setMaxRatio] = useState(70)
+  const [maxUploadDays, setMaxUploadDays] = useState(30)
+  const [proxyCountry, setProxyCountry] = useState('US')
 
-  // Apify state
+  // Apify state (still uses GAS)
   const [apifyTierIdx, setApifyTierIdx] = useState<number | null>(null)
   const [targetCreators, setTargetCreators] = useState(100)
   const [apifyStatus, setApifyStatus] = useState('')
   const [apifyLoading, setApifyLoading] = useState(false)
-  const [apifyResults, setApifyResults] = useState<string[][] | null>(null)
-  const [apifyCreators, setApifyCreators] = useState<ApifyCreator[]>([])
+  const [apifyResults, setApifyResults] = useState<ApifyCreator[] | null>(null)
   const [apifyRunId, setApifyRunId] = useState('')
   const [apifyDatasetId, setApifyDatasetId] = useState('')
-  const [apifyUsedTags, setApifyUsedTags] = useState<string[]>([])
   const [apifyPolling, setApifyPolling] = useState(false)
   const [apifyCurrentTier, setApifyCurrentTier] = useState<Tier | null>(null)
 
   // DB state
-  const [contactAdded, setContactAdded] = useState<Set<string>>(new Set())
-  const [listupData, setListupData] = useState<InfluencerData | null>(null)
-  const [listupLoaded, setListupLoaded] = useState(false)
-  const [listupLoading, setListupLoading] = useState(false)
+  const [influencers, setInfluencers] = useState<Influencer[]>([])
+  const [dbLoading, setDbLoading] = useState(false)
+  const [dbLoaded, setDbLoaded] = useState(false)
   const [currentDbTab, setCurrentDbTab] = useState('전체')
-  const [hiddenCols, setHiddenCols] = useState<Set<number>>(new Set())
-  const [searchTerms, setSearchTerms] = useState<Record<string, string>>({})
+  const [searchTerm, setSearchTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [dbPage, setDbPage] = useState(1)
-  const DB_PAGE_SIZE = 25
 
   // Dashboard stats
-  const [dashStats, setDashStats] = useState<{ total: number; sent: number; replied: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
+  const [dashStats, setDashStats] = useState<{ total: number; sent: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
 
+  // Load config + stats from Supabase on mount
   useEffect(() => {
     ;(async () => {
-      try {
-        const [outreach, confirmed] = await Promise.all([
-          gasGet<Record<string, { stats?: { total?: number; sent?: number; replied?: number } }>>('getOutreachData'),
-          gasGet<{ rows?: unknown[] }>('getConfirmedInfluencers'),
-        ])
-        let total = 0, sent = 0, replied = 0
-        const tiers = DB_TIERS.map(t => {
-          const s = (outreach[t] || {}).stats || {}
-          total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0
-          return { rank: t.replace('순위', ''), total: s.total || 0 }
-        })
-        setDashStats({ total, sent, replied, confirmed: (confirmed.rows || []).length, tiers })
-      } catch {}
+      const [{ data: cfg }, { data: infData }, { count: confirmedCount }] = await Promise.all([
+        supabase.from('app_config').select('key, value').in('key', ['tiers','kbeauty_keywords','beauty_keywords','filter_conditions','search_filters']),
+        supabase.from('influencers').select('outreach').eq('phase_id', activePhaseId ?? ''),
+        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }),
+      ])
+
+      if (cfg) {
+        const map = Object.fromEntries(cfg.map(r => [r.key, r.value]))
+        if (map.tiers)            setTiers(map.tiers as Tier[])
+        if (map.kbeauty_keywords) setKbeautyKws(map.kbeauty_keywords as string[])
+        if (map.beauty_keywords)  setBeautyKws(map.beauty_keywords as string[])
+        if (map.filter_conditions) setFilterConds((map.filter_conditions as FilterCond[]).filter(fc => fc.cat !== '국가'))
+        if (map.search_filters) {
+          const sf = map.search_filters as { maxRatio: number; maxUploadDays: number; proxyCountry: string }
+          setMaxRatio(sf.maxRatio ?? 70)
+          setMaxUploadDays(sf.maxUploadDays ?? 30)
+          setProxyCountry(sf.proxyCountry ?? 'US')
+        }
+      }
+
+      if (infData) {
+        let total = 0, sent = 0
+        for (const r of infData) {
+          total++
+          if (['yes','reply','negotiate','accept'].includes(r.outreach)) sent++
+        }
+        setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: [] })
+      }
     })()
   }, [])
 
-  useEffect(() => { setDbPage(1) }, [currentDbTab, searchTerms, dateFrom, dateTo])
+  useEffect(() => { setDbPage(1) }, [currentDbTab, searchTerm, dateFrom, dateTo])
 
+  // Apify polling (GAS)
   useEffect(() => {
     if (!apifyPolling || !apifyRunId) return
     let cancelled = false
@@ -187,10 +201,9 @@ export default function Listup() {
           if (cancelled) return
           if (results.error) { setApifyStatus('결과 오류: ' + results.error); return }
           const list = results.creators || []
-          setApifyCreators(list)
-          setApifyResults(list.map(c => [c.handle, c.displayName, c.email, String(c.followers), c.ratio, String(c.engRate) + '%', String(c.avgViews), c.bio]))
+          setApifyResults(list)
           setApifyStatus(`완료: ${list.length}명 발견 (중복 제외 ${results.dedupSkipped || 0}명)`)
-        } else if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(s)) {
+        } else if (['FAILED','ABORTED','TIMED-OUT'].includes(s)) {
           setApifyPolling(false)
           setApifyStatus('탐색 실패: ' + s)
         } else {
@@ -208,113 +221,79 @@ export default function Listup() {
 
   function switchTab(t: ListupTab) {
     setActiveTab(t)
-    if (t === 'database' && !listupLoaded) loadListup()
+    if (t === 'database' && !dbLoaded) loadInfluencers()
   }
 
-
-  async function loadListup() {
-    setListupLoaded(true)
-    setListupLoading(true)
-    try {
-      const data: InfluencerData = await gasGet('getInfluencerList')
-      // build combined '전체' tier
-      const firstTier = DB_TIERS.find(t => (data[t] as TierData)?.headers?.length)
-      if (firstTier) {
-        const base = data[firstTier] as TierData
-        const allRows: string[][] = [], allNums: number[] = [], allNames: string[] = []
-        DB_TIERS.forEach(t => {
-          const td = data[t] as TierData
-          ;(td?.rows || []).forEach((r, i) => {
-            allRows.push([...r])
-            allNums.push((td.rowNums || [])[i])
-            allNames.push((td.sheetNames || [])[i] || '')
-          })
-        })
-        data['전체'] = { headers: base.headers, colIdx: base.colIdx, rows: allRows, rowNums: allNums, sheetNames: allNames }
-      }
-      // pre-hide columns
-      const firstTierData = firstTier ? data[firstTier] as TierData : null
-      if (firstTierData?.headers) {
-        const hide = new Set<number>()
-        firstTierData.headers.forEach((h, i) => {
-          const l = h.toLowerCase().trim()
-          if (l === 'profile url') hide.add(i)
-        })
-        setHiddenCols(hide)
-      }
-      setListupData(data)
-    } catch (e: unknown) {
-      setListupData({ error: (e as Error).message })
-    }
-    setListupLoading(false)
+  async function loadInfluencers() {
+    setDbLoaded(true)
+    setDbLoading(true)
+    const { data, error } = await supabase.from('influencers').select('*').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
+    if (error) { setDbLoading(false); return }
+    setInfluencers(data ?? [])
+    setDbLoading(false)
   }
 
-  async function deleteDbRow(tier: string, sheetRow: number, sheetName: string) {
+  async function deleteInfluencer(id: string) {
     if (!confirm('이 크리에이터를 삭제하시겠습니까?')) return
-    try {
-      const result: { ok?: boolean; error?: string } = await gasPost({ action: 'deleteInfluencerRow', sheetRow, sheetName })
-      if (!result.ok) { alert('오류: ' + result.error); return }
-      // update local data
-      if (listupData) {
-        const updated = { ...listupData }
-        ;[tier, '전체'].forEach(t => {
-          const td = updated[t] as TierData
-          if (!td) return
-          const idx = (td.rowNums || []).findIndex((rn, j) => rn === sheetRow && (td.sheetNames || [])[j] === sheetName)
-          if (idx >= 0) {
-            td.rows = td.rows?.filter((_, i) => i !== idx)
-            td.rowNums = td.rowNums?.filter((_, i) => i !== idx)
-            td.sheetNames = td.sheetNames?.filter((_, i) => i !== idx)
-          }
-        })
-        setListupData({ ...updated })
-      }
-    } catch (e: unknown) { alert('오류: ' + (e as Error).message) }
+    const { error } = await supabase.from('influencers').delete().eq('id', id)
+    if (error) { alert('오류: ' + error.message); return }
+    setInfluencers(prev => prev.filter(inf => inf.id !== id))
   }
 
-  function getFilteredRows(tier: string) {
-    if (!listupData) return { rows: [], rowNums: [], sheetNames: [] }
-    const td = listupData[tier] as TierData
-    if (!td) return { rows: [], rowNums: [], sheetNames: [] }
-    const C = td.colIdx || {}
-    const hdr = td.headers || []
-    const search = (searchTerms[tier] || '').toLowerCase()
-    const dateCol = hdr.findIndex(h => { const l = h.toLowerCase(); return l.includes('timestamp') || l.includes('date') || l.includes('추가일') })
-
-    const filtered = (td.rows || [])
-      .map((r, i) => ({ row: r, sheetRow: (td.rowNums || [])[i], sheetName: (td.sheetNames || [])[i] || '' }))
-      .filter(({ row }) => {
-        if (search && !(row[C.name] || '').toLowerCase().includes(search) && !(row[C.handle] || '').toLowerCase().includes(search)) return false
-        if (dateCol >= 0 && (dateFrom || dateTo)) {
-          const cellDate = (row[dateCol] || '').toString().substring(0, 10)
-          if (dateFrom && cellDate < dateFrom) return false
-          if (dateTo && cellDate > dateTo) return false
-        }
-        return true
-      })
-    return { rows: filtered.map(x => x.row), rowNums: filtered.map(x => x.sheetRow), sheetNames: filtered.map(x => x.sheetName) }
+  async function markOutreach(id: string, value: string) {
+    const { error } = await supabase.from('influencers').update({ outreach: value }).eq('id', id)
+    if (error) return
+    setInfluencers(prev => prev.map(inf => inf.id === id ? { ...inf, outreach: value } : inf))
   }
 
-  function renderDbTable(tier: string) {
-    if (!listupData) return null
-    const td = listupData[tier] as TierData
-    if (!td) return null
-    const C = td.colIdx || {}
-    const hdr = td.headers || []
-    const { rows: allRows, rowNums: allRowNums, sheetNames: allSheetNames } = getFilteredRows(tier)
-    const profileCol = hdr.findIndex(h => h.toLowerCase().includes('profile') && h.toLowerCase().includes('url'))
-    const aiCol = hdr.findIndex(h => h.toLowerCase().includes('ai') && h.toLowerCase().includes('분석'))
-    const outreachCol = hdr.findIndex(h => h.toLowerCase().trim() === 'outreach')
-    const visCols = hdr.map((_, i) => i).filter(i => !hiddenCols.has(i))
-    const dateCol = hdr.findIndex(h => { const l = h.toLowerCase(); return l.includes('timestamp') || l.includes('date') || l.includes('추가일') })
-    const orderedCols = dateCol > 0 ? [dateCol, ...visCols.filter(i => i !== dateCol)] : visCols
+  async function saveToSupabase() {
+    if (!apifyResults?.length || !apifyCurrentTier) return
+    setApifyLoading(true)
+    const rows = apifyResults.map(c => ({
+      phase_id:         activePhaseId,
+      handle:           c.handle,
+      display_name:     c.displayName || null,
+      email:            c.email || null,
+      followers:        c.followers,
+      following:        c.following,
+      following_ratio:  c.ratio || null,
+      total_likes:      c.totalLikes,
+      video_count:      c.videoCount,
+      avg_views:        c.avgViews,
+      engagement_rate:  c.engRate,
+      profile_url:      c.profileUrl || null,
+      outreach:         '',
+    }))
+    const { error, data } = await supabase.from('influencers').upsert(rows, { onConflict: 'handle', ignoreDuplicates: true }).select()
+    if (error) {
+      setApifyStatus('저장 오류: ' + error.message)
+    } else {
+      const saved = data?.length ?? 0
+      const skipped = rows.length - saved
+      setApifyStatus(`저장 완료: ${saved}명 추가 (${skipped}명 중복 건너뜀)`)
+      if (data?.length) setInfluencers(prev => [...(data as Influencer[]), ...prev])
+    }
+    setApifyLoading(false)
+  }
 
-    const totalPages = Math.max(1, Math.ceil(allRows.length / DB_PAGE_SIZE))
+  function getFilteredInfluencers() {
+    let list = influencers
+    const search = searchTerm.toLowerCase()
+    if (search) list = list.filter(inf =>
+      (inf.handle || '').toLowerCase().includes(search) ||
+      (inf.display_name || '').toLowerCase().includes(search)
+    )
+    if (dateFrom) list = list.filter(inf => inf.created_at.substring(0, 10) >= dateFrom)
+    if (dateTo)   list = list.filter(inf => inf.created_at.substring(0, 10) <= dateTo)
+    return list
+  }
+
+  function renderDbTable() {
+    const filtered = getFilteredInfluencers()
+    const totalPages = Math.max(1, Math.ceil(filtered.length / DB_PAGE_SIZE))
     const safePage   = Math.min(dbPage, totalPages)
     const startIdx   = (safePage - 1) * DB_PAGE_SIZE
-    const rows       = allRows.slice(startIdx, startIdx + DB_PAGE_SIZE)
-    const rowNums    = allRowNums.slice(startIdx, startIdx + DB_PAGE_SIZE)
-    const sheetNames = allSheetNames.slice(startIdx, startIdx + DB_PAGE_SIZE)
+    const rows       = filtered.slice(startIdx, startIdx + DB_PAGE_SIZE)
 
     return (
       <div>
@@ -322,83 +301,51 @@ export default function Listup() {
           <table>
             <thead>
               <tr>
-                {orderedCols.map(i => <th key={i}>{hdr[i]}</th>)}
-                <th>컨택 대상</th>
+                <th>크리에이터</th><th>이메일</th>
+                <th>팔로워</th><th>팔로잉</th><th>팔로잉 비율</th>
+                <th>영상 수</th><th>평균 조회수</th><th>참여율 (%)</th><th>상태</th><th>컨택 대상</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
-                <tr><td colSpan={orderedCols.length + 1} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
-            ) : rows.map((r, i) => {
-              const aiText = aiCol >= 0 ? (r[aiCol] || '') : ''
-              let acctBg = ''
-              if (aiText.includes('적합하지 않다')) acctBg = 'background:#ffd6d6'
-              else if (aiText.includes('적합해 보인다')) acctBg = 'background:#fff9c4'
-              else if (aiText.includes('적합하다')) acctBg = 'background:#d4edda'
-
-              return (
-                <tr key={i}>
-                  {orderedCols.map(ci => {
-                    const cell = r[ci] || ''
-                    const bg = ci === (C.name >= 0 ? C.name : C.handle) ? acctBg : ''
-                    if (ci === profileCol && cell)
-                      return <td key={ci} style={{ background: bg || undefined }}><a href={cell} target="_blank" style={{ color: 'var(--blue-dk)', textDecoration: 'underline', fontSize: 13 }}>{cell}</a></td>
-                    if (ci === C.handle && cell)
-                      return <td key={ci} style={{ background: bg || undefined }}><a href={`https://www.tiktok.com/@${cell}`} target="_blank" rel="noopener" style={{ color: 'var(--gray-8)', textDecoration: 'none', fontWeight: 500 }}>@{cell}</a></td>
-                    if (ci === C.email)
-                      return cell && cell.includes('@')
-                        ? <td key={ci} style={{ background: bg || undefined }}><a href={`mailto:${cell}`} style={{ color: '#1558b0', fontSize: 13 }}>{cell}</a></td>
-                        : <td key={ci} style={{ background: bg || undefined }}><span style={{ color: 'var(--gray-5)' }}>{cell || '—'}</span></td>
-                    if ([C.followers, C.following, C.totalLikes, C.videoCount, C.engRate].includes(ci) && !isNaN(parseFloat(cell.replace(/,/g, ''))))
-                      return <td key={ci} className="num" style={{ background: bg || undefined }}>{fmtNum(cell)}</td>
-                    if (ci === outreachCol) {
-                      const v = cell.toLowerCase()
-                      const s = v === 'yes' ? { bg: '#dbeafe', color: '#1d4ed8', label: '완료' }
-                              : v === 'reply' ? { bg: '#fef3c7', color: '#d97706', label: '답장' }
-                              : v === 'negotiate' ? { bg: '#d1fae5', color: '#065f46', label: '협의중' }
-                              : v === 'accept' ? { bg: '#bbf7d0', color: '#14532d', label: '수락확정' }
-                              : v === 'reject' ? { bg: '#fee2e2', color: '#991b1b', label: '거절' }
-                              : { bg: '#f1f5f9', color: '#64748b', label: '미발송' }
-                      return <td key={ci}><span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>{s.label}</span></td>
-                    }
-                    return <td key={ci} style={{ background: bg || undefined }}>{cell}</td>
-                  })}
-                  <td>
-                    {(() => {
-                      const handle = r[C.handle] || ''
-                      const isAdded = contactAdded.has(handle)
-                      return (
+              {rows.length === 0
+                ? <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
+                : rows.map(inf => {
+                  const os = OUTREACH_STYLE[inf.outreach] ?? OUTREACH_STYLE.default
+                  const isTarget = inf.outreach === 'target'
+                  return (
+                    <tr key={inf.id}>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{inf.display_name || inf.handle}</span>
+                          <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{inf.handle}</a>
+                        </div>
+                      </td>
+                      <td>{inf.email ? <a href={`mailto:${inf.email}`} style={{ color: '#1558b0', fontSize: 13 }}>{inf.email}</a> : <span style={{ color: 'var(--gray-5)' }}>—</span>}</td>
+                      <td className="num">{fmtNum(inf.followers)}</td>
+                      <td className="num">{fmtNum(inf.following)}</td>
+                      <td className="num">{inf.following_ratio || '—'}</td>
+                      <td className="num">{inf.video_count}</td>
+                      <td className="num">{fmtNum(inf.avg_views)}</td>
+                      <td className="num">{inf.engagement_rate}%</td>
+                      <td><span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: os.bg, color: os.color, whiteSpace: 'nowrap' }}>{os.label}</span></td>
+                      <td>
                         <button
-                          disabled={isAdded}
-                          onClick={async () => {
-                            if (!rowNums[i] || !sheetNames[i]) return
-                            try {
-                              const res: { ok?: boolean; error?: string } = await gasPost({ action: 'markOutreachState', sheetRow: rowNums[i], sheetName: sheetNames[i], value: 'target' })
-                              if (res.ok) setContactAdded(prev => new Set(prev).add(handle))
-                            } catch { /* ignore */ }
-                          }}
-                          style={{
-                            padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6,
-                            cursor: isAdded ? 'default' : 'pointer',
-                            background: isAdded ? 'var(--gray-1)' : 'var(--blue-dk)',
-                            color:      isAdded ? 'var(--gray-4)' : '#fff',
-                            border:     isAdded ? '1px solid var(--gray-3)' : 'none',
-                            whiteSpace: 'nowrap',
-                          }}>
-                          {isAdded ? '추가됨' : '컨택 대상'}
+                          disabled={isTarget}
+                          onClick={() => markOutreach(inf.id, 'target')}
+                          style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, whiteSpace: 'nowrap', cursor: isTarget ? 'default' : 'pointer', background: isTarget ? 'var(--gray-1)' : 'var(--blue-dk)', color: isTarget ? 'var(--gray-4)' : '#fff', border: isTarget ? '1px solid var(--gray-3)' : 'none' }}>
+                          {isTarget ? '추가됨' : '컨택 대상'}
                         </button>
-                      )
-                    })()}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                      </td>
+                    </tr>
+                  )
+                })
+              }
+            </tbody>
+          </table>
         </div>
         <Pagination
           page={safePage} totalPages={totalPages}
-          total={allRows.length} startIdx={startIdx} endIdx={startIdx + rows.length}
+          total={filtered.length} startIdx={startIdx} endIdx={startIdx + rows.length}
           onPrev={() => setDbPage(p => Math.max(1, p - 1))}
           onNext={() => setDbPage(p => Math.min(totalPages, p + 1))}
         />
@@ -412,11 +359,11 @@ export default function Listup() {
         <span className="page-banner-deco">👥</span>
         <div>
           <div className="page-banner-title">인플루언서 리스트업 &amp; 크리에이터 DB 관리</div>
-          <div className="page-banner-desc">Apify를 통해 조건에 맞는 TikTok/Instagram 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
+          <div className="page-banner-desc">Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
         </div>
         <div className="page-banner-actions">
           <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('database')}>인플루언서 DB</button>
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setListupLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침 (Sync)</button>
+          <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setDbLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침</button>
         </div>
       </div>
 
@@ -435,7 +382,7 @@ export default function Listup() {
             </div>
           </div>
           <div className="card highlight">
-            <div className="card-label">모집 완료</div>
+            <div className="card-label">컨택 완료</div>
             <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
               {dashStats.total > 0 ? Math.round(dashStats.sent / dashStats.total * 100) : 0}%
             </div>
@@ -462,9 +409,9 @@ export default function Listup() {
 
       <div className="ftab-content">
 
-        {/* Search Tab — 인플루언서 필터링 조건 only */}
         {activeTab === 'search' && (
           <div>
+            {/* 필터링 조건 */}
             <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>인플루언서 필터링 조건</div>
@@ -473,8 +420,8 @@ export default function Listup() {
                     ? <button className="cfg-btn" onClick={() => setFilterEditMode(true)}>편집</button>
                     : <>
                       <button className="cfg-btn" onClick={() => setFilterConds(prev => [...prev, { cat: '구분', desc: '내용을 입력하세요' }])}>+ 추가</button>
-                      <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => { saveCfg('mimuse_filter_conds', filterConds); setFilterEditMode(false) }}>저장</button>
-                      <button className="cfg-btn cfg-btn--ghost" title="기본값으로 초기화" onClick={() => { setFilterConds(FILTER_COND_DEFAULT) }}>↺</button>
+                      <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => { saveConfig('filter_conditions', filterConds); setFilterEditMode(false) }}>저장</button>
+                      <button className="cfg-btn cfg-btn--ghost" title="기본값으로 초기화" onClick={() => { setFilterConds(DEFAULT_FILTER_CONDS); saveConfig('filter_conditions', DEFAULT_FILTER_CONDS) }}>↺</button>
                     </>
                   }
                 </div>
@@ -485,12 +432,12 @@ export default function Listup() {
                   <tbody>
                     <tr>
                       <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>1</td>
-                      <td style={{ whiteSpace: 'normal' }}>팔로잉 비율</td>
-                      <td style={{ whiteSpace: 'normal' }}>
+                      <td>팔로잉 비율</td>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>팔로잉 수가 팔로워 수의</span>
                           <select value={maxRatio} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600 }}
-                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveCfg('mm_max_ratio', v) }}>
+                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveConfig('search_filters', { maxRatio: v, maxUploadDays, proxyCountry }) }}>
                             <option value={50}>50%</option>
                             <option value={60}>60%</option>
                             <option value={70}>70%</option>
@@ -503,12 +450,12 @@ export default function Listup() {
                     </tr>
                     <tr>
                       <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>2</td>
-                      <td style={{ whiteSpace: 'normal' }}>업로드 주기</td>
-                      <td style={{ whiteSpace: 'normal' }}>
+                      <td>업로드 주기</td>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>최근</span>
                           <select value={maxUploadDays} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600 }}
-                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveCfg('mm_max_upload_days', v) }}>
+                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveConfig('search_filters', { maxRatio, maxUploadDays: v, proxyCountry }) }}>
                             <option value={30}>30일</option>
                             <option value={49}>7주</option>
                           </select>
@@ -519,13 +466,11 @@ export default function Listup() {
                     </tr>
                     <tr>
                       <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>3</td>
-                      <td style={{ whiteSpace: 'normal' }}>국가</td>
-                      <td style={{ whiteSpace: 'normal' }}>
+                      <td>국가</td>
+                      <td>
                         <select value={proxyCountry} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600, maxWidth: 260 }}
-                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveCfg('mm_proxy_country', v) }}>
-                          {Object.entries(COUNTRY_MAP).map(([code, name]) => (
-                            <option key={code} value={code}>{name}</option>
-                          ))}
+                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveConfig('search_filters', { maxRatio, maxUploadDays, proxyCountry: v }) }}>
+                          {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                         </select>
                       </td>
                       {filterEditMode && <td />}
@@ -534,41 +479,27 @@ export default function Listup() {
                       <tr key={i}>
                         <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>{i + 4}</td>
                         <td style={{ whiteSpace: 'normal' }}>
-                          {filterEditMode
-                            ? <input className="cfg-input" value={fc.cat} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, cat: e.target.value } : c))} />
-                            : fc.cat}
+                          {filterEditMode ? <input className="cfg-input" value={fc.cat} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, cat: e.target.value } : c))} /> : fc.cat}
                         </td>
                         <td style={{ whiteSpace: 'normal', maxWidth: 'none', overflow: 'visible' }}>
-                          {filterEditMode
-                            ? <input className="cfg-input" style={{ width: '100%' }} value={fc.desc} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, desc: e.target.value } : c))} />
-                            : fc.desc}
+                          {filterEditMode ? <input className="cfg-input" style={{ width: '100%' }} value={fc.desc} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, desc: e.target.value } : c))} /> : fc.desc}
                         </td>
-                        {filterEditMode && (
-                          <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
-                        )}
+                        {filterEditMode && <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Apify section (inside search tab) */}
-        {activeTab === 'search' && (
-          <div style={{ marginTop: 24 }}>
+            {/* Tier table + Keywords */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-
-              {/* Editable tier table */}
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="cfg-btn" onClick={() => { if (tierEditMode) saveCfg('mm_tiers', tiers); setTierEditMode(!tierEditMode) }}>
-                      {tierEditMode ? '완료' : '편집'}
-                    </button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveCfg('mm_tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
+                    <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveConfig('tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
                   </div>
                 </div>
                 <div className="table-wrap">
@@ -615,15 +546,14 @@ export default function Listup() {
                 )}
               </div>
 
-              {/* Editable keywords */}
+              {/* Keywords */}
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>키워드 설정</div>
                 {[
-                  { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, storageKey: 'mm_kbeauty_kws', defaults: DEFAULT_KBEAUTY_KEYWORDS },
-                  { key: 'beauty', label: '일반뷰티 키워드', kws: beautyKws, editMode: beautyEdit, setEdit: setBeautyEdit, newKw: newBeautyKw, setNewKw: setNewBeautyKw, setKws: setBeautyKws, storageKey: 'mm_beauty_kws', defaults: DEFAULT_BEAUTY_KEYWORDS },
-                ].map(({ key, label, kws, editMode, setEdit, newKw, setNewKw, setKws, storageKey, defaults }) => {
-                  const chosenTag = apifyTierIdx !== null ? tiers[apifyTierIdx]?.tags : null
-                  const isChosen = chosenTag === key
+                  { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, cfgKey: 'kbeauty_keywords', defaults: DEFAULT_KBEAUTY_KEYWORDS },
+                  { key: 'beauty',  label: '일반뷰티 키워드', kws: beautyKws,  editMode: beautyEdit,   setEdit: setBeautyEdit,   newKw: newBeautyKw,  setNewKw: setNewBeautyKw,  setKws: setBeautyKws,  cfgKey: 'beauty_keywords',  defaults: DEFAULT_BEAUTY_KEYWORDS },
+                ].map(({ key, label, kws, editMode, setEdit, newKw, setNewKw, setKws, cfgKey, defaults }) => {
+                  const isChosen = apifyTierIdx !== null && tiers[apifyTierIdx]?.tags === key
                   const yellow = { background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)' }
                   const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
                   return (
@@ -634,22 +564,22 @@ export default function Listup() {
                         </div>
                         <div style={{ display: 'flex', gap: 5 }}>
                           <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
-                          <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화?')) { setKws([...defaults]); saveCfg(storageKey, defaults); setEdit(false) } }}>↺</button>
+                          <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화?')) { setKws([...defaults]); saveConfig(cfgKey, defaults); setEdit(false) } }}>↺</button>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                         {kws.map(kw => (
                           <span key={kw} className="tag-pill" style={{ ...(isChosen ? yellow : blue) }}>
                             {kw}
-                            {editMode && <button className="tag-remove" onClick={() => { const next = kws.filter(k => k !== kw); setKws(next); saveCfg(storageKey, next) }}>×</button>}
+                            {editMode && <button className="tag-remove" onClick={() => { const next = kws.filter(k => k !== kw); setKws(next); saveConfig(cfgKey, next) }}>×</button>}
                           </span>
                         ))}
                       </div>
                       {editMode && (
                         <div className="tag-input-row" style={{ marginTop: 6 }}>
                           <input className="cfg-input" placeholder="키워드 입력" value={newKw} onChange={e => setNewKw(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') } }} />
-                          <button className="cfg-btn" onClick={() => { if (newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveCfg(storageKey, next); setNewKw('') } }}>추가</button>
+                            onKeyDown={e => { if (e.key === 'Enter' && newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveConfig(cfgKey, next); setNewKw('') } }} />
+                          <button className="cfg-btn" onClick={() => { if (newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveConfig(cfgKey, next); setNewKw('') } }}>추가</button>
                         </div>
                       )}
                     </div>
@@ -658,22 +588,21 @@ export default function Listup() {
               </div>
             </div>
 
+            {/* Find Creators bar */}
             <div className="filters" style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
               <div className="filter-group">
                 <label>목표 인플루언서 수 (명)</label>
                 <input type="number" value={targetCreators} min={10} max={1000} step={10} style={{ width: 70 }} onChange={e => setTargetCreators(+e.target.value)} />
               </div>
-<button className="listup-find-btn" disabled={apifyLoading || apifyTierIdx === null} onClick={async () => {
+              <button className="listup-find-btn" disabled={apifyLoading || apifyTierIdx === null} onClick={async () => {
                 if (apifyTierIdx === null) return
                 const tier = tiers[apifyTierIdx]
                 setApifyLoading(true); setApifyStatus('탐색 중...')
+                setApifyResults(null)
                 try {
                   const tags = tier.tags === 'kbeauty' ? kbeautyKws : beautyKws
-                  setApifyUsedTags(tags)
-                  setApifyResults(null)
-                  setApifyCreators([])
-                  const res: { error?: string; runId?: string; datasetId?: string } = await gasPost({ action: 'startCreatorSearch', hashtags: tags, targetCreators, followerMin: tier.minF, followerMax: tier.maxF, rank: tier.rank, sheetName: tier.category === 'K-뷰티' ? 'K-뷰티' : '일반뷰티', proxyCountry: proxyCountry || 'US' })
+                  const res: { error?: string; runId?: string; datasetId?: string } = await gasPost({ action: 'startCreatorSearch', hashtags: tags, targetCreators, followerMin: tier.minF, followerMax: tier.maxF, rank: tier.rank, sheetName: tier.category, proxyCountry: proxyCountry || 'US' })
                   if (res.error) {
                     setApifyStatus('오류: ' + res.error)
                   } else {
@@ -688,49 +617,32 @@ export default function Listup() {
               }}>Find Creators</button>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', marginLeft: 4 }}>{apifyLoading && <Spinner sm />} {apifyStatus}</span>
             </div>
+
+            {/* Results */}
             {apifyResults && apifyResults.length > 0 ? (
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>
                     탐색 결과 <span style={{ color: 'var(--blue-dk)' }}>{apifyResults.length}명</span>
-                    <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>
-                      팔로잉 비율 &le;{maxRatio}% · 최근 {maxUploadDays}일 이내 업로드
-                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>팔로잉 비율 &le;{maxRatio}% · 최근 {maxUploadDays}일 이내 업로드</span>
                   </div>
-                  <button
-                    className="cfg-btn"
-                    style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }}
-                    disabled={apifyLoading}
-                    onClick={async () => {
-                      if (!apifyCreators.length || !apifyCurrentTier) return
-                      setApifyLoading(true)
-                      const res: { ok?: boolean; count?: number; skipped?: number; message?: string; error?: string } =
-                        await gasPost({ action: 'appendCreatorsToSheet', creators: apifyCreators, rank: apifyCurrentTier.rank, sheetName: apifyCurrentTier.category === 'K-뷰티' ? 'K-뷰티' : '일반뷰티' })
-                      setApifyStatus(res.message || (res.error ? '오류: ' + res.error : '저장 완료'))
-                      setApifyLoading(false)
-                    }}>
-                    시트에 저장
+                  <button className="cfg-btn" style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }} disabled={apifyLoading} onClick={saveToSupabase}>
+                    DB에 저장
                   </button>
                 </div>
                 <div className="table-wrap">
                   <table style={{ minWidth: 0 }}>
-                    <thead>
-                      <tr>
-                        <th>Handle</th><th>이름</th><th>이메일</th>
-                        <th>팔로워</th><th>팔로잉 비율</th><th>참여율</th><th>평균 조회수</th><th>Bio</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>Handle</th><th>이름</th><th>이메일</th><th>팔로워</th><th>팔로잉 비율</th><th>참여율</th><th>평균 조회수</th></tr></thead>
                     <tbody>
-                      {apifyResults.map((r, i) => (
+                      {apifyResults.map((c, i) => (
                         <tr key={i}>
-                          <td><a href={`https://www.tiktok.com/@${r[0]}`} target="_blank" rel="noopener" style={{ color: 'var(--gray-8)', fontWeight: 500 }}>@{r[0]}</a></td>
-                          <td>{r[1]}</td>
-                          <td style={{ fontSize: 12, color: 'var(--gray-6)' }}>{r[2] || '—'}</td>
-                          <td className="num">{fmtNum(r[3])}</td>
-                          <td className="num">{r[4]}</td>
-                          <td className="num">{r[5]}</td>
-                          <td className="num">{fmtNum(r[6])}</td>
-                          <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--gray-6)' }}>{r[7]}</td>
+                          <td><a href={`https://www.tiktok.com/@${c.handle}`} target="_blank" rel="noopener" style={{ color: 'var(--gray-8)', fontWeight: 500 }}>@{c.handle}</a></td>
+                          <td>{c.displayName}</td>
+                          <td style={{ fontSize: 12, color: 'var(--gray-6)' }}>{c.email || '—'}</td>
+                          <td className="num">{fmtNum(c.followers)}</td>
+                          <td className="num">{c.ratio}</td>
+                          <td className="num">{c.engRate}%</td>
+                          <td className="num">{fmtNum(c.avgViews)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -742,9 +654,7 @@ export default function Listup() {
                 <div className="listup-empty-icon">🔍</div>
                 <div className="listup-empty-title">{apifyPolling ? '탐색 중...' : '티어를 선택하고 Find Creators를 누르세요'}</div>
                 <div className="listup-empty-desc">
-                  {apifyPolling
-                    ? '클라우드에서 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.'
-                    : '위 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.\n탐색은 클라우드에서 실행되며 2~5분 소요됩니다.'}
+                  {apifyPolling ? '클라우드에서 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.' : '위 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.\n탐색은 클라우드에서 실행되며 2~5분 소요됩니다.'}
                 </div>
               </div>
             )}
@@ -754,21 +664,13 @@ export default function Listup() {
         {/* Database Tab */}
         {activeTab === 'database' && (
           <div>
-            {listupLoading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
-            {!listupLoading && listupData?.error && <div className="empty">오류: {listupData.error as string}</div>}
-            {!listupLoading && listupData && !listupData.error && (
+            {dbLoading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
+            {!dbLoading && (
               <>
-                <div style={{ marginBottom: 10 }}>
-                  <div className="weekly-tabs">
-                    {['전체', ...DB_TIERS].map(t => (
-                      <button key={t} className={'weekly-tab' + (currentDbTab === t ? ' active' : '')} onClick={() => setCurrentDbTab(t)}>{t}</button>
-                    ))}
-                  </div>
-                </div>
                 <div className="filters" style={{ marginBottom: 16 }}>
                   <div className="filter-group">
                     <label>검색</label>
-                    <input type="text" placeholder="계정명 또는 핸들..." value={searchTerms[currentDbTab] || ''} onChange={e => setSearchTerms(prev => ({ ...prev, [currentDbTab]: e.target.value }))} />
+                    <input type="text" placeholder="계정명 또는 핸들..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                   </div>
                   <div className="filter-group">
                     <label>추가일</label>
@@ -777,10 +679,10 @@ export default function Listup() {
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
                   </div>
                   <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--gray-5)' }}>
-                    표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredRows(currentDbTab).rows.length}</strong>개
+                    표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
                   </span>
                 </div>
-                {renderDbTable(currentDbTab)}
+                {renderDbTable()}
               </>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './contexts/ToastContext'
+import { PhaseProvider } from './contexts/PhaseContext'
 import RequireAuth from './components/RequireAuth'
 import Layout from './components/Layout'
 
@@ -66,6 +67,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <PhaseProvider>
         <ToastProvider>
           <Routes>
             <Route path="/lock" element={<Lock />} />
@@ -142,6 +144,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ToastProvider>
+        </PhaseProvider>
       </AuthProvider>
     </BrowserRouter>
   )

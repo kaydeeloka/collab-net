@@ -2,18 +2,12 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Globe, Settings } from 'lucide-react'
-import { gasGet, gasPost } from '../lib/api'
-import { phaseNum, buildPhaseDbOptions, escHtml, useKrClock } from '../lib/utils'
+import { supabase } from '../lib/supabase'
+import { phaseNum, escHtml, useKrClock } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
+import { usePhase } from '../contexts/PhaseContext'
 import Modal from '../components/Modal'
 
-interface PhaseInfo {
-  ok: boolean
-  activePhase?    : string
-  activeOutreachId?: string
-  phase1SheetId?  : string
-  phases?         : { name?: string; outreachId?: string }[]
-}
 interface NavSubChild { label: string; to: string; end?: boolean }
 interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
 interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
@@ -117,78 +111,52 @@ export default function Layout() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
 
-  // ── Phase state ──
-  const [phaseInfo,    setPhaseInfo]    = useState<PhaseInfo | null>(null)
-  const [activeDbId,   setActiveDbId]   = useState('')
+  // ── Phase state (from PhaseContext → Supabase) ──
+  const { activePhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
 
-  // Phase management modals
   const [showManage,     setShowManage]     = useState(false)
   const [showNewPhase,   setShowNewPhase]   = useState(false)
   const [newPhaseName,   setNewPhaseName]   = useState('')
   const [newPhaseStatus, setNewPhaseStatus] = useState('')
   const [newPhaseLoading,setNewPhaseLoading]= useState(false)
-
-  const [linkId,         setLinkId]         = useState('')
-
   const [showDeleteModal,setShowDeleteModal]= useState(false)
   const [deleteTarget,   setDeleteTarget]   = useState('')
-  const [deleteTrash,    setDeleteTrash]    = useState(false)
   const [deleteLoading,  setDeleteLoading]  = useState(false)
 
-  async function loadPhaseInfo() {
-    try {
-      const d = await gasGet<PhaseInfo>('getPhaseInfo')
-      if (d.ok) {
-        setPhaseInfo(d)
-        setActiveDbId((d.activeOutreachId || '').trim())
-      }
-    } catch {}
-  }
+  const activeDbId  = activePhaseId ?? ''
+  const dbOptions   = phaseList.map(p => ({ id: p.id, label: p.name })).sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
+  const phaseBadge  = phaseList.find(p => p.id === activePhaseId)?.name || '—'
 
   async function switchPhase(id: string) {
     if (!id || id === activeDbId) return
-    try {
-      const r: { error?: string } = await gasPost({ action: 'setActiveDatabase', outreachId: id })
-      if (r.error) { showToast(r.error, 'error'); return }
-      window.location.reload()
-    } catch (e: unknown) { showToast((e as Error).message, 'error') }
+    await ctxSwitchPhase(id)
+    showToast(`「${phaseList.find(p => p.id === id)?.name}」 전환 완료`, 'success')
   }
 
   async function confirmNewPhase() {
     const name = newPhaseName.trim()
     if (!name) return
     setNewPhaseLoading(true)
-    const id = linkId.trim()
-    if (id) {
-      setNewPhaseStatus('기존 DB 연결 중...')
-      try {
-        const r: { error?: string } = await gasPost({ action: 'linkPhase', phaseName: name, outreachId: id })
-        if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
-        setNewPhaseStatus('완료!')
-        setTimeout(() => { showToast(`「${name}」 연결 완료`, 'success'); window.location.reload() }, 500)
-      } catch (e: unknown) {
-        setNewPhaseStatus('오류: ' + (e as Error).message)
-      } finally { setNewPhaseLoading(false) }
-    } else {
-      setNewPhaseStatus('새 스프레드시트 생성 중... (약 10~20초 소요)')
-      try {
-        const r: { error?: string } = await gasPost({ action: 'createNewPhase', phaseName: name })
-        if (r.error) { setNewPhaseStatus('오류: ' + r.error); return }
-        setNewPhaseStatus('완료!')
-        setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 600)
-      } catch (e: unknown) {
-        setNewPhaseStatus('오류: ' + (e as Error).message)
-      } finally { setNewPhaseLoading(false) }
-    }
+    setNewPhaseStatus('차수 생성 중...')
+    try {
+      const { error } = await supabase.from('phases').insert({ name, is_active: false })
+      if (error) { setNewPhaseStatus('오류: ' + error.message); return }
+      setNewPhaseStatus('완료!')
+      setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 500)
+    } catch (e: unknown) {
+      setNewPhaseStatus('오류: ' + (e as Error).message)
+    } finally { setNewPhaseLoading(false) }
   }
 
   async function executeDeletePhase() {
     if (!deleteTarget) return
     setDeleteLoading(true)
     try {
-      const r: { error?: string } = await gasPost({ action: 'deletePhase', phaseName: deleteTarget, trashSheet: deleteTrash })
+      const phase = phaseList.find(p => p.name === deleteTarget)
+      if (!phase) return
+      const { error } = await supabase.from('phases').delete().eq('id', phase.id)
       setShowDeleteModal(false)
-      if (r.error) { showToast(r.error, 'error'); return }
+      if (error) { showToast(error.message, 'error'); return }
       showToast(`「${deleteTarget}」 삭제 완료`, 'success')
       window.location.reload()
     } catch (e: unknown) {
@@ -196,21 +164,11 @@ export default function Layout() {
     } finally { setDeleteLoading(false) }
   }
 
-  const phaseBadge = phaseInfo?.activePhase || '—'
-  const dbOptions  = phaseInfo ? buildPhaseDbOptions(phaseInfo) : []
-  const phaseList  = (() => {
-    const list = [...(phaseInfo?.phases || [])]
-    const p1id = (phaseInfo?.phase1SheetId || '').trim()
-    if (p1id && !list.find(p => p.name === '1차')) list.push({ name: '1차', outreachId: p1id })
-    return list.sort((a, b) => phaseNum(b.name || '') - phaseNum(a.name || ''))
-  })()
-
   useEffect(() => {
     const tick = () => { const t = getKrTime(); setNavClock(t.navDate + '  ' + t.navTime) }
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
   }, [])
 
-  useEffect(() => { loadPhaseInfo() }, [])
 
   // Auto-expand the active group in the sidebar when navigating
   useEffect(() => {
@@ -397,7 +355,7 @@ export default function Layout() {
                 <span style={{ fontSize: 13 }}>{p.name}</span>
                 <button
                   style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                  onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setDeleteTrash(false); setShowDeleteModal(true) }}
+                  onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
                 >
                   삭제
                 </button>
@@ -408,19 +366,16 @@ export default function Layout() {
       </Modal>
 
       {/* New Phase */}
-      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setLinkId(''); setNewPhaseStatus('') }} title="새 차수 시작">
-        <div className="modal-desc">차수 이름을 입력하세요. DB ID를 입력하면 기존 시트에 연결되고, 비워두면 새 스프레드시트가 자동 생성됩니다.</div>
+      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }} title="새 차수 시작">
+        <div className="modal-desc">차수 이름을 입력하세요.</div>
         <label className="modal-label">차수 이름</label>
         <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
           value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') confirmNewPhase() }} autoFocus />
-        <label className="modal-label" style={{ marginTop: 10 }}>스프레드시트 ID <span style={{ fontWeight: 400, color: 'var(--gray-5)' }}>(선택 — 비우면 새로 생성)</span></label>
-        <input className="modal-input" type="text" placeholder="Google Sheets 스프레드시트 ID"
-          value={linkId} onChange={e => setLinkId(e.target.value)} />
         <div className="modal-actions">
-          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setLinkId(''); setNewPhaseStatus('') }}>취소</button>
+          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }}>취소</button>
           <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading || !newPhaseName.trim()}>
-            {newPhaseLoading ? '처리 중...' : linkId.trim() ? '연결' : '생성'}
+            {newPhaseLoading ? '처리 중...' : '생성'}
           </button>
         </div>
         {newPhaseStatus && <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{newPhaseStatus}</div>}
@@ -429,10 +384,6 @@ export default function Layout() {
       {/* Delete Phase */}
       <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="차수 삭제" titleColor="var(--red)">
         <div className="modal-desc" dangerouslySetInnerHTML={{ __html: `「<strong>${escHtml(deleteTarget)}</strong>」 차수 데이터베이스를 삭제하시겠습니까?` }} />
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, fontWeight: 600, color: 'var(--red)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={deleteTrash} onChange={e => setDeleteTrash(e.target.checked)} style={{ width: 15, height: 15 }} />
-          시트도 삭제 (Google Drive 휴지통으로 이동)
-        </label>
         <div className="modal-actions" style={{ marginTop: 16 }}>
           <button className="modal-btn-cancel" onClick={() => setShowDeleteModal(false)}>취소</button>
           <button className="modal-btn-confirm" style={{ background: 'var(--red)', borderColor: 'var(--red)' }}
