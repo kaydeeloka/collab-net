@@ -142,9 +142,7 @@ export default function Listup() {
   const [dbLoading, setDbLoading] = useState(false)
   const [dbLoaded, setDbLoaded] = useState(false)
   const [currentDbTab, setCurrentDbTab] = useState('전체')
-  const [searchTerm, setSearchTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [dbPage, setDbPage] = useState(1)
 
   // Dashboard stats
@@ -188,7 +186,7 @@ export default function Listup() {
     })()
   }, [])
 
-  useEffect(() => { setDbPage(1) }, [currentDbTab, searchTerm, dateFrom, dateTo])
+  useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
   // Apify polling (GAS)
   useEffect(() => {
@@ -242,7 +240,8 @@ export default function Listup() {
     setDbLoading(true)
     const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
-    setInfluencers(data ?? [])
+    const contacted = ['target','yes','reply','negotiate','accept','reject']
+    setInfluencers((data ?? []).filter(r => !contacted.includes(r.outreach ?? '')))
     setDbLoading(false)
   }
 
@@ -296,13 +295,7 @@ export default function Listup() {
   function getFilteredInfluencers() {
     let list = influencers
     if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
-    const search = searchTerm.toLowerCase()
-    if (search) list = list.filter(inf =>
-      (inf.handle || '').toLowerCase().includes(search) ||
-      (inf.display_name || '').toLowerCase().includes(search)
-    )
-    if (dateFrom) list = list.filter(inf => inf.created_at.substring(0, 10) >= dateFrom)
-    if (dateTo)   list = list.filter(inf => inf.created_at.substring(0, 10) <= dateTo)
+    if (dateFrom) list = list.filter(inf => inf.created_at.substring(0, 10) === dateFrom)
     return list
   }
 
@@ -333,15 +326,15 @@ export default function Listup() {
             <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 600 }}>추가일</span>
             <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDbPage(1) }}
               style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', outline: 'none' }} />
-            <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>~</span>
-            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setDbPage(1) }}
-              style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', outline: 'none' }} />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo('') }}
-                style={{ fontSize: 11, color: 'var(--gray-5)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
-                ✕ 초기화
+            {dateFrom && (
+              <button onClick={() => setDateFrom('')}
+                style={{ fontSize: 11, color: 'var(--gray-5)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}>
+                ✕
               </button>
             )}
+            <span style={{ marginLeft: 12, fontSize: 13, color: 'var(--gray-5)' }}>
+              표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
+            </span>
           </div>
         </div>
         <div className="table-wrap">
@@ -350,15 +343,13 @@ export default function Listup() {
               <tr>
                 <th>크리에이터</th><th>이메일</th>
                 <th>팔로워</th><th>팔로잉</th><th>팔로잉 비율</th>
-                <th>영상 수</th><th>평균 조회수</th><th>참여율 (%)</th><th>상태</th><th>컨택 대상</th>
+                <th>영상 수</th><th>평균 조회수</th><th>참여율 (%)</th><th>컨택 대상</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0
-                ? <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
+                ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
                 : rows.map(inf => {
-                  const os = OUTREACH_STYLE[inf.outreach] ?? OUTREACH_STYLE.default
-                  const isTarget = inf.outreach === 'target'
                   const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
                     <tr key={inf.id} style={tc ? { borderLeft: `3px solid ${tc}` } : undefined}>
@@ -375,13 +366,11 @@ export default function Listup() {
                       <td className="num">{inf.video_count}</td>
                       <td className="num">{fmtNum(inf.avg_views)}</td>
                       <td className="num">{inf.engagement_rate}%</td>
-                      <td><span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: os.bg, color: os.color, whiteSpace: 'nowrap' }}>{os.label}</span></td>
                       <td>
                         <button
-                          disabled={isTarget}
                           onClick={() => markOutreach(inf.id, 'target')}
-                          style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, whiteSpace: 'nowrap', cursor: isTarget ? 'default' : 'pointer', background: isTarget ? 'var(--gray-1)' : 'var(--blue-dk)', color: isTarget ? 'var(--gray-4)' : '#fff', border: isTarget ? '1px solid var(--gray-3)' : 'none' }}>
-                          {isTarget ? '추가됨' : '컨택 대상'}
+                          style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer', background: 'var(--blue-dk)', color: '#fff', border: 'none' }}>
+                          컨택 대상
                         </button>
                       </td>
                     </tr>
@@ -714,26 +703,7 @@ export default function Listup() {
         {activeTab === 'database' && (
           <div>
             {dbLoading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
-            {!dbLoading && (
-              <>
-                <div className="filters" style={{ marginBottom: 16 }}>
-                  <div className="filter-group">
-                    <label>검색</label>
-                    <input type="text" placeholder="계정명 또는 핸들..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                  </div>
-                  <div className="filter-group">
-                    <label>추가일</label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>~</span>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-                  </div>
-                  <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--gray-5)' }}>
-                    표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
-                  </span>
-                </div>
-                {renderDbTable()}
-              </>
-            )}
+            {!dbLoading && renderDbTable()}
           </div>
         )}
       </div>
