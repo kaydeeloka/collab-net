@@ -90,8 +90,9 @@ function startCreatorSearch(params) {
     const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
     if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요. (프로젝트 설정 → 스크립트 속성)' };
 
-    const queries        = params.tags || [];
+    const queries        = params.hashtags || params.tags || [];
     const targetCreators = params.targetCreators || 100;
+    const proxyCountry   = params.proxyCountry || 'US';
     const queryCount     = Math.max(queries.length, 1);
     // Each search query returns posts, not unique creators.
     // Assume ~25% unique creator rate per post → need 4× posts to hit the target.
@@ -101,7 +102,7 @@ function startCreatorSearch(params) {
     const runInput = {
       searchQueries:                 queries,
       resultsPerPage:                postsPerQuery,
-      region:                        'US',
+      region:                        proxyCountry,
       shouldDownloadVideos:          false,
       shouldDownloadCovers:          false,
       shouldDownloadSubtitles:       false,
@@ -135,7 +136,7 @@ function checkRunStatus(runId) {
   }
 }
 
-function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
+function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFollowingRatio, maxUploadDays) {
   try {
     const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
     const res   = UrlFetchApp.fetch(
@@ -170,6 +171,10 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
       if (followerMin && followers < followerMin) continue;
       if (followerMax && followers > followerMax) continue;
 
+      // Following ratio filter: skip creators whose following count exceeds the threshold % of followers
+      const following = meta.following || 0;
+      if (maxFollowingRatio > 0 && followers > 0 && (following / followers * 100) > maxFollowingRatio) continue;
+
       if (!creatorsMap[handle]) {
         const bio        = (meta.signature || '').substring(0, 300);
         const emailMatch = bio.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
@@ -177,7 +182,7 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
           handle,
           displayName : meta.nickName || '',
           followers,
-          following   : meta.following || 0,
+          following,
           bio,
           profileUrl  : 'https://www.tiktok.com/@' + handle,
           verified    : meta.verified ? 'Y' : '',
@@ -185,7 +190,16 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
           totalLikes  : meta.heart || meta.heartCount || meta.digg || 0,
           videoCount  : meta.video || meta.videoCount || 0,
           videos      : [],
+          latestPost  : null,
         };
+      }
+
+      // Track most recent post date for upload frequency filter
+      const postDate = item.createTimeISO ? new Date(item.createTimeISO)
+                     : item.createTime    ? new Date(item.createTime * 1000)
+                     : null;
+      if (postDate && (!creatorsMap[handle].latestPost || postDate > creatorsMap[handle].latestPost)) {
+        creatorsMap[handle].latestPost = postDate;
       }
 
       const plays    = parseInt(item.playCount)    || 0;
@@ -197,28 +211,33 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators) {
       }
     }
 
-    const creators = Object.values(creatorsMap).map(c => {
-      const vids          = c.videos;
-      const totalViews    = vids.length ? vids.reduce((s,v) => s+v.plays, 0) : 0;
-      const totalLikesVid = vids.length ? vids.reduce((s,v) => s+v.diggs, 0) : 0;
-      const avgViews      = vids.length > 0 ? Math.round(totalViews / vids.length) : 0;
-      const engRate       = avgViews > 0
-        ? parseFloat((totalLikesVid / avgViews * 100).toFixed(2)) : 0;
-      return {
-        handle     : c.handle,
-        displayName: c.displayName,
-        email      : c.email,
-        followers  : c.followers,
-        following  : c.following,
-        ratio      : c.followers ? Math.round(c.following / c.followers * 100) + '%' : '',
-        totalLikes : c.totalLikes,
-        videoCount : c.videoCount,
-        avgViews,
-        engRate,
-        bio        : c.bio,
-        profileUrl : c.profileUrl,
-      };
-    });
+    // Upload frequency filter: exclude creators whose most recent scraped post is older than the cutoff
+    const cutoff = maxUploadDays > 0 ? new Date(Date.now() - maxUploadDays * 86400000) : null;
+
+    const creators = Object.values(creatorsMap)
+      .filter(function(c) { return !cutoff || !c.latestPost || c.latestPost >= cutoff; })
+      .map(c => {
+        const vids          = c.videos;
+        const totalViews    = vids.length ? vids.reduce((s,v) => s+v.plays, 0) : 0;
+        const totalLikesVid = vids.length ? vids.reduce((s,v) => s+v.diggs, 0) : 0;
+        const avgViews      = vids.length > 0 ? Math.round(totalViews / vids.length) : 0;
+        const engRate       = avgViews > 0
+          ? parseFloat((totalLikesVid / avgViews * 100).toFixed(2)) : 0;
+        return {
+          handle     : c.handle,
+          displayName: c.displayName,
+          email      : c.email,
+          followers  : c.followers,
+          following  : c.following,
+          ratio      : c.followers ? Math.round(c.following / c.followers * 100) + '%' : '',
+          totalLikes : c.totalLikes,
+          videoCount : c.videoCount,
+          avgViews,
+          engRate,
+          bio        : c.bio,
+          profileUrl : c.profileUrl,
+        };
+      });
 
     const limited      = maxCreators > 0 ? creators.slice(0, maxCreators) : creators;
     const dedupSkipped = existingHandles.size;
@@ -306,8 +325,8 @@ function routeListup(action, p, body) {
   switch (action) {
     case 'getInfluencerList':     return getInfluencerList();
     case 'checkRunStatus':        return checkRunStatus(q.runId || b.runId);
-    case 'getRunResults':         return getRunResults(q.datasetId || b.datasetId, +(q.followerMin || b.followerMin) || 0, +(q.followerMax || b.followerMax) || 0, +(q.maxCreators || b.maxCreators) || 0);
-    case 'startCreatorSearch':    return startCreatorSearch(b.params);
+    case 'getRunResults':         return getRunResults(q.datasetId || b.datasetId, +(q.followerMin || b.followerMin) || 0, +(q.followerMax || b.followerMax) || 0, +(q.maxCreators || b.maxCreators) || 0, +(q.maxFollowingRatio || b.maxFollowingRatio) || 0, +(q.maxUploadDays || b.maxUploadDays) || 0);
+    case 'startCreatorSearch':    return startCreatorSearch(b);
     case 'appendCreatorsToSheet': return appendCreatorsToSheet(b.creators, b.rank, b.sheetName);
     case 'deleteInfluencerRow':   return deleteInfluencerRow(b.sheetRow, b.sheetName);
     default: return null;
