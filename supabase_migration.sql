@@ -2,7 +2,7 @@
 --  MiMuse Supabase Schema
 -- ============================================================
 
--- Drop existing tables (reverse dependency order)
+-- Drop existing objects (reverse dependency order)
 DROP TABLE IF EXISTS outreach_messages      CASCADE;
 DROP TABLE IF EXISTS influencers            CASCADE;
 DROP TABLE IF EXISTS ems_tracking           CASCADE;
@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS email_recipients       CASCADE;
 DROP TABLE IF EXISTS app_config             CASCADE;
 DROP TABLE IF EXISTS phases                 CASCADE;
 DROP TABLE IF EXISTS tiers                  CASCADE;
+DROP FUNCTION IF EXISTS get_active_phase_id;
 
 -- ============================================================
 --  0. Phases
@@ -27,7 +28,6 @@ CREATE TABLE phases (
   ended_at    DATE
 );
 
--- Seed phase 1 as the starting active phase
 INSERT INTO phases (name, is_active, started_at) VALUES ('1차', true, CURRENT_DATE);
 
 -- ============================================================
@@ -52,12 +52,42 @@ INSERT INTO tiers (rank, label, category, tags, min_followers, max_followers, so
   ('5순위', '마이크로 (60K~100K)', 'K-뷰티',   'kbeauty', 60000,  100000, 5);
 
 -- ============================================================
+--  8. App Config  ← moved up so the helper function can read it
+-- ============================================================
+CREATE TABLE app_config (
+  key        TEXT        PRIMARY KEY,
+  value      JSONB       NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+INSERT INTO app_config (key, value) VALUES
+  ('kbeauty_keywords', '["glass skin","kbeauty","korean beauty","korean skincare","kbeauty review","kbeauty routine","korean skincare routine","kbeauty products","kbeauty addict","korean makeup","olive young","kbeauty skincare"]'::jsonb),
+  ('beauty_keywords',  '["beauty review","skincare","makeup tips","beauty creator","beautytok","makeup haul","beauty hacks","beauty influencer"]'::jsonb),
+  ('filter_conditions','[{"cat":"중복","desc":"1~5순위까지의 중복 계정 필터링"},{"cat":"영상 퀄리티","desc":"영상 콘텐츠 퀄리티 기준 수기 검토 예정"}]'::jsonb),
+  ('search_filters',   '{"maxRatio":70,"maxUploadDays":30,"proxyCountry":"US"}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- Seed active_phase_id from the phase we just inserted
+INSERT INTO app_config (key, value)
+SELECT 'active_phase_id', to_jsonb(id::text) FROM phases WHERE name = '1차' LIMIT 1
+ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================
+--  Helper function: returns the current active phase UUID
+--  (PostgreSQL allows function calls in DEFAULT, but not subqueries)
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_active_phase_id()
+RETURNS UUID AS $$
+  SELECT (value #>> '{}')::uuid FROM app_config WHERE key = 'active_phase_id';
+$$ LANGUAGE sql STABLE;
+
+-- ============================================================
 --  1. Influencers
 -- ============================================================
 CREATE TABLE influencers (
   id                UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at        TIMESTAMPTZ  DEFAULT now(),
-  phase_id          UUID         NOT NULL DEFAULT (SELECT (value #>> '{}')::uuid FROM app_config WHERE key = 'active_phase_id') REFERENCES phases(id) ON DELETE CASCADE,
+  phase_id          UUID         NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
   tier_id           UUID         REFERENCES tiers(id) ON DELETE SET NULL,
   handle            TEXT         NOT NULL,
   display_name      TEXT,
@@ -100,7 +130,7 @@ CREATE INDEX idx_outreach_messages_sent_at    ON outreach_messages(sent_at);
 CREATE TABLE confirmed_influencers (
   id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at      TIMESTAMPTZ DEFAULT now(),
-  phase_id        UUID        NOT NULL DEFAULT (SELECT (value #>> '{}')::uuid FROM app_config WHERE key = 'active_phase_id') REFERENCES phases(id) ON DELETE CASCADE,
+  phase_id        UUID        NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
   influencer_id   UUID        REFERENCES influencers(id) ON DELETE SET NULL,
   display_name    TEXT,
   handle          TEXT,
@@ -180,7 +210,7 @@ ON CONFLICT (brand) DO NOTHING;
 CREATE TABLE beauty_news_archives (
   id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at TIMESTAMPTZ DEFAULT now(),
-  phase_id   UUID        NOT NULL DEFAULT (SELECT (value #>> '{}')::uuid FROM app_config WHERE key = 'active_phase_id') REFERENCES phases(id) ON DELETE CASCADE,
+  phase_id   UUID        NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
   date_key   TEXT        NOT NULL,               -- 'YYYY-MM-DD'
   data       JSONB       NOT NULL,
   UNIQUE (phase_id, date_key)
@@ -194,38 +224,13 @@ CREATE INDEX idx_archives_date_key ON beauty_news_archives(date_key DESC);
 -- ============================================================
 CREATE TABLE email_recipients (
   id         UUID  DEFAULT gen_random_uuid() PRIMARY KEY,
-  phase_id   UUID  NOT NULL DEFAULT (SELECT (value #>> '{}')::uuid FROM app_config WHERE key = 'active_phase_id') REFERENCES phases(id) ON DELETE CASCADE,
+  phase_id   UUID  NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
   email      TEXT  NOT NULL,
   name       TEXT,
   UNIQUE (phase_id, email)
 );
 
 CREATE INDEX idx_recipients_phase ON email_recipients(phase_id);
-
--- ============================================================
---  8. App Config
--- ============================================================
-CREATE TABLE app_config (
-  key        TEXT        PRIMARY KEY,
-  value      JSONB       NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-INSERT INTO app_config (key, value) VALUES
-  ('kbeauty_keywords', '["glass skin","kbeauty","korean beauty","korean skincare","kbeauty review","kbeauty routine","korean skincare routine","kbeauty products","kbeauty addict","korean makeup","olive young","kbeauty skincare"]'::jsonb),
-  ('beauty_keywords',  '["beauty review","skincare","makeup tips","beauty creator","beautytok","makeup haul","beauty hacks","beauty influencer"]'::jsonb),
-  ('filter_conditions','[{"cat":"중복","desc":"1~5순위까지의 중복 계정 필터링"},{"cat":"영상 퀄리티","desc":"영상 콘텐츠 퀄리티 기준 수기 검토 예정"}]'::jsonb),
-  ('search_filters',   '{"maxRatio":70,"maxUploadDays":30,"proxyCountry":"US"}'::jsonb)
-ON CONFLICT (key) DO NOTHING;
-
--- active_phase_id is inserted after phases table is populated
-INSERT INTO app_config (key, value)
-SELECT 'active_phase_id', to_jsonb(id::text) FROM phases WHERE name = '1차' LIMIT 1
-ON CONFLICT (key) DO NOTHING;
-
--- Helper: run this after CSV import to auto-assign tier_id from follower count
--- UPDATE influencers i SET tier_id = t.id FROM tiers t
--- WHERE i.followers BETWEEN t.min_followers AND t.max_followers AND i.tier_id IS NULL;
 
 -- ============================================================
 --  Row Level Security
@@ -249,3 +254,31 @@ BEGIN
     EXECUTE format('CREATE POLICY "allow_all_%s" ON %I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)', tbl, tbl);
   END LOOP;
 END $$;
+
+-- ============================================================
+--  Trigger: auto-fill phase_id + tier_id on INSERT
+--  (Supabase CSV importer sends explicit NULL which bypasses DEFAULT;
+--   a BEFORE INSERT trigger intercepts it reliably)
+-- ============================================================
+CREATE OR REPLACE FUNCTION set_influencer_defaults()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.phase_id IS NULL THEN
+    NEW.phase_id := get_active_phase_id();
+  END IF;
+
+  IF NEW.tier_id IS NULL AND NEW.followers IS NOT NULL THEN
+    SELECT id INTO NEW.tier_id
+    FROM tiers
+    WHERE NEW.followers BETWEEN min_followers AND max_followers
+    ORDER BY sort_order
+    LIMIT 1;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_influencer_defaults
+BEFORE INSERT ON influencers
+FOR EACH ROW EXECUTE FUNCTION set_influencer_defaults();
