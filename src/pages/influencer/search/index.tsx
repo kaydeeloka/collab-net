@@ -76,6 +76,7 @@ interface Influencer  {
   display_name: string | null; email: string | null; followers: number; following: number
   following_ratio: string | null; total_likes: number; video_count: number
   avg_views: number; engagement_rate: number; profile_url: string | null; outreach: string
+  tiers?: { rank: string; label: string; category: string } | null
 }
 interface ApifyCreator {
   handle: string; displayName: string; email: string; followers: number
@@ -85,6 +86,14 @@ interface ApifyCreator {
 
 function saveConfig(key: string, value: unknown) {
   supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
+}
+
+const TIER_COLOR: Record<string, string> = {
+  '1순위': '#6366f1',
+  '2순위': '#3b82f6',
+  '3순위': '#10b981',
+  '4순위': '#f59e0b',
+  '5순위': '#ec4899',
 }
 
 const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string }> = {
@@ -146,7 +155,7 @@ export default function Listup() {
     ;(async () => {
       const [{ data: cfg }, { data: infData }, { count: confirmedCount }] = await Promise.all([
         supabase.from('app_config').select('key, value').in('key', ['tiers','kbeauty_keywords','beauty_keywords','filter_conditions','search_filters']),
-        supabase.from('influencers').select('outreach').eq('phase_id', activePhaseId ?? ''),
+        supabase.from('influencers').select('outreach, tiers(rank)').eq('phase_id', activePhaseId ?? ''),
         supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }),
       ])
 
@@ -166,11 +175,15 @@ export default function Listup() {
 
       if (infData) {
         let total = 0, sent = 0
-        for (const r of infData) {
+        const tierCounts: Record<string, number> = {}
+        for (const r of infData as unknown as { outreach: string; tiers?: { rank: string } | null }[]) {
           total++
           if (['yes','reply','negotiate','accept'].includes(r.outreach)) sent++
+          const rank = r.tiers?.rank
+          if (rank) tierCounts[rank] = (tierCounts[rank] ?? 0) + 1
         }
-        setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: [] })
+        const tierStats = DB_TIERS.map(rank => ({ rank, total: tierCounts[rank] ?? 0 }))
+        setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: tierStats })
       }
     })()
   }, [])
@@ -227,7 +240,7 @@ export default function Listup() {
   async function loadInfluencers() {
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
@@ -243,7 +256,11 @@ export default function Listup() {
   async function markOutreach(id: string, value: string) {
     const { error } = await supabase.from('influencers').update({ outreach: value }).eq('id', id)
     if (error) return
-    setInfluencers(prev => prev.map(inf => inf.id === id ? { ...inf, outreach: value } : inf))
+    if (value === 'target') {
+      setInfluencers(prev => prev.filter(inf => inf.id !== id))
+    } else {
+      setInfluencers(prev => prev.map(inf => inf.id === id ? { ...inf, outreach: value } : inf))
+    }
   }
 
   async function saveToSupabase() {
@@ -278,6 +295,7 @@ export default function Listup() {
 
   function getFilteredInfluencers() {
     let list = influencers
+    if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
     const search = searchTerm.toLowerCase()
     if (search) list = list.filter(inf =>
       (inf.handle || '').toLowerCase().includes(search) ||
@@ -297,6 +315,35 @@ export default function Listup() {
 
     return (
       <div>
+        {/* Tier filter dropdown + date range */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            value={currentDbTab}
+            onChange={e => { setCurrentDbTab(e.target.value); setDbPage(1) }}
+            style={{
+              padding: '6px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8,
+              border: `2px solid ${TIER_COLOR[currentDbTab] ?? 'var(--gray-3)'}`,
+              color: TIER_COLOR[currentDbTab] ?? 'var(--gray-7)',
+              background: '#fff', cursor: 'pointer', outline: 'none',
+            }}>
+            <option value="전체">전체</option>
+            {DB_TIERS.map(rank => <option key={rank} value={rank}>{rank}</option>)}
+          </select>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 600 }}>추가일</span>
+            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDbPage(1) }}
+              style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', outline: 'none' }} />
+            <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>~</span>
+            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setDbPage(1) }}
+              style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', outline: 'none' }} />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(''); setDateTo('') }}
+                style={{ fontSize: 11, color: 'var(--gray-5)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
+                ✕ 초기화
+              </button>
+            )}
+          </div>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -312,8 +359,9 @@ export default function Listup() {
                 : rows.map(inf => {
                   const os = OUTREACH_STYLE[inf.outreach] ?? OUTREACH_STYLE.default
                   const isTarget = inf.outreach === 'target'
+                  const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
-                    <tr key={inf.id}>
+                    <tr key={inf.id} style={tc ? { borderLeft: `3px solid ${tc}` } : undefined}>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{inf.display_name || inf.handle}</span>
@@ -372,11 +420,12 @@ export default function Listup() {
           <div className="card">
             <div className="card-label">총 인플루언서</div>
             <div className="card-value">{dashStats.total}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 4 }}>
+            <div style={{ fontSize: 11, marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: '4px 0' }}>
               {dashStats.tiers.map((t, i) => (
                 <span key={t.rank}>
-                  {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
-                  <span>{t.rank}순위 <strong style={{ color: 'var(--gray-7)' }}>{t.total}</strong></span>
+                  {i > 0 && <span style={{ margin: '0 5px', color: 'var(--gray-3)' }}>·</span>}
+                  <span style={{ color: TIER_COLOR[t.rank] ?? 'var(--gray-5)', fontWeight: 600 }}>{t.rank}</span>
+                  <strong style={{ color: 'var(--gray-7)', marginLeft: 3 }}>{t.total}</strong>
                 </span>
               ))}
             </div>
@@ -384,7 +433,7 @@ export default function Listup() {
           <div className="card highlight">
             <div className="card-label">컨택 완료</div>
             <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
-              {dashStats.total > 0 ? Math.round(dashStats.sent / dashStats.total * 100) : 0}%
+              {dashStats.sent}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {dashStats.total}</span>
             </div>
           </div>
           <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>

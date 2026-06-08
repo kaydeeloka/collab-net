@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { gasGet } from '../../lib/api'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
@@ -41,15 +42,17 @@ export default function Dashboard() {
   const [trendKeywords,  setTrendKeywords]  = useState<string | null>(null)
 
   const loadListupStats = useCallback(async () => {
+    if (!activeDbId) return
     try {
-      const [outreach, confirmed] = await Promise.all([
-        gasGet<Record<string, { stats?: { total?: number; sent?: number; replied?: number } }>>('getOutreachData'),
-        gasGet<{ rows?: unknown[][] }>('getConfirmedInfluencers'),
+      const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
+        supabase.from('influencers').select('outreach').eq('phase_id', activeDbId),
+        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', activeDbId),
       ])
-      let total = 0, sent = 0, replied = 0
-      DB_TIERS.forEach(t => { const s = (outreach[t] || {}).stats || {}; total += s.total || 0; sent += s.sent || 0; replied += s.replied || 0 })
-      const confirmedCount = (confirmed.rows || []).length
-      const recruitPct = Math.round(confirmedCount / 50 * 100)
+      const total   = infData?.length ?? 0
+      const sent    = infData?.filter(r => ['yes','reply','negotiate','accept'].includes(r.outreach)).length ?? 0
+      const replied = infData?.filter(r => r.outreach === 'reply').length ?? 0
+      const confirmed = confirmedCount ?? 0
+      const recruitPct = Math.round(confirmed / 50 * 100)
       const bar = (pct: number, color: string) =>
         `<div style="width:100%;height:4px;background:#e5e7eb;border-radius:99px;margin-top:5px;overflow:hidden">` +
         `<div style="height:100%;width:${Math.min(pct,100)}%;background:${color};border-radius:99px;transition:width .4s"></div></div>`
@@ -57,10 +60,10 @@ export default function Dashboard() {
         `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}명</span></div><div class="fstat-lbl">컨택 현황</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">신규 회신</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${recruitPct}%</div><div class="fstat-lbl">모집 완료</div></div>` +
-        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmedCount}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인풀루언서</div></div>`
+        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
       )
     } catch (e: unknown) { setStatsListup(statError((e as Error).message)) }
-  }, [])
+  }, [activeDbId])
 
   const loadOutreachStats = useCallback(async () => {
     setStatsOutreach(
@@ -100,6 +103,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadListupStats()
+  }, [loadListupStats])
+
+  useEffect(() => {
     loadOutreachStats()
     loadEmsStats()
     loadMonitoringStats()
