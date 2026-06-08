@@ -491,15 +491,25 @@ export default function Listup() {
         </div>
       )}
 
-      <div className="ftab-bar">
-        {(['search', 'database'] as ListupTab[]).map((t, i) => (
-          <button key={t} className={'ftab' + (activeTab === t ? ' active' : '')} onClick={() => switchTab(t)}>
-            {['인플루언서 찾기', '인플루언서 DB'][i]}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--gray-2)', marginBottom: 24 }}>
+        {(['search', 'database'] as ListupTab[]).map((t, i) => {
+          const active = activeTab === t
+          return (
+            <button key={t} onClick={() => switchTab(t)}
+              style={{
+                padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
+                background: 'transparent', fontFamily: 'inherit',
+                color: active ? 'var(--blue-dk)' : 'var(--gray-5)',
+                borderBottom: active ? '2px solid var(--blue-dk)' : '2px solid transparent',
+                marginBottom: -2,
+              }}>
+              {['인플루언서 찾기', '인플루언서 DB'][i]}
+            </button>
+          )
+        })}
       </div>
 
-      <div className="ftab-content">
+      <div className={activeTab === 'database' ? 'ftab-content' : ''} style={activeTab === 'search' ? { padding: 0 } : undefined}>
 
         {activeTab === 'search' && (
           <div>
@@ -680,7 +690,8 @@ export default function Listup() {
               </div>
             </div>
 
-            {/* Find Creators bar */}
+            {/* Find Creators box */}
+            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
             <div className="filters" style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
               <div className="filter-group">
@@ -712,7 +723,7 @@ export default function Listup() {
 
             {/* Results */}
             {apifyResults && apifyResults.length > 0 ? (
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
+              <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>
                     탐색 결과 <span style={{ color: 'var(--blue-dk)' }}>{apifyResults.length}명</span>
@@ -750,6 +761,7 @@ export default function Listup() {
                 </div>
               </div>
             )}
+            </div>{/* end Find Creators box */}
           </div>
         )}
 

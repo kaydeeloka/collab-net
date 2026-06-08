@@ -518,7 +518,7 @@ td {
 }
 .ftab-content {
   background: var(--white); border: 1px solid var(--surface-md);
-  border-radius: 0 var(--r) var(--r) var(--r);
+  border-radius: var(--r);
   box-shadow: var(--sh); padding: 22px; position: relative; z-index: 2;
 }
 
