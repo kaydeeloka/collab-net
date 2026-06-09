@@ -102,8 +102,6 @@ function getActiveGroup(pathname: string) {
 export default function Layout() {
   const { showToast } = useToast()
 
-  const [collapsed,     setCollapsed]     = useState(false)
-  const [sideExpanded,  setSideExpanded]  = useState<string | null>(null)
   const [navClock,      setNavClock]      = useState('')
   const [openSub,       setOpenSub]       = useState<string | null>(null)
   const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -170,10 +168,6 @@ export default function Layout() {
   }, [])
 
 
-  // Auto-expand the active group in the sidebar when navigating
-  useEffect(() => {
-    setSideExpanded(getActiveGroup(pathname))
-  }, [pathname])
 
   useEffect(() => { setOpenSub(null) }, [pathname])
   useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
@@ -190,67 +184,35 @@ export default function Layout() {
   }
 
   return (
-    <div className={`app-layout${collapsed ? ' app-layout--collapsed' : ''}`}>
+    <div className="app-layout app-layout--collapsed">
 
       {/* ── Sidebar ── */}
-      <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
+      <aside className="sidebar sidebar--collapsed">
 
         <div className="sidebar-header">
-          {!collapsed && <img className="sidebar-logo" src="/img/logo-black.svg" alt="MiMuse" />}
-          <button
-            className="sidebar-toggle"
-            onClick={() => setCollapsed(c => !c)}
-            title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
-          >
-            {collapsed ? '☰' : '‹'}
-          </button>
+          <NavLink to="/" className="sidebar-logo-link" title="홈으로">
+            <img className="sidebar-logo-icon" src="/img/logo-black.svg" alt="MiMuse" />
+          </NavLink>
         </div>
 
         <div className="sidebar-nav">
           {GROUPS.map(group => {
-            const isActive   = activeLabel === group.label
-            const isExpanded = sideExpanded === group.label && !collapsed
+            const isActive = activeLabel === group.label
             return (
               <div key={group.label} className="sidebar-group">
                 <button
                   className={`sidebar-item${isActive ? ' active' : ''}`}
-                  title={collapsed ? group.label : undefined}
-                  onClick={() => {
-                    if (collapsed || group.children.length === 0) { navigate(group.defaultTo); return }
-                    if (!isExpanded) navigate(group.defaultTo)
-                    setSideExpanded(isExpanded ? null : group.label)
-                  }}
+                  title={group.label}
+                  onClick={() => navigate(group.defaultTo)}
                 >
                   <span className="sidebar-icon">{group.icon}</span>
-                  <span className="sidebar-label">{group.label}</span>
-                  {!collapsed && group.children.length > 0 && (
-                    <span className="sidebar-arrow">{isExpanded ? '▴' : '▾'}</span>
-                  )}
                 </button>
-
-                {isExpanded && (
-                  <div className="sidebar-children">
-                    {group.children.map(child => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        end={child.end}
-                        className={({ isActive }) =>
-                          'sidebar-child' + (isActive ? ' active' : '')
-                        }
-                      >
-                        {child.label}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
               </div>
             )
           })}
         </div>
 
         <div className="sidebar-footer">
-          {!collapsed && <div className="sidebar-clock">{navClock}</div>}
           <a
             href="https://mimuse.imweb.me/"
             target="_blank"
@@ -258,14 +220,14 @@ export default function Layout() {
             className="sidebar-website-btn"
             title="미뮤즈 웹사이트"
           >
-            {collapsed ? <Globe size={22} /> : '미뮤즈 웹사이트'}
+            <Globe size={22} />
           </a>
           <button
             className="sidebar-phase-btn"
             onClick={() => setShowManage(true)}
             title="차수 관리"
           >
-            {collapsed ? <Settings size={22} /> : '차수 관리'}
+            <Settings size={22} />
           </button>
         </div>
       </aside>
