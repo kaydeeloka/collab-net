@@ -236,16 +236,14 @@ export default function Confirmed() {
             ? <div className="empty">{rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}</div>
             : (
               <div className="table-wrap">
-                <table style={{ tableLayout: 'fixed', minWidth: 1360 }}>
+                <table style={{ tableLayout: 'fixed', minWidth: 1170 }}>
                   <colgroup>
                     <col style={{ width: 36 }} />   {/* No. */}
                     <col style={{ width: 90 }} />   {/* 플랫폼 */}
-                    <col style={{ width: 110 }} />  {/* 계정 */}
-                    <col style={{ width: 62 }} />   {/* 팔로워 */}
-                    <col style={{ width: 100 }} />  {/* NAME */}
+                    <col style={{ width: 150 }} />  {/* NAME / 계정 */}
+                    <col style={{ width: 60 }} />   {/* 팔로워 */}
                     <col style={{ width: 58 }} />   {/* 리뷰 업로드 */}
                     <col style={{ width: 80 }} />   {/* repost */}
-                    <col style={{ width: 130 }} />  {/* 콘텐츠 타입 */}
                     <col style={{ width: 130 }} />  {/* PHONE */}
                     <col style={{ width: 140 }} />  {/* E-mail */}
                     <col style={{ width: 200 }} />  {/* Address */}
@@ -255,12 +253,10 @@ export default function Confirmed() {
                     <tr>
                       <th style={{ textAlign: 'center' }}>No.</th>
                       <th>플랫폼</th>
-                      <th>계정</th>
-                      <th style={{ textAlign: 'right' }}>팔로워</th>
                       <th>NAME</th>
+                      <th style={{ textAlign: 'right' }}>팔로워</th>
                       <th style={{ textAlign: 'center' }}>리뷰 업로드</th>
                       <th style={{ textAlign: 'center' }}>repost</th>
-                      <th>콘텐츠 타입</th>
                       <th>PHONE</th>
                       <th>E-mail</th>
                       <th>Address</th>
@@ -277,15 +273,19 @@ export default function Confirmed() {
                           <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)' }}>{i + 1}</td>
                           <td><PlatformBadge platform={inf?.platform ?? null} /></td>
                           <td>
-                            {handle
-                              ? <a href={profileUrl || '#'} target="_blank" rel="noopener"
-                                  style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                {inf?.display_name || handle || '—'}
+                              </span>
+                              {handle && (
+                                <a href={profileUrl || '#'} target="_blank" rel="noopener"
+                                  style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>
                                   @{handle}
                                 </a>
-                              : <span style={{ color: 'var(--gray-4)' }}>—</span>}
+                              )}
+                            </div>
                           </td>
-                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{fmtFollowers(inf?.followers ?? null)}</td>
-                          <td style={{ fontWeight: 700, fontSize: 13 }}>{inf?.display_name || '—'}</td>
+                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', overflow: 'visible' }}>{fmtFollowers(inf?.followers ?? null)}</td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             <input type="checkbox" checked={r.upload_status === 'Yes'}
                               onChange={e => updateField(r.id, 'upload_status', e.target.checked ? 'Yes' : 'Pending')}
@@ -300,13 +300,6 @@ export default function Confirmed() {
                               <option value="▲">▲</option>
                               <option value="X">X</option>
                             </select>
-                          </td>
-                          <td>
-                            {r.content_type
-                              ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid #bfdbfe' }}>
-                                  {r.content_type}
-                                </span>
-                              : <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>}
                           </td>
                           <td style={{ fontSize: 11 }}>{r.phone || '—'}</td>
                           <td style={{ fontSize: 11 }}>
