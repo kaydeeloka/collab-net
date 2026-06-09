@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ListFilter } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
 
+const GOOGLE_FORM_URL = '' // ← paste your Google Form URL here
 
-type UploadStatus = 'Pending' | 'Yes' | 'No' | 'all'
+type UploadStatus      = 'Pending' | 'Yes' | 'No' | 'all'
+type ReviewLinkFilter  = 'all' | 'has' | 'none'
 
 interface InfluencerRef {
   platform:     string | null
@@ -21,6 +24,8 @@ interface ConfirmedRow {
   email:          string | null
   upload_status:  string
   repost:         string | null
+  review_link:    string | null
+  notes:          string | null
   phone:          string | null
   address_line_1: string | null
   address_line_2: string | null
@@ -32,7 +37,7 @@ interface ConfirmedRow {
 }
 
 const EMPTY_FORM = {
-  phone: '', repost: '',
+  phone: '', repost: '', review_link: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
 }
 
@@ -62,35 +67,67 @@ export default function Confirmed() {
   const { activePhaseId } = usePhase()
   const { showToast }     = useToast()
 
-  const [rows,         setRows]         = useState<ConfirmedRow[]>([])
-  const [loading,      setLoading]      = useState(false)
-  const [search,       setSearch]       = useState('')
-  const [uploadFilter, setUploadFilter] = useState<UploadStatus>('all')
-  const [syncMsg,      setSyncMsg]      = useState('')
+  const [rows,    setRows]    = useState<ConfirmedRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search,  setSearch]  = useState('')
+  const [syncMsg, setSyncMsg] = useState('')
 
+  // filters
+  const [uploadFilter,     setUploadFilter]     = useState<UploadStatus>('all')
+  const [reviewLinkFilter, setReviewLinkFilter] = useState<ReviewLinkFilter>('all')
+  const [showUploadFilter,     setShowUploadFilter]     = useState(false)
+  const [showReviewLinkFilter, setShowReviewLinkFilter] = useState(false)
+  const uploadFilterRef     = useRef<HTMLDivElement>(null)
+  const reviewLinkFilterRef = useRef<HTMLDivElement>(null)
+
+  // modals
   const [showView, setShowView] = useState(false)
   const [viewRow,  setViewRow]  = useState<ConfirmedRow | null>(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editId,   setEditId]   = useState('')
+  const [editForm, setEditForm] = useState(EMPTY_FORM)
+  const [saving,   setSaving]   = useState(false)
 
-  const [showEdit,  setShowEdit]  = useState(false)
-  const [editId,    setEditId]    = useState('')
-  const [editForm,  setEditForm]  = useState(EMPTY_FORM)
-  const [saving,    setSaving]    = useState(false)
+  // inline notes
+  const [notesEdits, setNotesEdits] = useState<Record<string, string>>({})
+  const notesTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => { if (activePhaseId) load() }, [activePhaseId])
 
+  useEffect(() => {
+    if (!showUploadFilter && !showReviewLinkFilter) return
+    const handler = (e: MouseEvent) => {
+      if (uploadFilterRef.current     && !uploadFilterRef.current.contains(e.target as Node))     setShowUploadFilter(false)
+      if (reviewLinkFilterRef.current && !reviewLinkFilterRef.current.contains(e.target as Node)) setShowReviewLinkFilter(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUploadFilter, showReviewLinkFilter])
+
   async function load() {
     setLoading(true)
+    // try full query with new columns first
     const { data, error } = await supabase
       .from('confirmed_influencers')
-      .select(`
-        id, email, upload_status, repost, phone,
-        address_line_1, address_line_2, city, state, zip, country,
-        influencers(platform, handle, display_name, followers, profile_url)
-      `)
+      .select(`id, email, upload_status, repost, review_link, notes, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
       .eq('phase_id', activePhaseId ?? '')
       .order('created_at', { ascending: false })
 
-    if (error) { showToast(error.message, 'error'); setLoading(false); return }
+    if (error) {
+      // graceful fallback if new columns don't exist yet
+      const { data: fb, error: fbErr } = await supabase
+        .from('confirmed_influencers')
+        .select(`id, email, upload_status, repost, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
+        .eq('phase_id', activePhaseId ?? '')
+        .order('created_at', { ascending: false })
+      if (fbErr) { showToast(fbErr.message, 'error'); setLoading(false); return }
+      setRows((fb ?? []).map((r: any) => ({ ...r, review_link: null, notes: null })) as unknown as ConfirmedRow[])
+      setLoading(false)
+      const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      setSyncMsg(`마지막 동기화: ${now}`)
+      return
+    }
+
     setRows((data ?? []) as unknown as ConfirmedRow[])
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     setSyncMsg(`마지막 동기화: ${now}`)
@@ -98,19 +135,23 @@ export default function Confirmed() {
   }
 
   async function updateField(id: string, field: string, value: string) {
-    const { error } = await supabase
-      .from('confirmed_influencers')
-      .update({ [field]: value })
-      .eq('id', id)
+    const { error } = await supabase.from('confirmed_influencers').update({ [field]: value }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+  }
+
+  function updateNotes(id: string, value: string) {
+    setNotesEdits(prev => ({ ...prev, [id]: value }))
+    if (notesTimers.current[id]) clearTimeout(notesTimers.current[id])
+    notesTimers.current[id] = setTimeout(() => updateField(id, 'notes', value), 800)
   }
 
   function openEdit(r: ConfirmedRow) {
     setEditId(r.id)
     setEditForm({
-      phone:  r.phone  || '',
-      repost: r.repost || '',
+      phone:       r.phone        || '',
+      repost:      r.repost       || '',
+      review_link: r.review_link  || '',
       addr1:       r.address_line_1 || '',
       addr2:       r.address_line_2 || '',
       city:        r.city         || '',
@@ -123,37 +164,29 @@ export default function Confirmed() {
 
   async function saveEdit() {
     setSaving(true)
-    const { error } = await supabase
-      .from('confirmed_influencers')
-      .update({
-        phone:          editForm.phone  || null,
-        repost:         editForm.repost || null,
-        address_line_1: editForm.addr1       || null,
-        address_line_2: editForm.addr2       || null,
-        city:           editForm.city        || null,
-        state:          editForm.state       || null,
-        zip:            editForm.zip         || null,
-        country:        editForm.country     || null,
-      })
-      .eq('id', editId)
+    const { error } = await supabase.from('confirmed_influencers').update({
+      phone:          editForm.phone       || null,
+      repost:         editForm.repost      || null,
+      review_link:    editForm.review_link || null,
+      address_line_1: editForm.addr1       || null,
+      address_line_2: editForm.addr2       || null,
+      city:           editForm.city        || null,
+      state:          editForm.state       || null,
+      zip:            editForm.zip         || null,
+      country:        editForm.country     || null,
+    }).eq('id', editId)
     if (error) { showToast(error.message, 'error') }
-    else {
-      showToast('저장 완료', 'success')
-      setShowEdit(false)
-      load()
-    }
+    else { showToast('저장 완료', 'success'); setShowEdit(false); load() }
     setSaving(false)
   }
 
   const filtered = rows.filter(r => {
     if (uploadFilter !== 'all' && r.upload_status !== uploadFilter) return false
+    if (reviewLinkFilter === 'has'  && !r.review_link)  return false
+    if (reviewLinkFilter === 'none' && !!r.review_link) return false
     if (search) {
-      const q = search.toLowerCase()
-      const text = [
-        r.influencers?.display_name,
-        r.influencers?.handle,
-        r.email,
-      ].join(' ').toLowerCase()
+      const q    = search.toLowerCase()
+      const text = [r.influencers?.display_name, r.influencers?.handle, r.email].join(' ').toLowerCase()
       if (!text.includes(q)) return false
     }
     return true
@@ -163,12 +196,32 @@ export default function Confirmed() {
   const uploaded = rows.filter(r => r.upload_status === 'Yes').length
   const pending  = rows.filter(r => r.upload_status === 'Pending').length
 
+  const UPLOAD_OPTIONS = [
+    { value: 'all',     label: '전체' },
+    { value: 'Pending', label: '대기' },
+    { value: 'Yes',     label: '완료' },
+    { value: 'No',      label: '미업로드' },
+  ]
+  const REVIEW_LINK_OPTIONS = [
+    { value: 'all',  label: '전체' },
+    { value: 'has',  label: '링크 있음' },
+    { value: 'none', label: '링크 없음' },
+  ]
+
+  const thBase: React.CSSProperties = {
+    position: 'sticky', top: 0, zIndex: 1,
+    background: '#f0f5f8',
+    padding: '13px 18px',
+    textAlign: 'left', fontSize: 11, fontWeight: 700,
+    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+  }
+
   const field = (label: string, key: keyof typeof EMPTY_FORM, opts?: { type?: string; placeholder?: string }) => (
     <div>
       <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>{label}</label>
       <input type={opts?.type || 'text'} placeholder={opts?.placeholder}
-        value={editForm[key]}
-        onChange={e => setEditForm(prev => ({ ...prev, [key]: e.target.value }))}
+        value={editForm[key]} onChange={e => setEditForm(prev => ({ ...prev, [key]: e.target.value }))}
         style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
     </div>
   )
@@ -193,6 +246,13 @@ export default function Confirmed() {
           <div className="page-banner-desc">아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요.</div>
         </div>
         <div className="page-banner-actions">
+          {GOOGLE_FORM_URL && (
+            <a href={GOOGLE_FORM_URL} target="_blank" rel="noopener"
+              className="page-banner-btn page-banner-btn--secondary"
+              style={{ textDecoration: 'none' }}>
+              📋 구글폼 보기
+            </a>
+          )}
           <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>
             {loading ? <Spinner sm /> : <span style={{ color: 'var(--blue-dk)' }}>↻</span>} 새로고침
           </button>
@@ -218,52 +278,89 @@ export default function Confirmed() {
           <div className="filters" style={{ marginBottom: 16, marginTop: 12 }}>
             <input type="text" placeholder="이름, 이메일, 핸들로 검색..." value={search} onChange={e => setSearch(e.target.value)}
               style={{ flex: 1, minWidth: 200, maxWidth: 360 }} />
-            <div className="filter-group">
-              <label>콘텐츠 업로드:</label>
-              {(['all', 'Pending', 'Yes', 'No'] as UploadStatus[]).map((v, i) => (
-                <button key={v} className={'ems-filter-btn' + (uploadFilter === v ? ' active' : '')} onClick={() => setUploadFilter(v)}>
-                  {['전체', '대기', '완료', '미업로드'][i]}
-                </button>
-              ))}
-            </div>
           </div>
 
           {filtered.length === 0
             ? <div className="empty">{rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}</div>
             : (
               <div className="table-wrap">
-                <table style={{ tableLayout: 'fixed', minWidth: 1170 }}>
+                <table style={{ tableLayout: 'auto', minWidth: 1400 }}>
                   <colgroup>
-                    <col style={{ width: 36 }} />   {/* No. */}
-                    <col style={{ width: 90 }} />   {/* 플랫폼 */}
-                    <col style={{ width: 150 }} />  {/* NAME / 계정 */}
-                    <col style={{ width: 60 }} />   {/* 팔로워 */}
-                    <col style={{ width: 58 }} />   {/* 리뷰 업로드 */}
-                    <col style={{ width: 80 }} />   {/* repost */}
-                    <col style={{ width: 130 }} />  {/* PHONE */}
-                    <col style={{ width: 140 }} />  {/* E-mail */}
-                    <col style={{ width: 200 }} />  {/* Address */}
-                    <col style={{ width: 60 }} />   {/* Actions */}
+                    <col style={{ width: 36 }} />
+                    <col style={{ width: 90 }} />
+                    <col style={{ width: 160 }} />
+                    <col style={{ width: 70 }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 140 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ minWidth: 180 }} />
+                    <col style={{ minWidth: 200 }} />
+                    <col style={{ minWidth: 160 }} />
+                    <col style={{ width: 60 }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: 'center' }}>No.</th>
-                      <th>플랫폼</th>
-                      <th>NAME</th>
-                      <th style={{ textAlign: 'right' }}>팔로워</th>
-                      <th style={{ textAlign: 'center' }}>리뷰 업로드</th>
-                      <th style={{ textAlign: 'center' }}>repost</th>
-                      <th>PHONE</th>
-                      <th>E-mail</th>
-                      <th>Address</th>
-                      <th></th>
+                      <th style={{ ...thBase, textAlign: 'center' }}>No.</th>
+                      <th style={thBase}>플랫폼</th>
+                      <th style={thBase}>NAME</th>
+                      <th style={{ ...thBase, textAlign: 'right' }}>팔로워</th>
+                      {/* 리뷰 업로드 with filter */}
+                      <th style={thBase}>
+                        <div ref={uploadFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                          <span>리뷰 업로드</span>
+                          <button
+                            onClick={() => { setShowUploadFilter(p => !p); setShowReviewLinkFilter(false) }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: uploadFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: uploadFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                            <ListFilter size={13} />
+                          </button>
+                          {showUploadFilter && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                              {UPLOAD_OPTIONS.map(o => (
+                                <button key={o.value} onClick={() => { setUploadFilter(o.value as UploadStatus); setShowUploadFilter(false) }}
+                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: uploadFilter === o.value ? 700 : 500, background: uploadFilter === o.value ? '#d1fae5' : 'transparent', color: uploadFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </th>
+                      <th style={{ ...thBase, textAlign: 'center' }}>Repost</th>
+                      {/* 리뷰 모니터링 링크 with filter */}
+                      <th style={thBase}>
+                        <div ref={reviewLinkFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                          <span>리뷰 링크</span>
+                          <button
+                            onClick={() => { setShowReviewLinkFilter(p => !p); setShowUploadFilter(false) }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: reviewLinkFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: reviewLinkFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                            <ListFilter size={13} />
+                          </button>
+                          {showReviewLinkFilter && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                              {REVIEW_LINK_OPTIONS.map(o => (
+                                <button key={o.value} onClick={() => { setReviewLinkFilter(o.value as ReviewLinkFilter); setShowReviewLinkFilter(false) }}
+                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: reviewLinkFilter === o.value ? 700 : 500, background: reviewLinkFilter === o.value ? '#dbeafe' : 'transparent', color: reviewLinkFilter === o.value ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </th>
+                      <th style={thBase}>PHONE</th>
+                      <th style={thBase}>E-mail</th>
+                      <th style={thBase}>Address</th>
+                      <th style={thBase}>비고</th>
+                      <th style={thBase}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((r, i) => {
-                      const inf       = r.influencers
-                      const handle    = inf?.handle    || ''
+                      const inf        = r.influencers
+                      const handle     = inf?.handle     || ''
                       const profileUrl = inf?.profile_url || ''
+                      const notesVal   = notesEdits[r.id] !== undefined ? notesEdits[r.id] : (r.notes ?? '')
                       return (
                         <tr key={r.id} onClick={() => { setViewRow(r); setShowView(true) }} style={{ cursor: 'pointer' }}>
                           <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)' }}>{i + 1}</td>
@@ -274,14 +371,14 @@ export default function Confirmed() {
                                 {inf?.display_name || handle || '—'}
                               </span>
                               {handle && (
-                                <a href={profileUrl || '#'} target="_blank" rel="noopener"
+                                <a href={profileUrl || '#'} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}
                                   style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>
                                   @{handle}
                                 </a>
                               )}
                             </div>
                           </td>
-                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', overflow: 'visible' }}>{fmtFollowers(inf?.followers ?? null)}</td>
+                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{fmtFollowers(inf?.followers ?? null)}</td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             <input type="checkbox" checked={r.upload_status === 'Yes'}
                               onChange={e => updateField(r.id, 'upload_status', e.target.checked ? 'Yes' : 'Pending')}
@@ -297,9 +394,17 @@ export default function Confirmed() {
                               <option value="X">X</option>
                             </select>
                           </td>
-                          <td style={{ fontSize: 11 }}>{r.phone || '—'}</td>
-                          <td style={{ fontSize: 11 }}>
-                            {r.email ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)' }}>{r.email}</a> : '—'}
+                          <td onClick={e => e.stopPropagation()}>
+                            {r.review_link
+                              ? <a href={r.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                              : <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
+                            }
+                          </td>
+                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{r.phone || '—'}</td>
+                          <td style={{ fontSize: 11 }} onClick={e => e.stopPropagation()}>
+                            {r.email
+                              ? <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--blue-dk)', wordBreak: 'break-all' }}>{r.email}</a>
+                              : '—'}
                           </td>
                           <td style={{ fontSize: 11, whiteSpace: 'normal', lineHeight: 1.5 }}>
                             {(() => {
@@ -308,13 +413,20 @@ export default function Confirmed() {
                               if (!line1 && !line2 && !r.country) return <span style={{ color: 'var(--gray-4)' }}>—</span>
                               return <>
                                 {line1 && <div>{line1}</div>}
-                                {(line2 || r.country) && (
-                                  <div style={{ color: 'var(--gray-5)' }}>
-                                    {[line2, r.country].filter(Boolean).join(' · ')}
-                                  </div>
-                                )}
+                                {(line2 || r.country) && <div style={{ color: 'var(--gray-5)' }}>{[line2, r.country].filter(Boolean).join(' · ')}</div>}
                               </>
                             })()}
+                          </td>
+                          <td onClick={e => e.stopPropagation()} style={{ padding: '6px 12px' }}>
+                            <textarea
+                              value={notesVal}
+                              onChange={e => updateNotes(r.id, e.target.value)}
+                              placeholder="메모..."
+                              rows={1}
+                              style={{ width: '100%', minWidth: 120, height: 32, fontSize: 11, padding: '3px 6px', border: '1px solid transparent', borderRadius: 6, background: notesVal ? 'var(--gray-1)' : 'transparent', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)', cursor: 'text', resize: 'none', lineHeight: 1.5 }}
+                              onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
+                              onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = notesVal ? 'var(--gray-1)' : 'transparent' }}
+                            />
                           </td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => openEdit(r)}
@@ -341,13 +453,7 @@ export default function Confirmed() {
           : r.upload_status === 'No'
           ? { bg: '#fee2e2', color: '#991b1b', label: '미업로드' }
           : { bg: '#fef3c7', color: '#d97706', label: '대기중' }
-        const addrParts = [
-          r.address_line_1,
-          r.address_line_2,
-          r.city,
-          [r.state, r.zip].filter(Boolean).join(' '),
-          r.country,
-        ].filter(Boolean) as string[]
+        const addrParts = [r.address_line_1, r.address_line_2, r.city, [r.state, r.zip].filter(Boolean).join(' '), r.country].filter(Boolean) as string[]
         return (
           <Modal open={showView} onClose={() => setShowView(false)} title={inf?.display_name || inf?.handle || '인플루언서 정보'}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
@@ -375,20 +481,28 @@ export default function Confirmed() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 16 }}>
-              {([
-                ['E-mail',  r.email],
-                ['Phone',   r.phone],
-                ['Repost',  r.repost],
-              ] as [string, string | null][]).map(([label, value]) => (
-                <div key={label}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>
-                    {label === 'E-mail' && r.email
-                      ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{r.email}</a>
-                      : (value || '—')}
-                  </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>E-mail</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>
+                  {r.email ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{r.email}</a> : '—'}
                 </div>
-              ))}
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Phone</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{r.phone || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>리뷰 모니터링 링크</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>
+                  {r.review_link
+                    ? <a href={r.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                    : '—'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Repost</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{r.repost || '—'}</div>
+              </div>
             </div>
 
             {addrParts.length > 0 && (
@@ -411,9 +525,12 @@ export default function Confirmed() {
       {/* ── Edit Modal ── */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)} title="인플루언서 정보 입력">
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '4px 0 10px' }}>연락처</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
           {field('Phone', 'phone', { placeholder: '+1 310-555-0000' })}
           {selectField('Repost', 'repost', ['O', '▲', 'X'], '선택')}
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          {field('리뷰 모니터링 링크', 'review_link', { placeholder: 'https://www.tiktok.com/@...' })}
         </div>
 
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '0 0 10px' }}>배송 주소</div>

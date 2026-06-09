@@ -48,6 +48,8 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS city           TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS state          TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS zip            TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS country        TEXT;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS review_link    TEXT;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes          TEXT;
 
 -- ALTER TABLE ems_tracking          ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE monitoring            ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
