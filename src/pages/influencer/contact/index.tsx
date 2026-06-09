@@ -355,7 +355,7 @@ export default function Outreach() {
       </div>
 
       {/* ── Table ── */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
 
         {/* Bulk toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--gray-2)', background: checkedIds.size > 0 ? '#f0f5ff' : 'var(--gray-0)', flexWrap: 'wrap' }}>
@@ -402,7 +402,7 @@ export default function Outreach() {
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
           : <>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 160px)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
@@ -515,13 +515,19 @@ export default function Outreach() {
                         </td>
                         {/* 현황 */}
                         <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          {inf.first_sent_at
-                            ? <span style={{ fontSize: 10, background: '#dbeafe', color: '#1d4ed8', borderRadius: 4, padding: '2px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                {(() => { const d = new Date(inf.first_sent_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
-                                {(inf.reply_count ?? 0) > 0 && <span style={{ marginLeft: 4 }}>{inf.reply_count}회</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {inf.first_sent_at
+                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                  {(() => { const d = new Date(inf.first_sent_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
+                                </span>
+                              : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>
+                            }
+                            {(inf.reply_count ?? 0) > 0 && (
+                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {inf.reply_count}회
                               </span>
-                            : <span style={{ fontSize: 11, color: 'var(--gray-3)' }}>—</span>
-                          }
+                            )}
+                          </div>
                         </td>
                         {/* 컨택 차수 + 건수 */}
                         <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
@@ -544,13 +550,13 @@ export default function Outreach() {
                           </div>
                         </td>
                         {/* 비고 */}
-                        <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>
+                        <td style={{ padding: '0 10px', verticalAlign: 'middle', overflow: 'hidden' }}>
                           <textarea
                             value={memoVal}
                             onChange={e => updateMemo(inf.id, e.target.value)}
                             placeholder="메모 입력..."
-                            rows={2}
-                            style={{ width: '100%', minWidth: 140, fontSize: 12, padding: '4px 8px', border: '1px solid transparent', borderRadius: 6, background: memoVal ? 'var(--gray-0)' : 'transparent', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)', cursor: 'text', resize: 'none', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                            rows={1}
+                            style={{ width: '100%', minWidth: 140, height: 34, fontSize: 12, padding: '4px 8px', border: '1px solid transparent', borderRadius: 6, background: memoVal ? 'var(--gray-0)' : 'transparent', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)', cursor: 'text', resize: 'none', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto' }}
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = memoVal ? 'var(--gray-0)' : 'transparent' }}
                           />
