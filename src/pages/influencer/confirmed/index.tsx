@@ -5,7 +5,6 @@ import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
 
-const CONTENT_TYPES = ['Product Unboxing', 'Tutorial/Demo', 'Review', 'Carousel Post', 'Story/Reel', 'Blog Post', 'GRWM Showcase']
 
 type UploadStatus = 'Pending' | 'Yes' | 'No' | 'all'
 
@@ -23,7 +22,6 @@ interface ConfirmedRow {
   upload_status:  string
   repost:         string | null
   phone:          string | null
-  content_type:   string | null
   address_line_1: string | null
   address_line_2: string | null
   city:           string | null
@@ -34,7 +32,7 @@ interface ConfirmedRow {
 }
 
 const EMPTY_FORM = {
-  phone: '', contentType: '', repost: '',
+  phone: '', repost: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
 }
 
@@ -85,7 +83,7 @@ export default function Confirmed() {
     const { data, error } = await supabase
       .from('confirmed_influencers')
       .select(`
-        id, email, upload_status, repost, phone, content_type,
+        id, email, upload_status, repost, phone,
         address_line_1, address_line_2, city, state, zip, country,
         influencers(platform, handle, display_name, followers, profile_url)
       `)
@@ -111,9 +109,8 @@ export default function Confirmed() {
   function openEdit(r: ConfirmedRow) {
     setEditId(r.id)
     setEditForm({
-      phone:       r.phone        || '',
-      contentType: r.content_type || '',
-      repost:      r.repost       || '',
+      phone:  r.phone  || '',
+      repost: r.repost || '',
       addr1:       r.address_line_1 || '',
       addr2:       r.address_line_2 || '',
       city:        r.city         || '',
@@ -129,9 +126,8 @@ export default function Confirmed() {
     const { error } = await supabase
       .from('confirmed_influencers')
       .update({
-        phone:          editForm.phone      || null,
-        content_type:   editForm.contentType || null,
-        repost:         editForm.repost      || null,
+        phone:          editForm.phone  || null,
+        repost:         editForm.repost || null,
         address_line_1: editForm.addr1       || null,
         address_line_2: editForm.addr2       || null,
         city:           editForm.city        || null,
@@ -380,10 +376,9 @@ export default function Confirmed() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 16 }}>
               {([
-                ['E-mail',       r.email],
-                ['Phone',        r.phone],
-                ['Content Type', r.content_type],
-                ['Repost',       r.repost],
+                ['E-mail',  r.email],
+                ['Phone',   r.phone],
+                ['Repost',  r.repost],
               ] as [string, string | null][]).map(([label, value]) => (
                 <div key={label}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
@@ -418,7 +413,6 @@ export default function Confirmed() {
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '4px 0 10px' }}>연락처</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
           {field('Phone', 'phone', { placeholder: '+1 310-555-0000' })}
-          {selectField('Content Type', 'contentType', CONTENT_TYPES, '콘텐츠 유형 선택')}
           {selectField('Repost', 'repost', ['O', '▲', 'X'], '선택')}
         </div>
 

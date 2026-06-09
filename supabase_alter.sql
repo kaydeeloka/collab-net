@@ -36,6 +36,9 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS country        TEXT;
 --  DROP COLUMN
 -- ============================================================
 
+-- confirmed_influencers — remove content_type (not needed)
+ALTER TABLE confirmed_influencers DROP COLUMN IF EXISTS content_type;
+
 -- confirmed_influencers — remove duplicated/old columns
 -- platform, account_url added by mistake (come from influencers JOIN)
 ALTER TABLE confirmed_influencers DROP COLUMN IF EXISTS platform;
