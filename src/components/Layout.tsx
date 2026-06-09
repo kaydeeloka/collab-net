@@ -28,14 +28,9 @@ const GROUPS: SideGroup[] = [
     label: 'INFLUENCER', icon: <Users size={22} />, defaultTo: '/influencer/search', prefix: '/influencer',
     children: [
       { to: '/influencer/search', label: '인플루언서 서치' },
-      {
-        to: '/influencer/contact', label: '인플루언서 컨택',
-        sub: [
-          { to: '/influencer/contact', label: '컨택 리스트', end: true },
-          { to: '/influencer/contact/template', label: '템플릿 관리' },
-        ],
-      },
+      { to: '/influencer/contact', label: '인플루언서 컨택' },
       { to: '/influencer/confirmed', label: '확정 인플루언서' },
+      { to: '/influencer/contact/template', label: '템플릿 관리' },
     ],
   },
   {

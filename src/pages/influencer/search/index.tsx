@@ -270,10 +270,11 @@ export default function Listup() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('influencers').update({ outreach: 'target' }).in('id', ids)
+    const { error } = await supabase.from('influencers').update({ outreach: 'target', status: 'target' }).in('id', ids)
     if (!error) {
       setInfluencers(prev => prev.filter(inf => !selected.has(inf.id)))
       setSelected(new Set())
+      navigate('/influencer/contact')
     }
     setBulkLoading(false)
   }

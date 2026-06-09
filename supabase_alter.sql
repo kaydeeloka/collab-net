@@ -11,6 +11,31 @@
 -- influencers — platform is a core attribute, used by confirmed join
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS platform TEXT;
 
+-- influencers — contact tracking fields
+-- NOTE: outreach is the existing backend column (values: accept/yes/reply/negotiate/reject/target) — do NOT modify
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT '';
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_round   TEXT DEFAULT '미컨택';
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS first_sent_at   TIMESTAMPTZ;
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS reply_count     INTEGER DEFAULT 0;
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_stage  TEXT DEFAULT '';
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_count  INTEGER;
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS memo            TEXT DEFAULT '';
+
+-- Seed status from existing outreach data (run once after adding the column)
+UPDATE influencers SET status = CASE outreach
+  WHEN 'target'    THEN 'target'
+  WHEN 'yes'       THEN 'yes'
+  WHEN 'reply'     THEN 'reply'
+  WHEN 'positive'  THEN 'positive'
+  WHEN 'negative'  THEN 'negative'
+  WHEN 'reject'    THEN 'reject'
+  WHEN 'accept'    THEN 'accept'
+  WHEN 'noreply'   THEN 'noreply'
+  WHEN 'paid'      THEN 'paid'
+  WHEN 'negotiate' THEN 'positive'
+  ELSE ''
+END WHERE (status IS NULL OR status = '');
+
 -- confirmed_influencers — Google Form data
 -- NOTE: handle, display_name, email, profile_url (account_url) and platform
 --       are fetched via JOIN on influencer_id — do not duplicate here
