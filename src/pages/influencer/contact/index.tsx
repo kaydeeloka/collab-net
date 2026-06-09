@@ -170,8 +170,15 @@ export default function Outreach() {
     const { error } = await supabase.from('influencers').update({ outreach: value }).eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, outreach: value } : r))
+    if (value === 'accept') {
+      const inf = influencers.find(r => r.id === id)
+      await supabase.from('confirmed_influencers').upsert(
+        { influencer_id: id, phase_id: activePhaseId, email: inf?.email ?? null, upload_status: 'Pending' },
+        { onConflict: 'influencer_id', ignoreDuplicates: true }
+      )
+    }
     if (value === 'accept' || value === 'reject') setSelectedId(null)
-  }, [showToast])
+  }, [showToast, influencers, activePhaseId])
 
   // ── Draft ──
   function selectInfluencer(inf: Influencer) {

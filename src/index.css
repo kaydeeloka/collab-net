@@ -426,7 +426,7 @@ a { text-decoration: none; }
   max-height: 600px;
   border: 1px solid var(--surface-md);
 }
-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+table { width: 100%; border-collapse: collapse; table-layout: auto; margin-bottom: 16px; }
 thead th {
   position: sticky; top: 0; z-index: 1;
   background: #f0f5f8;

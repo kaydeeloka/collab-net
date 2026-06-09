@@ -92,6 +92,7 @@ CREATE TABLE influencers (
   handle            TEXT         NOT NULL,
   display_name      TEXT,
   email             TEXT,
+  platform          TEXT,
   followers         INTEGER      DEFAULT 0,
   following         INTEGER      DEFAULT 0,
   following_ratio   TEXT,
@@ -138,7 +139,15 @@ CREATE TABLE confirmed_influencers (
   followers       INTEGER     DEFAULT 0,
   upload_status   TEXT        DEFAULT 'Pending',  -- 'Pending' | 'Yes' | 'No'
   upload_link     TEXT,
-  full_address    TEXT,
+  repost          TEXT,
+  phone           TEXT,
+  content_type    TEXT,
+  address_line_1  TEXT,
+  address_line_2  TEXT,
+  city            TEXT,
+  state           TEXT,
+  zip             TEXT,
+  country         TEXT,
   UNIQUE (phase_id, email)
 );
 

@@ -16,7 +16,11 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*":          ["./src/*"],
+      "@lib/*":       ["./src/lib/*"],
+      "@context/*":   ["./src/contexts/*"],
+      "@components/*":["./src/components/*"],
+      "@pages/*":     ["./src/pages/*"]
     }
   },
   "include": ["src"],
