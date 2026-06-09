@@ -41,7 +41,6 @@ export default function ContactTemplate() {
   const [category, setCategory] = useState<Category>('첫 컨택')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -114,38 +113,6 @@ export default function ContactTemplate() {
         </div>
       </div>
 
-      {/* Preview popup */}
-      {showPreview && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setShowPreview(false)}>
-          <div style={{ background: '#fff', borderRadius: 16, width: 560, maxWidth: '90vw', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
-            onClick={e => e.stopPropagation()}>
-            {/* Popup header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>미리보기</span>
-              <button onClick={() => setShowPreview(false)}
-                style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'var(--gray-2)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-            </div>
-            {/* Email frame */}
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              <div style={{ background: 'var(--gray-1)', padding: '12px 20px', borderBottom: '1px solid var(--gray-2)' }}>
-                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 3 }}>{'보내는 사람 · MiMuse Team <beautyproject@cranecomm.com>'}</div>
-                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 8 }}>
-                  받는 사람 · <span style={{ color: DUMMY['{{이름}}'].color, fontWeight: 700 }}>{DUMMY['{{이름}}'].value}</span>
-                  {' <'}<span style={{ color: DUMMY['{{이메일}}'].color, fontWeight: 700 }}>{DUMMY['{{이메일}}'].value}</span>{'>'}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{renderWithDummy(subject || '(제목 없음)')}</div>
-              </div>
-              <div style={{ padding: '24px 20px', fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
-                {body ? renderWithDummy(body) : <span style={{ color: 'var(--gray-4)' }}>본문을 입력하면 여기에 표시됩니다.</span>}
-              </div>
-            </div>
-            <div style={{ padding: '10px 20px', borderTop: '1px solid var(--gray-2)', fontSize: 11, color: 'var(--gray-4)', textAlign: 'center' }}>
-              치환 구문은 발송 시 자동 적용됩니다
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
 
@@ -197,10 +164,6 @@ export default function ContactTemplate() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>템플릿 편집</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowPreview(p => !p)}
-                style={{ padding: '6px 14px', background: showPreview ? 'var(--teal-lt)' : 'var(--gray-1)', color: showPreview ? 'var(--teal-dk)' : 'var(--gray-6)', border: `1px solid ${showPreview ? 'var(--teal)' : 'var(--gray-3)'}`, borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
-                {showPreview ? '미리보기 닫기' : '미리보기'}
-              </button>
               <button onClick={deleteTpl} disabled={templates.length <= 1}
                 style={{ padding: '6px 14px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
                 삭제

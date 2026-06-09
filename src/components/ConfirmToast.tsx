@@ -21,9 +21,11 @@ export function useConfirmToast() {
 interface Props {
   state: ConfirmState | null
   onHide: () => void
+  confirmLabel?: string
+  confirmColor?: string
 }
 
-export default function ConfirmToast({ state, onHide }: Props) {
+export default function ConfirmToast({ state, onHide, confirmLabel = '삭제', confirmColor = '#ef4444' }: Props) {
   if (!state) return null
   return (
     <div style={{
@@ -36,8 +38,8 @@ export default function ConfirmToast({ state, onHide }: Props) {
       <span>{state.message}</span>
       <button
         onClick={() => { onHide(); state.onConfirm() }}
-        style={{ padding: '5px 14px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-      >삭제</button>
+        style={{ padding: '5px 14px', background: confirmColor, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+      >{confirmLabel}</button>
       <button
         onClick={onHide}
         style={{ padding: '5px 14px', background: '#475569', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}

@@ -91,8 +91,8 @@ function saveConfig(key: string, value: unknown) {
 
 const TIER_COLOR: Record<string, string> = {
   '1순위': '#6366f1',
-  '2순위': '#3b82f6',
-  '3순위': '#10b981',
+  '2순위': '#10b981',
+  '3순위': '#3b82f6',
   '4순위': '#f59e0b',
   '5순위': '#ec4899',
 }

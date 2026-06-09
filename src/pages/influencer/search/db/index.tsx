@@ -23,8 +23,8 @@ const TIER_TABS = ['전체', '1순위', '2순위', '3순위', '4순위', '5순�
 
 const TIER_COLOR: Record<string, string> = {
   '1순위': '#6366f1',  // indigo
-  '2순위': '#3b82f6',  // blue
-  '3순위': '#10b981',  // emerald
+  '2순위': '#10b981',  // emerald
+  '3순위': '#3b82f6',  // blue
   '4순위': '#f59e0b',  // amber
   '5순위': '#ec4899',  // pink
 }

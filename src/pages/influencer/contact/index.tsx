@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
@@ -6,14 +6,15 @@ import { fmtNum } from '../../../lib/utils'
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
+import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
 
 const TIER_COLOR: Record<string, string> = {
   '1순위': '#6366f1',
-  '2순위': '#3b82f6',
-  '3순위': '#10b981',
+  '2순위': '#10b981',
+  '3순위': '#3b82f6',
   '4순위': '#f59e0b',
   '5순위': '#ec4899',
 }
@@ -84,6 +85,36 @@ function loadTemplates() {
 function saveTemplates(t: typeof DEFAULT_TEMPLATES) {
   localStorage.setItem('mm_email_templates', JSON.stringify(t))
 }
+const DUMMY_VALUES: Record<string, { value: string; color: string }> = {
+  '{{이름}}':   { value: 'MiMuse Creator',    color: '#a07800' },
+  '{{핸들}}':   { value: '@mimuse_creator',    color: '#0369a1' },
+  '{{이메일}}': { value: 'creator@mimuse.com', color: '#b45309' },
+  '{{팔로워}}': { value: '42,800',             color: '#065f46' },
+  '{{조회수}}': { value: '18,500',             color: '#be123c' },
+}
+function renderWithDummy(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+  let key = 0
+  while (remaining.length > 0) {
+    let earliest = -1, earliestTag = ''
+    for (const tag of Object.keys(DUMMY_VALUES)) {
+      const idx = remaining.indexOf(tag)
+      if (idx !== -1 && (earliest === -1 || idx < earliest)) { earliest = idx; earliestTag = tag }
+    }
+    if (earliest === -1) { parts.push(remaining); break }
+    if (earliest > 0) parts.push(remaining.slice(0, earliest))
+    const d = DUMMY_VALUES[earliestTag]
+    parts.push(
+      <span key={key++} style={{ background: d.color + '18', color: d.color, fontWeight: 700, borderRadius: 4, padding: '0 3px', fontSize: '0.95em' }}>
+        {d.value}
+      </span>
+    )
+    remaining = remaining.slice(earliest + earliestTag.length)
+  }
+  return parts
+}
+
 function applyPlaceholders(text: string, inf: Influencer | null) {
   if (!inf) return text
   return text
@@ -115,6 +146,7 @@ function paginate<T>(items: T[], page: number) {
 export default function Outreach() {
   const { showToast }    = useToast()
   const { activePhaseId } = usePhase()
+  const confirmToast = useConfirmToast()
 
   // ── Tab ──
   const [contactTab, setContactTab] = useState<ContactTab>('pending')
@@ -127,19 +159,12 @@ export default function Outreach() {
   const [activeTier,   setActiveTier]   = useState('1순위')
   const [selectedId,   setSelectedId]   = useState<string | null>(null)
   const [checkedIds,   setCheckedIds]   = useState<Set<string>>(new Set())
-  const [bulkTplIdx,   setBulkTplIdx]   = useState(0)
-  const [bulkSending,  setBulkSending]  = useState(false)
+  const [bulkTplIdx,    setBulkTplIdx]    = useState(0)
+  const [bulkSending,   setBulkSending]   = useState(false)
+  const [showBulkPreview, setShowBulkPreview] = useState(false)
 
-  // ── Template & draft ──
-  const [templates,      setTemplates]      = useState(loadTemplates)
-  const [selectedTplIdx, setSelectedTplIdx] = useState(0)
-  const [tplName,        setTplName]        = useState('')
-  const [tplSubject,     setTplSubject]     = useState('')
-  const [tplBody,        setTplBody]        = useState('')
-  const [draftSubject,   setDraftSubject]   = useState('')
-  const [draftBody,      setDraftBody]      = useState('')
-  const [sendingEmail,   setSendingEmail]   = useState(false)
-  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  // ── Templates ──
+  const [templates, setTemplates] = useState(loadTemplates)
 
   // ── Pagination ──
   const [sentPage,     setSentPage]     = useState(1)
@@ -160,11 +185,6 @@ export default function Outreach() {
 
   useEffect(() => { loadInfluencers() }, [loadInfluencers])
 
-  useEffect(() => {
-    const tpl = templates[selectedTplIdx]
-    if (tpl) { setTplName(tpl.name); setTplSubject(tpl.subject); setTplBody(tpl.body) }
-  }, [selectedTplIdx, templates])
-
   // ── Status update via Supabase ──
   const updateStatus = useCallback(async (id: string, value: string) => {
     const { error } = await supabase.from('influencers').update({ outreach: value }).eq('id', id)
@@ -180,57 +200,6 @@ export default function Outreach() {
     if (value === 'accept' || value === 'reject') setSelectedId(null)
   }, [showToast, influencers, activePhaseId])
 
-  // ── Draft ──
-  function selectInfluencer(inf: Influencer) {
-    setSelectedId(inf.id)
-    const tpl = templates[selectedTplIdx]
-    if (!tpl) return
-    setDraftSubject(applyPlaceholders(tpl.subject, inf))
-    setDraftBody(applyPlaceholders(tpl.body, inf))
-  }
-
-  async function sendEmailDirectly() {
-    if (!selected || !selected.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
-    setSendingEmail(true)
-    try {
-      const res: { ok?: boolean; error?: string } = await gasPost({
-        action: 'sendOutreachEmail', to: selected.email, subject: draftSubject, body: draftBody,
-      })
-      if (res.error) { showToast(res.error, 'error') } else {
-        await updateStatus(selected.id, 'yes')
-        showToast('발송 완료!', 'success')
-      }
-    } catch (e: unknown) { showToast((e as Error).message, 'error') }
-    setSendingEmail(false)
-  }
-
-  async function markAsSent() {
-    if (!selected) return
-    await updateStatus(selected.id, 'yes')
-    showToast('발송 완료 처리됨', 'success')
-  }
-
-  function insertPlaceholder(ph: string) {
-    const ta = bodyRef.current
-    if (!ta) { setDraftBody(prev => prev + ph); return }
-    const s = ta.selectionStart, e = ta.selectionEnd
-    setDraftBody(draftBody.slice(0, s) + ph + draftBody.slice(e))
-    setTimeout(() => { ta.selectionStart = ta.selectionEnd = s + ph.length; ta.focus() }, 0)
-  }
-
-  function saveTplState() {
-    const updated = templates.map((t: any, i: number) => i === selectedTplIdx ? { ...t, name: tplName, subject: tplSubject, body: tplBody } : t)
-    setTemplates(updated); saveTemplates(updated)
-  }
-  function createNewTemplate() {
-    const next = [...templates, { id: 'temp_' + Date.now(), name: '새 템플릿', subject: '', body: '' }]
-    setTemplates(next); saveTemplates(next); setSelectedTplIdx(next.length - 1)
-  }
-  function deleteTemplate() {
-    if (templates.length <= 1) { showToast('마지막 템플릿은 삭제할 수 없습니다.', 'info'); return }
-    const next = templates.filter((_: any, i: number) => i !== selectedTplIdx)
-    setTemplates(next); saveTemplates(next); setSelectedTplIdx(0)
-  }
 
   // ── Derived ──
   const pendingRows  = influencers.filter(r => r.outreach === 'target')
@@ -421,9 +390,25 @@ export default function Outreach() {
 
       {/* ══ 컨택 예정 ══ */}
       {contactTab === 'pending' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+        <div>
 
-          {/* Left: influencer table */}
+          {/* Reply / Negotiate banners */}
+          {selected && selected.outreach === 'reply' && (
+            <div style={{ background: '#fffbeb', border: '1.5px solid #fcd34d', borderRadius: 12, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>✉ {selected.display_name || selected.handle} — 인플루언서 회신 메일이 도착했습니다!</span>
+              <button onClick={() => updateStatus(selected.id, 'negotiate')} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>협의중 마킹</button>
+            </div>
+          )}
+          {selected && selected.outreach === 'negotiate' && (
+            <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 12, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>🤝 {selected.display_name || selected.handle} — 협의 진행 중</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => updateStatus(selected.id, 'reject')} style={{ padding: '5px 12px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>거절 처리</button>
+                <button onClick={() => updateStatus(selected.id, 'accept')} style={{ padding: '5px 12px', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>수락 확정</button>
+              </div>
+            </div>
+          )}
+
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-8)' }}>아웃리치 대상 명단</div>
@@ -452,37 +437,44 @@ export default function Outreach() {
               })}
             </div>
 
-            {/* Bulk actions */}
-            {checkedIds.size > 0 && (
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--blue-lt)', background: '#eef3ff', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{checkedIds.size}명 선택됨</span>
-                <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
-                  style={{ flex: 1, minWidth: 160, fontSize: 12, border: '1px solid var(--blue)', borderRadius: 8, padding: '6px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit' }}>
-                  {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-                </select>
-                <button disabled={bulkSending}
-                  onClick={async () => {
-                    const tpl = templates[bulkTplIdx]
-                    if (!tpl) return
-                    setBulkSending(true)
-                    for (const id of Array.from(checkedIds)) {
-                      const inf = tierRows.find(r => r.id === id)
-                      if (!inf || !inf.email) continue
-                      await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
-                      await updateStatus(id, 'yes')
+            {/* Bulk actions — always visible */}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--blue-lt)', background: '#eef3ff', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{checkedIds.size}명 선택됨</span>
+              <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
+                style={{ flex: 1, minWidth: 160, fontSize: 12, border: '1px solid var(--blue)', borderRadius: 8, padding: '6px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit' }}>
+                {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+              </select>
+              <button onClick={() => setShowBulkPreview(true)}
+                style={{ padding: '6px 12px', background: '#fff', color: 'var(--blue-dk)', border: '1px solid var(--blue)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                미리보기
+              </button>
+              <button disabled={bulkSending || checkedIds.size === 0}
+                onClick={() => {
+                  const tpl = templates[bulkTplIdx]
+                  if (!tpl) return
+                  confirmToast.show(
+                    `${checkedIds.size}명에게 일괄 발송하시겠습니까?`,
+                    async () => {
+                      setBulkSending(true)
+                      for (const id of Array.from(checkedIds)) {
+                        const inf = tierRows.find(r => r.id === id)
+                        if (!inf || !inf.email) continue
+                        await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
+                        await updateStatus(id, 'yes')
+                      }
+                      setBulkSending(false); setCheckedIds(new Set())
+                      showToast(`${checkedIds.size}명에게 발송 완료`, 'success')
                     }
-                    setBulkSending(false); setCheckedIds(new Set())
-                    showToast(`${checkedIds.size}명에게 발송 완료`, 'success')
-                  }}
-                  style={{ padding: '6px 14px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                  {bulkSending ? '발송 중...' : '일괄 발송'}
-                </button>
-                <button onClick={() => setCheckedIds(new Set())}
-                  style={{ padding: '6px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>취소</button>
-              </div>
-            )}
+                  )
+                }}
+                style={{ padding: '6px 14px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.45 : 1, flexShrink: 0 }}>
+                {bulkSending ? '발송 중...' : '일괄 발송'}
+              </button>
+              <button onClick={() => setCheckedIds(new Set())} disabled={checkedIds.size === 0}
+                style={{ padding: '6px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.45 : 1, flexShrink: 0 }}>취소</button>
+            </div>
 
-            <div style={{ overflowY: 'auto', maxHeight: 600, overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: 36 }} /><col style={{ width: 200 }} /><col style={{ width: 150 }} /><col style={{ width: 68 }} /><col style={{ width: 100 }} /><col style={{ width: 120 }} />
@@ -514,7 +506,7 @@ export default function Outreach() {
                     return (
                       <tr key={inf.id}
                         style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: tc ? `3px solid ${tc}` : undefined, cursor: 'pointer', background: isSelected ? 'var(--blue-lt)' : undefined, transition: 'background .1s' }}
-                        onClick={() => selectInfluencer(inf)}>
+                        onClick={() => setSelectedId(inf.id)}>
                         <td style={{ padding: '10px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={checkedIds.has(inf.id)} onChange={e => {
                             const next = new Set(checkedIds); e.target.checked ? next.add(inf.id) : next.delete(inf.id); setCheckedIds(next)
@@ -552,11 +544,11 @@ export default function Outreach() {
                                   style={{ padding: '4px 10px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✗ 거절</button>
                               </>
                             ) : statusKey === 'reply' ? (
-                              <button onClick={() => selectInfluencer(inf)}
+                              <button onClick={() => setSelectedId(inf.id)}
                                 style={{ padding: '4px 10px', background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏ 답장</button>
                             ) : (
                               <>
-                                <button onClick={() => selectInfluencer(inf)}
+                                <button onClick={() => setSelectedId(inf.id)}
                                   style={{ padding: '4px 10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✏ 초안</button>
                                 {statusKey === 'target' && (
                                   <button onClick={() => updateStatus(inf.id, 'yes')} title="발송완료"
@@ -571,106 +563,6 @@ export default function Outreach() {
                   })}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* Right: draft builder */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* Reply card */}
-            {selected && selected.outreach === 'reply' && (
-              <div style={{ background: '#fffbeb', border: '1.5px solid #fcd34d', borderRadius: 12, padding: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#92400e', marginBottom: 10 }}>✉ 인플루언서 회신 메일이 도착했습니다!</div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
-                  <button onClick={() => updateStatus(selected.id, 'negotiate')} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>협의중 마킹</button>
-                </div>
-              </div>
-            )}
-
-            {/* Negotiate card */}
-            {selected && selected.outreach === 'negotiate' && (
-              <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 12, padding: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#166534', marginBottom: 8 }}>🤝 협의 진행 중</div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                  <button onClick={() => updateStatus(selected.id, 'reject')} style={{ padding: '6px 14px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>거절 처리</button>
-                  <button onClick={() => updateStatus(selected.id, 'accept')} style={{ padding: '6px 14px', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>수락 확정</button>
-                </div>
-              </div>
-            )}
-
-            {/* Draft builder */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--gray-2)', paddingBottom: 12, marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--yellow-md)', display: 'inline-block' }}></span>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>개인 맞춤형 초안 빌더 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue-dk)' }}>(Live)</span></span>
-                </div>
-                {selected && <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--blue-lt)', color: 'var(--blue-dk)', padding: '4px 10px', borderRadius: 999 }}>{selected.display_name || selected.handle} 대상</span>}
-              </div>
-
-              {!selected
-                ? <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>인플루언서 목록에서 대상을 클릭하세요.</div>
-                : <div>
-                    {/* Template selector */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>템플릿 선택</div>
-                      <select value={selectedTplIdx}
-                        onChange={e => {
-                          const idx = +e.target.value; setSelectedTplIdx(idx)
-                          const tpl = templates[idx]
-                          if (!tpl || !selected) return
-                          setDraftSubject(applyPlaceholders(tpl.subject, selected))
-                          setDraftBody(applyPlaceholders(tpl.body, selected))
-                        }}
-                        style={{ width: '100%', fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 8, padding: '8px 12px', background: '#fff', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
-                        {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Subject */}
-                    <div style={{ marginBottom: 12, border: '1px solid var(--gray-3)', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--gray-1)', borderBottom: '1px solid var(--gray-2)' }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue-dk)', textTransform: 'uppercase', letterSpacing: '.5px' }}>치환 완료된 메일 제목</span>
-                        <button onClick={() => navigator.clipboard.writeText(draftSubject).then(() => showToast('제목 복사됨', 'success'))}
-                          style={{ fontSize: 11, padding: '2px 8px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', color: 'var(--gray-6)', fontWeight: 600 }}>📋 복사</button>
-                      </div>
-                      <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--gray-8)', lineHeight: 1.5, wordBreak: 'break-all' }}>
-                        {draftSubject || <span style={{ color: 'var(--gray-4)' }}>—</span>}
-                      </div>
-                    </div>
-
-                    {/* Body */}
-                    <div style={{ marginBottom: 12, border: '1px solid var(--yellow-md)', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#fffbeb', borderBottom: '1px solid var(--yellow-md)' }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--yellow-text)', textTransform: 'uppercase', letterSpacing: '.5px' }}>실시간 치환된 본문 (수정 가능)</span>
-                        <button onClick={() => navigator.clipboard.writeText(draftBody).then(() => showToast('본문 복사됨', 'success'))}
-                          style={{ fontSize: 11, padding: '2px 8px', background: '#fff', border: '1px solid var(--yellow-md)', borderRadius: 6, cursor: 'pointer', color: 'var(--yellow-text)', fontWeight: 600 }}>📋 복사</button>
-                      </div>
-                      <textarea ref={bodyRef} value={draftBody} onChange={e => setDraftBody(e.target.value)} rows={8}
-                        style={{ width: '100%', padding: '10px 12px', border: 'none', fontSize: 12, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.6, display: 'block' }} />
-                    </div>
-
-                    {/* Placeholder chips */}
-                    <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {['{{이름}}', '{{핸들}}', '{{이메일}}', '{{팔로워}}'].map(p => (
-                        <button key={p} onClick={() => insertPlaceholder(p)}
-                          style={{ fontSize: 11, padding: '3px 9px', background: 'var(--gray-1)', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}>{p}</button>
-                      ))}
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <button onClick={sendEmailDirectly} disabled={sendingEmail}
-                        style={{ padding: '10px', background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        {sendingEmail ? '발송 중...' : '이메일 즉시 전송'}
-                      </button>
-                      <button onClick={markAsSent}
-                        style={{ padding: '10px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        발송 완료로 확정
-                      </button>
-                    </div>
-                  </div>
-              }
             </div>
           </div>
         </div>
@@ -711,6 +603,70 @@ export default function Outreach() {
           () => setAcceptedPage(p => Math.min(ap.totalPages, p + 1)))}
         </div>
       )}
+
+      {/* ── 미리보기 모달 ── */}
+      {showBulkPreview && (() => {
+        const tpl = templates[bulkTplIdx]
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => setShowBulkPreview(false)}>
+            <div style={{ background: '#fff', borderRadius: 16, width: 560, maxWidth: '90vw', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>미리보기 — {tpl?.name}</span>
+                <button onClick={() => setShowBulkPreview(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'var(--gray-2)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                <div style={{ background: 'var(--gray-1)', padding: '12px 20px', borderBottom: '1px solid var(--gray-2)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 3 }}>보내는 사람 · MiMuse Team &lt;beautyproject@cranecomm.com&gt;</div>
+                  <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 8 }}>
+                    받는 사람 · <span style={{ color: DUMMY_VALUES['{{이름}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이름}}'].value}</span>
+                    {' <'}<span style={{ color: DUMMY_VALUES['{{이메일}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이메일}}'].value}</span>{'>'}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{renderWithDummy(tpl?.subject || '(제목 없음)')}</div>
+                </div>
+                <div style={{ padding: '24px 20px', fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
+                  {tpl?.body ? renderWithDummy(tpl.body) : <span style={{ color: 'var(--gray-4)' }}>본문을 입력하면 여기에 표시됩니다.</span>}
+                </div>
+              </div>
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>치환 구문은 발송 시 자동 적용됩니다</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowBulkPreview(false)}
+                    style={{ padding: '6px 14px', background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    닫기
+                  </button>
+                  <button
+                    disabled={checkedIds.size === 0}
+                    onClick={() => {
+                      setShowBulkPreview(false)
+                      confirmToast.show(
+                        `${checkedIds.size}명에게 일괄 발송하시겠습니까?`,
+                        async () => {
+                          setBulkSending(true)
+                          for (const id of Array.from(checkedIds)) {
+                            const inf = influencers.find(r => r.id === id)
+                            if (!inf || !inf.email) continue
+                            await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
+                            await updateStatus(id, 'yes')
+                          }
+                          setBulkSending(false); setCheckedIds(new Set())
+                          showToast(`${checkedIds.size}명에게 발송 완료`, 'success')
+                        }
+                      )
+                    }}
+                    style={{ padding: '6px 14px', background: checkedIds.size === 0 ? 'var(--gray-3)' : 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
+                    {checkedIds.size > 0 ? `${checkedIds.size}명 일괄 발송` : '일괄 발송'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} confirmLabel="발송" confirmColor="var(--blue-dk)" />
     </div>
   )
 }
