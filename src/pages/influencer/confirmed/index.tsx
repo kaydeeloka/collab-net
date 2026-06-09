@@ -192,9 +192,15 @@ export default function Confirmed() {
     return true
   })
 
-  const total    = rows.length
-  const uploaded = rows.filter(r => r.upload_status === 'Yes').length
-  const pending  = rows.filter(r => r.upload_status === 'Pending').length
+  const total      = rows.length
+  const uploaded   = rows.filter(r => r.upload_status === 'Yes').length
+  const pending    = rows.filter(r => r.upload_status === 'Pending').length
+  const noUpload   = rows.filter(r => r.upload_status === 'No').length
+
+  function cycleUpload(id: string, current: string) {
+    const next = current === 'Pending' ? 'Yes' : current === 'Yes' ? 'No' : 'Pending'
+    updateField(id, 'upload_status', next)
+  }
 
   const UPLOAD_OPTIONS = [
     { value: 'all',     label: '전체' },
@@ -266,8 +272,8 @@ export default function Confirmed() {
           <div className="cards">
             <div className="card"><div className="card-label">총 확정 인플루언서</div><div className="card-value">{total}</div></div>
             <div className="card highlight"><div className="card-label">콘텐츠 업로드 완료</div><div className="card-value" style={{ color: 'var(--green)' }}>{uploaded}</div><div className="card-sub">{total ? Math.round(uploaded / total * 100) : 0}% 완료율</div></div>
-            <div className="card"><div className="card-label">업로드 대기중</div><div className="card-value">{pending}</div></div>
-            <div className="card"><div className="card-label">미업로드</div><div className="card-value">{total - uploaded - pending}</div></div>
+            <div className="card"><div className="card-label">총 업로드된 리뷰</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{rows.filter(r => !!r.review_link).length}</div></div>
+            <div className="card"><div className="card-label">미업로드</div><div className="card-value">{noUpload}</div></div>
           </div>
 
           <div className="ems-toolbar" style={{ marginTop: 16 }}>
@@ -380,9 +386,20 @@ export default function Confirmed() {
                           </td>
                           <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{fmtFollowers(inf?.followers ?? null)}</td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                            <input type="checkbox" checked={r.upload_status === 'Yes'}
-                              onChange={e => updateField(r.id, 'upload_status', e.target.checked ? 'Yes' : 'Pending')}
-                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--green)' }} />
+                            {(() => {
+                              const s = r.upload_status
+                              const cfg = s === 'Yes'
+                                ? { label: '✓', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+                                : s === 'No'
+                                ? { label: '✕', bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+                                : { label: '—', bg: '#f1f5f9', color: '#94a3b8', border: '#e2e8f0' }
+                              return (
+                                <button onClick={() => cycleUpload(r.id, s)}
+                                  style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {cfg.label}
+                                </button>
+                              )
+                            })()}
                           </td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             <select value={r.repost || ''}
