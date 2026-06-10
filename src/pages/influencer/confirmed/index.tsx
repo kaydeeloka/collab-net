@@ -26,6 +26,7 @@ interface ConfirmedRow {
   repost:         string | null
   review_link:    string | null
   notes:          string | null
+  form_submitted: boolean | null
   phone:          string | null
   address_line_1: string | null
   address_line_2: string | null
@@ -109,7 +110,7 @@ export default function Confirmed() {
     // try full query with new columns first
     const { data, error } = await supabase
       .from('confirmed_influencers')
-      .select(`id, email, upload_status, repost, review_link, notes, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
+      .select(`id, email, upload_status, repost, review_link, notes, form_submitted, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
       .eq('phase_id', activePhaseId ?? '')
       .order('created_at', { ascending: false })
 
@@ -121,7 +122,7 @@ export default function Confirmed() {
         .eq('phase_id', activePhaseId ?? '')
         .order('created_at', { ascending: false })
       if (fbErr) { showToast(fbErr.message, 'error'); setLoading(false); return }
-      setRows((fb ?? []).map((r: any) => ({ ...r, review_link: null, notes: null })) as unknown as ConfirmedRow[])
+      setRows((fb ?? []).map((r: any) => ({ ...r, review_link: null, notes: null, form_submitted: null })) as unknown as ConfirmedRow[])
       setLoading(false)
       const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       setSyncMsg(`마지막 동기화: ${now}`)
@@ -200,6 +201,13 @@ export default function Confirmed() {
   function cycleUpload(id: string, current: string) {
     const next = current === 'Pending' ? 'Yes' : current === 'Yes' ? 'No' : 'Pending'
     updateField(id, 'upload_status', next)
+  }
+
+  async function toggleFormSubmitted(id: string, current: boolean | null) {
+    const next = !current
+    const { error } = await supabase.from('confirmed_influencers').update({ form_submitted: next }).eq('id', id)
+    if (error) showToast(error.message, 'error')
+    else setRows(prev => prev.map(r => r.id === id ? { ...r, form_submitted: next } : r))
   }
 
   const UPLOAD_OPTIONS = [
@@ -298,6 +306,7 @@ export default function Confirmed() {
                     <col style={{ width: 70 }} />
                     <col style={{ width: 100 }} />
                     <col style={{ width: 80 }} />
+                    <col style={{ width: 100 }} />
                     <col style={{ width: 140 }} />
                     <col style={{ width: 120 }} />
                     <col style={{ minWidth: 180 }} />
@@ -333,6 +342,7 @@ export default function Confirmed() {
                         </div>
                       </th>
                       <th style={{ ...thBase, textAlign: 'center' }}>Repost</th>
+                      <th style={{ ...thBase, textAlign: 'center' }}>구글폼 제출</th>
                       {/* 리뷰 모니터링 링크 with filter */}
                       <th style={thBase}>
                         <div ref={reviewLinkFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
@@ -410,6 +420,19 @@ export default function Confirmed() {
                               <option value="▲">▲</option>
                               <option value="X">X</option>
                             </select>
+                          </td>
+                          <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={() => toggleFormSubmitted(r.id, r.form_submitted)}
+                              style={{
+                                width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                                border: `1.5px solid ${r.form_submitted ? '#6ee7b7' : '#e2e8f0'}`,
+                                background: r.form_submitted ? '#d1fae5' : '#f1f5f9',
+                                color: r.form_submitted ? '#065f46' : '#94a3b8',
+                                fontWeight: 700, fontSize: 13,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                              {r.form_submitted ? '✓' : '—'}
+                            </button>
                           </td>
                           <td onClick={e => e.stopPropagation()}>
                             {r.review_link

@@ -48,8 +48,9 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS city           TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS state          TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS zip            TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS country        TEXT;
-ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS review_link    TEXT;
-ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes          TEXT;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS review_link     TEXT;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes           TEXT;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS form_submitted  BOOLEAN DEFAULT FALSE;
 
 -- ALTER TABLE ems_tracking          ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE monitoring            ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
@@ -58,6 +59,23 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes          TEXT;
 -- ALTER TABLE email_recipients      ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE phases                ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE tiers                 ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
+
+-- ============================================================
+--  NEW TABLES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS brand_contacts (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  company    TEXT,
+  name       TEXT,
+  department TEXT,
+  position   TEXT,
+  email      TEXT,
+  mobile     TEXT,
+  extension  TEXT,
+  website    TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- ============================================================
 --  DROP COLUMN
