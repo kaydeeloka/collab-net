@@ -52,7 +52,6 @@ const TYPE_COLOR: Record<string, string> = {
 
 const STATUS_OPTIONS = [
   { value: '',         label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
-  { value: 'target',   label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
   { value: 'yes',      label: '보냄',     bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
@@ -60,19 +59,20 @@ const STATUS_OPTIONS = [
   { value: 'negative', label: '부정 검토', bg: '#fee2e2', color: '#991b1b' },
   { value: 'reject',   label: '거절',     bg: '#fecaca', color: '#dc2626' },
   { value: 'accept',   label: '확정',     bg: '#bbf7d0', color: '#14532d' },
-  { value: 'paid',     label: '유가 협업', bg: '#ede9fe', color: '#7c3aed' },
 ]
 const STATUS_STYLE = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
 
 interface BrandRow {
   id:         string
-  source:     'general' | 'personal'
-  brand:      string
-  name:       string | null
-  email:      string | null
-  status:     string
-  send_count: number
-  notes:      string | null
+  source:      'general' | 'personal'
+  brand:       string
+  name:        string | null
+  position:    string | null
+  email:       string | null
+  status:      string
+  send_count:  number
+  reply_count: number
+  notes:       string | null
 }
 
 const PAGE_SIZE = 25
@@ -127,20 +127,22 @@ export default function BrandContact() {
   async function load() {
     setLoading(true)
     const [{ data: gen }, { data: per }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, email, status, send_count, notes').eq('contacted', true),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, personal_email, status, send_count, notes').eq('contacted', true),
+      supabase.from('brand_general').select('id, brand_name, name, email, status, send_count, reply_count, notes').eq('contacted', true),
+      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, status, send_count, reply_count, notes').eq('contacted', true),
     ])
     const generalRows: BrandRow[] = (gen ?? []).map((r: any) => ({
       id: r.id, source: 'general' as const,
-      brand: r.brand_name, name: null,
+      brand: r.brand_name, name: r.name ?? null,
+      position: 'CEO',
       email: r.email, status: r.status ?? '',
-      send_count: r.send_count ?? 0, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
     }))
     const personalRows: BrandRow[] = (per ?? []).map((r: any) => ({
       id: r.id, source: 'personal' as const,
       brand: r.brand_name, name: r.contact_name,
+      position: r.position ?? null,
       email: r.personal_email, status: r.status ?? '',
-      send_count: r.send_count ?? 0, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
     }))
     setRows([...generalRows, ...personalRows])
     setLoading(false)
@@ -149,9 +151,17 @@ export default function BrandContact() {
   const updateField = useCallback(async (row: BrandRow, patch: Partial<BrandRow>) => {
     const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
     const dbPatch: Record<string, unknown> = {}
-    if (patch.status     !== undefined) dbPatch.status     = patch.status
-    if (patch.send_count !== undefined) dbPatch.send_count = patch.send_count
-    if (patch.notes      !== undefined) dbPatch.notes      = patch.notes
+    const REPLY_STATUSES = ['reply', 'positive', 'negative', 'reject', 'accept']
+    if (patch.status !== undefined) {
+      dbPatch.status = patch.status
+      if (REPLY_STATUSES.includes(patch.status) && !REPLY_STATUSES.includes(row.status)) {
+        dbPatch.reply_count = row.reply_count + 1
+        patch = { ...patch, reply_count: row.reply_count + 1 }
+      }
+    }
+    if (patch.send_count  !== undefined) dbPatch.send_count  = patch.send_count
+    if (patch.reply_count !== undefined) dbPatch.reply_count = patch.reply_count
+    if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
     const { error } = await supabase.from(table).update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.map(r => r.id === row.id && r.source === row.source ? { ...r, ...patch } : r))
@@ -332,7 +342,8 @@ export default function BrandContact() {
                         })} />
                     </th>
                     <th style={{ ...thBase, minWidth: 160 }}>브랜드</th>
-                    <th style={{ ...thBase, minWidth: 120 }}>담당자</th>
+                    <th style={{ ...thBase, minWidth: 110 }}>성명</th>
+                    <th style={{ ...thBase, minWidth: 90 }}>직급</th>
                     <th style={{ ...thBase, minWidth: 180 }}>이메일</th>
                     <th style={{ ...thBase, minWidth: 140 }}>
                       <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
@@ -360,7 +371,7 @@ export default function BrandContact() {
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                       컨택 대상으로 설정된 브랜드가 없습니다.
                     </td></tr>
                   )}
@@ -379,10 +390,12 @@ export default function BrandContact() {
                         </td>
                         <td style={{ padding: '0 12px', verticalAlign: 'middle' }}>
                           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{row.brand || '—'}</div>
-                          <div style={{ fontSize: 11, color: typeColor, fontWeight: 600 }}>{row.source === 'general' ? '일반' : '퍼스널'}</div>
                         </td>
                         <td style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', verticalAlign: 'middle' }}>
                           {row.name || <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          {row.position || <span style={{ color: 'var(--gray-3)' }}>—</span>}
                         </td>
                         <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200, verticalAlign: 'middle' }}>
                           {row.email || '—'}
@@ -393,12 +406,19 @@ export default function BrandContact() {
                             {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </td>
-                        <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          {row.send_count > 0
-                            ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {row.send_count}차 발송
+                        <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {row.send_count > 0
+                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                  {row.send_count}차 발송
+                                </span>
+                              : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
+                            {row.reply_count > 0 && (
+                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {row.reply_count}차 회신
                               </span>
-                            : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
+                            )}
+                          </div>
                         </td>
                         <td style={{ padding: '0 10px', verticalAlign: 'middle', overflow: 'hidden' }}>
                           <textarea
@@ -413,9 +433,9 @@ export default function BrandContact() {
                         </td>
                         <td style={{ padding: '0 12px', textAlign: 'right', verticalAlign: 'middle' }}>
                           {(() => {
-                            const isTerminal = ['accept', 'reject', 'paid'].includes(status)
+                            const isTerminal = ['accept', 'reject'].includes(status)
                             const btnLabel = isTerminal
-                              ? (status === 'accept' ? '확정' : status === 'reject' ? '거절' : '유가')
+                              ? (status === 'accept' ? '확정' : '거절')
                               : row.send_count > 0 ? '✉ 재발송' : '✉ 발송'
                             return (
                               <button disabled={isTerminal}

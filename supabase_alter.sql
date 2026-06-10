@@ -76,10 +76,12 @@ CREATE TABLE IF NOT EXISTS brand_general (
 );
 
 -- brand_general — contacted + contact tracking columns
-ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS contacted   BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS status      TEXT    NOT NULL DEFAULT '';
-ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS send_count  INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS notes       TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS name         TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS contacted    BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS status       TEXT    NOT NULL DEFAULT '';
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS send_count   INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS reply_count  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS notes        TEXT;
 
 -- brand_personal — new table for personal brand contacts
 CREATE TABLE IF NOT EXISTS brand_personal (
@@ -98,6 +100,7 @@ CREATE TABLE IF NOT EXISTS brand_personal (
   contacted        BOOLEAN     NOT NULL DEFAULT FALSE,
   status           TEXT        NOT NULL DEFAULT '',
   send_count       INTEGER     NOT NULL DEFAULT 0,
+  reply_count      INTEGER     NOT NULL DEFAULT 0,
   notes            TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
@@ -111,19 +114,6 @@ ALTER TABLE brand_general ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_all_brand_general" ON brand_general;
 CREATE POLICY "allow_all_brand_general" ON brand_general FOR ALL USING (true) WITH CHECK (true);
 
-CREATE TABLE IF NOT EXISTS brand_contacts (
-  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  brand_type TEXT        NOT NULL DEFAULT 'general',
-  company    TEXT,
-  name       TEXT,
-  department TEXT,
-  position   TEXT,
-  email      TEXT,
-  mobile     TEXT,
-  extension  TEXT,
-  website    TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
 
 -- RLS policies for brand_contacts (run if table already exists and RLS is on)
 ALTER TABLE brand_contacts ENABLE ROW LEVEL SECURITY;

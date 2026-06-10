@@ -195,7 +195,7 @@ export default function BrandDbPersonal() {
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '1px solid var(--gray-2)', paddingBottom: 6 }}>필수 입력</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {field('브랜드명',       'brand_name',     form, setForm, { required: true })}
-        {field('담당자 이름',    'contact_name',   form, setForm, { required: true })}
+        {field('성명',    'contact_name',   form, setForm, { required: true })}
         {field('부서',          'department',     form, setForm, { required: true })}
         {field('직급',          'position',       form, setForm, { required: true })}
         {field('개인 이메일',   'personal_email', form, setForm, { required: true, type: 'email' })}
@@ -204,10 +204,10 @@ export default function BrandDbPersonal() {
       {field('홈페이지', 'website', form, setForm, { required: true, placeholder: 'https://' })}
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '1px solid var(--gray-2)', paddingBottom: 6, marginTop: 4 }}>선택 입력</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {field('대표 메일',      'rep_email',        form, setForm, { type: 'email' })}
-        {field('내선 번호',      'telephone',        form, setForm)}
-        {field('판매 제품 종류', 'product_category', form, setForm)}
+        {field('대표 메일', 'rep_email',  form, setForm, { type: 'email' })}
+        {field('내선 번호', 'telephone',  form, setForm)}
       </div>
+      {field('판매 제품 종류', 'product_category', form, setForm)}
       {overseasBtn(form, setForm)}
     </div>
   )
@@ -236,7 +236,7 @@ export default function BrandDbPersonal() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="브랜드명, 담당자, 이메일로 검색..."
+          placeholder="브랜드명, 성명, 이메일로 검색..."
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
@@ -248,7 +248,6 @@ export default function BrandDbPersonal() {
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 900 }}>
             <colgroup>
               <col style={{ width: 36 }} />
-              <col style={{ width: 90 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 110 }} />
               <col style={{ width: 100 }} />
@@ -257,11 +256,12 @@ export default function BrandDbPersonal() {
               <col style={{ width: 120 }} />
               <col style={{ minWidth: 130 }} />
               <col style={{ width: 80 }} />
+              <col style={{ width: 90 }} />
             </colgroup>
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
-                {['No.', '컨택 대상', '브랜드명', '담당자', '부서', '직급', '개인 이메일', '개인 전화번호', '홈페이지', '해외 진출'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                {['No.', '브랜드명', '성명', '부서', '직급', '개인 이메일', '개인 전화번호', '홈페이지', '해외 진출', '컨택 대상'].map((h, i) => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 9 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -278,12 +278,6 @@ export default function BrandDbPersonal() {
                   onMouseEnter={e => (e.currentTarget.style.background = r.contacted ? '#dcfce7' : 'var(--gray-1)')}
                   onMouseLeave={e => (e.currentTarget.style.background = r.contacted ? '#f0fdf4' : '')}>
                   <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)', padding: '0 8px', height: 44 }}>{i + 1}</td>
-                  <td style={{ textAlign: 'center', padding: '0 8px' }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => toggleContacted(r.id, r.contacted)}
-                      style={{ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', border: `1.5px solid ${r.contacted ? '#6ee7b7' : '#e2e8f0'}`, background: r.contacted ? '#d1fae5' : '#f1f5f9', color: r.contacted ? '#065f46' : '#94a3b8' }}>
-                      {r.contacted ? '✓ 컨택' : '컨택'}
-                    </button>
-                  </td>
                   <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</td>
                   <td style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
@@ -300,6 +294,12 @@ export default function BrandDbPersonal() {
                     {r.overseas
                       ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
                       : <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>—</span>}
+                  </td>
+                  <td style={{ textAlign: 'center', padding: '0 8px' }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => toggleContacted(r.id, r.contacted)}
+                      style={{ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', border: `1.5px solid ${r.contacted ? '#6ee7b7' : '#e2e8f0'}`, background: r.contacted ? '#d1fae5' : '#f1f5f9', color: r.contacted ? '#065f46' : '#94a3b8' }}>
+                      {r.contacted ? '✓ 컨택' : '컨택'}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -325,7 +325,7 @@ export default function BrandDbPersonal() {
       {viewRow && (
         <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {infoRow('담당자',      viewRow.contact_name)}
+            {infoRow('성명',      viewRow.contact_name)}
             {infoRow('부서',        viewRow.department)}
             {infoRow('직급',        viewRow.position)}
             {infoRow('개인 이메일', viewRow.personal_email)}

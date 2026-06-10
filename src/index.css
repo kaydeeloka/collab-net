@@ -568,15 +568,17 @@ td {
 ───────────────────────────────────── */
 .modal-overlay {
   display: none; position: fixed; inset: 0;
-  background: rgba(4,0,0,.55); z-index: 1000;
-  align-items: center; justify-content: center;
+  background: rgba(4,0,0,.55); z-index: 9999;
+  align-items: flex-start; justify-content: center;
   backdrop-filter: blur(4px);
+  overflow-y: auto; padding: 40px 0;
 }
 .modal-overlay.open { display: flex; }
 .modal-box {
   background: var(--white); border-radius: var(--r-lg);
-  padding: 30px 34px; max-width: 440px; width: 90%;
+  padding: 30px 34px; max-width: 560px; width: 90%;
   box-shadow: var(--sh-lg); position: relative;
+  margin: auto;
 }
 .modal-title { font-size: 17px; font-weight: 800; color: var(--ink); margin-bottom: 10px; letter-spacing: -.3px; }
 .modal-desc { font-size: 13px; color: var(--teal-dk); line-height: 1.65; }
