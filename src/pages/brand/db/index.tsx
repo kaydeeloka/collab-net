@@ -1,9 +1,37 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { supabase } from '../../../lib/supabase'
 
-type DbTab = 'mail' | 'contacts'
+interface Stats {
+  generalCount:  number
+  personalCount: number
+  contactedCount: number
+}
 
 export default function BrandDb() {
-  const [tab, setTab] = useState<DbTab>('mail')
+  const { pathname } = useLocation()
+  const navigate     = useNavigate()
+  const [stats, setStats] = useState<Stats | null>(null)
+
+  const tabs = [
+    { path: '/brand/db/general',  label: '일반 DB'  },
+    { path: '/brand/db/personal', label: '퍼스널 DB' },
+  ]
+  const activeTab = tabs.find(t => pathname.startsWith(t.path))?.path ?? tabs[0].path
+
+  useEffect(() => { loadStats() }, [])
+
+  async function loadStats() {
+    const [{ data: general }, { data: personal }] = await Promise.all([
+      supabase.from('brand_general').select('contacted'),
+      supabase.from('brand_personal').select('contacted'),
+    ])
+    const generalCount   = general?.length ?? 0
+    const personalCount  = personal?.length ?? 0
+    const contactedCount = (general?.filter((r: any) => r.contacted).length ?? 0)
+                         + (personal?.filter((r: any) => r.contacted).length ?? 0)
+    setStats({ generalCount, personalCount, contactedCount })
+  }
 
   return (
     <div className="page page--fill">
@@ -11,41 +39,47 @@ export default function BrandDb() {
         <span className="page-banner-deco">🗃️</span>
         <div>
           <div className="page-banner-title">브랜드 DB</div>
-          <div className="page-banner-desc">대표메일 DB와 개인 연락처 DB를 통합 관리합니다.</div>
+          <div className="page-banner-desc">일반 DB와 퍼스널 DB를 통합 관리합니다.</div>
         </div>
       </div>
 
+      {stats && (
+        <div className="cards" style={{ marginBottom: 20 }}>
+          <div className="card">
+            <div className="card-label">총 일반 브랜드</div>
+            <div className="card-value">{stats.generalCount}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
+          </div>
+          <div className="card">
+            <div className="card-label">총 퍼스널 브랜드</div>
+            <div className="card-value">{stats.personalCount}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
+          </div>
+          <div className="card highlight">
+            <div className="card-label">컨택 완료</div>
+            <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
+              {stats.contactedCount}
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {stats.generalCount + stats.personalCount}</span>
+            </div>
+            <div className="card-sub">
+              {stats.generalCount + stats.personalCount
+                ? Math.round(stats.contactedCount / (stats.generalCount + stats.personalCount) * 100)
+                : 0}% 완료율
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="ftab-bar">
-        <button className={'ftab' + (tab === 'mail' ? ' active' : '')} onClick={() => setTab('mail')}>대표메일 DB</button>
-        <button className={'ftab' + (tab === 'contacts' ? ' active' : '')} onClick={() => setTab('contacts')}>개인 연락처 DB</button>
+        {tabs.map(t => (
+          <button key={t.path}
+            className={'ftab' + (activeTab === t.path ? ' active' : '')}
+            onClick={() => navigate(t.path)}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <div className="ftab-content">
-        {tab === 'mail' && <WipBlock title="대표메일 DB" desc="브랜드 대표 이메일 주소 데이터베이스를 관리합니다." />}
-        {tab === 'contacts' && <WipBlock title="개인 연락처 DB" desc="브랜드 담당자 개인 연락처 데이터베이스를 관리합니다." />}
-      </div>
-    </div>
-  )
-}
-
-function WipBlock({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      flex: 1, minHeight: 320, gap: 14,
-      background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
-      padding: 48,
-    }}>
-      <div style={{ fontSize: 44, lineHeight: 1 }}>🚧</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-7)', letterSpacing: '-0.5px' }}>개발중</div>
-      <div style={{ fontSize: 13, color: 'var(--gray-6)', fontWeight: 600 }}>{title}</div>
-      <div style={{ fontSize: 13, color: 'var(--gray-4)', textAlign: 'center', lineHeight: 1.7 }}>
-        {desc}<br />곧 서비스될 예정입니다.
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-        {[0, 1, 2].map(i => (
-          <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? '#3b82f6' : 'var(--gray-3)' }} />
-        ))}
+        <Outlet />
       </div>
     </div>
   )

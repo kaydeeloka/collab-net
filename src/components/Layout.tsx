@@ -207,14 +207,14 @@ export default function Layout() {
             target="_blank"
             rel="noopener noreferrer"
             className="sidebar-website-btn"
-            title="미뮤즈 웹사이트"
+            data-label="미뮤즈 웹사이트"
           >
             <Globe size={22} />
           </a>
           <button
             className="sidebar-phase-btn"
             onClick={() => setShowManage(true)}
-            title="차수 관리"
+            data-label="차수 관리"
           >
             <Settings size={22} />
           </button>

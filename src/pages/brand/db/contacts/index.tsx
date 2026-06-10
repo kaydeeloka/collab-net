@@ -4,6 +4,8 @@ import { useToast } from '../../../../contexts/ToastContext'
 
 interface BrandContact {
   id: string
+  brand_type: string
+  contacted: boolean
   company: string | null
   name: string | null
   department: string | null
@@ -15,25 +17,26 @@ interface BrandContact {
   created_at: string
 }
 
-const FIELDS: { key: keyof BrandContact; label: string; width?: number }[] = [
-  { key: 'company',    label: '회사',   width: 140 },
-  { key: 'name',       label: '성명',   width: 90  },
-  { key: 'department', label: '소속',   width: 120 },
-  { key: 'position',   label: '직급',   width: 90  },
-  { key: 'email',      label: '이메일', width: 180 },
-  { key: 'mobile',     label: '휴대폰', width: 120 },
-  { key: 'extension',  label: '내선',   width: 80  },
-  { key: 'website',    label: '홈페이지', width: 160 },
+const FIELDS: { key: keyof BrandContact; label: string; width: number }[] = [
+  { key: 'company',    label: '회사',    width: 140 },
+  { key: 'name',       label: '성명',    width: 90  },
+  { key: 'department', label: '소속',    width: 120 },
+  { key: 'position',   label: '직급',    width: 90  },
+  { key: 'email',      label: '이메일',  width: 190 },
+  { key: 'mobile',     label: '휴대폰',  width: 120 },
+  { key: 'extension',  label: '내선',    width: 80  },
+  { key: 'website',    label: '홈페이지', width: 150 },
 ]
 
-export default function BrandDbContacts() {
+export default function BrandDbContacts({ brandType = 'personal' }: { brandType?: string }) {
   const { showToast } = useToast()
-  const [rows, setRows]     = useState<BrandContact[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editCell, setEditCell] = useState<{ id: string; field: string } | null>(null)
+
+  const [allRows,   setAllRows]   = useState<BrandContact[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [editCell,  setEditCell]  = useState<{ id: string; field: string } | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [search, setSearch]   = useState('')
+  const [saving,    setSaving]    = useState(false)
+  const [search,    setSearch]    = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, [])
@@ -49,7 +52,7 @@ export default function BrandDbContacts() {
       .select('*')
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
-    setRows((data ?? []) as BrandContact[])
+    setAllRows((data ?? []) as BrandContact[])
     setLoading(false)
   }
 
@@ -61,7 +64,7 @@ export default function BrandDbContacts() {
   async function commitEdit() {
     if (!editCell) return
     const { id, field } = editCell
-    const prev = rows.find(r => r.id === id)
+    const prev = allRows.find(r => r.id === id)
     if (!prev) { setEditCell(null); return }
     const prevVal = (prev as any)[field] ?? ''
     if (editValue === prevVal) { setEditCell(null); return }
@@ -72,84 +75,117 @@ export default function BrandDbContacts() {
       .update({ [field]: editValue || null })
       .eq('id', id)
     if (error) { showToast(error.message, 'error') }
-    else {
-      setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: editValue || null } : r))
-    }
+    else setAllRows(prev => prev.map(r => r.id === id ? { ...r, [field]: editValue || null } : r))
     setEditCell(null)
     setSaving(false)
+  }
+
+  async function toggleContacted(id: string, current: boolean) {
+    const next = !current
+    const { error } = await supabase.from('brand_contacts').update({ contacted: next }).eq('id', id)
+    if (error) showToast(error.message, 'error')
+    else setAllRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
   }
 
   async function addRow() {
     const { data, error } = await supabase
       .from('brand_contacts')
-      .insert({})
+      .insert({ brand_type: brandType, contacted: false })
       .select()
       .single()
     if (error) { showToast(error.message, 'error'); return }
-    setRows(prev => [data as BrandContact, ...prev])
+    setAllRows(prev => [data as BrandContact, ...prev])
   }
 
   async function deleteRow(id: string) {
     const { error } = await supabase.from('brand_contacts').delete().eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
-    setRows(prev => prev.filter(r => r.id !== id))
+    setAllRows(prev => prev.filter(r => r.id !== id))
   }
 
-  const filtered = rows.filter(r => {
+  // Stats (global across both types)
+  const generalCount  = allRows.filter(r => r.brand_type === 'general').length
+  const personalCount = allRows.filter(r => r.brand_type === 'personal').length
+  const currentRows   = allRows.filter(r => r.brand_type === brandType)
+  const contactedCount = currentRows.filter(r => r.contacted).length
+
+  // Table rows: filtered by type + search
+  const filtered = currentRows.filter(r => {
     if (!search) return true
     const q = search.toLowerCase()
     return FIELDS.some(f => ((r as any)[f.key] ?? '').toLowerCase().includes(q))
   })
 
+  const isGeneral = brandType === 'general'
+
   return (
-    <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">👤</span>
-        <div>
-          <div className="page-banner-title">개인 연락처 DB</div>
-          <div className="page-banner-desc">브랜드 담당자 개인 연락처 데이터베이스를 관리합니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>↻ 새로고침</button>
-          <button className="page-banner-btn" onClick={addRow}>+ 행 추가</button>
-        </div>
+    <div>
+      {/* Toolbar */}
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button className="page-banner-btn" style={{ marginRight: 'auto' }} onClick={addRow}>+ 행 추가</button>
+        <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>↻ 새로고침</button>
       </div>
 
-      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
-        {/* Toolbar */}
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="검색..."
-            style={{ padding: '6px 12px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 220, fontFamily: 'inherit' }}
-          />
-          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>
-            {filtered.length}<span style={{ fontWeight: 400 }}> 건</span>
-          </span>
-          {saving && <span style={{ fontSize: 11, color: 'var(--gray-4)', marginLeft: 4 }}>저장 중...</span>}
-        </div>
+      {/* Search */}
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="회사, 성명, 이메일로 검색..."
+          style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 280, fontFamily: 'inherit' }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>
+          {filtered.length}<span style={{ fontWeight: 400 }}> 건</span>
+        </span>
+        {saving && <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>저장 중...</span>}
+      </div>
 
-        {/* Table */}
-        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 220px)' }}>
+      {/* Table card */}
+      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 340px)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 52 }} />
+              {FIELDS.map(f => <col key={f.key} style={{ width: f.width }} />)}
+              <col style={{ width: 44 }} />
+            </colgroup>
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                  컨택
+                </th>
                 {FIELDS.map(f => (
-                  <th key={f.key} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap', width: f.width }}>
+                  <th key={f.key} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
                     {f.label}
                   </th>
                 ))}
-                <th style={{ width: 48, padding: '10px 8px', borderBottom: '2px solid var(--gray-2)' }} />
+                <th style={{ padding: '10px 8px', borderBottom: '2px solid var(--gray-2)' }} />
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={FIELDS.length + 1} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
+                <tr><td colSpan={FIELDS.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={FIELDS.length + 1} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-5)' }}>데이터가 없습니다.</td></tr>
+                <tr><td colSpan={FIELDS.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>데이터가 없습니다.</td></tr>
               ) : filtered.map(row => (
-                <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-2)' }}>
+                <tr key={row.id} style={{ borderBottom: '1px solid var(--gray-2)', background: row.contacted ? '#f0fdf4' : undefined }}>
+                  {/* Contacted toggle */}
+                  <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0 8px' }}>
+                    <button
+                      onClick={() => toggleContacted(row.id, row.contacted)}
+                      style={{
+                        width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                        border: `1.5px solid ${row.contacted ? '#6ee7b7' : '#e2e8f0'}`,
+                        background: row.contacted ? '#d1fae5' : '#f1f5f9',
+                        color: row.contacted ? '#065f46' : '#94a3b8',
+                        fontWeight: 700, fontSize: 13,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                      {row.contacted ? '✓' : '—'}
+                    </button>
+                  </td>
+
+                  {/* Data cells */}
                   {FIELDS.map(f => {
                     const isEditing = editCell?.id === row.id && editCell?.field === f.key
                     const val = (row as any)[f.key] as string | null
@@ -172,7 +208,7 @@ export default function BrandDbContacts() {
                     return (
                       <td key={f.key}
                         onClick={() => startEdit(row.id, f.key, val)}
-                        style={{ padding: '0 12px', height: 40, cursor: 'text', verticalAlign: 'middle', maxWidth: f.width, overflow: 'hidden' }}>
+                        style={{ padding: '0 12px', height: 40, cursor: 'text', verticalAlign: 'middle', overflow: 'hidden' }}>
                         {f.key === 'website' && val ? (
                           <a href={val.startsWith('http') ? val : 'https://' + val} target="_blank" rel="noopener"
                             onClick={e => e.stopPropagation()}
@@ -187,10 +223,12 @@ export default function BrandDbContacts() {
                       </td>
                     )
                   })}
+
+                  {/* Delete */}
                   <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <button
                       onClick={() => deleteRow(row.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-4)', fontSize: 14, lineHeight: 1, padding: 4, borderRadius: 4 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-4)', fontSize: 14, padding: 4, borderRadius: 4 }}
                       title="삭제">
                       ✕
                     </button>

@@ -64,8 +64,56 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS form_submitted  BOOLE
 --  NEW TABLES
 -- ============================================================
 
+CREATE TABLE IF NOT EXISTS brand_general (
+  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand_name       TEXT        NOT NULL,
+  email            TEXT,
+  phone            TEXT,
+  website          TEXT,
+  product_category TEXT,
+  overseas         BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- brand_general — contacted + contact tracking columns
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS contacted   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS status      TEXT    NOT NULL DEFAULT '';
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS send_count  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS notes       TEXT;
+
+-- brand_personal — new table for personal brand contacts
+CREATE TABLE IF NOT EXISTS brand_personal (
+  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand_name       TEXT        NOT NULL,
+  contact_name     TEXT        NOT NULL,
+  department       TEXT        NOT NULL,
+  position         TEXT        NOT NULL,
+  personal_email   TEXT        NOT NULL,
+  personal_phone   TEXT        NOT NULL,
+  website          TEXT        NOT NULL,
+  rep_email        TEXT,
+  telephone        TEXT,
+  product_category TEXT,
+  overseas         BOOLEAN     NOT NULL DEFAULT FALSE,
+  contacted        BOOLEAN     NOT NULL DEFAULT FALSE,
+  status           TEXT        NOT NULL DEFAULT '',
+  send_count       INTEGER     NOT NULL DEFAULT 0,
+  notes            TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE brand_personal ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_brand_personal" ON brand_personal;
+CREATE POLICY "allow_all_brand_personal" ON brand_personal FOR ALL USING (true) WITH CHECK (true);
+
+-- RLS policies for brand_general (run if table already exists and RLS is on)
+ALTER TABLE brand_general ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_brand_general" ON brand_general;
+CREATE POLICY "allow_all_brand_general" ON brand_general FOR ALL USING (true) WITH CHECK (true);
+
 CREATE TABLE IF NOT EXISTS brand_contacts (
   id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand_type TEXT        NOT NULL DEFAULT 'general',
   company    TEXT,
   name       TEXT,
   department TEXT,
@@ -76,6 +124,15 @@ CREATE TABLE IF NOT EXISTS brand_contacts (
   website    TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- RLS policies for brand_contacts (run if table already exists and RLS is on)
+ALTER TABLE brand_contacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_brand_contacts" ON brand_contacts;
+CREATE POLICY "allow_all_brand_contacts" ON brand_contacts FOR ALL USING (true) WITH CHECK (true);
+
+-- If table already exists, add the columns:
+ALTER TABLE brand_contacts ADD COLUMN IF NOT EXISTS brand_type  TEXT    NOT NULL DEFAULT 'general';
+ALTER TABLE brand_contacts ADD COLUMN IF NOT EXISTS contacted   BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ============================================================
 --  DROP COLUMN
