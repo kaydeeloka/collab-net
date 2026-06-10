@@ -57,7 +57,7 @@ export default function BrandDb() {
             <div className="card-value">{stats.personalCount}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
           </div>
           <div className="card highlight">
-            <div className="card-label">컨택 완료</div>
+            <div className="card-label">컨택 예정</div>
             <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
               {stats.contactedCount}
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {stats.generalCount + stats.personalCount}</span>

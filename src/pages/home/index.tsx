@@ -66,12 +66,25 @@ export default function Dashboard() {
   }, [activeDbId])
 
   const loadOutreachStats = useCallback(async () => {
-    setStatsOutreach(
-      `<div class="fstat"><div class="fstat-val" style="color:var(--green)">0<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 0명</span></div><div class="fstat-lbl">컨택 현황</div></div>` +
-      `<div class="fstat"><div class="fstat-val" style="color:#d97706">0</div><div class="fstat-lbl">신규 회신</div></div>` +
-      `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0</div><div class="fstat-lbl">확정 브랜드</div></div>`
-    )
-  }, [])
+    if (!activeDbId) return
+    try {
+      const [{ data: general }, { data: personal }] = await Promise.all([
+        supabase.from('brand_general').select('contacted').eq('phase_id', activeDbId),
+        supabase.from('brand_personal').select('contacted').eq('phase_id', activeDbId),
+      ])
+      const generalTotal  = general?.length ?? 0
+      const personalTotal = personal?.length ?? 0
+      const total = generalTotal + personalTotal
+      const contacted = (general?.filter((r: any) => r.contacted).length ?? 0)
+                      + (personal?.filter((r: any) => r.contacted).length ?? 0)
+      setStatsOutreach(
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${contacted}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}개</span></div><div class="fstat-lbl">컨택 현황</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#d97706">0</div><div class="fstat-lbl">신규 회신</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${generalTotal}</div><div class="fstat-lbl">일반 DB</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#8b5cf6">${personalTotal}</div><div class="fstat-lbl">퍼스널 DB</div></div>`
+      )
+    } catch (e: unknown) { setStatsOutreach(statError((e as Error).message)) }
+  }, [activeDbId])
 
   const loadEmsStats = useCallback(async () => {
     try {
@@ -107,6 +120,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadOutreachStats()
+  }, [loadOutreachStats])
+
+  useEffect(() => {
     loadEmsStats()
     loadMonitoringStats()
     ;(async () => {

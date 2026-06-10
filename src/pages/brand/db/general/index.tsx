@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../../lib/supabase'
 import { useToast } from '../../../../contexts/ToastContext'
 import { usePhase } from '../../../../contexts/PhaseContext'
@@ -43,11 +44,14 @@ type Form = typeof EMPTY_FORM
 export default function BrandDbGeneral() {
   const { showToast } = useToast()
   const { activePhaseId } = usePhase()
+  const navigate = useNavigate()
 
   const [rows,     setRows]     = useState<BrandGeneral[]>([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
   const [page,     setPage]     = useState(1)
+  const [selected,     setSelected]     = useState<Set<string>>(new Set())
+  const [bulkLoading,  setBulkLoading]  = useState(false)
 
   // add modal
   const [showAdd,  setShowAdd]  = useState(false)
@@ -159,6 +163,19 @@ export default function BrandDbGeneral() {
     else setRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
   }
 
+  async function bulkMarkContacted() {
+    if (!selected.size) return
+    setBulkLoading(true)
+    const ids = Array.from(selected)
+    const { error } = await supabase.from('brand_general').update({ contacted: true }).in('id', ids)
+    if (!error) {
+      setRows(prev => prev.map(r => selected.has(r.id) ? { ...r, contacted: true } : r))
+      setSelected(new Set())
+      navigate('/brand/contact')
+    } else showToast(error.message, 'error')
+    setBulkLoading(false)
+  }
+
   const filtered = rows.filter(r => {
     if (!search) return true
     const q = search.toLowerCase()
@@ -218,7 +235,7 @@ export default function BrandDbGeneral() {
         ))}
         <button type="button"
           onClick={() => setForm({ ...form, email: [...form.email, ''] })}
-          style={{ alignSelf: 'flex-start', padding: '4px 12px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', background: 'var(--gray-1)', color: 'var(--gray-7)', cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ alignSelf: 'flex-start', padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, border: '1.5px dashed var(--teal)', background: '#f0fdfa', color: 'var(--teal-dk)', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.2px' }}>
           + 이메일 추가
         </button>
       </div>
@@ -253,6 +270,14 @@ export default function BrandDbGeneral() {
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+        {selected.size > 0 && (
+          <button
+            onClick={bulkMarkContacted}
+            disabled={bulkLoading}
+            style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+            {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}개)`}
+          </button>
+        )}
         <button
           onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: activePhaseId ?? '' }); setShowAdd(true) }}
           style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
@@ -265,7 +290,7 @@ export default function BrandDbGeneral() {
         <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1080 }}>
             <colgroup>
-              <col style={{ width: 40 }} />
+              <col style={{ width: 36 }} />
               <col style={{ width: 160 }} />
               <col style={{ width: 210 }} />
               <col style={{ width: 140 }} />
@@ -277,8 +302,19 @@ export default function BrandDbGeneral() {
             </colgroup>
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
-                {['No.', '브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid var(--gray-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={pg.pageItems.length > 0 && pg.pageItems.every(r => selected.has(r.id))}
+                    onChange={e => {
+                      if (e.target.checked) setSelected(prev => new Set([...prev, ...pg.pageItems.map(r => r.id)]))
+                      else setSelected(prev => { const next = new Set(prev); pg.pageItems.forEach(r => next.delete(r.id)); return next })
+                    }}
+                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                  />
+                </th>
+                {['브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -289,12 +325,26 @@ export default function BrandDbGeneral() {
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
-              ) : pg.pageItems.map((r, i) => (
+              ) : pg.pageItems.map((r) => (
                 <tr key={r.id} onClick={() => openView(r)}
-                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: r.contacted ? '#f0fdf4' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = r.contacted ? '#dcfce7' : 'var(--gray-1)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = r.contacted ? '#f0fdf4' : '')}>
-                  <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)', padding: '0 8px', height: 50 }}>{i + 1}</td>
+                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = selected.has(r.id) ? '#dbeafe' : r.contacted ? '#dcfce7' : 'var(--gray-1)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : '')}>
+                  <td style={{ textAlign: 'center', padding: '0 8px', height: 50 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(r.id)}
+                      onChange={e => {
+                        setSelected(prev => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(r.id)
+                          else next.delete(r.id)
+                          return next
+                        })
+                      }}
+                      style={{ cursor: 'pointer', width: 14, height: 14 }}
+                    />
+                  </td>
                   <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{r.brand_name}</td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
                     {r.email?.length ? (

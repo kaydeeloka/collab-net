@@ -476,7 +476,7 @@ export default function Listup() {
             </div>
           </div>
           <div className="card highlight">
-            <div className="card-label">컨택 완료</div>
+            <div className="card-label">컨택 예정</div>
             <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
               {dashStats.sent}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {dashStats.total}</span>
             </div>

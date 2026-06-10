@@ -468,13 +468,11 @@ export default function Outreach() {
                     </th>
                     {/* 비고 */}
                     <th style={{ ...thBase, minWidth: 180 }}>비고</th>
-                    {/* 액션 */}
-                    <th style={{ ...thBase, textAlign: 'right', minWidth: 90 }}>액션</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                       데이터가 없습니다.
                     </td></tr>
                   )}
@@ -560,33 +558,6 @@ export default function Outreach() {
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = memoVal ? 'var(--gray-0)' : 'transparent' }}
                           />
-                        </td>
-                        {/* 액션 */}
-                        <td style={{ padding: '0 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                          {(() => {
-                            const isTerminal = ['accept', 'reject', 'paid'].includes(status)
-                            const isResend   = ['yes', 'noreply'].includes(status)
-                            const btnLabel   = isTerminal ? (status === 'accept' ? '확정' : status === 'reject' ? '거절' : '유가') : isResend ? '✉ 재발송' : '✉ 발송'
-                            return (
-                              <button
-                                title={isTerminal ? '최종 확정된 상태입니다' : '이 인플루언서에게 선택된 템플릿 발송'}
-                                disabled={isTerminal}
-                                onClick={() => {
-                                  if (isTerminal) return
-                                  const tpl = templates[bulkTplIdx]
-                                  if (!tpl || !inf.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
-                                  confirmToast.show(`${inf.display_name || inf.handle}에게 발송하시겠습니까?`, async () => {
-                                    await gasPost({ action: 'sendOutreachEmail', to: inf.email!, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
-                                    const nextRound = round === '미컨택' ? '1차 컨택' : '2차 컨택'
-                                    await updateField(inf.id, { contact_round: nextRound, status: 'yes' })
-                                    showToast('발송 완료', 'success')
-                                  })
-                                }}
-                                style={{ padding: '4px 10px', background: isTerminal ? 'var(--gray-2)' : 'var(--yellow)', color: isTerminal ? 'var(--gray-5)' : 'var(--yellow-text)', border: `1px solid ${isTerminal ? 'var(--gray-3)' : 'var(--yellow-md)'}`, borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: isTerminal ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: isTerminal ? 0.6 : 1 }}>
-                                {btnLabel}
-                              </button>
-                            )
-                          })()}
                         </td>
                       </tr>
                     )

@@ -9,8 +9,12 @@ import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 
 // ── Templates (shared with /brand/template page via localStorage) ─────────────
 const BRAND_TPL_KEY = 'mm_brand_email_templates'
+const DEFAULT_TEMPLATES = [
+  { id: 'brand_temp_01', name: '협업 제안 (첫 컨택)', subject: '[MiMuse] {{브랜드명}} 담당자님, 미뮤즈 협업 제안드립니다', body: '안녕하세요 {{담당자}}님,\n\n프리미엄 뷰티 브랜드 MiMuse(미뮤즈) 글로벌 커뮤니케이션 팀입니다.\n\n{{브랜드명}}의 제품과 미뮤즈가 함께 시너지를 낼 수 있을 것이라 생각하여 협업을 제안드립니다.\n\n자세한 내용은 아래와 같으며, 검토 후 회신 주시면 감사하겠습니다.\n\n미뮤즈 드림.' },
+  { id: 'brand_temp_02', name: '협업 리마인더', subject: '[MiMuse] {{브랜드명}} 담당자님, 이전 협업 제안 관련 재문의', body: '안녕하세요 {{담당자}}님, MiMuse 글로벌 팀입니다.\n\n이전에 발송드린 협업 제안 메일 관련하여 재문의 드립니다.\n\n{{브랜드명}}과의 협업에 여전히 큰 기대를 가지고 있으며, 편하실 때 회신 주시면 감사하겠습니다.\n\n감사합니다.' },
+]
 function loadTemplates() {
-  try { const v = localStorage.getItem(BRAND_TPL_KEY); return v ? JSON.parse(v) : [] } catch { return [] }
+  try { const v = localStorage.getItem(BRAND_TPL_KEY); return v ? JSON.parse(v) : DEFAULT_TEMPLATES } catch { return DEFAULT_TEMPLATES }
 }
 
 const DUMMY: Record<string, { value: string; color: string }> = {
@@ -63,12 +67,15 @@ const STATUS_OPTIONS = [
 const STATUS_STYLE = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
 
 interface BrandRow {
-  id:         string
+  id:          string
   source:      'general' | 'personal'
   brand:       string
   name:        string | null
   position:    string | null
   email:       string | null
+  phone:       string | null
+  website:     string | null
+  phase_id:    string | null
   status:      string
   send_count:  number
   reply_count: number
@@ -129,21 +136,24 @@ export default function BrandContact() {
   async function load() {
     setLoading(true)
     const [{ data: gen }, { data: per }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, name, email, status, send_count, reply_count, notes').eq('contacted', true),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, status, send_count, reply_count, notes').eq('contacted', true),
+      supabase.from('brand_general').select('id, brand_name, name, email, telephone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
+      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
     ])
     const generalRows: BrandRow[] = (gen ?? []).map((r: any) => ({
       id: r.id, source: 'general' as const,
       brand: r.brand_name, name: r.name ?? null,
       position: 'CEO',
-      email: r.email, status: r.status ?? '',
+      email: Array.isArray(r.email) ? r.email[0] ?? null : r.email,
+      phone: r.telephone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
+      status: r.status ?? '',
       send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
     }))
     const personalRows: BrandRow[] = (per ?? []).map((r: any) => ({
       id: r.id, source: 'personal' as const,
       brand: r.brand_name, name: r.contact_name,
       position: r.position ?? null,
-      email: r.personal_email, status: r.status ?? '',
+      email: r.personal_email, phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
+      status: r.status ?? '',
       send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
     }))
     setRows([...generalRows, ...personalRows])
@@ -167,6 +177,27 @@ export default function BrandContact() {
     const { error } = await supabase.from(table).update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.map(r => r.id === row.id && r.source === row.source ? { ...r, ...patch } : r))
+
+    // Auto-create confirmed_brands entry when status becomes 'accept'
+    if (patch.status === 'accept' && row.status !== 'accept' && row.phase_id) {
+      const { data: existing } = await supabase
+        .from('confirmed_brands')
+        .select('id')
+        .eq('phase_id', row.phase_id)
+        .eq('brand_name', row.brand)
+        .maybeSingle()
+      if (!existing) {
+        await supabase.from('confirmed_brands').insert({
+          phase_id:     row.phase_id,
+          brand_name:   row.brand,
+          contact_name: row.name,
+          position:     row.position,
+          email:        row.email,
+          phone:        row.phone,
+          website:      row.website,
+        })
+      }
+    }
   }, [showToast])
 
   const updateNote = useCallback((row: BrandRow, value: string) => {
@@ -330,7 +361,7 @@ export default function BrandContact() {
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
           : <>
-            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 380px)' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 180px)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
@@ -365,12 +396,11 @@ export default function BrandContact() {
                     </th>
                     <th style={{ ...thBase, minWidth: 90 }}>현황</th>
                     <th style={{ ...thBase, minWidth: 180 }}>비고</th>
-                    <th style={{ ...thBase, textAlign: 'right', minWidth: 90 }}>액션</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                       컨택 대상으로 설정된 브랜드가 없습니다.
                     </td></tr>
                   )}
@@ -429,31 +459,6 @@ export default function BrandContact() {
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = noteVal ? 'var(--gray-0)' : 'transparent' }}
                           />
-                        </td>
-                        <td style={{ padding: '0 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                          {(() => {
-                            const isTerminal = ['accept', 'reject'].includes(status)
-                            const btnLabel = isTerminal
-                              ? (status === 'accept' ? '확정' : '거절')
-                              : row.send_count > 0 ? '✉ 재발송' : '✉ 발송'
-                            return (
-                              <button disabled={isTerminal}
-                                onClick={() => {
-                                  if (isTerminal) return
-                                  if (!row.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
-                                  const tpl = templates[bulkTplIdx]
-                                  const nextCount = row.send_count + 1
-                                  confirmToast.show(`${row.brand}에게 발송하시겠습니까?`, async () => {
-                                    if (tpl) await gasPost({ action: 'sendOutreachEmail', to: row.email!, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
-                                    await updateField(row, { send_count: nextCount, status: 'yes' })
-                                    showToast(`${nextCount}차 발송 완료`, 'success')
-                                  })
-                                }}
-                                style={{ padding: '4px 10px', background: isTerminal ? 'var(--gray-2)' : 'var(--yellow)', color: isTerminal ? 'var(--gray-5)' : 'var(--yellow-text)', border: `1px solid ${isTerminal ? 'var(--gray-3)' : 'var(--yellow-md)'}`, borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: isTerminal ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: isTerminal ? 0.6 : 1 }}>
-                                {btnLabel}
-                              </button>
-                            )
-                          })()}
                         </td>
                       </tr>
                     )

@@ -124,6 +124,29 @@ CREATE POLICY "allow_all_brand_contacts" ON brand_contacts FOR ALL USING (true) 
 ALTER TABLE brand_contacts ADD COLUMN IF NOT EXISTS brand_type  TEXT    NOT NULL DEFAULT 'general';
 ALTER TABLE brand_contacts ADD COLUMN IF NOT EXISTS contacted   BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- confirmed_brands — standalone confirmed brand management table
+CREATE TABLE IF NOT EXISTS confirmed_brands (
+  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  phase_id         UUID        REFERENCES phases(id),
+  brand_name       TEXT        NOT NULL,
+  contact_name     TEXT,
+  position         TEXT,
+  email            TEXT,
+  phone            TEXT,
+  website          TEXT,
+  product          TEXT,
+  production_cost  TEXT,
+  received         BOOLEAN     NOT NULL DEFAULT FALSE,
+  notes            TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE confirmed_brands ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_confirmed_brands" ON confirmed_brands;
+CREATE POLICY "allow_all_confirmed_brands" ON confirmed_brands FOR ALL USING (true) WITH CHECK (true);
+
+-- brand_personal — add company column
+ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS company TEXT;
+
 -- ============================================================
 --  DROP COLUMN
 -- ============================================================
@@ -315,6 +338,40 @@ FROM influencers i
 WHERE i.outreach = 'accept'
   AND NOT EXISTS (
     SELECT 1 FROM confirmed_influencers c WHERE c.influencer_id = i.id
+  );
+
+-- Backfill confirmed_brands from brand_general where status = 'accept'
+INSERT INTO confirmed_brands (brand_name, phase_id, email, phone, website)
+SELECT
+  bg.brand_name,
+  bg.phase_id,
+  bg.email[1],
+  bg.telephone,
+  bg.website
+FROM brand_general bg
+WHERE bg.status = 'accept'
+  AND NOT EXISTS (
+    SELECT 1 FROM confirmed_brands cb
+    WHERE cb.brand_name = bg.brand_name
+      AND cb.phase_id   = bg.phase_id
+  );
+
+-- Backfill confirmed_brands from brand_personal where status = 'accept'
+INSERT INTO confirmed_brands (brand_name, phase_id, email, contact_name, position, phone, website)
+SELECT
+  bp.brand_name,
+  bp.phase_id,
+  bp.personal_email,
+  bp.contact_name,
+  bp.position,
+  bp.personal_phone,
+  bp.website
+FROM brand_personal bp
+WHERE bp.status = 'accept'
+  AND NOT EXISTS (
+    SELECT 1 FROM confirmed_brands cb
+    WHERE cb.brand_name = bp.brand_name
+      AND cb.phase_id   = bp.phase_id
   );
 
 -- Add a new phase (is_active stays false; switch it in the app)

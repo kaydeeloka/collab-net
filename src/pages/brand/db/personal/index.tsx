@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../../lib/supabase'
 import { useToast } from '../../../../contexts/ToastContext'
 import { usePhase } from '../../../../contexts/PhaseContext'
@@ -17,6 +18,7 @@ function paginate<T>(items: T[], page: number) {
 interface BrandPersonal {
   id:               string
   brand_name:       string
+  company:          string | null
   contact_name:     string | null
   department:       string | null
   position:         string | null
@@ -34,6 +36,7 @@ interface BrandPersonal {
 
 const EMPTY_FORM = {
   brand_name:       '',
+  company:          '',
   contact_name:     '',
   department:       '',
   position:         '',
@@ -51,11 +54,14 @@ type Form = typeof EMPTY_FORM
 export default function BrandDbPersonal() {
   const { showToast } = useToast()
   const { activePhaseId } = usePhase()
+  const navigate = useNavigate()
 
-  const [rows,    setRows]    = useState<BrandPersonal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
-  const [page,    setPage]    = useState(1)
+  const [rows,        setRows]        = useState<BrandPersonal[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [search,      setSearch]      = useState('')
+  const [page,        setPage]        = useState(1)
+  const [selected,    setSelected]    = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState<Form>({ ...EMPTY_FORM })
@@ -91,6 +97,7 @@ export default function BrandDbPersonal() {
     setAdding(true)
     const { error } = await supabase.from('brand_personal').insert({
       brand_name:       addForm.brand_name.trim(),
+      company:          addForm.company.trim()          || null,
       contact_name:     addForm.contact_name.trim()     || null,
       department:       addForm.department.trim()       || null,
       position:         addForm.position.trim()         || null,
@@ -115,6 +122,7 @@ export default function BrandDbPersonal() {
     setEditId(r.id)
     setEditForm({
       brand_name:       r.brand_name,
+      company:          r.company          ?? '',
       contact_name:     r.contact_name     ?? '',
       department:       r.department       ?? '',
       position:         r.position         ?? '',
@@ -137,6 +145,7 @@ export default function BrandDbPersonal() {
     setSaving(true)
     const { error } = await supabase.from('brand_personal').update({
       brand_name:       editForm.brand_name.trim(),
+      company:          editForm.company.trim()          || null,
       contact_name:     editForm.contact_name.trim()     || null,
       department:       editForm.department.trim()       || null,
       position:         editForm.position.trim()         || null,
@@ -167,6 +176,19 @@ export default function BrandDbPersonal() {
     const { error } = await supabase.from('brand_personal').update({ contacted: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
+  }
+
+  async function bulkMarkContacted() {
+    if (!selected.size) return
+    setBulkLoading(true)
+    const ids = Array.from(selected)
+    const { error } = await supabase.from('brand_personal').update({ contacted: true }).in('id', ids)
+    if (!error) {
+      setRows(prev => prev.map(r => selected.has(r.id) ? { ...r, contacted: true } : r))
+      setSelected(new Set())
+      navigate('/brand/contact')
+    } else showToast(error.message, 'error')
+    setBulkLoading(false)
   }
 
   const filtered = rows.filter(r => {
@@ -213,19 +235,20 @@ export default function BrandDbPersonal() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {field('브랜드명', 'brand_name',     form, setForm, { required: true })}
-        {field('성명',     'contact_name',   form, setForm, { required: true })}
+        {field('브랜드 명', 'brand_name',   form, setForm, { required: true })}
+        {field('성명',      'contact_name', form, setForm, { required: true })}
       </div>
       {field('개인 이메일', 'personal_email', form, setForm, { required: true, type: 'email' })}
       {field('홈페이지',    'website',        form, setForm, { required: true, placeholder: 'https://' })}
 
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {field('부서',               'department',      form, setForm)}
-        {field('직급',               'position',        form, setForm)}
-        {field('개인 전화번호',      'personal_phone',  form, setForm, { type: 'tel' })}
-        {field('내선 번호',          'telephone',       form, setForm)}
-        {field('대표 메일',          'rep_email',       form, setForm, { type: 'email' })}
+        {field('회사명',             'company',          form, setForm)}
+        {field('부서',               'department',       form, setForm)}
+        {field('직급',               'position',         form, setForm)}
+        {field('개인 전화번호',      'personal_phone',   form, setForm, { type: 'tel' })}
+        {field('내선 번호',          'telephone',        form, setForm)}
+        {field('대표 메일',          'rep_email',        form, setForm, { type: 'email' })}
         {field('판매 제품 카테고리', 'product_category', form, setForm)}
       </div>
       {overseasBtn(form, setForm)}
@@ -252,6 +275,14 @@ export default function BrandDbPersonal() {
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+        {selected.size > 0 && (
+          <button
+            onClick={bulkMarkContacted}
+            disabled={bulkLoading}
+            style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+            {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}개)`}
+          </button>
+        )}
         <button
           onClick={() => { setAddForm({ ...EMPTY_FORM, phase_id: activePhaseId ?? '' }); setShowAdd(true) }}
           style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
@@ -277,8 +308,19 @@ export default function BrandDbPersonal() {
             </colgroup>
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
-                {['No.', '브랜드명', '성명', '부서', '직급', '개인 이메일', '개인 전화번호', '홈페이지', '해외 진출', '컨택 대상'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 9 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid var(--gray-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={pg.pageItems.length > 0 && pg.pageItems.every(r => selected.has(r.id))}
+                    onChange={e => {
+                      if (e.target.checked) setSelected(prev => new Set([...prev, ...pg.pageItems.map(r => r.id)]))
+                      else setSelected(prev => { const next = new Set(prev); pg.pageItems.forEach(r => next.delete(r.id)); return next })
+                    }}
+                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                  />
+                </th>
+                {['브랜드명', '성명', '부서', '직급', '개인 이메일', '개인 전화번호', '홈페이지', '해외 진출', '컨택 대상'].map((h, i) => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 8 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -289,12 +331,26 @@ export default function BrandDbPersonal() {
                 <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
-              ) : pg.pageItems.map((r, i) => (
+              ) : pg.pageItems.map((r) => (
                 <tr key={r.id} onClick={() => openView(r)}
-                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: r.contacted ? '#f0fdf4' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = r.contacted ? '#dcfce7' : 'var(--gray-1)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = r.contacted ? '#f0fdf4' : '')}>
-                  <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)', padding: '0 8px', height: 44 }}>{i + 1}</td>
+                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : undefined }}
+                  onMouseEnter={e => (e.currentTarget.style.background = selected.has(r.id) ? '#dbeafe' : r.contacted ? '#dcfce7' : 'var(--gray-1)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : '')}>
+                  <td style={{ textAlign: 'center', padding: '0 8px', height: 44 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(r.id)}
+                      onChange={e => {
+                        setSelected(prev => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(r.id)
+                          else next.delete(r.id)
+                          return next
+                        })
+                      }}
+                      style={{ cursor: 'pointer', width: 14, height: 14 }}
+                    />
+                  </td>
                   <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</td>
                   <td style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
