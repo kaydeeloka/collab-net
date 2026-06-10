@@ -1,16 +1,5 @@
-export default function BrandConfirmedFolders() {
-  return (
-    <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">📁</span>
-        <div>
-          <div className="page-banner-title">브랜드 별 필요 자료 폴더 생성</div>
-          <div className="page-banner-desc">확정 브랜드별 구글 드라이브 폴더 생성 현황을 관리합니다.</div>
-        </div>
-      </div>
-      <WipBlock />
-    </div>
-  )
+export default function BrandConfirmedManagement() {
+  return <WipBlock />
 }
 
 function WipBlock() {

@@ -30,7 +30,7 @@ const GROUPS: SideGroup[] = [
       { to: '/influencer/search', label: '인플루언서 서치' },
       { to: '/influencer/contact', label: '인플루언서 컨택' },
       { to: '/influencer/confirmed', label: '확정 인플루언서' },
-      { to: '/influencer/contact/template', label: '템플릿 관리' },
+      { to: '/influencer/template', label: '템플릿 관리' },
     ],
   },
   {
@@ -44,13 +44,7 @@ const GROUPS: SideGroup[] = [
           { to: '/brand/contact/template', label: '템플릿 관리' },
         ],
       },
-      {
-        to: '/brand/confirmed', label: '확정 브랜드 명단',
-        sub: [
-          { to: '/brand/confirmed/folders', label: '확정 브랜드 관리' },
-          { to: '/brand/confirmed/files',   label: '자료 아카이브' },
-        ],
-      },
+      { to: '/brand/confirmed', label: '확정 브랜드' },
     ],
   },
   {
@@ -197,7 +191,7 @@ export default function Layout() {
               <div key={group.label} className="sidebar-group">
                 <button
                   className={`sidebar-item${isActive ? ' active' : ''}`}
-                  title={group.label}
+                  data-label={group.label}
                   onClick={() => navigate(group.defaultTo)}
                 >
                   <span className="sidebar-icon">{group.icon}</span>

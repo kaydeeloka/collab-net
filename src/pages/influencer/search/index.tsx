@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
@@ -110,7 +110,8 @@ const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string 
 export default function Listup() {
   const { activePhaseId } = usePhase()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<ListupTab>('search')
+  const { pathname } = useLocation()
+  const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
   const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
   // Config state (loaded from Supabase app_config)
@@ -235,7 +236,7 @@ export default function Listup() {
   }, [apifyPolling, apifyRunId, apifyDatasetId, apifyCurrentTier, maxRatio, maxUploadDays])
 
   function switchTab(t: ListupTab) {
-    setActiveTab(t)
+    navigate(t === 'database' ? '/influencer/search/db' : '/influencer/search')
     if (t === 'database' && !dbLoaded) loadInfluencers()
   }
 

@@ -17,11 +17,10 @@ import Monitoring  from './pages/monitoring/reviews'
 // TREND
 import TiktokTrend from './pages/trend/tiktok'
 
-// INFLUENCER — search
-import SearchDbList   from './pages/influencer/search/db'
+// INFLUENCER — template
+import InfluencerTemplate from './pages/influencer/template'
 // INFLUENCER — contact
 import ContactList      from './pages/influencer/contact/list'
-import ContactTemplate  from './pages/influencer/contact/template'
 import ContactCompleted from './pages/influencer/contact/completed'
 // INFLUENCER — confirmed
 import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
@@ -38,8 +37,8 @@ import BrandContactTemplate  from './pages/brand/contact/template'
 import BrandContactCompleted from './pages/brand/contact/completed'
 // BRAND — confirmed
 import BrandConfirmed        from './pages/brand/confirmed'
-import BrandConfirmedFolders from './pages/brand/confirmed/folders'
-import BrandConfirmedFiles   from './pages/brand/confirmed/files'
+import BrandConfirmedFolders from './pages/brand/confirmed/management'
+import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
 
 // KIT — ems
 import EmsDaily   from './pages/kit/ems/daily'
@@ -83,10 +82,10 @@ export default function App() {
 
                 {/* ── INFLUENCER ── */}
                 <Route path="/influencer/search"                    element={<Listup />} />
-                <Route path="/influencer/search/db"                 element={<SearchDbList />} />
+                <Route path="/influencer/search/db"                 element={<Listup />} />
+                <Route path="/influencer/template"                  element={<InfluencerTemplate />} />
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/contact/list"              element={<ContactList />} />
-                <Route path="/influencer/contact/template"          element={<ContactTemplate />} />
                 <Route path="/influencer/contact/completed"         element={<ContactCompleted />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
                 <Route path="/influencer/confirmed/shipping"        element={<ConfirmedShipping />} />
@@ -100,9 +99,11 @@ export default function App() {
                 <Route path="/brand/contact/list"                   element={<BrandContactList />} />
                 <Route path="/brand/contact/template"               element={<BrandContactTemplate />} />
                 <Route path="/brand/contact/completed"              element={<BrandContactCompleted />} />
-                <Route path="/brand/confirmed"                      element={<BrandConfirmed />} />
-                <Route path="/brand/confirmed/folders"              element={<BrandConfirmedFolders />} />
-                <Route path="/brand/confirmed/files"                element={<BrandConfirmedFiles />} />
+                <Route path="/brand/confirmed" element={<BrandConfirmed />}>
+                  <Route index element={<Navigate to="management" replace />} />
+                  <Route path="management" element={<BrandConfirmedFolders />} />
+                  <Route path="archive"    element={<BrandConfirmedFiles />} />
+                </Route>
 
                 {/* ── KIT ── */}
                 <Route path="/kit/ems"                              element={<Ems />} />

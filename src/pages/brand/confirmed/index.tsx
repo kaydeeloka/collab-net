@@ -1,36 +1,43 @@
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+
 export default function BrandConfirmed() {
+  const { pathname } = useLocation()
+  const navigate     = useNavigate()
+
+  const tabs = [
+    { path: '/brand/confirmed/management', label: '브랜드 관리' },
+    { path: '/brand/confirmed/archive',    label: '자료 아카이브' },
+  ]
+
+  const activeTab = tabs.find(t => pathname.startsWith(t.path))?.path ?? tabs[0].path
+
   return (
     <div className="page page--fill">
       <div className="page-banner">
         <span className="page-banner-deco">🎯</span>
         <div>
-          <div className="page-banner-title">확정 브랜드 명단</div>
+          <div className="page-banner-title">확정 브랜드</div>
           <div className="page-banner-desc">협업 확정 브랜드의 자료 수집 및 폴더 관리 현황을 확인합니다.</div>
         </div>
       </div>
-      <WipBlock />
-    </div>
-  )
-}
 
-function WipBlock() {
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      flex: 1, minHeight: 320, gap: 14,
-      background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
-      padding: 48,
-    }}>
-      <div style={{ fontSize: 44, lineHeight: 1 }}>🚧</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-7)', letterSpacing: '-0.5px' }}>개발중</div>
-      <div style={{ fontSize: 13, color: 'var(--gray-4)', textAlign: 'center', lineHeight: 1.7 }}>
-        이 페이지는 현재 개발 중입니다.<br />곧 서비스될 예정입니다.
-      </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-        {[0, 1, 2].map(i => (
-          <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === 0 ? '#3b82f6' : 'var(--gray-3)' }} />
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '2px solid var(--gray-2)' }}>
+        {tabs.map(t => (
+          <button key={t.path} onClick={() => navigate(t.path)}
+            style={{
+              padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              border: 'none', background: 'transparent',
+              color: activeTab === t.path ? 'var(--teal-dk)' : 'var(--gray-5)',
+              borderBottom: activeTab === t.path ? '2px solid var(--teal-dk)' : '2px solid transparent',
+              marginBottom: -2, borderRadius: 0, transition: 'all .15s',
+            }}>
+            {t.label}
+          </button>
         ))}
       </div>
+
+      <Outlet />
     </div>
   )
 }

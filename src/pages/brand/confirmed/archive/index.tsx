@@ -1,16 +1,5 @@
-export default function BrandConfirmedFiles() {
-  return (
-    <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">🖼️</span>
-        <div>
-          <div className="page-banner-title">로고 파일 · 제품 성분 파일 등</div>
-          <div className="page-banner-desc">브랜드별 로고, 성분표 등 필수 파일 수집 현황을 관리합니다.</div>
-        </div>
-      </div>
-      <WipBlock />
-    </div>
-  )
+export default function BrandConfirmedArchive() {
+  return <WipBlock />
 }
 
 function WipBlock() {
