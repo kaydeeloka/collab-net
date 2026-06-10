@@ -76,10 +76,16 @@ export default function Confirmed() {
   // filters
   const [uploadFilter,     setUploadFilter]     = useState<UploadStatus>('all')
   const [reviewLinkFilter, setReviewLinkFilter] = useState<ReviewLinkFilter>('all')
+  const [platformFilter,   setPlatformFilter]   = useState('all')
+  const [repostFilter,     setRepostFilter]     = useState('all')
   const [showUploadFilter,     setShowUploadFilter]     = useState(false)
   const [showReviewLinkFilter, setShowReviewLinkFilter] = useState(false)
+  const [showPlatformFilter,   setShowPlatformFilter]   = useState(false)
+  const [showRepostFilter,     setShowRepostFilter]     = useState(false)
   const uploadFilterRef     = useRef<HTMLDivElement>(null)
   const reviewLinkFilterRef = useRef<HTMLDivElement>(null)
+  const platformFilterRef   = useRef<HTMLDivElement>(null)
+  const repostFilterRef     = useRef<HTMLDivElement>(null)
 
   // modals
   const [showView, setShowView] = useState(false)
@@ -96,14 +102,16 @@ export default function Confirmed() {
   useEffect(() => { if (activePhaseId) load() }, [activePhaseId])
 
   useEffect(() => {
-    if (!showUploadFilter && !showReviewLinkFilter) return
+    if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter && !showRepostFilter) return
     const handler = (e: MouseEvent) => {
       if (uploadFilterRef.current     && !uploadFilterRef.current.contains(e.target as Node))     setShowUploadFilter(false)
       if (reviewLinkFilterRef.current && !reviewLinkFilterRef.current.contains(e.target as Node)) setShowReviewLinkFilter(false)
+      if (platformFilterRef.current   && !platformFilterRef.current.contains(e.target as Node))   setShowPlatformFilter(false)
+      if (repostFilterRef.current     && !repostFilterRef.current.contains(e.target as Node))     setShowRepostFilter(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showUploadFilter, showReviewLinkFilter])
+  }, [showUploadFilter, showReviewLinkFilter, showPlatformFilter, showRepostFilter])
 
   async function load() {
     setLoading(true)
@@ -181,10 +189,23 @@ export default function Confirmed() {
     setSaving(false)
   }
 
+  const platforms = Array.from(new Set(rows.map(r => r.influencers?.platform).filter(Boolean))) as string[]
+
+  const REPOST_OPTIONS = [
+    { value: 'all',  label: '전체' },
+    { value: 'O',    label: 'O' },
+    { value: '▲',   label: '▲' },
+    { value: 'X',    label: 'X' },
+    { value: 'none', label: '미설정' },
+  ]
+
   const filtered = rows.filter(r => {
     if (uploadFilter !== 'all' && r.upload_status !== uploadFilter) return false
     if (reviewLinkFilter === 'has'  && !r.review_link)  return false
     if (reviewLinkFilter === 'none' && !!r.review_link) return false
+    if (platformFilter !== 'all' && (r.influencers?.platform ?? '') !== platformFilter) return false
+    if (repostFilter === 'none' && r.repost) return false
+    if (repostFilter !== 'all' && repostFilter !== 'none' && r.repost !== repostFilter) return false
     if (search) {
       const q    = search.toLowerCase()
       const text = [r.influencers?.display_name, r.influencers?.handle, r.email].join(' ').toLowerCase()
@@ -317,7 +338,26 @@ export default function Confirmed() {
                   <thead>
                     <tr>
                       <th style={{ ...thBase, textAlign: 'center' }}>No.</th>
-                      <th style={thBase}>플랫폼</th>
+                      <th style={thBase}>
+                        <div ref={platformFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                          <span>플랫폼</span>
+                          <button
+                            onClick={() => { setShowPlatformFilter(p => !p); setShowRepostFilter(false); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: platformFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: platformFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                            <ListFilter size={13} />
+                          </button>
+                          {showPlatformFilter && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                              {[{ value: 'all', label: '전체' }, ...platforms.map(p => ({ value: p, label: p }))].map(o => (
+                                <button key={o.value} onClick={() => { setPlatformFilter(o.value); setShowPlatformFilter(false) }}
+                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: platformFilter === o.value ? 700 : 500, background: platformFilter === o.value ? '#d1fae5' : 'transparent', color: platformFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </th>
                       <th style={thBase}>NAME</th>
                       <th style={{ ...thBase, textAlign: 'right' }}>팔로워</th>
                       {/* 리뷰 업로드 with filter */}
@@ -341,7 +381,26 @@ export default function Confirmed() {
                           )}
                         </div>
                       </th>
-                      <th style={{ ...thBase, textAlign: 'center' }}>Repost</th>
+                      <th style={thBase}>
+                        <div ref={repostFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                          <span>Repost</span>
+                          <button
+                            onClick={() => { setShowRepostFilter(p => !p); setShowPlatformFilter(false); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: repostFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: repostFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                            <ListFilter size={13} />
+                          </button>
+                          {showRepostFilter && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 120, marginTop: 4 }}>
+                              {REPOST_OPTIONS.map(o => (
+                                <button key={o.value} onClick={() => { setRepostFilter(o.value); setShowRepostFilter(false) }}
+                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: repostFilter === o.value ? 700 : 500, background: repostFilter === o.value ? '#d1fae5' : 'transparent', color: repostFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </th>
                       <th style={{ ...thBase, textAlign: 'center' }}>구글폼 제출</th>
                       {/* 리뷰 모니터링 링크 with filter */}
                       <th style={thBase}>
