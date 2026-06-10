@@ -252,7 +252,7 @@ export default function Dashboard() {
             stats: statsListup, color: '#3b82f6', go: '인플루언서 보기',
           },
           {
-            to: '/brand/contact', icon: <Building2 size={20} />,
+            to: '/brand/db/general', icon: <Building2 size={20} />,
             title: '브랜드 리스트업', desc: '브랜드 컨택 현황 · 확정 브랜드 관리',
             stats: statsOutreach, color: '#8b5cf6', go: '브랜드 보기',
           },

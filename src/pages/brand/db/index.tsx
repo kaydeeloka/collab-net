@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
+import { usePhase } from '../../../contexts/PhaseContext'
 
 interface Stats {
   generalCount:  number
@@ -11,6 +12,7 @@ interface Stats {
 export default function BrandDb() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
+  const { activePhaseId } = usePhase()
   const [stats, setStats] = useState<Stats | null>(null)
 
   const tabs = [
@@ -19,12 +21,13 @@ export default function BrandDb() {
   ]
   const activeTab = tabs.find(t => pathname.startsWith(t.path))?.path ?? tabs[0].path
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => { loadStats() }, [activePhaseId])
 
   async function loadStats() {
+    if (!activePhaseId) { setStats({ generalCount: 0, personalCount: 0, contactedCount: 0 }); return }
     const [{ data: general }, { data: personal }] = await Promise.all([
-      supabase.from('brand_general').select('contacted'),
-      supabase.from('brand_personal').select('contacted'),
+      supabase.from('brand_general').select('contacted').eq('phase_id', activePhaseId),
+      supabase.from('brand_personal').select('contacted').eq('phase_id', activePhaseId),
     ])
     const generalCount   = general?.length ?? 0
     const personalCount  = personal?.length ?? 0

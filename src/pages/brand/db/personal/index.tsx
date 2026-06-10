@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { useToast } from '../../../../contexts/ToastContext'
+import { usePhase } from '../../../../contexts/PhaseContext'
 import Modal from '../../../../components/Modal'
-import Spinner from '../../../../components/Spinner'
 import Pagination from '../../../../components/Pagination'
 
 const PAGE_SIZE = 25
@@ -17,17 +17,18 @@ function paginate<T>(items: T[], page: number) {
 interface BrandPersonal {
   id:               string
   brand_name:       string
-  contact_name:     string
-  department:       string
-  position:         string
-  personal_email:   string
-  personal_phone:   string
-  website:          string
+  contact_name:     string | null
+  department:       string | null
+  position:         string | null
+  personal_email:   string | null
+  personal_phone:   string | null
+  website:          string | null
   rep_email:        string | null
   telephone:        string | null
   product_category: string | null
   overseas:         boolean
   contacted:        boolean
+  phase_id:         string | null
   created_at:       string
 }
 
@@ -43,11 +44,13 @@ const EMPTY_FORM = {
   telephone:        '',
   product_category: '',
   overseas:         false,
+  phase_id:         '',
 }
 type Form = typeof EMPTY_FORM
 
 export default function BrandDbPersonal() {
   const { showToast } = useToast()
+  const { activePhaseId } = usePhase()
 
   const [rows,    setRows]    = useState<BrandPersonal[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,13 +69,15 @@ export default function BrandDbPersonal() {
   const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM })
   const [saving,   setSaving]   = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activePhaseId])
 
   async function load() {
+    if (!activePhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
       .from('brand_personal')
       .select('*')
+      .eq('phase_id', activePhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as BrandPersonal[])
@@ -80,27 +85,27 @@ export default function BrandDbPersonal() {
   }
 
   async function addBrand() {
-    const { brand_name, contact_name, department, position, personal_email, personal_phone, website } = addForm
-    if (!brand_name.trim() || !contact_name.trim() || !department.trim() || !position.trim() || !personal_email.trim() || !personal_phone.trim() || !website.trim()) {
-      showToast('필수 항목을 모두 입력해주세요.', 'error'); return
+    if (!addForm.brand_name.trim()) {
+      showToast('브랜드명을 입력해주세요.', 'error'); return
     }
     setAdding(true)
     const { error } = await supabase.from('brand_personal').insert({
-      brand_name:       brand_name.trim(),
-      contact_name:     contact_name.trim(),
-      department:       department.trim(),
-      position:         position.trim(),
-      personal_email:   personal_email.trim(),
-      personal_phone:   personal_phone.trim(),
-      website:          website.trim(),
+      brand_name:       addForm.brand_name.trim(),
+      contact_name:     addForm.contact_name.trim()     || null,
+      department:       addForm.department.trim()       || null,
+      position:         addForm.position.trim()         || null,
+      personal_email:   addForm.personal_email.trim()   || null,
+      personal_phone:   addForm.personal_phone.trim()   || null,
+      website:          addForm.website.trim()          || null,
       rep_email:        addForm.rep_email.trim()        || null,
       telephone:        addForm.telephone.trim()        || null,
       product_category: addForm.product_category.trim() || null,
       overseas:         addForm.overseas,
+      phase_id:         addForm.phase_id                || null,
     })
     if (error) { showToast(error.message, 'error'); setAdding(false); return }
     showToast('브랜드가 추가되었습니다', 'success')
-    setShowAdd(false); setAddForm({ ...EMPTY_FORM }); setAdding(false)
+    setShowAdd(false); setAddForm({ ...EMPTY_FORM, phase_id: activePhaseId ?? '' }); setAdding(false)
     load()
   }
 
@@ -110,38 +115,39 @@ export default function BrandDbPersonal() {
     setEditId(r.id)
     setEditForm({
       brand_name:       r.brand_name,
-      contact_name:     r.contact_name,
-      department:       r.department,
-      position:         r.position,
-      personal_email:   r.personal_email,
-      personal_phone:   r.personal_phone,
-      website:          r.website,
+      contact_name:     r.contact_name     ?? '',
+      department:       r.department       ?? '',
+      position:         r.position         ?? '',
+      personal_email:   r.personal_email   ?? '',
+      personal_phone:   r.personal_phone   ?? '',
+      website:          r.website          ?? '',
       rep_email:        r.rep_email        ?? '',
       telephone:        r.telephone        ?? '',
       product_category: r.product_category ?? '',
       overseas:         r.overseas,
+      phase_id:         r.phase_id         ?? '',
     })
     setShowEdit(true)
   }
 
   async function saveEdit() {
-    const { brand_name, contact_name, department, position, personal_email, personal_phone, website } = editForm
-    if (!brand_name.trim() || !contact_name.trim() || !department.trim() || !position.trim() || !personal_email.trim() || !personal_phone.trim() || !website.trim()) {
-      showToast('필수 항목을 모두 입력해주세요.', 'error'); return
+    if (!editForm.brand_name.trim()) {
+      showToast('브랜드명을 입력해주세요.', 'error'); return
     }
     setSaving(true)
     const { error } = await supabase.from('brand_personal').update({
-      brand_name:       brand_name.trim(),
-      contact_name:     contact_name.trim(),
-      department:       department.trim(),
-      position:         position.trim(),
-      personal_email:   personal_email.trim(),
-      personal_phone:   personal_phone.trim(),
-      website:          website.trim(),
+      brand_name:       editForm.brand_name.trim(),
+      contact_name:     editForm.contact_name.trim()     || null,
+      department:       editForm.department.trim()       || null,
+      position:         editForm.position.trim()         || null,
+      personal_email:   editForm.personal_email.trim()   || null,
+      personal_phone:   editForm.personal_phone.trim()   || null,
+      website:          editForm.website.trim()          || null,
       rep_email:        editForm.rep_email.trim()        || null,
       telephone:        editForm.telephone.trim()        || null,
       product_category: editForm.product_category.trim() || null,
       overseas:         editForm.overseas,
+      phase_id:         editForm.phase_id                || null,
     }).eq('id', editId)
     if (error) { showToast(error.message, 'error'); setSaving(false); return }
     showToast('저장 완료', 'success')
@@ -174,7 +180,7 @@ export default function BrandDbPersonal() {
 
   const field = (
     label: string,
-    key: keyof Omit<Form, 'overseas'>,
+    key: keyof Omit<Form, 'overseas' | 'phase_id'>,
     form: Form,
     setForm: (f: Form) => void,
     opts?: { placeholder?: string; required?: boolean; type?: string }
@@ -204,23 +210,24 @@ export default function BrandDbPersonal() {
   )
 
   const modalFields = (form: Form, setForm: (f: Form) => void) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '1px solid var(--gray-2)', paddingBottom: 6 }}>필수 입력</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {field('브랜드명',       'brand_name',     form, setForm, { required: true })}
-        {field('성명',    'contact_name',   form, setForm, { required: true })}
-        {field('부서',          'department',     form, setForm, { required: true })}
-        {field('직급',          'position',       form, setForm, { required: true })}
-        {field('개인 이메일',   'personal_email', form, setForm, { required: true, type: 'email' })}
-        {field('개인 전화번호', 'personal_phone', form, setForm, { required: true, type: 'tel' })}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {field('브랜드명', 'brand_name',     form, setForm, { required: true })}
+        {field('성명',     'contact_name',   form, setForm, { required: true })}
       </div>
-      {field('홈페이지', 'website', form, setForm, { required: true, placeholder: 'https://' })}
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', borderBottom: '1px solid var(--gray-2)', paddingBottom: 6, marginTop: 4 }}>선택 입력</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {field('대표 메일', 'rep_email',  form, setForm, { type: 'email' })}
-        {field('내선 번호', 'telephone',  form, setForm)}
+      {field('개인 이메일', 'personal_email', form, setForm, { required: true, type: 'email' })}
+      {field('홈페이지',    'website',        form, setForm, { required: true, placeholder: 'https://' })}
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {field('부서',               'department',      form, setForm)}
+        {field('직급',               'position',        form, setForm)}
+        {field('개인 전화번호',      'personal_phone',  form, setForm, { type: 'tel' })}
+        {field('내선 번호',          'telephone',       form, setForm)}
+        {field('대표 메일',          'rep_email',       form, setForm, { type: 'email' })}
+        {field('판매 제품 카테고리', 'product_category', form, setForm)}
       </div>
-      {field('판매 제품 종류', 'product_category', form, setForm)}
       {overseasBtn(form, setForm)}
     </div>
   )
@@ -229,22 +236,14 @@ export default function BrandDbPersonal() {
     <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>{label}</span>
       {isLink && value
-        ? <a href={value.startsWith('http') ? value : 'https://' + value} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13 }}>↗ 열기</a>
+        ? <a href={value.startsWith('http') ? value : 'https://' + value} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13 }}>↗ 방문</a>
         : <span style={{ fontSize: 13, color: value ? 'var(--gray-8)' : 'var(--gray-3)' }}>{value || '—'}</span>}
     </div>
   )
 
   return (
     <div>
-      {/* Toolbar */}
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button className="page-banner-btn" onClick={() => { setAddForm({ ...EMPTY_FORM }); setShowAdd(true) }}>+ DB 추가</button>
-        <button className="page-banner-btn page-banner-btn--secondary" style={{ marginLeft: 'auto' }} onClick={load}>
-          {loading ? <Spinner sm /> : '↻'} 새로고침
-        </button>
-      </div>
-
-      {/* Search */}
+      {/* Toolbar + Search */}
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
           value={search}
@@ -253,11 +252,16 @@ export default function BrandDbPersonal() {
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+        <button
+          onClick={() => { setAddForm({ ...EMPTY_FORM, phase_id: activePhaseId ?? '' }); setShowAdd(true) }}
+          style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
+          + DB 추가
+        </button>
       </div>
 
       {/* Table */}
       <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
-        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 300px)' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 900 }}>
             <colgroup>
               <col style={{ width: 36 }} />
@@ -296,12 +300,16 @@ export default function BrandDbPersonal() {
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.position}</td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
-                    <a href={`mailto:${r.personal_email}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{r.personal_email}</a>
+                    {r.personal_email
+                      ? <a href={`mailto:${r.personal_email}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{r.personal_email}</a>
+                      : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.personal_phone}</td>
+                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.personal_phone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px' }}>
-                    <a href={r.website.startsWith('http') ? r.website : 'https://' + r.website} target="_blank" rel="noopener"
-                      onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 열기</a>
+                    {r.website
+                      ? <a href={r.website.startsWith('http') ? r.website : 'https://' + r.website} target="_blank" rel="noopener"
+                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 방문</a>
+                      : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                   </td>
                   <td style={{ padding: '0 12px', textAlign: 'center' }}>
                     {r.overseas
@@ -342,7 +350,7 @@ export default function BrandDbPersonal() {
       {viewRow && (
         <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {infoRow('성명',      viewRow.contact_name)}
+            {infoRow('성명',      viewRow.contact_name ?? null)}
             {infoRow('부서',        viewRow.department)}
             {infoRow('직급',        viewRow.position)}
             {infoRow('개인 이메일', viewRow.personal_email)}

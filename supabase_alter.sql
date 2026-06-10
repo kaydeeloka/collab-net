@@ -150,6 +150,24 @@ ALTER TABLE confirmed_influencers DROP COLUMN IF EXISTS upload_link;
 --  RENAME COLUMN
 -- ============================================================
 
+-- brand_personal — make all contact fields optional (only brand_name required)
+ALTER TABLE brand_personal ALTER COLUMN department     DROP NOT NULL;
+ALTER TABLE brand_personal ALTER COLUMN position       DROP NOT NULL;
+ALTER TABLE brand_personal ALTER COLUMN personal_phone DROP NOT NULL;
+ALTER TABLE brand_personal ALTER COLUMN website        DROP NOT NULL;
+ALTER TABLE brand_personal ALTER COLUMN personal_email DROP NOT NULL;
+
+-- brand_general, brand_personal — phase tracking
+ALTER TABLE brand_general  ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES phases(id);
+ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES phases(id);
+
+-- brand_general — rename name → company, phone → telephone
+ALTER TABLE brand_general RENAME COLUMN name TO company;
+ALTER TABLE brand_general RENAME COLUMN phone TO telephone;
+
+-- brand_general — convert email from single TEXT to TEXT[] (preserves existing values)
+ALTER TABLE brand_general ALTER COLUMN email TYPE TEXT[] USING CASE WHEN email IS NULL THEN NULL ELSE ARRAY[email] END;
+
 -- ALTER TABLE influencers RENAME COLUMN <old_name> TO <new_name>;
 
 -- ============================================================

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { useToast } from '../../../../contexts/ToastContext'
+import { usePhase } from '../../../../contexts/PhaseContext'
 import Modal from '../../../../components/Modal'
-import Spinner from '../../../../components/Spinner'
 import Pagination from '../../../../components/Pagination'
 
 const PAGE_SIZE = 25
@@ -17,29 +17,32 @@ function paginate<T>(items: T[], page: number) {
 interface BrandGeneral {
   id:               string
   brand_name:       string
-  name:             string | null
-  email:            string | null
-  phone:            string | null
+  company:          string | null
+  email:            string[] | null
+  telephone:        string | null
   website:          string | null
   product_category: string | null
   overseas:         boolean
   contacted:        boolean
+  phase_id:         string | null
   created_at:       string
 }
 
 const EMPTY_FORM = {
   brand_name:       '',
-  name:             '',
-  email:            '',
-  phone:            '',
+  company:          '',
+  email:            [''],
+  telephone:        '',
   website:          '',
   product_category: '',
   overseas:         false,
+  phase_id:         '',
 }
 type Form = typeof EMPTY_FORM
 
-export default function BrandDbMail() {
+export default function BrandDbGeneral() {
   const { showToast } = useToast()
+  const { activePhaseId } = usePhase()
 
   const [rows,     setRows]     = useState<BrandGeneral[]>([])
   const [loading,  setLoading]  = useState(true)
@@ -48,7 +51,7 @@ export default function BrandDbMail() {
 
   // add modal
   const [showAdd,  setShowAdd]  = useState(false)
-  const [addForm,  setAddForm]  = useState<Form>({ ...EMPTY_FORM })
+  const [addForm,  setAddForm]  = useState<Form>({ ...EMPTY_FORM, email: [''] })
   const [adding,   setAdding]   = useState(false)
 
   // view modal
@@ -58,38 +61,46 @@ export default function BrandDbMail() {
   // edit modal
   const [showEdit, setShowEdit] = useState(false)
   const [editId,   setEditId]   = useState('')
-  const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM })
+  const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM, email: [''] })
   const [saving,   setSaving]   = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activePhaseId])
 
   async function load() {
+    if (!activePhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
       .from('brand_general')
       .select('*')
+      .eq('phase_id', activePhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as BrandGeneral[])
     setLoading(false)
   }
 
+  function cleanEmails(emails: string[]) {
+    const clean = emails.map(e => e.trim()).filter(Boolean)
+    return clean.length ? clean : null
+  }
+
   async function addBrand() {
-    if (!addForm.brand_name.trim()) return
+    if (!addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()) return
     setAdding(true)
     const { error } = await supabase.from('brand_general').insert({
       brand_name:       addForm.brand_name.trim(),
-      name:             addForm.name.trim()             || null,
-      email:            addForm.email.trim()            || null,
-      phone:            addForm.phone.trim()            || null,
+      company:          addForm.company.trim()          || null,
+      email:            cleanEmails(addForm.email),
+      telephone:        addForm.telephone.trim()        || null,
       website:          addForm.website.trim()          || null,
       product_category: addForm.product_category.trim() || null,
       overseas:         addForm.overseas,
+      phase_id:         addForm.phase_id                || null,
     })
     if (error) { showToast(error.message, 'error'); setAdding(false); return }
     showToast('브랜드가 추가되었습니다', 'success')
     setShowAdd(false)
-    setAddForm({ ...EMPTY_FORM })
+    setAddForm({ ...EMPTY_FORM, email: [''], phase_id: activePhaseId ?? '' })
     setAdding(false)
     load()
   }
@@ -103,12 +114,13 @@ export default function BrandDbMail() {
     setEditId(r.id)
     setEditForm({
       brand_name:       r.brand_name,
-      name:             r.name             ?? '',
-      email:            r.email            ?? '',
-      phone:            r.phone            ?? '',
+      company:          r.company          ?? '',
+      email:            r.email?.length ? r.email : [''],
+      telephone:        r.telephone        ?? '',
       website:          r.website          ?? '',
       product_category: r.product_category ?? '',
       overseas:         r.overseas,
+      phase_id:         r.phase_id         ?? '',
     })
     setShowEdit(true)
   }
@@ -117,12 +129,13 @@ export default function BrandDbMail() {
     setSaving(true)
     const { error } = await supabase.from('brand_general').update({
       brand_name:       editForm.brand_name.trim(),
-      name:             editForm.name.trim()             || null,
-      email:            editForm.email.trim()            || null,
-      phone:            editForm.phone.trim()            || null,
+      company:          editForm.company.trim()          || null,
+      email:            cleanEmails(editForm.email),
+      telephone:        editForm.telephone.trim()        || null,
       website:          editForm.website.trim()          || null,
       product_category: editForm.product_category.trim() || null,
       overseas:         editForm.overseas,
+      phase_id:         editForm.phase_id                || null,
     }).eq('id', editId)
     if (error) { showToast(error.message, 'error'); setSaving(false); return }
     showToast('저장 완료', 'success')
@@ -149,16 +162,16 @@ export default function BrandDbMail() {
   const filtered = rows.filter(r => {
     if (!search) return true
     const q = search.toLowerCase()
-    return [r.brand_name, r.name, r.email, r.phone, r.website, r.product_category]
+    return [r.brand_name, r.company, r.telephone, r.website, r.product_category, ...(r.email ?? [])]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const sorted = [...filtered].sort((a, b) => (a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1))
   const pg = paginate(sorted, page)
 
-  // Shared field renderer
+  // Shared text field renderer (excludes email which is handled separately)
   const formField = (
     label: string,
-    key: keyof Omit<Form, 'overseas'>,
+    key: keyof Omit<Form, 'overseas' | 'email' | 'phase_id'>,
     form: Form,
     setForm: (f: Form) => void,
     opts?: { placeholder?: string; required?: boolean }
@@ -171,8 +184,44 @@ export default function BrandDbMail() {
         value={form[key] as string}
         onChange={e => setForm({ ...form, [key]: e.target.value })}
         placeholder={opts?.placeholder}
-        style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+        style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
       />
+    </div>
+  )
+
+  const emailListEditor = (form: Form, setForm: (f: Form) => void, required?: boolean) => (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
+        이메일{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+      </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {form.email.map((e, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={e}
+              onChange={ev => {
+                const next = [...form.email]
+                next[idx] = ev.target.value
+                setForm({ ...form, email: next })
+              }}
+              placeholder="contact@brand.com"
+              style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            />
+            {form.email.length > 1 && (
+              <button type="button"
+                onClick={() => setForm({ ...form, email: form.email.filter((_, i) => i !== idx) })}
+                style={{ padding: '5px 9px', fontSize: 13, lineHeight: 1, borderRadius: 6, border: '1px solid var(--gray-3)', background: '#fff0f0', color: '#c00', cursor: 'pointer', fontFamily: 'inherit' }}>
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button"
+          onClick={() => setForm({ ...form, email: [...form.email, ''] })}
+          style={{ alignSelf: 'flex-start', padding: '4px 12px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', background: 'var(--gray-1)', color: 'var(--gray-7)', cursor: 'pointer', fontFamily: 'inherit' }}>
+          + 이메일 추가
+        </button>
+      </div>
     </div>
   )
 
@@ -195,43 +244,40 @@ export default function BrandDbMail() {
 
   return (
     <div>
-      {/* Toolbar */}
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button className="page-banner-btn" onClick={() => { setAddForm({ ...EMPTY_FORM }); setShowAdd(true) }}>+ DB 추가</button>
-        <button className="page-banner-btn page-banner-btn--secondary" style={{ marginLeft: 'auto' }} onClick={load}>
-          {loading ? <Spinner sm /> : '↻'} 새로고침
-        </button>
-      </div>
-
-      {/* Search */}
+      {/* Toolbar + Search */}
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1) }}
-          placeholder="브랜드명, 이메일, 전화번호로 검색..."
+          placeholder="브랜드명, 이메일, 회사 명으로 검색..."
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+        <button
+          onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: activePhaseId ?? '' }); setShowAdd(true) }}
+          style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
+          + DB 추가
+        </button>
       </div>
 
       {/* Table */}
       <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
-        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 300px)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 960 }}>
+        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1080 }}>
             <colgroup>
-              <col style={{ width: 36 }} />
+              <col style={{ width: 40 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 210 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 180 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ minWidth: 140 }} />
-              <col style={{ width: 80 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ minWidth: 160 }} />
               <col style={{ width: 90 }} />
+              <col style={{ width: 100 }} />
             </colgroup>
             <thead>
               <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
-                {['No.', '브랜드명', '성명', '이메일', '전화번호', '홈페이지', '판매 제품 종류', '해외 진출', '컨택 대상'].map((h, i) => (
+                {['No.', '브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h, i) => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
@@ -248,21 +294,28 @@ export default function BrandDbMail() {
                   style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: r.contacted ? '#f0fdf4' : undefined }}
                   onMouseEnter={e => (e.currentTarget.style.background = r.contacted ? '#dcfce7' : 'var(--gray-1)')}
                   onMouseLeave={e => (e.currentTarget.style.background = r.contacted ? '#f0fdf4' : '')}>
-                  <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)', padding: '0 8px', height: 44 }}>{i + 1}</td>
+                  <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)', padding: '0 8px', height: 50 }}>{i + 1}</td>
                   <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{r.brand_name}</td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.name || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
-                    {r.email
-                      ? <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none' }}>{r.email}</a>
-                      : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    {r.email?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <a href={`mailto:${r.email[0]}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                          {r.email[0]}
+                        </a>
+                        {r.email.length > 1 && (
+                          <span style={{ fontSize: 10, color: 'var(--gray-5)', fontWeight: 600 }}>+{r.email.length - 1} more</span>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.phone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px' }}>
                     {r.website
                       ? <a href={r.website.startsWith('http') ? r.website : 'https://' + r.website} target="_blank" rel="noopener"
-                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 열기</a>
+                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 방문</a>
                       : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                   </td>
+                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.company || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
+                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.telephone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.product_category || <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
@@ -298,23 +351,22 @@ export default function BrandDbMail() {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="브랜드 DB 추가">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('브랜드명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
-            {formField('성명', 'name', addForm, setAddForm, { placeholder: '성명 입력' })}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('이메일', 'email', addForm, setAddForm, { placeholder: 'contact@brand.com' })}
-            {formField('전화번호', 'phone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
-          </div>
-          {formField('홈페이지', 'website', addForm, setAddForm, { placeholder: 'https://www.brand.com' })}
+          {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
+          {emailListEditor(addForm, setAddForm, true)}
+          {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-          {formField('판매 제품 종류', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품' })}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {formField('회사 명', 'company', addForm, setAddForm, { placeholder: '회사명 입력' })}
+            {formField('내선번호', 'telephone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
+          </div>
+          {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품' })}
           {overseasToggle(addForm, setAddForm)}
         </div>
         <div className="modal-actions" style={{ marginTop: 20 }}>
           <button className="modal-btn-cancel" onClick={() => setShowAdd(false)}>취소</button>
-          <button className="modal-btn-confirm" onClick={addBrand} disabled={adding || !addForm.brand_name.trim()}>
+          <button className="modal-btn-confirm" onClick={addBrand}
+            disabled={adding || !addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()}>
             {adding ? '추가 중...' : '추가'}
           </button>
         </div>
@@ -324,13 +376,24 @@ export default function BrandDbMail() {
       {viewRow && (
         <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Emails */}
+            {viewRow.email?.length ? (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>이메일</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {viewRow.email.map((e, i) => (
+                    <a key={i} href={`mailto:${e}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{e}</a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
               {[
-                { label: '성명',      value: viewRow.name,     href: null },
-                { label: '이메일',      value: viewRow.email,    href: viewRow.email ? `mailto:${viewRow.email}` : null },
-                { label: '전화번호',    value: viewRow.phone,    href: null },
-                { label: '판매 제품 종류', value: viewRow.product_category, href: null },
-                { label: '해외 진출',   value: viewRow.overseas ? '있음' : '없음', href: null },
+                { label: '회사 명',           value: viewRow.company,          href: null },
+                { label: '내선번호',           value: viewRow.telephone,        href: null },
+                { label: '판매 제품 카테고리', value: viewRow.product_category, href: null },
+                { label: '해외 진출 여부',     value: viewRow.overseas ? '있음' : '없음', href: null },
               ].map(({ label, value, href }) => (
                 <div key={label}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
@@ -370,23 +433,22 @@ export default function BrandDbMail() {
       <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 편집">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('브랜드명', 'brand_name', editForm, setEditForm, { required: true })}
-            {formField('성명', 'name', editForm, setEditForm)}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('이메일', 'email', editForm, setEditForm)}
-            {formField('전화번호', 'phone', editForm, setEditForm)}
-          </div>
-          {formField('홈페이지', 'website', editForm, setEditForm)}
+          {formField('브랜드 명', 'brand_name', editForm, setEditForm, { required: true })}
+          {emailListEditor(editForm, setEditForm, true)}
+          {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-          {formField('판매 제품 종류', 'product_category', editForm, setEditForm)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {formField('회사 명', 'company', editForm, setEditForm)}
+            {formField('내선번호', 'telephone', editForm, setEditForm)}
+          </div>
+          {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm)}
           {overseasToggle(editForm, setEditForm)}
         </div>
         <div className="modal-actions" style={{ marginTop: 20 }}>
           <button className="modal-btn-cancel" onClick={() => setShowEdit(false)}>취소</button>
-          <button className="modal-btn-confirm" onClick={saveEdit} disabled={saving || !editForm.brand_name.trim()}>
+          <button className="modal-btn-confirm" onClick={saveEdit}
+            disabled={saving || !editForm.brand_name.trim() || !editForm.email.some(e => e.trim()) || !editForm.website.trim()}>
             {saving ? '저장 중...' : '저장'}
           </button>
         </div>
