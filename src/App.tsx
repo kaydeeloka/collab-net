@@ -30,6 +30,8 @@ import ConfirmedMonitoringLink from './pages/influencer/confirmed/monitoring'
 import BrandDb         from './pages/brand/db'
 import BrandDbGeneral  from './pages/brand/db/general'
 import BrandDbPersonal from './pages/brand/db/personal'
+// BRAND — template
+import BrandTemplate         from './pages/brand/template'
 // BRAND — contact
 import BrandContact          from './pages/brand/contact'
 import BrandContactList      from './pages/brand/contact/list'
@@ -101,6 +103,7 @@ export default function App() {
                 <Route path="/brand/contact/list"                   element={<BrandContactList />} />
                 <Route path="/brand/contact/template"               element={<BrandContactTemplate />} />
                 <Route path="/brand/contact/completed"              element={<BrandContactCompleted />} />
+                <Route path="/brand/template"                           element={<BrandTemplate />} />
                 <Route path="/brand/confirmed" element={<BrandConfirmed />}>
                   <Route index element={<Navigate to="management" replace />} />
                   <Route path="management" element={<BrandConfirmedFolders />} />

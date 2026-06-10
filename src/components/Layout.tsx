@@ -36,15 +36,10 @@ const GROUPS: SideGroup[] = [
   {
     label: 'BRAND', icon: <Building2 size={22} />, defaultTo: '/brand/db', prefix: '/brand',
     children: [
-      { to: '/brand/db', label: '브랜드 DB' },
-      {
-        to: '/brand/contact', label: '브랜드 컨택',
-        sub: [
-          { to: '/brand/contact', label: '컨택 리스트', end: true },
-          { to: '/brand/contact/template', label: '템플릿 관리' },
-        ],
-      },
+      { to: '/brand/db',       label: '브랜드 DB' },
+      { to: '/brand/contact',  label: '브랜드 컨택' },
       { to: '/brand/confirmed', label: '확정 브랜드' },
+      { to: '/brand/template', label: '템플릿 관리' },
     ],
   },
   {

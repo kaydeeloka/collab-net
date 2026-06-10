@@ -1,10 +1,48 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter } from 'lucide-react'
+import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
+
+// ── Templates (shared with /brand/template page via localStorage) ─────────────
+const BRAND_TPL_KEY = 'mm_brand_email_templates'
+function loadTemplates() {
+  try { const v = localStorage.getItem(BRAND_TPL_KEY); return v ? JSON.parse(v) : [] } catch { return [] }
+}
+
+const DUMMY: Record<string, { value: string; color: string }> = {
+  '{{브랜드명}}':  { value: 'AmorePacific',      color: '#a07800' },
+  '{{담당자}}':    { value: '김민지',             color: '#0369a1' },
+  '{{이메일}}':    { value: 'brand@example.com',  color: '#b45309' },
+  '{{홈페이지}}':  { value: 'https://example.com', color: '#065f46' },
+}
+
+function renderWithDummy(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []; let remaining = text; let key = 0
+  while (remaining.length > 0) {
+    let earliest = -1, earliestTag = ''
+    for (const tag of Object.keys(DUMMY)) {
+      const idx = remaining.indexOf(tag)
+      if (idx !== -1 && (earliest === -1 || idx < earliest)) { earliest = idx; earliestTag = tag }
+    }
+    if (earliest === -1) { parts.push(remaining); break }
+    if (earliest > 0) parts.push(remaining.slice(0, earliest))
+    const d = DUMMY[earliestTag]
+    parts.push(<span key={key++} style={{ background: d.color + '18', color: d.color, fontWeight: 700, borderRadius: 4, padding: '0 3px', fontSize: '0.95em' }}>{d.value}</span>)
+    remaining = remaining.slice(earliest + earliestTag.length)
+  }
+  return parts
+}
+
+function applyPlaceholders(text: string, row: { brand: string; name: string | null; email: string | null }) {
+  return text
+    .replace(/\{\{브랜드명\}\}/g, row.brand || '')
+    .replace(/\{\{담당자\}\}/g,   row.name  || '')
+    .replace(/\{\{이메일\}\}/g,   row.email || '')
+}
 
 const TYPES = ['일반', '퍼스널']
 const TYPE_COLOR: Record<string, string> = {
@@ -59,8 +97,18 @@ export default function BrandContact() {
   const [page,             setPage]             = useState(1)
   const statusFilterRef = useRef<HTMLDivElement>(null)
 
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
-  const [bulkSending, setBulkSending] = useState(false)
+  const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
+  const [bulkSending,     setBulkSending]     = useState(false)
+  const [templates,       setTemplates]       = useState<any[]>(loadTemplates)
+  const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
+  const [showBulkPreview, setShowBulkPreview] = useState(false)
+
+  // Reload templates when window regains focus (user may have edited in /brand/template)
+  useEffect(() => {
+    const handler = () => setTemplates(loadTemplates())
+    window.addEventListener('focus', handler)
+    return () => window.removeEventListener('focus', handler)
+  }, [])
 
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -154,7 +202,7 @@ export default function BrandContact() {
       {/* Stats */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
           <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>전체 컨택 리스트</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
@@ -229,13 +277,28 @@ export default function BrandContact() {
             {checkedIds.size > 0 ? `${checkedIds.size}건 선택됨` : '선택 없음'}
           </span>
           <div style={{ width: 1, height: 18, background: 'var(--gray-3)', flexShrink: 0 }} />
-          <button disabled={bulkSending || checkedIds.size === 0} style={{ marginLeft: 'auto', padding: '5px 14px', background: checkedIds.size === 0 ? 'var(--gray-2)' : 'var(--blue-dk)', color: checkedIds.size === 0 ? 'var(--gray-5)' : '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.55 : 1, flexShrink: 0 }}
+          {templates.length === 0
+            ? <span style={{ fontSize: 12, color: 'var(--gray-4)', fontStyle: 'italic' }}>템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요</span>
+            : <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
+                style={{ flex: 1, minWidth: 160, maxWidth: 300, fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 7, padding: '5px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)' }}>
+                {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+              </select>
+          }
+          <button onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}
+            style={{ padding: '5px 12px', background: '#fff', color: 'var(--gray-7)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 'auto' }}>
+            미리보기
+          </button>
+          <button disabled={bulkSending || checkedIds.size === 0 || templates.length === 0}
+            style={{ padding: '5px 14px', background: checkedIds.size === 0 ? 'var(--gray-2)' : 'var(--blue-dk)', color: checkedIds.size === 0 ? 'var(--gray-5)' : '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.55 : 1, flexShrink: 0 }}
             onClick={() => {
-              confirmToast.show(`${checkedIds.size}건 일괄 발송하시겠습니까?`, async () => {
+              const tpl = templates[bulkTplIdx]
+              if (!tpl) return
+              confirmToast.show(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
                 setBulkSending(true)
                 for (const key of Array.from(checkedIds)) {
                   const row = filtered.find(r => rowKey(r) === key)
-                  if (!row) continue
+                  if (!row || !row.email) continue
+                  await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
                   await updateField(row, { send_count: row.send_count + 1, status: 'yes' })
                 }
                 setBulkSending(false); setCheckedIds(new Set())
@@ -359,8 +422,10 @@ export default function BrandContact() {
                                 onClick={() => {
                                   if (isTerminal) return
                                   if (!row.email) { showToast('이메일 주소가 없습니다.', 'error'); return }
+                                  const tpl = templates[bulkTplIdx]
                                   const nextCount = row.send_count + 1
                                   confirmToast.show(`${row.brand}에게 발송하시겠습니까?`, async () => {
+                                    if (tpl) await gasPost({ action: 'sendOutreachEmail', to: row.email!, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
                                     await updateField(row, { send_count: nextCount, status: 'yes' })
                                     showToast(`${nextCount}차 발송 완료`, 'success')
                                   })
@@ -384,6 +449,34 @@ export default function BrandContact() {
           </>
         }
       </div>
+
+      {/* Bulk Preview Modal */}
+      {showBulkPreview && templates[bulkTplIdx] && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowBulkPreview(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 580, width: '90%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gray-8)' }}>템플릿 미리보기</div>
+              <button onClick={() => setShowBulkPreview(false)}
+                style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--gray-5)', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-5)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>
+              {templates[bulkTplIdx].name}
+            </div>
+            <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '14px 18px', border: '1px solid var(--gray-2)' }}>
+              <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>보내는 사람 · MiMuse Team</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
+                {renderWithDummy(templates[bulkTplIdx].subject)}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
+                {renderWithDummy(templates[bulkTplIdx].body)}
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 8 }}>치환 구문은 발송 시 자동 적용됩니다</div>
+          </div>
+        </div>
+      )}
 
       <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} confirmLabel="발송" confirmColor="var(--blue-dk)" />
     </div>
