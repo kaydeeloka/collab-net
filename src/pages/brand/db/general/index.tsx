@@ -3,6 +3,16 @@ import { supabase } from '../../../../lib/supabase'
 import { useToast } from '../../../../contexts/ToastContext'
 import Modal from '../../../../components/Modal'
 import Spinner from '../../../../components/Spinner'
+import Pagination from '../../../../components/Pagination'
+
+const PAGE_SIZE = 25
+function paginate<T>(items: T[], page: number) {
+  const total = items.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safe = Math.min(page, totalPages)
+  const startIdx = (safe - 1) * PAGE_SIZE
+  return { pageItems: items.slice(startIdx, startIdx + PAGE_SIZE), total, totalPages, page: safe, startIdx, endIdx: Math.min(startIdx + PAGE_SIZE, total) }
+}
 
 interface BrandGeneral {
   id:               string
@@ -34,6 +44,7 @@ export default function BrandDbMail() {
   const [rows,     setRows]     = useState<BrandGeneral[]>([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
+  const [page,     setPage]     = useState(1)
 
   // add modal
   const [showAdd,  setShowAdd]  = useState(false)
@@ -141,6 +152,8 @@ export default function BrandDbMail() {
     return [r.brand_name, r.name, r.email, r.phone, r.website, r.product_category]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
+  const sorted = [...filtered].sort((a, b) => (a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1))
+  const pg = paginate(sorted, page)
 
   // Shared field renderer
   const formField = (
@@ -194,7 +207,7 @@ export default function BrandDbMail() {
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
           placeholder="브랜드명, 이메일, 전화번호로 검색..."
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
@@ -230,7 +243,7 @@ export default function BrandDbMail() {
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
-              ) : filtered.map((r, i) => (
+              ) : pg.pageItems.map((r, i) => (
                 <tr key={r.id} onClick={() => openView(r)}
                   style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: r.contacted ? '#f0fdf4' : undefined }}
                   onMouseEnter={e => (e.currentTarget.style.background = r.contacted ? '#dcfce7' : 'var(--gray-1)')}
@@ -275,6 +288,10 @@ export default function BrandDbMail() {
             </tbody>
           </table>
         </div>
+        <Pagination page={pg.page} totalPages={pg.totalPages} total={pg.total}
+          startIdx={pg.startIdx} endIdx={pg.endIdx}
+          onPrev={() => setPage(p => Math.max(1, p - 1))}
+          onNext={() => setPage(p => Math.min(pg.totalPages, p + 1))} />
       </div>
 
       {/* ── Add Modal ── */}

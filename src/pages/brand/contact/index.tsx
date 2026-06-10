@@ -94,8 +94,10 @@ export default function BrandContact() {
   const [activeType,       setActiveType]       = useState('전체')
   const [statusFilter,     setStatusFilter]     = useState('')
   const [showStatusFilter, setShowStatusFilter] = useState(false)
+  const [filterDropdownPos, setFilterDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const [page,             setPage]             = useState(1)
   const statusFilterRef = useRef<HTMLDivElement>(null)
+  const filterBtnRef    = useRef<HTMLButtonElement>(null)
 
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
@@ -328,7 +330,7 @@ export default function BrandContact() {
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
           : <>
-            <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 160px)' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 380px)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
@@ -346,22 +348,19 @@ export default function BrandContact() {
                     <th style={{ ...thBase, minWidth: 90 }}>직급</th>
                     <th style={{ ...thBase, minWidth: 180 }}>이메일</th>
                     <th style={{ ...thBase, minWidth: 140 }}>
-                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span>상태</span>
-                        <button onClick={() => setShowStatusFilter(p => !p)}
+                        <button ref={filterBtnRef}
+                          onClick={() => {
+                            if (!showStatusFilter && filterBtnRef.current) {
+                              const r = filterBtnRef.current.getBoundingClientRect()
+                              setFilterDropdownPos({ top: r.bottom + 4, left: r.left })
+                            }
+                            setShowStatusFilter(p => !p)
+                          }}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: statusFilter ? (STATUS_STYLE[statusFilter]?.color ?? '#64748b') : 'transparent', color: statusFilter ? '#fff' : 'var(--gray-4)', cursor: 'pointer', padding: 0 }}>
                           <ListFilter size={13} />
                         </button>
-                        {showStatusFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 140, marginTop: 4 }}>
-                            {[{ value: '', label: '전체' }, ...STATUS_OPTIONS.filter(o => o.value !== '')].map(o => (
-                              <button key={o.value} onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false); setPage(1) }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.bg) ?? '#f1f5f9') : 'transparent', color: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.color) ?? 'var(--gray-7)') : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                {o.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </th>
                     <th style={{ ...thBase, minWidth: 90 }}>현황</th>
@@ -469,6 +468,19 @@ export default function BrandContact() {
           </>
         }
       </div>
+
+      {/* Status filter dropdown — fixed position to escape overflow container */}
+      {showStatusFilter && filterDropdownPos && (
+        <div ref={statusFilterRef}
+          style={{ position: 'fixed', top: filterDropdownPos.top, left: filterDropdownPos.left, zIndex: 9999, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 140 }}>
+          {[{ value: '', label: '전체' }, ...STATUS_OPTIONS.filter(o => o.value !== '')].map(o => (
+            <button key={o.value} onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false); setPage(1) }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.bg) ?? '#f1f5f9') : 'transparent', color: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.color) ?? 'var(--gray-7)') : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bulk Preview Modal */}
       {showBulkPreview && templates[bulkTplIdx] && (

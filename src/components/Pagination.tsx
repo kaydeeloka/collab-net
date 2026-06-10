@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function Pagination({ page, totalPages, total, startIdx, endIdx, onPrev, onNext }: Props) {
-  if (totalPages <= 1) return null
+  if (total === 0) return null
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
