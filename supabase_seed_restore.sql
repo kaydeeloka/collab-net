@@ -61,7 +61,7 @@ ON CONFLICT (phase_id, email) DO NOTHING;
 INSERT INTO influencers (
   created_at, phase_id, handle, display_name, email,
   followers, following, following_ratio, total_likes,
-  video_count, engagement_rate, profile_url, outreach
+  video_count, engagement_rate, profile_url, status
 ) VALUES
   -- Batch 1: 2026-05-20 (micro 10K–50K)
   ('2026-05-20', get_active_phase_id(), 'kaydeeloka',           'Kaydee',                     'kaydee@cranecomm.com',                  26375, 2039,  '7.70%',  2991375,  660,  0.33, NULL,                                      'target'),
@@ -215,7 +215,7 @@ ON CONFLICT (phase_id, handle) DO NOTHING;
 -- ============================================================
 --  7. CONFIRMED ACCEPT INFLUENCERS — added 2026-06-09
 -- ============================================================
-INSERT INTO influencers (created_at, phase_id, platform, handle, display_name, followers, outreach)
+INSERT INTO influencers (created_at, phase_id, platform, handle, display_name, followers, status)
 VALUES
   ('2026-06-09T00:00:00Z', get_active_phase_id(), 'TikTok',    'thatgirlkierstin',      'Kierstin Sedlak',           33000, 'accept'),
   ('2026-06-09T00:00:00Z', get_active_phase_id(), 'TikTok',    'lovebylexis',           'Alexis Beasley',            23100, 'accept'),
@@ -271,7 +271,7 @@ ON CONFLICT (phase_id, handle) DO UPDATE SET
   platform     = EXCLUDED.platform,
   display_name = EXCLUDED.display_name,
   followers    = EXCLUDED.followers,
-  outreach     = EXCLUDED.outreach;
+  status     = EXCLUDED.status;
 
 -- ============================================================
 --  8. CONFIRMED INFLUENCERS — auto-populate from accept rows
@@ -279,7 +279,7 @@ ON CONFLICT (phase_id, handle) DO UPDATE SET
 INSERT INTO confirmed_influencers (influencer_id, phase_id, email, upload_status)
 SELECT i.id, i.phase_id, i.email, 'Pending'
 FROM influencers i
-WHERE i.outreach = 'accept'
+WHERE i.status = 'accept'
   AND NOT EXISTS (
     SELECT 1 FROM confirmed_influencers c WHERE c.influencer_id = i.id
   );

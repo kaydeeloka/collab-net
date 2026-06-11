@@ -22,13 +22,13 @@ const TIER_COLOR: Record<string, string> = {
 
 const STATUS_OPTIONS = [
   { value: 'target',   label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
-  { value: 'yes',      label: '보냄',     bg: '#dbeafe', color: '#1d4ed8' },
-  { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
+  { value: 'yes',      label: '완료',     bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
   { value: 'positive', label: '긍정 검토', bg: '#d1fae5', color: '#065f46' },
   { value: 'negative', label: '부정 검토', bg: '#fee2e2', color: '#991b1b' },
   { value: 'reject',   label: '거절',     bg: '#fecaca', color: '#dc2626' },
   { value: 'accept',   label: '확정',     bg: '#bbf7d0', color: '#14532d' },
+  { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
   { value: 'paid',     label: '유가 협업', bg: '#ede9fe', color: '#7c3aed' },
 ]
 const STATUS_STYLE = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
@@ -53,8 +53,7 @@ interface Influencer {
   video_count: number
   engagement_rate: number
   profile_url: string | null
-  outreach: string
-  status: string | null
+  status: string
   contact_round: string | null
   first_sent_at: string | null
   reply_count: number | null
@@ -168,7 +167,7 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, outreach, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
       .eq('phase_id', activePhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -258,22 +257,22 @@ export default function Outreach() {
   const filtered = influencers
     .filter(r => {
       if (activeTier !== '전체' && r.tiers?.rank !== activeTier) return false
-      if (statusFilter && (r.status ?? '') !== statusFilter) return false
+      if (statusFilter && (r.status || '') !== statusFilter) return false
       if (roundFilter && (r.contact_round ?? '미컨택') !== roundFilter) return false
       return true
     })
     .sort((a, b) => {
-      const aAccepted = (a.status ?? '') === 'accept' ? 1 : 0
-      const bAccepted = (b.status ?? '') === 'accept' ? 1 : 0
+      const aAccepted = a.status === 'accept' ? 1 : 0
+      const bAccepted = b.status === 'accept' ? 1 : 0
       return aAccepted - bAccepted
     })
   const pg = paginate(filtered, page)
 
-  const sentCount    = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.outreach)).length
-  const repliedCount = influencers.filter(r => ['reply','negotiate'].includes(r.outreach)).length
+  const sentCount    = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
+  const repliedCount = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
   const tierBreakdown = TIERS.map(t => {
     const all  = influencers.filter(r => r.tiers?.rank === t)
-    const sent = all.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.outreach)).length
+    const sent = all.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
     return { tier: t, count: all.length, sent }
   })
 
