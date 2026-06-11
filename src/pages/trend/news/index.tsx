@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { gasGet, gasPost } from '../../../lib/api'
+import { supabase } from '../../../lib/supabase'
 import { escHtml } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 
 interface ArchiveItem {
-  dateKey: string
+  id: string
+  date_key: string
   date?: string
-  savedAt?: string
+  date_range?: string
+  report_title?: string
+  created_at: string
 }
 
 interface ArchiveGroup {
@@ -98,16 +102,19 @@ export default function Trends() {
   async function refreshArchiveList() {
     setArchiveLoading(true)
     try {
-      const data: { ok: boolean; archives?: ArchiveItem[]; error?: string } = await gasGet('getArchiveList')
-      if (!data.ok) throw new Error(data.error)
+      const { data, error } = await supabase
+        .from('beauty_news_archives')
+        .select('id, date_key, date, date_range, report_title, created_at')
+        .order('created_at', { ascending: false })
+      if (error) throw error
       const groups: Record<string, ArchiveGroup> = {}
       const order: string[] = []
-      ;(data.archives || []).forEach(a => {
-        const d = new Date(a.savedAt || a.dateKey.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'))
+      ;(data || []).forEach(a => {
+        const d  = new Date(a.created_at)
         const mk = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
         const ml = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월'
         if (!groups[mk]) { groups[mk] = { label: ml, items: [] }; order.push(mk) }
-        groups[mk].items.push(a)
+        groups[mk].items.push(a as ArchiveItem)
       })
       setArchiveGroups(groups)
       setArchiveOrder(order)
@@ -120,9 +127,21 @@ export default function Trends() {
     setBnLoading(true)
     setBnStatus('')
     try {
-      const data: ReportData = await gasGet('getArchive', { dateKey })
-      if (!data.ok) throw new Error(data.error || '불러오기 실패')
-      setBnReport(data)
+      const { data, error } = await supabase
+        .from('beauty_news_archives')
+        .select('*')
+        .eq('date_key', dateKey)
+        .single()
+      if (error || !data) throw new Error(error?.message || '불러오기 실패')
+      setBnReport({
+        ok:          true,
+        reportTitle: data.report_title,
+        date:        data.date,
+        htmlBody:    data.html_body,
+        categories:  data.categories,
+        keywords:    data.keywords,
+        fromArchive: true,
+      })
       setBnStatus('📁 아카이브 · ' + (data.date || dateKey))
       setBnStatusColor('var(--gray-6)')
     } catch (e: unknown) {
@@ -135,7 +154,11 @@ export default function Trends() {
   async function deleteArchive(dateKey: string) {
     if (!confirm('이 아카이브를 삭제하시겠습니까?')) return
     try {
-      await gasPost({ action: 'deleteArchive', dateKey })
+      const { error } = await supabase
+        .from('beauty_news_archives')
+        .delete()
+        .eq('date_key', dateKey)
+      if (error) throw error
       await refreshArchiveList()
     } catch (e: unknown) {
       alert('삭제 실패: ' + (e as Error).message)
@@ -338,14 +361,12 @@ export default function Trends() {
                           {open && (
                             <div className="bn-arch-items" style={{ display: 'flex', flexDirection: 'column' }}>
                               {g.items.map(a => {
-                                const savedLabel = a.savedAt
-                                  ? new Date(a.savedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                  : ''
+                                const savedLabel = new Date(a.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                                 return (
-                                  <div key={a.dateKey} className="bn-archive-item" onClick={() => loadArchive(a.dateKey)}>
-                                    <div className="bn-archive-item-date">{a.date || a.dateKey}</div>
+                                  <div key={a.date_key} className="bn-archive-item" onClick={() => loadArchive(a.date_key)}>
+                                    <div className="bn-archive-item-date">{a.date || a.date_key}</div>
                                     {savedLabel && <div className="bn-archive-item-saved">{savedLabel}</div>}
-                                    <button className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.dateKey) }}>×</button>
+                                    <button className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.date_key) }}>×</button>
                                   </div>
                                 )
                               })}

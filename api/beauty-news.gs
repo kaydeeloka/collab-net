@@ -331,6 +331,10 @@ function runAnalysis() {
       return { name: name, emoji: meta.emoji, items: items, count: items.length };
     });
 
+    const htmlBody = _bnBuildEmailHtml({
+      reportTitle, dateRange: ws + ' – ' + we, categories, keywords: parsed.keywords || '',
+    });
+
     const result = {
       ok: true,
       date: we,
@@ -338,6 +342,7 @@ function runAnalysis() {
       reportTitle: reportTitle,
       categories: categories,
       keywords: parsed.keywords || '',
+      htmlBody: htmlBody,
     };
 
     _saveArchive(result);
@@ -406,10 +411,10 @@ function _bnBuildEmailHtml(data) {
   return h;
 }
 
-// ── Archive ───────────────────────────────────────────────────
-const BN_ARCH_INDEX_KEY = 'BN_ARCH_INDEX';
-const BN_ARCH_MAX       = 12;
-const BN_ARCH_CHUNK     = 7500;
+// ── Archive → Supabase ────────────────────────────────────────
+// Script Properties required:
+//   SUPABASE_URL         — e.g. https://xxxx.supabase.co
+//   SUPABASE_SERVICE_KEY — service role key (for inserts/deletes from GAS)
 
 function _archDateKey(dateStr) {
   return String(dateStr).replace(/[^0-9]/g, '');
@@ -417,76 +422,62 @@ function _archDateKey(dateStr) {
 
 function _saveArchive(data) {
   try {
-    const props   = PropertiesService.getScriptProperties();
-    const dateKey = _archDateKey(data.date);
-    const json    = JSON.stringify(data);
-    const chunks  = Math.ceil(json.length / BN_ARCH_CHUNK);
-    for (var i = 0; i < chunks; i++) {
-      props.setProperty('BN_ARCH_' + dateKey + '_' + i, json.substring(i * BN_ARCH_CHUNK, (i + 1) * BN_ARCH_CHUNK));
-    }
-    props.setProperty('BN_ARCH_' + dateKey + '_META', JSON.stringify({
-      chunks: chunks, date: data.date, reportTitle: data.reportTitle, savedAt: new Date().toISOString(),
-    }));
-    var index = [];
-    try { index = JSON.parse(props.getProperty(BN_ARCH_INDEX_KEY) || '[]'); } catch(e) {}
-    index = index.filter(function(k) { return k !== dateKey; });
-    index.unshift(dateKey);
-    if (index.length > BN_ARCH_MAX) {
-      index.splice(BN_ARCH_MAX).forEach(function(k) { _deleteArchiveEntry(props, k); });
-    }
-    props.setProperty(BN_ARCH_INDEX_KEY, JSON.stringify(index));
+    const url = _prop('SUPABASE_URL');
+    const key = _prop('SUPABASE_SERVICE_KEY');
+    if (!url || !key) { Logger.log('_saveArchive: SUPABASE_URL or SUPABASE_SERVICE_KEY missing'); return; }
+
+    const res = UrlFetchApp.fetch(url + '/rest/v1/beauty_news_archives', {
+      method:      'post',
+      contentType: 'application/json',
+      headers: {
+        'apikey':        key,
+        'Authorization': 'Bearer ' + key,
+        'Prefer':        'resolution=merge-duplicates',
+      },
+      payload: JSON.stringify({
+        date_key:     _archDateKey(data.date),
+        date:         data.date         || '',
+        date_range:   data.dateRange    || data.date || '',
+        report_title: data.reportTitle  || '',
+        categories:   data.categories   || [],
+        keywords:     data.keywords     || '',
+        html_body:    data.htmlBody     || '',
+      }),
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code < 200 || code >= 300) Logger.log('_saveArchive HTTP ' + code + ': ' + res.getContentText().slice(0, 200));
+    else Logger.log('_saveArchive: saved ' + _archDateKey(data.date));
   } catch(e) { Logger.log('_saveArchive: ' + e.message); }
 }
 
-function _deleteArchiveEntry(props, dateKey) {
+// ── Webhook receiver (called by Cloudflare → Claude AI flow) ──
+function receiveWebhookBriefing(body) {
   try {
-    var meta = JSON.parse(props.getProperty('BN_ARCH_' + dateKey + '_META') || 'null');
-    if (!meta) return;
-    for (var i = 0; i < meta.chunks; i++) props.deleteProperty('BN_ARCH_' + dateKey + '_' + i);
-    props.deleteProperty('BN_ARCH_' + dateKey + '_META');
-  } catch(e) {}
-}
+    if ((body.secret || '') !== 'mimuse-wh-2026') return { ok: false, error: 'invalid secret' };
 
-function getArchiveList() {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    var index = [];
-    try { index = JSON.parse(props.getProperty(BN_ARCH_INDEX_KEY) || '[]'); } catch(e) {}
-    return { ok: true, archives: index.map(function(dateKey) {
-      try {
-        var meta = JSON.parse(props.getProperty('BN_ARCH_' + dateKey + '_META') || '{}');
-        return { dateKey: dateKey, date: meta.date || dateKey, reportTitle: meta.reportTitle || '', savedAt: meta.savedAt || '' };
-      } catch(e) { return { dateKey: dateKey, date: dateKey, reportTitle: '', savedAt: '' }; }
-    })};
-  } catch(e) { return { ok: false, error: e.toString() }; }
-}
+    const data = {
+      date:        body.date        || '',
+      dateRange:   body.dateRange   || body.date || '',
+      reportTitle: body.reportTitle || ('이번 주 뷰티 브리핑 — ' + (body.date || '')),
+      htmlBody:    body.htmlBody    || '',
+      categories:  body.categories  || [],
+      keywords:    body.keywords    || '',
+    };
 
-function getArchive(dateKey) {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    var meta = JSON.parse(props.getProperty('BN_ARCH_' + dateKey + '_META') || 'null');
-    if (!meta) return { ok: false, error: '해당 아카이브를 찾을 수 없습니다.' };
-    var json = '';
-    for (var i = 0; i < meta.chunks; i++) {
-      var chunk = props.getProperty('BN_ARCH_' + dateKey + '_' + i);
-      if (!chunk) return { ok: false, error: '아카이브 데이터가 손상됐습니다.' };
-      json += chunk;
+    _saveArchive(data);
+
+    if (body.autoEmail) {
+      const recipients = getRecipients();
+      const subject    = body.subject || ('[MiMuse] 주간 뷰티 브리핑 · ' + data.date);
+      sendBeautyNewsEmail(recipients, data.htmlBody, subject);
     }
-    var data = JSON.parse(json);
-    data.fromArchive = true;
-    return data;
-  } catch(e) { return { ok: false, error: e.toString() }; }
-}
 
-function deleteArchive(dateKey) {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    _deleteArchiveEntry(props, dateKey);
-    var index = [];
-    try { index = JSON.parse(props.getProperty(BN_ARCH_INDEX_KEY) || '[]'); } catch(e) {}
-    props.setProperty(BN_ARCH_INDEX_KEY, JSON.stringify(index.filter(function(k) { return k !== dateKey; })));
-    return { ok: true };
-  } catch(e) { return { ok: false, error: e.toString() }; }
+    return { ok: true, saved: _archDateKey(data.date) };
+  } catch(e) {
+    Logger.log('receiveWebhookBriefing: ' + e.toString());
+    return { ok: false, error: e.toString() };
+  }
 }
 
 // ── Email via Outlook Graph API ───────────────────────────────
@@ -535,9 +526,7 @@ function getRecipients() {
 function routeBeautyNews(action, p, body) {
   switch (action) {
     case 'runAnalysis':         return runAnalysis();
-    case 'getArchiveList':      return getArchiveList();
-    case 'getArchive':          return getArchive((p || {}).dateKey);
-    case 'deleteArchive':       return deleteArchive((body || {}).dateKey);
+    case 'receiveWebhook':      return receiveWebhookBriefing(body || {});
     case 'getRecipients':       return getRecipients();
     case 'sendBeautyNewsEmail': return sendBeautyNewsEmail((body || {}).recipients, (body || {}).htmlBody, (body || {}).subject);
     default:                    return null;
