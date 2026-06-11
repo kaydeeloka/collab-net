@@ -22,7 +22,7 @@ interface BrandPersonal {
   contact_name:     string | null
   department:       string | null
   position:         string | null
-  personal_email:   string | null
+  personal_email:   string[] | null
   personal_phone:   string | null
   website:          string | null
   rep_email:        string | null
@@ -34,13 +34,29 @@ interface BrandPersonal {
   created_at:       string
 }
 
-const EMPTY_FORM = {
+interface Form {
+  brand_name:       string
+  company:          string
+  contact_name:     string
+  department:       string
+  position:         string
+  personal_email:   string[]
+  personal_phone:   string
+  website:          string
+  rep_email:        string
+  telephone:        string
+  product_category: string
+  overseas:         boolean
+  phase_id:         string
+}
+
+const EMPTY_FORM: Form = {
   brand_name:       '',
   company:          '',
   contact_name:     '',
   department:       '',
   position:         '',
-  personal_email:   '',
+  personal_email:   [''],
   personal_phone:   '',
   website:          '',
   rep_email:        '',
@@ -49,7 +65,6 @@ const EMPTY_FORM = {
   overseas:         false,
   phase_id:         '',
 }
-type Form = typeof EMPTY_FORM
 
 export default function BrandDbPersonal() {
   const { showToast } = useToast()
@@ -86,8 +101,20 @@ export default function BrandDbPersonal() {
       .eq('phase_id', activePhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
-    setRows((data ?? []) as BrandPersonal[])
+    setRows((data ?? []).map(r => ({
+      ...r,
+      personal_email: Array.isArray(r.personal_email)
+        ? r.personal_email
+        : typeof r.personal_email === 'string' && r.personal_email
+          ? [r.personal_email]
+          : null
+    })) as BrandPersonal[])
     setLoading(false)
+  }
+
+  function cleanEmails(emails: string[]) {
+    const clean = emails.map(e => e.trim()).filter(Boolean)
+    return clean.length ? clean : null
   }
 
   async function addBrand() {
@@ -101,7 +128,7 @@ export default function BrandDbPersonal() {
       contact_name:     addForm.contact_name.trim()     || null,
       department:       addForm.department.trim()       || null,
       position:         addForm.position.trim()         || null,
-      personal_email:   addForm.personal_email.trim()   || null,
+      personal_email:   cleanEmails(addForm.personal_email),
       personal_phone:   addForm.personal_phone.trim()   || null,
       website:          addForm.website.trim()          || null,
       rep_email:        addForm.rep_email.trim()        || null,
@@ -126,7 +153,7 @@ export default function BrandDbPersonal() {
       contact_name:     r.contact_name     ?? '',
       department:       r.department       ?? '',
       position:         r.position         ?? '',
-      personal_email:   r.personal_email   ?? '',
+      personal_email:   r.personal_email?.length ? r.personal_email : [''],
       personal_phone:   r.personal_phone   ?? '',
       website:          r.website          ?? '',
       rep_email:        r.rep_email        ?? '',
@@ -149,7 +176,7 @@ export default function BrandDbPersonal() {
       contact_name:     editForm.contact_name.trim()     || null,
       department:       editForm.department.trim()       || null,
       position:         editForm.position.trim()         || null,
-      personal_email:   editForm.personal_email.trim()   || null,
+      personal_email:   cleanEmails(editForm.personal_email),
       personal_phone:   editForm.personal_phone.trim()   || null,
       website:          editForm.website.trim()          || null,
       rep_email:        editForm.rep_email.trim()        || null,
@@ -194,7 +221,7 @@ export default function BrandDbPersonal() {
   const filtered = rows.filter(r => {
     if (!search) return true
     const q = search.toLowerCase()
-    return [r.brand_name, r.contact_name, r.department, r.personal_email, r.website]
+    return [r.brand_name, r.contact_name, r.department, r.website, ...(r.personal_email ?? [])]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const sorted = [...filtered].sort((a, b) => (a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1))
@@ -202,7 +229,7 @@ export default function BrandDbPersonal() {
 
   const field = (
     label: string,
-    key: keyof Omit<Form, 'overseas' | 'phase_id'>,
+    key: keyof Omit<Form, 'overseas' | 'phase_id' | 'personal_email'>,
     form: Form,
     setForm: (f: Form) => void,
     opts?: { placeholder?: string; required?: boolean; type?: string }
@@ -218,6 +245,42 @@ export default function BrandDbPersonal() {
         placeholder={opts?.placeholder}
         style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
       />
+    </div>
+  )
+
+  const emailListEditor = (form: Form, setForm: (f: Form) => void, required?: boolean) => (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
+        개인 이메일{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+      </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {form.personal_email.map((e, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={e}
+              onChange={ev => {
+                const next = [...form.personal_email]
+                next[idx] = ev.target.value
+                setForm({ ...form, personal_email: next })
+              }}
+              placeholder="contact@brand.com"
+              style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            />
+            {form.personal_email.length > 1 && (
+              <button type="button"
+                onClick={() => setForm({ ...form, personal_email: form.personal_email.filter((_, i) => i !== idx) })}
+                style={{ padding: '5px 9px', fontSize: 13, lineHeight: 1, borderRadius: 6, border: '1px solid var(--gray-3)', background: '#fff0f0', color: '#c00', cursor: 'pointer', fontFamily: 'inherit' }}>
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button"
+          onClick={() => setForm({ ...form, personal_email: [...form.personal_email, ''] })}
+          style={{ alignSelf: 'flex-start', padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, border: '1.5px dashed var(--teal)', background: '#f0fdfa', color: 'var(--teal-dk)', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.2px' }}>
+          + 이메일 추가
+        </button>
+      </div>
     </div>
   )
 
@@ -238,8 +301,8 @@ export default function BrandDbPersonal() {
         {field('브랜드 명', 'brand_name',   form, setForm, { required: true })}
         {field('성명',      'contact_name', form, setForm, { required: true })}
       </div>
-      {field('개인 이메일', 'personal_email', form, setForm, { required: true, type: 'email' })}
-      {field('홈페이지',    'website',        form, setForm, { required: true, placeholder: 'https://' })}
+      {emailListEditor(form, setForm, true)}
+      {field('홈페이지', 'website', form, setForm, { required: true, placeholder: 'https://' })}
 
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -356,9 +419,16 @@ export default function BrandDbPersonal() {
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.position}</td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
-                    {r.personal_email
-                      ? <a href={`mailto:${r.personal_email}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{r.personal_email}</a>
-                      : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    {r.personal_email?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <a href={`mailto:${r.personal_email[0]}`} onClick={e => e.stopPropagation()} style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                          {r.personal_email[0]}
+                        </a>
+                        {r.personal_email.length > 1 && (
+                          <span style={{ fontSize: 10, color: 'var(--gray-5)', fontWeight: 600 }}>+{r.personal_email.length - 1} more</span>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.personal_phone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px' }}>
@@ -409,7 +479,16 @@ export default function BrandDbPersonal() {
             {infoRow('성명',      viewRow.contact_name ?? null)}
             {infoRow('부서',        viewRow.department)}
             {infoRow('직급',        viewRow.position)}
-            {infoRow('개인 이메일', viewRow.personal_email)}
+            {viewRow.personal_email?.length ? (
+              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>개인 이메일</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {viewRow.personal_email.map((e, i) => (
+                    <a key={i} href={`mailto:${e}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{e}</a>
+                  ))}
+                </div>
+              </div>
+            ) : infoRow('개인 이메일', null)}
             {infoRow('개인 전화',   viewRow.personal_phone)}
             {infoRow('홈페이지',    viewRow.website, true)}
             {infoRow('대표 메일',   viewRow.rep_email)}

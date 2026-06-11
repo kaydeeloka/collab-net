@@ -425,3 +425,11 @@ WHERE i.outreach = 'accept'
 
 -- CREATE INDEX IF NOT EXISTS idx_influencers_handle ON influencers(handle);
 -- DROP INDEX IF EXISTS <index_name>;
+
+
+-- ============================================================
+--  brand_personal — change personal_email TEXT → TEXT[]
+-- ============================================================
+ALTER TABLE brand_personal
+  ALTER COLUMN personal_email TYPE TEXT[]
+  USING CASE WHEN personal_email IS NULL THEN NULL ELSE ARRAY[personal_email] END;

@@ -79,7 +79,14 @@ export default function BrandDbGeneral() {
       .eq('phase_id', activePhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
-    setRows((data ?? []) as BrandGeneral[])
+    setRows((data ?? []).map(r => ({
+      ...r,
+      email: Array.isArray(r.email)
+        ? r.email
+        : typeof r.email === 'string' && r.email
+          ? [r.email]
+          : null
+    })) as BrandGeneral[])
     setLoading(false)
   }
 

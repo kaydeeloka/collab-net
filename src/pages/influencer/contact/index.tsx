@@ -21,7 +21,6 @@ const TIER_COLOR: Record<string, string> = {
 }
 
 const STATUS_OPTIONS = [
-  { value: '',         label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
   { value: 'target',   label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
   { value: 'yes',      label: '보냄',     bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
@@ -226,7 +225,26 @@ export default function Outreach() {
     const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
-  }, [showToast, influencers])
+
+    // sync to confirmed_influencers when status becomes 'accept'
+    if (patch.status === 'accept' && inf) {
+      const { data: existing } = await supabase
+        .from('confirmed_influencers')
+        .select('id')
+        .eq('influencer_id', id)
+        .maybeSingle()
+      if (!existing) {
+        const { error: ciErr } = await supabase.from('confirmed_influencers').insert({
+          influencer_id: id,
+          phase_id:      activePhaseId,
+          email:         inf.email,
+          upload_status: 'Pending',
+        })
+        if (ciErr) showToast('확정 등록 실패: ' + ciErr.message, 'error')
+        else showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
+      }
+    }
+  }, [showToast, influencers, activePhaseId])
 
   const updateMemo = useCallback((id: string, value: string) => {
     setMemoEdits(prev => ({ ...prev, [id]: value }))
@@ -477,10 +495,10 @@ export default function Outreach() {
                     </td></tr>
                   )}
                   {pg.pageItems.map(inf => {
-                    const status     = inf.status ?? ''
+                    const status     = inf.status || 'target'
                     const round      = inf.contact_round ?? '미컨택'
                     const roundStyle = ROUND_COLOR[round] ?? ROUND_COLOR['미컨택']
-                    const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['']
+                    const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['target']
                     const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                     const memoVal = memoEdits[inf.id] !== undefined ? memoEdits[inf.id] : (inf.memo ?? '')
                     return (

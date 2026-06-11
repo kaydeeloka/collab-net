@@ -397,7 +397,7 @@ function _bnBuildEmailHtml(data) {
     h += '</div>';
   }
 
-  var dashUrl = 'https://mimuse-automation-dashboard.vercel.app/tab-trends.html#briefing';
+  var dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/news';
   h += '<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">';
   h += '<p style="font-size:13px;color:#555;margin-bottom:14px">전체 리포트 및 지난 주차 아카이브는 MiMuse 대시보드에서 확인하세요.</p>';
   h += '<a href="' + dashUrl + '" target="_blank" style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">📊 대시보드 뷰티뉴스 섹션 바로가기</a>';
