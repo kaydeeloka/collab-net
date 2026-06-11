@@ -332,7 +332,11 @@ export default function Trends() {
                 e.target.checked ? next.add(r.email) : next.delete(r.email)
                 setSelectedRcpt(next)
               }}
-            /> {r.name || r.email}
+            />
+            <div>
+              {r.name && <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{r.name}</div>}
+              <div style={{ fontSize: 11, color: 'var(--teal-dk)', lineHeight: 1.3 }}>{r.email}</div>
+            </div>
           </label>
         ))}
       </div>
