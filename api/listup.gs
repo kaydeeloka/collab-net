@@ -1,102 +1,17 @@
 // ============================================================
-//  Tab: 인플루언서 리스트업 + 크리에이터 탐색 (Apify)
-//  Requires Script Property: APIFY_TOKEN
+//  TikTok Creator Search — Apify integration
+//  Influencer DB is now managed in Supabase (not Google Sheets).
 // ============================================================
-
-// 16 columns — must match the K-뷰티 / 일반뷰티 sheet headers exactly
-const LISTUP_HEADERS = [
-  'Timestamp', '순위', 'Handle', 'Display Name', 'Email',
-  'Followers', 'Following', 'Following Ratio (%)',
-  'Total Likes', 'Video Count',
-  'Engagement Rate (%)', 'Bio', 'Profile URL',
-  'Outreach', 'Reply Body', 'Reply Date',
-];
-
-function getInfluencerList() {
-  try {
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
-
-    const kb = _readInfluencerTab(ss, SHEET_K_BEAUTY);
-    const be = _readInfluencerTab(ss, SHEET_GENERAL_BEAUTY);
-
-    // All sheets use the standard 16-column header — colIdx is fixed
-    const colIdx = kb.colIdx;
-
-    const combined = [
-      ...(kb.rows || []).map((r, i) => ({ row: r, sheetRow: (kb.rowNums || [])[i], sheetName: kb.sheetTabName })),
-      ...(be.rows || []).map((r, i) => ({ row: r, sheetRow: (be.rowNums || [])[i], sheetName: be.sheetTabName })),
-    ];
-
-    const TIERS  = ['1순위', '2순위', '3순위', '4순위', '5순위'];
-    const result = {};
-    TIERS.forEach(tier => {
-      const tierNum = tier.replace('순위', '');
-      const items = combined.filter(x => {
-        const val = (x.row[COL_RANK] || '').toString().trim();
-        return val === tier || val === tierNum;
-      });
-      const totalFollowers = items.reduce((s, x) => s + (parseInt(x.row[COL_FOLLOWERS]) || 0), 0);
-      result[tier] = {
-        headers  : LISTUP_HEADERS.slice(),
-        rows     : items.map(x => x.row),
-        rowNums  : items.map(x => x.sheetRow),
-        sheetNames: items.map(x => x.sheetName),
-        colIdx,
-        stats    : { total: items.length, totalFollowers },
-      };
-    });
-    return result;
-  } catch (e) {
-    return { error: e.toString() };
-  }
-}
-
-function _readInfluencerTab(ss, tabName) {
-  var ws = ss.getSheetByName(tabName);
-  var sheetTabName = ws ? ws.getName() : tabName;
-  if (!ws) return { headers: [], rows: [], rowNums: [], colIdx: {}, stats: { total: 0, totalFollowers: 0 }, error: tabName + ' 탭을 찾을 수 없습니다.', sheetTabName: sheetTabName };
-  const all = ws.getDataRange().getValues();
-  if (all.length < 2) return { headers: all.length ? all[0].map(h => h.toString()) : [], rows: [], rowNums: [], colIdx: {}, stats: { total: 0, totalFollowers: 0 }, sheetTabName: sheetTabName };
-
-  const rowsWithIdx = all.slice(1)
-    .map((r, i) => ({ row: r, sheetRow: i + 2 }))
-    .filter(({ row }) => row.some(c => c !== null && c.toString().trim() !== ''));
-
-  const totalFollowers = rowsWithIdx.reduce((s, { row: r }) => s + (parseInt(r[COL_FOLLOWERS]) || 0), 0);
-
-  return {
-    headers : LISTUP_HEADERS.slice(),
-    rows    : rowsWithIdx.map(x => x.row.map(c => c.toString())),
-    rowNums : rowsWithIdx.map(x => x.sheetRow),
-    colIdx  : {
-      name      : COL_DISPLAY_NAME,
-      handle    : COL_HANDLE,
-      followers : COL_FOLLOWERS,
-      following : COL_FOLLOWING,
-      rank      : COL_RANK,
-      email     : COL_EMAIL,
-      outreach  : COL_OUTREACH,
-      totalLikes: COL_TOTAL_LIKES,
-      videoCount: COL_VIDEO_COUNT,
-      engRate   : COL_ENGAGE_RATE,
-    },
-    stats   : { total: rowsWithIdx.length, totalFollowers },
-    sheetTabName,
-  };
-}
 
 function startCreatorSearch(params) {
   try {
     const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
-    if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요. (프로젝트 설정 → 스크립트 속성)' };
+    if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요.' };
 
     const queries        = params.hashtags || params.tags || [];
     const targetCreators = params.targetCreators || 100;
     const proxyCountry   = params.proxyCountry || 'US';
     const queryCount     = Math.max(queries.length, 1);
-    // Each search query returns posts, not unique creators.
-    // Assume ~25% unique creator rate per post → need 4× posts to hit the target.
-    // Distribute evenly across all queries, cap at 200 per Apify limit.
     const postsPerQuery  = Math.min(Math.ceil(targetCreators / queryCount / 0.25), 200);
 
     const runInput = {
@@ -145,33 +60,16 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFoll
     );
     const items = JSON.parse(res.getContentText());
 
-    // Build existing handle set from both sheets so results are pre-filtered
-    const existingHandles = new Set();
-    try {
-      const ss         = SpreadsheetApp.openById(getActiveOutreachId());
-      const handleCol  = LISTUP_HEADERS.indexOf('Handle');
-      [SHEET_K_BEAUTY, SHEET_GENERAL_BEAUTY].forEach(function(tab) {
-        var sheet = ss.getSheetByName(tab);
-        if (!sheet) return;
-        sheet.getDataRange().getValues().slice(1).forEach(function(row) {
-          var h = (row[handleCol] || '').toString().trim().toLowerCase();
-          if (h) existingHandles.add(h);
-        });
-      });
-    } catch (e) { Logger.log('기존 핸들 읽기 오류 (무시): ' + e); }
-
     const creatorsMap = {};
 
     for (const item of items) {
       const meta      = item.authorMeta || {};
       const handle    = meta.name;
       if (!handle) continue;
-      if (existingHandles.has(handle.toLowerCase())) continue;  // already in DB
       const followers = meta.fans || 0;
       if (followerMin && followers < followerMin) continue;
       if (followerMax && followers > followerMax) continue;
 
-      // Following ratio filter: skip creators whose following count exceeds the threshold % of followers
       const following = meta.following || 0;
       if (maxFollowingRatio > 0 && followers > 0 && (following / followers * 100) > maxFollowingRatio) continue;
 
@@ -185,7 +83,6 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFoll
           following,
           bio,
           profileUrl  : 'https://www.tiktok.com/@' + handle,
-          verified    : meta.verified ? 'Y' : '',
           email       : emailMatch ? emailMatch[0] : '',
           totalLikes  : meta.heart || meta.heartCount || meta.digg || 0,
           videoCount  : meta.video || meta.videoCount || 0,
@@ -194,7 +91,6 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFoll
         };
       }
 
-      // Track most recent post date for upload frequency filter
       const postDate = item.createTimeISO ? new Date(item.createTimeISO)
                      : item.createTime    ? new Date(item.createTime * 1000)
                      : null;
@@ -211,7 +107,6 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFoll
       }
     }
 
-    // Upload frequency filter: exclude creators whose most recent scraped post is older than the cutoff
     const cutoff = maxUploadDays > 0 ? new Date(Date.now() - maxUploadDays * 86400000) : null;
 
     const creators = Object.values(creatorsMap)
@@ -239,97 +134,19 @@ function getRunResults(datasetId, followerMin, followerMax, maxCreators, maxFoll
         };
       });
 
-    const limited      = maxCreators > 0 ? creators.slice(0, maxCreators) : creators;
-    const dedupSkipped = existingHandles.size;
-    return { ok: true, creators: limited, dedupSkipped: dedupSkipped };
+    const limited = maxCreators > 0 ? creators.slice(0, maxCreators) : creators;
+    return { ok: true, creators: limited };
   } catch (e) {
     return { error: e.toString() };
-  }
-}
-
-function appendCreatorsToSheet(creators, rank, sheetName) {
-  try {
-    const ss     = SpreadsheetApp.openById(getActiveOutreachId());
-    var target   = sheetName || SHEET_K_BEAUTY;
-    var ws       = ss.getSheetByName(target);
-    if (!ws) return { error: (sheetName || '시트') + '를 찾을 수 없습니다.' };
-
-    // Build a set of ALL existing handles across BOTH sheets to deduplicate
-    // across tiers (e.g. same creator already in K-뷰티 shouldn't appear in 일반뷰티).
-    const handleCol = LISTUP_HEADERS.indexOf('Handle');
-    const existingHandles = new Set();
-    [SHEET_K_BEAUTY, SHEET_GENERAL_BEAUTY].forEach(function(tab) {
-      var sheet = ss.getSheetByName(tab);
-      if (!sheet) return;
-      var data = sheet.getDataRange().getValues();
-      data.slice(1).forEach(function(row) {
-        var h = (row[handleCol] || '').toString().trim().toLowerCase();
-        if (h) existingHandles.add(h);
-      });
-    });
-
-    // Only keep creators not already in any sheet
-    var newCreators = creators.filter(function(c) {
-      return !existingHandles.has((c.handle || '').toString().trim().toLowerCase());
-    });
-    var skipped = creators.length - newCreators.length;
-
-    if (newCreators.length === 0) {
-      return { ok: true, count: 0, skipped: skipped, message: '새로운 크리에이터가 없습니다 — 전체 ' + skipped + '명이 이미 DB에 있습니다.' };
-    }
-
-    // Always write the canonical headers to row 1
-    ws.getRange(1, 1, 1, LISTUP_HEADERS.length).setValues([LISTUP_HEADERS]);
-    ws.setFrozenRows(1);
-    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const rows = newCreators.map(function(c) { return [
-      today,        // Timestamp
-      rank,         // 순위
-      c.handle,     // Handle
-      c.displayName,// Display Name
-      c.email,      // Email
-      c.followers,  // Followers
-      c.following,  // Following
-      c.ratio,      // Following Ratio (%)
-      c.totalLikes, // Total Likes
-      c.videoCount, // Video Count
-      c.engRate,    // Engagement Rate (%)
-      c.bio,        // Bio
-      c.profileUrl, // Profile URL
-      '',           // Outreach
-      '',           // Reply Body
-      '',           // Reply Date
-    ]; });
-    ws.getRange(ws.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
-    return { ok: true, count: newCreators.length, skipped: skipped,
-      message: newCreators.length + '명 추가 완료 (' + skipped + '명은 이미 DB에 있어 건너뜀)' };
-  } catch (e) {
-    return { error: e.toString() };
-  }
-}
-
-function deleteInfluencerRow(sheetRow, sheetName) {
-  try {
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
-    var ws = ss.getSheetByName(sheetName);
-    if (!ws) return { ok: false, error: sheetName + ' 탭을 찾을 수 없습니다.' };
-    ws.deleteRow(sheetRow);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.toString() };
   }
 }
 
 function routeListup(action, p, body) {
   const b = body || {}, q = p || {};
   switch (action) {
-    case 'getInfluencerList':     return getInfluencerList();
-    case 'checkRunStatus':        return checkRunStatus(q.runId || b.runId);
-    case 'getRunResults':         return getRunResults(q.datasetId || b.datasetId, +(q.followerMin || b.followerMin) || 0, +(q.followerMax || b.followerMax) || 0, +(q.maxCreators || b.maxCreators) || 0, +(q.maxFollowingRatio || b.maxFollowingRatio) || 0, +(q.maxUploadDays || b.maxUploadDays) || 0);
-    case 'startCreatorSearch':    return startCreatorSearch(b);
-    case 'appendCreatorsToSheet': return appendCreatorsToSheet(b.creators, b.rank, b.sheetName);
-    case 'deleteInfluencerRow':   return deleteInfluencerRow(b.sheetRow, b.sheetName);
+    case 'checkRunStatus':     return checkRunStatus(q.runId || b.runId);
+    case 'getRunResults':      return getRunResults(q.datasetId || b.datasetId, +(q.followerMin || b.followerMin) || 0, +(q.followerMax || b.followerMax) || 0, +(q.maxCreators || b.maxCreators) || 0, +(q.maxFollowingRatio || b.maxFollowingRatio) || 0, +(q.maxUploadDays || b.maxUploadDays) || 0);
+    case 'startCreatorSearch': return startCreatorSearch(b);
     default: return null;
   }
 }
-
