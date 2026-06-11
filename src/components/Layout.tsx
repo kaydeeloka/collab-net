@@ -104,6 +104,17 @@ export default function Layout() {
   const [deleteTarget,   setDeleteTarget]   = useState('')
   const [deleteLoading,  setDeleteLoading]  = useState(false)
 
+  // Edit phase
+  const [showEditPhase,  setShowEditPhase]  = useState(false)
+  const [editPhaseId,    setEditPhaseId]    = useState('')
+  const [editPhaseName,  setEditPhaseName]  = useState('')
+  const [editStartDate,  setEditStartDate]  = useState('')
+  const [editEndDate,    setEditEndDate]    = useState('')
+  const [editKitDate,    setEditKitDate]    = useState('')
+  const [editSheetsUrl,  setEditSheetsUrl]  = useState('')
+  const [editLoading,    setEditLoading]    = useState(false)
+  const [editStatus,     setEditStatus]     = useState('')
+
   // New phase form fields
   const [newPhaseName,        setNewPhaseName]        = useState('')
   const [newPhaseStartDate,   setNewPhaseStartDate]   = useState('')
@@ -146,6 +157,37 @@ export default function Layout() {
     } catch (e: unknown) {
       setNewPhaseStatus('오류: ' + (e as Error).message)
     } finally { setNewPhaseLoading(false) }
+  }
+
+  function openEditPhase(p: { id: string; name: string; started_at?: string | null; ended_at?: string | null; kit_send_date?: string | null; google_sheets_url?: string | null }) {
+    setEditPhaseId(p.id)
+    setEditPhaseName(p.name)
+    setEditStartDate(p.started_at ? p.started_at.split('T')[0] : '')
+    setEditEndDate(p.ended_at ? p.ended_at.split('T')[0] : '')
+    setEditKitDate(p.kit_send_date ?? '')
+    setEditSheetsUrl(p.google_sheets_url ?? '')
+    setEditStatus('')
+    setShowManage(false)
+    setShowEditPhase(true)
+  }
+
+  async function executeEditPhase() {
+    if (!editPhaseId) return
+    setEditLoading(true)
+    setEditStatus('저장 중...')
+    try {
+      const { error } = await supabase.from('phases').update({
+        started_at:        editStartDate  || null,
+        ended_at:          editEndDate    || null,
+        kit_send_date:     editKitDate    || null,
+        google_sheets_url: editSheetsUrl.trim() || null,
+      }).eq('id', editPhaseId)
+      if (error) { setEditStatus('오류: ' + error.message); return }
+      setEditStatus('완료!')
+      setTimeout(() => { showToast(`「${editPhaseName}」 수정 완료`, 'success'); window.location.reload() }, 500)
+    } catch (e: unknown) {
+      setEditStatus('오류: ' + (e as Error).message)
+    } finally { setEditLoading(false) }
   }
 
   async function executeDeletePhase() {
@@ -333,6 +375,12 @@ export default function Layout() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {p.started_at && <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>{p.started_at.split('T')[0]} ~ {p.ended_at?.split('T')[0] ?? '?'}</span>}
                   <button
+                    style={{ background: 'none', border: 'none', color: 'var(--blue-dk)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    onClick={() => openEditPhase(p)}
+                  >
+                    수정
+                  </button>
+                  <button
                     style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                     onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
                   >
@@ -379,6 +427,37 @@ export default function Layout() {
           </button>
         </div>
         {newPhaseStatus && <div className="modal-status" style={{ color: newPhaseStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{newPhaseStatus}</div>}
+      </Modal>
+
+      {/* Edit Phase */}
+      <Modal open={showEditPhase} onClose={() => setShowEditPhase(false)} title={`「${editPhaseName}」 날짜 수정`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label className="modal-label">프로젝트 시작일</label>
+              <input className="modal-input" type="date" value={editStartDate} onChange={e => setEditStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="modal-label">프로젝트 마감일</label>
+              <input className="modal-input" type="date" value={editEndDate} onChange={e => setEditEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="modal-label">키트 발송일</label>
+            <input className="modal-input" type="date" value={editKitDate} onChange={e => setEditKitDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="modal-label">구글 시트 연동 링크</label>
+            <input className="modal-input" type="url" placeholder="https://docs.google.com/spreadsheets/..." value={editSheetsUrl} onChange={e => setEditSheetsUrl(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <button className="modal-btn-cancel" onClick={() => setShowEditPhase(false)}>취소</button>
+          <button className="modal-btn-confirm" onClick={executeEditPhase} disabled={editLoading}>
+            {editLoading ? '저장 중...' : '저장'}
+          </button>
+        </div>
+        {editStatus && <div className="modal-status" style={{ color: editStatus.startsWith('오류') ? '#c00' : 'var(--green)' }}>{editStatus}</div>}
       </Modal>
 
       {/* Delete Phase */}

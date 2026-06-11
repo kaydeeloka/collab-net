@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { gasGet } from '../../lib/api'
+import { usePhase } from '../../contexts/PhaseContext'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -16,9 +17,6 @@ function StatCell({ html }: StatSnippet) {
 
 const SPINNER_HTML = '<div class="fstat"><div class="fstat-val"><span class="spinner spinner--sm"></span></div><div class="fstat-lbl">로딩 중</div></div>'
 const DB_TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
-
-const DISPATCH_DATE  = new Date('2026-08-18T00:00:00+09:00')   // 발송일
-const DEADLINE_DATE  = new Date('2026-12-31T00:00:00+09:00')   // 프로젝트 마감일 (수정 필요)
 
 function calcDday(target: Date): string {
   const now   = new Date()
@@ -34,6 +32,10 @@ function statError(msg: string) {
 
 export default function Dashboard() {
   const { dbOptions, activeDbId, switchPhase } = useOutletContext<PhaseCtx>()
+  const { selectedPhaseId, phases } = usePhase()
+  const currentPhase  = phases.find(p => p.id === (selectedPhaseId ?? activeDbId))
+  const dispatchDate  = currentPhase?.kit_send_date ? new Date(currentPhase.kit_send_date + 'T00:00:00') : null
+  const deadlineDate  = currentPhase?.ended_at      ? new Date(currentPhase.ended_at.split('T')[0] + 'T00:00:00') : null
 
   const [statsListup,    setStatsListup]    = useState(SPINNER_HTML)
   const [statsOutreach,  setStatsOutreach]  = useState(SPINNER_HTML)
@@ -178,16 +180,17 @@ export default function Dashboard() {
 
           {/* Right: 발송까지 D-DAY */}
           {(() => {
-            const now = new Date()
-            const diff = Math.ceil((DISPATCH_DATE.getTime() - now.getTime()) / 86_400_000)
+            if (!dispatchDate) return null
+            const now  = new Date()
+            const diff = Math.ceil((dispatchDate.getTime() - now.getTime()) / 86_400_000)
             const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
-            const done = dbOptions.find(o => o.id === activeDbId)?.label === '1차'
+            const done = diff < 0
             return (
               <div style={{ position: 'relative', zIndex: 1, textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: done ? '#34d399cc' : '#ffe9a0cc', textTransform: 'uppercase', letterSpacing: '2px' }}>발송까지</div>
                 <div style={{ fontSize: 52, fontWeight: 900, color: done ? '#34d399' : '#ffe9a0', letterSpacing: '-3px', lineHeight: 1 }}>{done ? '완료' : dday}</div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
-                  {done ? '키트 발송 완료' : `${new Date('2026-08-18').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정`}
+                  {done ? '키트 발송 완료' : `${dispatchDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정`}
                 </div>
               </div>
             )
@@ -196,14 +199,17 @@ export default function Dashboard() {
 
         {/* D-DAY — 1/3 white card */}
         {(() => {
-          const phase = dbOptions.find(o => o.id === activeDbId)?.label
-          const isDone = phase === '1차'
-          const now = new Date()
-          const diff = Math.ceil((DEADLINE_DATE.getTime() - now.getTime()) / 86_400_000)
-          const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
+          const phase  = dbOptions.find(o => o.id === activeDbId)?.label
+          const now    = new Date()
+          const diff   = deadlineDate ? Math.ceil((deadlineDate.getTime() - now.getTime()) / 86_400_000) : null
+          const isDone = diff !== null && diff < 0
+          const dday   = diff === null ? '—' : diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
           const accent = isDone ? '#10b981' : '#9FBAC5'
-          const months = Math.floor(Math.max(diff, 0) / 30)
-          const days = Math.max(diff, 0) % 30
+          const months = diff !== null ? Math.floor(Math.max(diff, 0) / 30) : 0
+          const days   = diff !== null ? Math.max(diff, 0) % 30 : 0
+          const deadlineLabel = deadlineDate
+            ? deadlineDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+            : '마감일 미설정'
           return (
             <div style={{
               flex: 1, minWidth: 0,
@@ -214,7 +220,6 @@ export default function Dashboard() {
               display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8,
               position: 'relative', overflow: 'hidden',
             }}>
-              {/* glow blob */}
               <div style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 180, height: 180, borderRadius: '50%', background: `${accent}20`, filter: 'blur(50px)', pointerEvents: 'none' }} />
 
               {isDone ? (
@@ -225,11 +230,9 @@ export default function Dashboard() {
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>
-                    프로젝트마감
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>프로젝트마감</div>
                   <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>{dday}</div>
-                  {diff > 0 && (
+                  {diff !== null && diff > 0 && (
                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
                       {months > 0 && <span>{months}개월 </span>}{days}일
                     </div>
@@ -238,12 +241,8 @@ export default function Dashboard() {
               )}
               <div style={{ borderTop: `1px solid rgba(255,255,255,0.08)`, paddingTop: 14, marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, position: 'relative' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
-                    {isDone ? '1차 프로젝트' : '2026년 12월 31일'}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>
-                    {isDone ? '발송 · 리뷰 · 마감 완료' : '프로젝트 최종 마감일'}
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{deadlineLabel}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>프로젝트 최종 마감일</div>
                 </div>
                 {phase && (
                   <>

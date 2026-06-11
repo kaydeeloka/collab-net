@@ -32,6 +32,7 @@ interface ReportData {
   ok: boolean
   reportTitle?: string
   date?: string
+  htmlBody?: string
   categories?: Category[]
   keywords?: string
   fromArchive?: boolean
@@ -270,7 +271,11 @@ export default function Trends() {
                       ))}
                     </div>
                   )}
-                  {!bnLoading && bnReport && <ReportBody data={bnReport} />}
+                  {!bnLoading && bnReport && (
+                    bnReport.htmlBody
+                      ? <HtmlReport data={bnReport} />
+                      : <ReportBody data={bnReport} />
+                  )}
                 </div>
               </div>
 
@@ -355,6 +360,35 @@ export default function Trends() {
             </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function HtmlReport({ data }: { data: ReportData }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  useEffect(() => {
+    const el = iframeRef.current
+    if (!el || !data.htmlBody) return
+    const doc = el.contentDocument
+    if (!doc) return
+    doc.open(); doc.write(data.htmlBody); doc.close()
+    // auto-resize to content height
+    const resize = () => {
+      try { el.style.height = (el.contentDocument?.body?.scrollHeight ?? 600) + 'px' } catch {}
+    }
+    el.onload = resize
+    setTimeout(resize, 200)
+  }, [data.htmlBody])
+
+  return (
+    <div>
+      {data.fromArchive && (
+        <div style={{ marginBottom: 8 }}>
+          <span className="bn-cache-badge" style={{ background: '#e8f5e9', color: '#2e7d32' }}>📁 아카이브</span>
+        </div>
+      )}
+      <iframe ref={iframeRef} style={{ width: '100%', border: 'none', minHeight: 600, display: 'block' }} title="beauty-report" />
     </div>
   )
 }
