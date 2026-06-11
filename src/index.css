@@ -908,6 +908,10 @@ a.bn-article-link { color: var(--teal-dk); }
 .bn-spinner-wrap { display: flex; justify-content: center; padding: 16px; }
 .bn-email-none { font-size: 13px; color: var(--teal-dk); font-style: italic; }
 .bn-cache-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; }
+.bn-tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--surface-md); }
+.bn-tab-btn { background: none; border: none; padding: 10px 20px; font-size: 13px; font-weight: 600; color: var(--teal-dk); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; transition: color .15s, border-color .15s; }
+.bn-tab-btn:hover { color: var(--ink); }
+.bn-tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
 
 /* ─────────────────────────────────────
    LISTUP SPECIFIC
