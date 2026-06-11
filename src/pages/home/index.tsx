@@ -4,6 +4,7 @@ import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide
 import { supabase } from '../../lib/supabase'
 import { gasGet } from '../../lib/api'
 import { usePhase } from '../../contexts/PhaseContext'
+import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -378,7 +379,20 @@ export default function Dashboard() {
                 transition: 'background .15s',
               }}>트렌드 보기 →</Link>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>*추후 구현</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {TIKTOK_HASHTAGS_PREVIEW.map(h => {
+                const volColor = h.volume === 'HIGH' ? { bg: '#dcfce7', text: '#16a34a' }
+                  : h.volume === 'RISING' ? { bg: '#ffedd5', text: '#ea580c' }
+                  : { bg: '#dbeafe', text: '#2563eb' }
+                return (
+                  <span key={h.tag} style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12,
+                    background: volColor.bg, color: volColor.text,
+                  }}>{h.tag}</span>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-3)', marginTop: 2 }}>May 26–29, 2026 · US TikTok Beauty</div>
           </div>
         </div>
       </div>

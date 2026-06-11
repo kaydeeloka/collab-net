@@ -2,11 +2,11 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Globe, Settings } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { phaseNum, escHtml, useKrClock } from '../lib/utils'
-import { useToast } from '../contexts/ToastContext'
-import { usePhase } from '../contexts/PhaseContext'
-import Modal from '../components/Modal'
+import { supabase } from '@/lib/supabase'
+import { phaseNum, escHtml, useKrClock } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
+import { usePhase } from '@/contexts/PhaseContext'
+import Modal from '@/components/Modal'
 
 interface NavSubChild { label: string; to: string; end?: boolean }
 interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
