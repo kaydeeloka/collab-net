@@ -76,7 +76,7 @@ interface Influencer  {
   id: string; created_at: string; phase_id: string; handle: string
   display_name: string | null; email: string | null; followers: number; following: number
   following_ratio: string | null; total_likes: number; video_count: number
-  avg_views: number; engagement_rate: number; profile_url: string | null; outreach: string
+  avg_views: number; engagement_rate: number; profile_url: string | null; status: string
   tiers?: { rank: string; label: string; category: string } | null
 }
 interface ApifyCreator {
@@ -158,7 +158,7 @@ export default function Listup() {
     ;(async () => {
       const [{ data: cfg }, { data: infData }, { count: confirmedCount }] = await Promise.all([
         supabase.from('app_config').select('key, value').in('key', ['tiers','kbeauty_keywords','beauty_keywords','filter_conditions','search_filters']),
-        supabase.from('influencers').select('outreach, tiers(rank)').eq('phase_id', activePhaseId ?? ''),
+        supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', activePhaseId ?? ''),
         supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }),
       ])
 
@@ -179,9 +179,9 @@ export default function Listup() {
       if (infData) {
         let total = 0, sent = 0
         const tierCounts: Record<string, number> = {}
-        for (const r of infData as unknown as { outreach: string; tiers?: { rank: string } | null }[]) {
+        for (const r of infData as unknown as { status: string; tiers?: { rank: string } | null }[]) {
           total++
-          if (['yes','reply','negotiate','accept'].includes(r.outreach)) sent++
+          if (['yes','reply','negotiate','accept'].includes(r.status)) sent++
           const rank = r.tiers?.rank
           if (rank) tierCounts[rank] = (tierCounts[rank] ?? 0) + 1
         }
@@ -245,8 +245,7 @@ export default function Listup() {
     setDbLoading(true)
     const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
-    const contacted = ['target','yes','reply','negotiate','accept','reject']
-    setInfluencers((data ?? []).filter(r => !contacted.includes(r.outreach ?? '')))
+    setInfluencers(data ?? [])
     setDbLoading(false)
   }
 
@@ -257,23 +256,24 @@ export default function Listup() {
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
   }
 
-  async function markOutreach(id: string, value: string) {
-    const { error } = await supabase.from('influencers').update({ outreach: value }).eq('id', id)
+  async function markContact(id: string) {
+    const inf = influencers.find(r => r.id === id)
+    if (!inf) return
+    // only allow toggling off if status is exactly 'target'; advanced statuses can't be cleared here
+    if (inf.status && inf.status !== 'target') return
+    const newStatus = inf.status === 'target' ? '' : 'target'
+    const { error } = await supabase.from('influencers').update({ status: newStatus }).eq('id', id)
     if (error) return
-    if (value === 'target') {
-      setInfluencers(prev => prev.filter(inf => inf.id !== id))
-    } else {
-      setInfluencers(prev => prev.map(inf => inf.id === id ? { ...inf, outreach: value } : inf))
-    }
+    setInfluencers(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r))
   }
 
   async function bulkMarkTarget() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('influencers').update({ outreach: 'target', status: 'target' }).in('id', ids)
+    const { error } = await supabase.from('influencers').update({ status: 'target' }).in('id', ids)
     if (!error) {
-      setInfluencers(prev => prev.filter(inf => !selected.has(inf.id)))
+      setInfluencers(prev => prev.map(inf => selected.has(inf.id) ? { ...inf, status: 'target' } : inf))
       setSelected(new Set())
       navigate('/influencer/contact')
     }
@@ -296,7 +296,7 @@ export default function Listup() {
       avg_views:        c.avgViews,
       engagement_rate:  c.engRate,
       profile_url:      c.profileUrl || null,
-      outreach:         '',
+      status:           '',
     }))
     const { error, data } = await supabase.from('influencers').upsert(rows, { onConflict: 'handle', ignoreDuplicates: true }).select()
     if (error) {
@@ -314,7 +314,7 @@ export default function Listup() {
     let list = influencers
     if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
     if (dateFrom) list = list.filter(inf => inf.created_at.substring(0, 10) === dateFrom)
-    return list
+    return [...list].sort((a, b) => (a.status ? 1 : 0) - (b.status ? 1 : 0))
   }
 
   function renderDbTable() {
@@ -424,9 +424,14 @@ export default function Listup() {
                       <td className="num">{inf.engagement_rate}%</td>
                       <td>
                         <button
-                          onClick={() => markOutreach(inf.id, 'target')}
-                          style={{ padding: '4px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer', background: 'var(--blue-dk)', color: '#fff', border: 'none' }}>
-                          컨택
+                          onClick={() => markContact(inf.id)}
+                          style={{
+                            padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
+                            border: `1.5px solid ${inf.status ? '#6ee7b7' : '#e2e8f0'}`,
+                            background: inf.status ? '#d1fae5' : '#f1f5f9',
+                            color: inf.status ? '#065f46' : '#94a3b8',
+                          }}>
+                          {inf.status ? '✓ 컨택' : '컨택'}
                         </button>
                       </td>
                     </tr>

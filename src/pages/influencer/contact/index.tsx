@@ -137,8 +137,9 @@ export default function Outreach() {
   const confirmToast      = useConfirmToast()
 
   // ── Data ──
-  const [influencers, setInfluencers] = useState<Influencer[]>([])
-  const [loading,     setLoading]     = useState(true)
+  const [influencers,    setInfluencers]    = useState<Influencer[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [confirmedDbCount, setConfirmedDbCount] = useState(0)
 
   // ── Filter / pagination ──
   const [activeTier,    setActiveTier]    = useState('전체')
@@ -183,6 +184,13 @@ export default function Outreach() {
       await supabase.from('influencers').upsert(toFix.map((r: any) => ({ id: r.id, contact_round: '1차 컨택' })))
     }
     setInfluencers(corrected as unknown as Influencer[])
+
+    const { count: ciCount } = await supabase
+      .from('confirmed_influencers')
+      .select('*', { count: 'exact', head: true })
+      .eq('phase_id', activePhaseId)
+    setConfirmedDbCount(ciCount ?? 0)
+
     setLoading(false)
   }, [activePhaseId])
 
@@ -278,8 +286,9 @@ export default function Outreach() {
     })
   const pg = paginate(filtered, page)
 
-  const sentCount    = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
-  const repliedCount = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
+  const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
+  const repliedCount   = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
+  const negotiateCount = influencers.filter(r => r.status === 'negotiate').length
   const tierBreakdown = TIERS.map(t => {
     const all  = influencers.filter(r => r.tiers?.rank === t)
     const sent = all.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
@@ -311,7 +320,7 @@ export default function Outreach() {
       {/* ── Stats ── */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
           <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
             <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>전체 타겟 리스트</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
@@ -349,6 +358,26 @@ export default function Outreach() {
             </div>
             <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
               {sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0}% 회신율
+            </div>
+          </div>
+          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid #bbf7d0', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
+            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>확정 / 협의</div>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 8 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{confirmedDbCount}</span>
+                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>확정</div>
+              </div>
+              <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-1px' }}>{negotiateCount}</span>
+                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>협의 중</div>
+              </div>
             </div>
           </div>
         </div>
