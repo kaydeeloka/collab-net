@@ -864,14 +864,32 @@ a.bn-article-link { color: var(--teal-dk); }
 .bn-sidebar { display: flex; flex-direction: column; gap: 16px; }
 .bn-email-panel { background: var(--white); border-radius: var(--r); border: 1px solid var(--surface-md); box-shadow: var(--sh); padding: 18px; }
 .bn-email-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.bn-email-icon { font-size: 15px; color: var(--teal-dk); font-weight: 700; }
-.bn-email-title { font-size: 13px; font-weight: 700; color: var(--ink); }
-.bn-recipients { display: flex; flex-direction: column; gap: 6px; min-height: 40px; margin-bottom: 10px; }
-.bn-rcpt-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); cursor: pointer; }
-.bn-email-status { font-size: 12px; min-height: 16px; margin-bottom: 8px; color: var(--teal-dk); }
+.bn-email-icon { font-size: 16px; color: var(--teal-dk); font-weight: 700; }
+.bn-email-title { font-size: 14px; font-weight: 700; color: var(--ink); flex: 1; }
+.bn-rcpt-add-btn { background: var(--teal-dk); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.bn-rcpt-add-btn:hover { background: var(--teal); }
+.bn-rcpt-form { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border-radius: var(--r-sm); padding: 10px; margin-bottom: 8px; }
+.bn-rcpt-input { padding: 7px 10px; border: 1px solid var(--surface-md); border-radius: var(--r-sm); font-size: 13px; font-family: inherit; color: var(--ink); background: var(--white); width: 100%; box-sizing: border-box; }
+.bn-rcpt-input:focus { outline: none; border-color: var(--teal); }
+.bn-rcpt-form-btns { display: flex; gap: 6px; }
+.bn-rcpt-save { flex: 1; padding: 6px; background: var(--teal-dk); color: #fff; border: none; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.bn-rcpt-save:hover { background: var(--teal); }
+.bn-rcpt-save:disabled { opacity: .5; cursor: not-allowed; }
+.bn-rcpt-cancel { flex: 1; padding: 6px; background: var(--surface-md); color: var(--ink); border: none; border-radius: var(--r-sm); font-size: 13px; cursor: pointer; font-family: inherit; }
+.bn-rcpt-cancel:hover { background: var(--gray-3); color: var(--white); }
+.bn-recipients { display: flex; flex-direction: column; gap: 4px; min-height: 40px; margin-bottom: 12px; }
+.bn-rcpt-row { display: flex; align-items: center; gap: 4px; padding: 6px 4px; border-radius: var(--r-sm); }
+.bn-rcpt-row:hover { background: var(--surface); }
+.bn-rcpt-label { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; min-width: 0; }
+.bn-rcpt-name { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bn-rcpt-email { font-size: 12px; color: var(--teal-dk); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bn-rcpt-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.bn-rcpt-edit-btn { background: none; border: none; color: var(--teal-dk); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: var(--r-sm); }
+.bn-rcpt-edit-btn:hover { background: var(--yellow-lt); color: var(--ink); }
+.bn-email-status { font-size: 13px; min-height: 18px; margin-bottom: 8px; color: var(--teal-dk); }
 .bn-send-btn {
-  width: 100%; padding: 10px; background: var(--teal-dk); color: var(--white);
-  border: none; border-radius: var(--r-pill); font-size: 13px; font-weight: 700;
+  width: 100%; padding: 11px; background: var(--teal-dk); color: var(--white);
+  border: none; border-radius: var(--r-pill); font-size: 14px; font-weight: 700;
   cursor: pointer; transition: background .15s;
 }
 .bn-send-btn:hover { background: var(--teal); }
@@ -912,6 +930,30 @@ a.bn-article-link { color: var(--teal-dk); }
 .bn-tab-btn { background: none; border: none; padding: 10px 20px; font-size: 13px; font-weight: 600; color: var(--teal-dk); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; transition: color .15s, border-color .15s; }
 .bn-tab-btn:hover { color: var(--ink); }
 .bn-tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+/* Email panel — full-width horizontal layout (overrides sidebar styles above) */
+.bn-email-panel { background: var(--white); border-radius: var(--r); border: 1px solid var(--surface-md); box-shadow: var(--sh); padding: 16px 20px; margin-bottom: 16px; }
+.bn-email-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 0; }
+.bn-email-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+.bn-recipients { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 10px 0; min-height: unset; }
+.bn-rcpt-row { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--surface-md); }
+.bn-rcpt-row:hover { background: var(--yellow-lt); border-color: var(--teal); }
+.bn-rcpt-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.bn-rcpt-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.bn-rcpt-email { font-size: 12px; color: var(--teal-dk); }
+.bn-email-status { font-size: 13px; min-height: 18px; margin-bottom: 8px; color: var(--teal-dk); }
+.bn-send-btn { padding: 10px 28px; background: var(--teal-dk); color: var(--white); border: none; border-radius: var(--r-pill); font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s; white-space: nowrap; width: auto; }
+.bn-send-btn:hover { background: var(--teal); }
+.bn-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Archive nav bar */
+.bn-arch-nav-bar { background: var(--white); border-radius: var(--r); border: 1px solid var(--surface-md); box-shadow: var(--sh); padding: 14px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.bn-arch-nav-label { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.bn-arch-nav-pills { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.bn-arch-nav-pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--r-pill); border: 1px solid var(--surface-md); background: var(--surface); font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; font-family: inherit; transition: background .12s, border-color .12s; }
+.bn-arch-nav-pill:hover { background: var(--yellow-lt); border-color: var(--teal); }
+.bn-arch-nav-pill.active { background: var(--teal-dk); color: #fff; border-color: var(--teal-dk); }
+.bn-arch-nav-del { font-size: 14px; opacity: .55; line-height: 1; padding: 0 2px; }
+.bn-arch-nav-pill:hover .bn-arch-nav-del { opacity: 1; }
+.bn-arch-nav-pill.active .bn-arch-nav-del { opacity: .7; }
 
 /* ─────────────────────────────────────
    LISTUP SPECIFIC

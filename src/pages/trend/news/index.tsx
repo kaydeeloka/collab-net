@@ -88,6 +88,15 @@ export default function Trends() {
   const [emailStatus, setEmailStatus] = useState('')
   const [emailSending, setEmailSending] = useState(false)
 
+  // Recipient management
+  const [editingEmail, setEditingEmail] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addName, setAddName] = useState('')
+  const [addEmail, setAddEmail] = useState('')
+  const [rcptSaving, setRcptSaving] = useState(false)
+
   const [trendDrafts, setTrendDrafts] = useState<TrendDraft[]>([])
   const [trendSelected, setTrendSelected] = useState(0)
   const [trendLoading, setTrendLoading] = useState(true)
@@ -117,6 +126,52 @@ export default function Trends() {
       setRecipients(list)
       setSelectedRcpt(new Set(list.map(r => r.email)))
     } catch {}
+  }
+
+  async function addRecipient() {
+    const email = addEmail.trim().toLowerCase()
+    const name  = addName.trim()
+    if (!email) return
+    setRcptSaving(true)
+    const { error } = await supabase.from('email_recipients').insert({ email, name: name || null })
+    if (!error) { setAddEmail(''); setAddName(''); setShowAddForm(false); await loadRecipients() }
+    setRcptSaving(false)
+  }
+
+  function startEdit(r: Recipient) {
+    setEditingEmail(r.email)
+    setEditName(r.name || '')
+    setEditEmail(r.email)
+  }
+
+  async function saveEdit(oldEmail: string) {
+    const email = editEmail.trim().toLowerCase()
+    const name  = editName.trim()
+    if (!email) return
+    setRcptSaving(true)
+    const { error } = await supabase
+      .from('email_recipients')
+      .update({ email, name: name || null })
+      .eq('email', oldEmail)
+    if (!error) {
+      setEditingEmail(null)
+      setSelectedRcpt(prev => {
+        const next = new Set(prev)
+        if (next.has(oldEmail)) { next.delete(oldEmail); next.add(email) }
+        return next
+      })
+      await loadRecipients()
+    }
+    setRcptSaving(false)
+  }
+
+  async function deleteRecipient(email: string) {
+    if (!confirm(email + ' 을(를) 삭제하시겠습니까?')) return
+    const { error } = await supabase.from('email_recipients').delete().eq('email', email)
+    if (!error) {
+      setSelectedRcpt(prev => { const next = new Set(prev); next.delete(email); return next })
+      await loadRecipients()
+    }
   }
 
   async function loadLatestReport() {
@@ -321,25 +376,62 @@ export default function Trends() {
       <div className="bn-email-header">
         <span className="bn-email-icon">@</span>
         <span className="bn-email-title">이메일 발송</span>
+        <button className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">+</button>
       </div>
+
+      {/* Add form */}
+      {showAddForm && (
+        <div className="bn-rcpt-form">
+          <input className="bn-rcpt-input" placeholder="이름 (선택)" value={addName} onChange={e => setAddName(e.target.value)} />
+          <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addRecipient()} />
+          <div className="bn-rcpt-form-btns">
+            <button className="bn-rcpt-save" onClick={addRecipient} disabled={rcptSaving || !addEmail.trim()}>추가</button>
+            <button className="bn-rcpt-cancel" onClick={() => { setShowAddForm(false); setAddEmail(''); setAddName('') }}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {/* Recipient list */}
       <div className="bn-recipients">
-        {recipients.length === 0 && <div className="bn-email-none">수신자 없음</div>}
+        {recipients.length === 0 && !showAddForm && <div className="bn-email-none">수신자 없음 — + 버튼으로 추가하세요</div>}
         {recipients.map(r => (
-          <label key={r.email} className="bn-rcpt-label">
-            <input type="checkbox" checked={selectedRcpt.has(r.email)}
-              onChange={e => {
-                const next = new Set(selectedRcpt)
-                e.target.checked ? next.add(r.email) : next.delete(r.email)
-                setSelectedRcpt(next)
-              }}
-            />
-            <div>
-              {r.name && <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{r.name}</div>}
-              <div style={{ fontSize: 11, color: 'var(--teal-dk)', lineHeight: 1.3 }}>{r.email}</div>
-            </div>
-          </label>
+          <div key={r.email}>
+            {editingEmail === r.email ? (
+              <div className="bn-rcpt-form" style={{ margin: '4px 0' }}>
+                <input className="bn-rcpt-input" placeholder="이름 (선택)" value={editName} onChange={e => setEditName(e.target.value)} />
+                <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveEdit(r.email)} />
+                <div className="bn-rcpt-form-btns">
+                  <button className="bn-rcpt-save" onClick={() => saveEdit(r.email)} disabled={rcptSaving || !editEmail.trim()}>저장</button>
+                  <button className="bn-rcpt-cancel" onClick={() => setEditingEmail(null)}>취소</button>
+                </div>
+              </div>
+            ) : (
+              <div className="bn-rcpt-row">
+                <label className="bn-rcpt-label" style={{ flex: 1, minWidth: 0 }}>
+                  <input type="checkbox" checked={selectedRcpt.has(r.email)}
+                    onChange={e => {
+                      const next = new Set(selectedRcpt)
+                      e.target.checked ? next.add(r.email) : next.delete(r.email)
+                      setSelectedRcpt(next)
+                    }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    {r.name && <div className="bn-rcpt-name">{r.name}</div>}
+                    <div className="bn-rcpt-email">{r.email}</div>
+                  </div>
+                </label>
+                <div className="bn-rcpt-actions">
+                  <button className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
+                  <button className="bn-archive-del" onClick={() => deleteRecipient(r.email)} title="삭제">×</button>
+                </div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
+
       <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
         {emailStatus}
       </div>
@@ -366,6 +458,7 @@ export default function Trends() {
 
       {activeTab === 'news' && (
         <div>
+          {/* Engine + refresh bar */}
           <div className="bn-engine-card">
             <div className="bn-engine-left">
               <span className="bn-engine-icon">◆</span>
@@ -376,51 +469,71 @@ export default function Trends() {
             </div>
             <div className="bn-engine-right">
               {latestReport?.windowsEnd && (
-                <span className="bn-status" style={{ color: 'rgba(248,246,246,.7)' }}>
-                  최신 · {fmtKor(latestReport.windowsEnd)}
-                </span>
+                <span className="bn-status" style={{ color: 'rgba(248,246,246,.7)' }}>최신 · {fmtKor(latestReport.windowsEnd)}</span>
               )}
               <button className="bn-run-btn" onClick={() => { loadLatestReport(); refreshArchiveList() }}>새로고침</button>
             </div>
           </div>
 
-          <div className="bn-columns">
-            <div className="bn-report-card">
-              <div className="bn-report-header">
-                <span className="bn-report-title">AI 뉴스 요약 리포트</span>
-              </div>
-              <div className="bn-report-body">
-                {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
-                {!latestLoading && !latestReport && (
-                  <div className="bn-empty-cats">
-                    {['스킨케어', '메이크업', '퍼스널케어', 'K-뷰티', '기타'].map(cat => (
-                      <div key={cat} style={{ marginBottom: 16 }}>
-                        <div className="bn-ph-cat-title">{cat}</div>
-                        <div className="bn-ph-cat-body">아직 분석 결과가 없습니다.</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!latestLoading && latestReport && <ReportBody data={latestReport} />}
-              </div>
+          {/* Email panel — full width above report */}
+          {emailPanel(latestReport)}
+
+          {/* Full-width report */}
+          <div className="bn-report-card">
+            <div className="bn-report-header">
+              <span className="bn-report-title">AI 뉴스 요약 리포트</span>
             </div>
-            <div className="bn-sidebar">
-              {emailPanel(latestReport)}
+            <div className="bn-report-body">
+              {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
+              {!latestLoading && !latestReport && (
+                <div className="bn-empty-cats">
+                  {['스킨케어', '메이크업', '퍼스널케어', 'K-뷰티', '기타'].map(cat => (
+                    <div key={cat} style={{ marginBottom: 16 }}>
+                      <div className="bn-ph-cat-title">{cat}</div>
+                      <div className="bn-ph-cat-body">아직 분석 결과가 없습니다.</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!latestLoading && latestReport && <ReportBody data={latestReport} />}
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'archive' && (
-        <div className="bn-columns">
+        <div>
+          {/* Horizontal archive nav */}
+          <div className="bn-arch-nav-bar">
+            <span className="bn-arch-nav-label">📁 아카이브</span>
+            {archiveListLoading && <Spinner sm />}
+            <div className="bn-arch-nav-pills">
+              {archiveOrder.flatMap(mk => archiveGroups[mk].items).map(a => {
+                const label = a.windows_end
+                  ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end)
+                  : fmtKor(a.windows_start)
+                return (
+                  <button key={a.windows_start}
+                    className={`bn-arch-nav-pill${a.windows_start === selectedKey ? ' active' : ''}`}
+                    onClick={() => loadArchive(a.windows_start)}>
+                    {label}
+                    <span className="bn-arch-nav-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</span>
+                  </button>
+                )
+              })}
+              {!archiveListLoading && archiveOrder.length === 0 && (
+                <span style={{ fontSize: 13, color: 'var(--teal-dk)', fontStyle: 'italic' }}>저장된 아카이브가 없습니다</span>
+              )}
+            </div>
+          </div>
+
+          {/* Full-width archive report */}
           <div className="bn-report-card">
             <div className="bn-report-header">
-              <span className="bn-report-title">
-                {archiveReport?.reportTitle || '아카이브 리포트'}
-              </span>
+              <span className="bn-report-title">{archiveReport?.reportTitle || '아카이브 리포트'}</span>
               {archiveReport?.ok && (
-                <button style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid var(--surface-md)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink)' }}
-                  onClick={() => sendNewsEmail(archiveReport)} disabled={emailSending}>
+                <button style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid var(--surface-md)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink)', fontWeight: 600 }}
+                  onClick={() => sendNewsEmail(archiveReport!)} disabled={emailSending}>
                   {emailSending ? '발송 중...' : '이메일 발송'}
                 </button>
               )}
@@ -429,7 +542,7 @@ export default function Trends() {
               {archiveReportLoading && <div className="bn-loading"><Spinner /><span>불러오는 중...</span></div>}
               {!archiveReportLoading && !archiveReport && (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
-                  오른쪽 목록에서 리포트를 선택하세요.
+                  위 목록에서 주차를 선택하세요.
                 </div>
               )}
               {!archiveReportLoading && archiveReport && (
@@ -438,9 +551,6 @@ export default function Trends() {
                   : <ReportBody data={archiveReport} />
               )}
             </div>
-          </div>
-          <div className="bn-sidebar">
-            {archiveListPanel}
           </div>
         </div>
       )}
