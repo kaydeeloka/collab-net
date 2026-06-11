@@ -944,14 +944,14 @@ a.bn-article-link { color: var(--teal-dk); }
 .bn-email-panel { background: var(--white); border-radius: var(--r); border: 1px solid var(--surface-md); box-shadow: var(--sh); padding: 16px 20px; margin-bottom: 0; }
 .bn-email-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 0; }
 .bn-email-title { font-size: 14px; font-weight: 700; color: var(--ink); }
-.bn-recipients { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 10px 0; min-height: unset; }
-.bn-rcpt-row { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--surface-md); }
-.bn-rcpt-row:hover { background: var(--yellow-lt); border-color: var(--teal); }
-.bn-rcpt-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.bn-rcpt-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-.bn-rcpt-email { font-size: 12px; color: var(--teal-dk); }
-.bn-email-status { font-size: 13px; min-height: 18px; margin-bottom: 8px; color: var(--teal-dk); }
-.bn-send-btn { padding: 10px 28px; background: var(--teal-dk); color: var(--white); border: none; border-radius: var(--r-pill); font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s; white-space: nowrap; width: auto; }
+.bn-recipients { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.bn-rcpt-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--surface-md); transition: border-color .12s; }
+.bn-rcpt-row:hover { border-color: var(--teal); }
+.bn-rcpt-label { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; min-width: 0; }
+.bn-rcpt-name { font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+.bn-rcpt-email { font-size: 12px; color: var(--teal-dk); line-height: 1.3; }
+.bn-email-status { font-size: 13px; min-height: 18px; margin-bottom: 10px; color: var(--teal-dk); text-align: center; }
+.bn-send-btn { display: block; margin: 0 auto; padding: 10px 36px; background: var(--teal-dk); color: var(--white); border: none; border-radius: var(--r-pill); font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s; white-space: nowrap; }
 .bn-send-btn:hover { background: var(--teal); }
 .bn-send-btn:disabled { opacity: .5; cursor: not-allowed; }
 /* Archive nav bar */
