@@ -458,7 +458,6 @@ export default function Trends() {
 
       {activeTab === 'news' && (
         <div>
-          {/* Engine + refresh bar */}
           <div className="bn-engine-card">
             <div className="bn-engine-left">
               <span className="bn-engine-icon">◆</span>
@@ -468,18 +467,40 @@ export default function Trends() {
               </div>
             </div>
             <div className="bn-engine-right">
-              {latestReport?.windowsEnd && (
-                <span className="bn-status" style={{ color: 'rgba(248,246,246,.7)' }}>최신 · {fmtKor(latestReport.windowsEnd)}</span>
-              )}
               <button className="bn-run-btn" onClick={() => { loadLatestReport(); refreshArchiveList() }}>새로고침</button>
             </div>
           </div>
 
-          {/* Email panel — full width above report */}
-          {emailPanel(latestReport)}
+          {/* 50/50 row: date info | email panel */}
+          <div className="bn-half-row">
+            <div className="bn-date-card">
+              <div className="bn-date-card-label">📅 이번 주 브리핑</div>
+              {latestLoading && <div style={{ color: 'var(--teal-dk)', fontSize: 13 }}><Spinner sm /></div>}
+              {!latestLoading && !latestReport && (
+                <div className="bn-date-card-empty">아직 리포트가 없습니다.<br />Claude 루틴이 실행되면 자동으로 업데이트됩니다.</div>
+              )}
+              {!latestLoading && latestReport && (
+                <>
+                  <div className="bn-date-card-range">
+                    {latestReport.windowsStart && latestReport.windowsEnd
+                      ? fmtKorFull(latestReport.windowsStart) + ' – ' + fmtKorFull(latestReport.windowsEnd)
+                      : latestReport.windowsEnd ? fmtKorFull(latestReport.windowsEnd) : ''}
+                  </div>
+                  {latestReport.reportTitle && (
+                    <div className="bn-date-card-title">{latestReport.reportTitle}</div>
+                  )}
+                  <a className="bn-date-card-link" href="#news-report" onClick={e => {
+                    e.preventDefault()
+                    document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
+                  }}>이번 주 뉴스 보기 ↓</a>
+                </>
+              )}
+            </div>
+            {emailPanel(latestReport)}
+          </div>
 
           {/* Full-width report */}
-          <div className="bn-report-card">
+          <div className="bn-report-card" id="news-report">
             <div className="bn-report-header">
               <span className="bn-report-title">AI 뉴스 요약 리포트</span>
             </div>
@@ -503,46 +524,43 @@ export default function Trends() {
 
       {activeTab === 'archive' && (
         <div>
-          {/* Horizontal archive nav */}
-          <div className="bn-arch-nav-bar">
-            <span className="bn-arch-nav-label">📁 아카이브</span>
-            {archiveListLoading && <Spinner sm />}
-            <div className="bn-arch-nav-pills">
-              {archiveOrder.flatMap(mk => archiveGroups[mk].items).map(a => {
-                const label = a.windows_end
-                  ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end)
-                  : fmtKor(a.windows_start)
-                return (
-                  <button key={a.windows_start}
-                    className={`bn-arch-nav-pill${a.windows_start === selectedKey ? ' active' : ''}`}
-                    onClick={() => loadArchive(a.windows_start)}>
-                    {label}
-                    <span className="bn-arch-nav-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</span>
-                  </button>
-                )
-              })}
-              {!archiveListLoading && archiveOrder.length === 0 && (
-                <span style={{ fontSize: 13, color: 'var(--teal-dk)', fontStyle: 'italic' }}>저장된 아카이브가 없습니다</span>
-              )}
+          {/* 50/50 row: archive nav | email panel */}
+          <div className="bn-half-row">
+            <div className="bn-date-card">
+              <div className="bn-date-card-label">📁 아카이브</div>
+              {archiveListLoading && <Spinner sm />}
+              <div className="bn-arch-nav-pills" style={{ marginTop: 10 }}>
+                {archiveOrder.flatMap(mk => archiveGroups[mk].items).map(a => {
+                  const label = a.windows_end
+                    ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end)
+                    : fmtKor(a.windows_start)
+                  return (
+                    <button key={a.windows_start}
+                      className={`bn-arch-nav-pill${a.windows_start === selectedKey ? ' active' : ''}`}
+                      onClick={() => loadArchive(a.windows_start)}>
+                      {label}
+                      <span className="bn-arch-nav-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</span>
+                    </button>
+                  )
+                })}
+                {!archiveListLoading && archiveOrder.length === 0 && (
+                  <span style={{ fontSize: 13, color: 'var(--teal-dk)', fontStyle: 'italic' }}>저장된 아카이브가 없습니다</span>
+                )}
+              </div>
             </div>
+            {emailPanel(archiveReport?.ok ? archiveReport : null)}
           </div>
 
           {/* Full-width archive report */}
           <div className="bn-report-card">
             <div className="bn-report-header">
               <span className="bn-report-title">{archiveReport?.reportTitle || '아카이브 리포트'}</span>
-              {archiveReport?.ok && (
-                <button style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid var(--surface-md)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink)', fontWeight: 600 }}
-                  onClick={() => sendNewsEmail(archiveReport!)} disabled={emailSending}>
-                  {emailSending ? '발송 중...' : '이메일 발송'}
-                </button>
-              )}
             </div>
             <div className="bn-report-body">
               {archiveReportLoading && <div className="bn-loading"><Spinner /><span>불러오는 중...</span></div>}
               {!archiveReportLoading && !archiveReport && (
                 <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
-                  위 목록에서 주차를 선택하세요.
+                  왼쪽 목록에서 주차를 선택하세요.
                 </div>
               )}
               {!archiveReportLoading && archiveReport && (
