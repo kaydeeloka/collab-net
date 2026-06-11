@@ -43,7 +43,7 @@ type Form = typeof EMPTY_FORM
 
 export default function BrandDbGeneral() {
   const { showToast } = useToast()
-  const { activePhaseId } = usePhase()
+  const { selectedPhaseId } = usePhase()
   const navigate = useNavigate()
 
   const [rows,     setRows]     = useState<BrandGeneral[]>([])
@@ -68,15 +68,15 @@ export default function BrandDbGeneral() {
   const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM, email: [''] })
   const [saving,   setSaving]   = useState(false)
 
-  useEffect(() => { load() }, [activePhaseId])
+  useEffect(() => { load() }, [selectedPhaseId])
 
   async function load() {
-    if (!activePhaseId) { setRows([]); setLoading(false); return }
+    if (!selectedPhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
       .from('brand_general')
       .select('*')
-      .eq('phase_id', activePhaseId)
+      .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []).map(r => ({
@@ -111,7 +111,7 @@ export default function BrandDbGeneral() {
     if (error) { showToast(error.message, 'error'); setAdding(false); return }
     showToast('브랜드가 추가되었습니다', 'success')
     setShowAdd(false)
-    setAddForm({ ...EMPTY_FORM, email: [''], phase_id: activePhaseId ?? '' })
+    setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' })
     setAdding(false)
     load()
   }
@@ -286,7 +286,7 @@ export default function BrandDbGeneral() {
           </button>
         )}
         <button
-          onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: activePhaseId ?? '' }); setShowAdd(true) }}
+          onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' }); setShowAdd(true) }}
           style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
           + DB 추가
         </button>

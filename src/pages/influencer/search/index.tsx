@@ -108,7 +108,7 @@ const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string 
 }
 
 export default function Listup() {
-  const { activePhaseId } = usePhase()
+  const { selectedPhaseId } = usePhase()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
@@ -158,7 +158,7 @@ export default function Listup() {
     ;(async () => {
       const [{ data: cfg }, { data: infData }, { count: confirmedCount }] = await Promise.all([
         supabase.from('app_config').select('key, value').in('key', ['tiers','kbeauty_keywords','beauty_keywords','filter_conditions','search_filters']),
-        supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', activePhaseId ?? ''),
+        supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', selectedPhaseId ?? ''),
         supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }),
       ])
 
@@ -243,7 +243,7 @@ export default function Listup() {
   async function loadInfluencers() {
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', activePhaseId ?? '').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', selectedPhaseId ?? '').order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
@@ -284,7 +284,7 @@ export default function Listup() {
     if (!apifyResults?.length || !apifyCurrentTier) return
     setApifyLoading(true)
     const rows = apifyResults.map(c => ({
-      phase_id:         activePhaseId,
+      phase_id:         selectedPhaseId,
       handle:           c.handle,
       display_name:     c.displayName || null,
       email:            c.email || null,

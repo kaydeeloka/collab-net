@@ -43,7 +43,7 @@ const EMPTY_FORM = {
 type Form = typeof EMPTY_FORM
 
 export default function BrandConfirmedManagement() {
-  const { activePhaseId } = usePhase()
+  const { selectedPhaseId } = usePhase()
   const { showToast }     = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedBrand[]>([])
@@ -66,15 +66,15 @@ export default function BrandConfirmedManagement() {
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-  useEffect(() => { load() }, [activePhaseId])
+  useEffect(() => { load() }, [selectedPhaseId])
 
   async function load() {
-    if (!activePhaseId) { setRows([]); setLoading(false); return }
+    if (!selectedPhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
       .from('confirmed_brands')
       .select('*')
-      .eq('phase_id', activePhaseId)
+      .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as ConfirmedBrand[])
@@ -85,7 +85,7 @@ export default function BrandConfirmedManagement() {
     if (!addForm.brand_name.trim()) { showToast('브랜드명을 입력해주세요.', 'error'); return }
     setAdding(true)
     const { error } = await supabase.from('confirmed_brands').insert({
-      phase_id:        activePhaseId,
+      phase_id:        selectedPhaseId,
       brand_name:      addForm.brand_name.trim(),
       contact_name:    addForm.contact_name.trim()    || null,
       position:        addForm.position.trim()        || null,

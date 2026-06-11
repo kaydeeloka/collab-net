@@ -94,25 +94,36 @@ export default function Layout() {
   const navigate     = useNavigate()
 
   // ── Phase state (from PhaseContext → Supabase) ──
-  const { activePhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
+  const { selectedPhaseId, activePhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
 
   const [showManage,     setShowManage]     = useState(false)
   const [showNewPhase,   setShowNewPhase]   = useState(false)
-  const [newPhaseName,   setNewPhaseName]   = useState('')
   const [newPhaseStatus, setNewPhaseStatus] = useState('')
   const [newPhaseLoading,setNewPhaseLoading]= useState(false)
   const [showDeleteModal,setShowDeleteModal]= useState(false)
   const [deleteTarget,   setDeleteTarget]   = useState('')
   const [deleteLoading,  setDeleteLoading]  = useState(false)
 
-  const activeDbId  = activePhaseId ?? ''
+  // New phase form fields
+  const [newPhaseName,        setNewPhaseName]        = useState('')
+  const [newPhaseStartDate,   setNewPhaseStartDate]   = useState('')
+  const [newPhaseEndDate,     setNewPhaseEndDate]      = useState('')
+  const [newPhaseKitDate,     setNewPhaseKitDate]      = useState('')
+  const [newPhaseSheetsUrl,   setNewPhaseSheetsUrl]    = useState('')
+
+  const activeDbId  = selectedPhaseId ?? ''
   const dbOptions   = phaseList.map(p => ({ id: p.id, label: p.name })).sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
-  const phaseBadge  = phaseList.find(p => p.id === activePhaseId)?.name || '—'
+  const phaseBadge  = phaseList.find(p => p.id === selectedPhaseId)?.name || '—'
 
   async function switchPhase(id: string) {
     if (!id || id === activeDbId) return
     await ctxSwitchPhase(id)
     showToast(`「${phaseList.find(p => p.id === id)?.name}」 전환 완료`, 'success')
+  }
+
+  function resetNewPhaseForm() {
+    setNewPhaseName(''); setNewPhaseStartDate(''); setNewPhaseEndDate('')
+    setNewPhaseKitDate(''); setNewPhaseSheetsUrl(''); setNewPhaseStatus('')
   }
 
   async function confirmNewPhase() {
@@ -121,7 +132,14 @@ export default function Layout() {
     setNewPhaseLoading(true)
     setNewPhaseStatus('차수 생성 중...')
     try {
-      const { error } = await supabase.from('phases').insert({ name, is_active: false })
+      const { error } = await supabase.from('phases').insert({
+        name,
+        is_active:        false,
+        started_at:       newPhaseStartDate  || null,
+        ended_at:         newPhaseEndDate    || null,
+        kit_send_date:    newPhaseKitDate    || null,
+        google_sheets_url: newPhaseSheetsUrl.trim() || null,
+      })
       if (error) { setNewPhaseStatus('오류: ' + error.message); return }
       setNewPhaseStatus('완료!')
       setTimeout(() => { showToast(`「${name}」 생성되었습니다`, 'success'); window.location.reload() }, 500)
@@ -259,6 +277,11 @@ export default function Layout() {
             })}
 
             <div className="children-bar-right">
+              {activePhaseId && activePhaseId !== activeDbId && (
+                <span style={{ fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                  🟢 활성: {phaseList.find(p => p.id === activePhaseId)?.name}
+                </span>
+              )}
               {dbOptions.length > 0 ? (
                 <select
                   className="phase-select"
@@ -285,7 +308,7 @@ export default function Layout() {
       {/* ── Phase Management modal ── */}
       <Modal open={showManage} onClose={() => setShowManage(false)} title="차수 관리">
         <div style={{ marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>현재 차수</span>
+          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>보고 있는 차수</span>
           <span className="phase-badge-nav" style={{ marginLeft: 8 }}>{phaseBadge}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -297,14 +320,25 @@ export default function Layout() {
           <>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8 }}>차수 목록</div>
             {phaseList.map(p => (
-              <div key={p.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--gray-2)' }}>
-                <span style={{ fontSize: 13 }}>{p.name}</span>
-                <button
-                  style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                  onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
-                >
-                  삭제
-                </button>
+              <div key={p.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--gray-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+                  {p.id === activePhaseId && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '2px 7px' }}>활성</span>
+                  )}
+                  {p.id === selectedPhaseId && p.id !== activePhaseId && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', borderRadius: 20, padding: '2px 7px' }}>보는 중</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {p.started_at && <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>{p.started_at.split('T')[0]} ~ {p.ended_at?.split('T')[0] ?? '?'}</span>}
+                  <button
+                    style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
             ))}
           </>
@@ -312,14 +346,34 @@ export default function Layout() {
       </Modal>
 
       {/* New Phase */}
-      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }} title="새 차수 시작">
-        <div className="modal-desc">차수 이름을 입력하세요.</div>
-        <label className="modal-label">차수 이름</label>
-        <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
-          value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') confirmNewPhase() }} autoFocus />
-        <div className="modal-actions">
-          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); setNewPhaseName(''); setNewPhaseStatus('') }}>취소</button>
+      <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); resetNewPhaseForm() }} title="새 차수 시작">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label className="modal-label">차수 이름 *</label>
+            <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
+              value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} autoFocus />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label className="modal-label">프로젝트 시작일</label>
+              <input className="modal-input" type="date" value={newPhaseStartDate} onChange={e => setNewPhaseStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="modal-label">프로젝트 마감일</label>
+              <input className="modal-input" type="date" value={newPhaseEndDate} onChange={e => setNewPhaseEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="modal-label">키트 발송일</label>
+            <input className="modal-input" type="date" value={newPhaseKitDate} onChange={e => setNewPhaseKitDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="modal-label">구글 시트 연동 링크</label>
+            <input className="modal-input" type="url" placeholder="https://docs.google.com/spreadsheets/..." value={newPhaseSheetsUrl} onChange={e => setNewPhaseSheetsUrl(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); resetNewPhaseForm() }}>취소</button>
           <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading || !newPhaseName.trim()}>
             {newPhaseLoading ? '처리 중...' : '생성'}
           </button>

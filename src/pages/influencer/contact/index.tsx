@@ -133,7 +133,7 @@ function paginate<T>(items: T[], page: number) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Outreach() {
   const { showToast }     = useToast()
-  const { activePhaseId } = usePhase()
+  const { selectedPhaseId } = usePhase()
   const confirmToast      = useConfirmToast()
 
   // ── Data ──
@@ -164,12 +164,12 @@ export default function Outreach() {
 
   // ── Load ──
   const loadInfluencers = useCallback(async () => {
-    if (!activePhaseId) return
+    if (!selectedPhaseId) return
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
       .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
-      .eq('phase_id', activePhaseId)
+      .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     const targetStatuses = ['', 'target', null]
@@ -188,11 +188,11 @@ export default function Outreach() {
     const { count: ciCount } = await supabase
       .from('confirmed_influencers')
       .select('*', { count: 'exact', head: true })
-      .eq('phase_id', activePhaseId)
+      .eq('phase_id', selectedPhaseId)
     setConfirmedDbCount(ciCount ?? 0)
 
     setLoading(false)
-  }, [activePhaseId])
+  }, [selectedPhaseId])
 
   useEffect(() => { loadInfluencers() }, [loadInfluencers])
 
@@ -243,7 +243,7 @@ export default function Outreach() {
       if (!existing) {
         const { error: ciErr } = await supabase.from('confirmed_influencers').insert({
           influencer_id: id,
-          phase_id:      activePhaseId,
+          phase_id:      selectedPhaseId,
           email:         inf.email,
           upload_status: 'Pending',
         })
@@ -261,7 +261,7 @@ export default function Outreach() {
       if (delErr) showToast('확정 취소 실패: ' + delErr.message, 'error')
       else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
     }
-  }, [showToast, influencers, activePhaseId])
+  }, [showToast, influencers, selectedPhaseId])
 
   const updateMemo = useCallback((id: string, value: string) => {
     setMemoEdits(prev => ({ ...prev, [id]: value }))

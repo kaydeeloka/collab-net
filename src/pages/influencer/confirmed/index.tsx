@@ -65,7 +65,7 @@ function PlatformBadge({ platform }: { platform: string | null }) {
 }
 
 export default function Confirmed() {
-  const { activePhaseId } = usePhase()
+  const { selectedPhaseId } = usePhase()
   const { showToast }     = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedRow[]>([])
@@ -99,7 +99,7 @@ export default function Confirmed() {
   const [notesEdits, setNotesEdits] = useState<Record<string, string>>({})
   const notesTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-  useEffect(() => { if (activePhaseId) load() }, [activePhaseId])
+  useEffect(() => { if (selectedPhaseId) load() }, [selectedPhaseId])
 
   useEffect(() => {
     if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter && !showRepostFilter) return
@@ -119,7 +119,7 @@ export default function Confirmed() {
     const { data, error } = await supabase
       .from('confirmed_influencers')
       .select(`id, email, upload_status, repost, review_link, notes, form_submitted, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
-      .eq('phase_id', activePhaseId ?? '')
+      .eq('phase_id', selectedPhaseId ?? '')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -127,7 +127,7 @@ export default function Confirmed() {
       const { data: fb, error: fbErr } = await supabase
         .from('confirmed_influencers')
         .select(`id, email, upload_status, repost, phone, address_line_1, address_line_2, city, state, zip, country, influencers(platform, handle, display_name, followers, profile_url)`)
-        .eq('phase_id', activePhaseId ?? '')
+        .eq('phase_id', selectedPhaseId ?? '')
         .order('created_at', { ascending: false })
       if (fbErr) { showToast(fbErr.message, 'error'); setLoading(false); return }
       setRows((fb ?? []).map((r: any) => ({ ...r, review_link: null, notes: null, form_submitted: null })) as unknown as ConfirmedRow[])

@@ -213,6 +213,19 @@ export default function ContactTemplate() {
             <textarea value={body} onChange={e => setBody(e.target.value)} rows={14}
               style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.7 }} />
           </div>
+
+          {/* Preview */}
+          {(subject || body) && (
+            <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>미리보기</div>
+              <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '14px 18px', border: '1px solid var(--gray-2)' }}>
+                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>보내는 사람 · MiMuse Team &lt;beautyproject@cranecomm.com&gt;</div>
+                {subject && <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>{renderWithDummy(subject)}</div>}
+                {body && <div style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{renderWithDummy(body)}</div>}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6 }}>치환 구문은 발송 시 자동 적용됩니다</div>
+            </div>
+          )}
         </div>
 
       </div>
