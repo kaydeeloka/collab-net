@@ -135,14 +135,16 @@ export default function BrandContact() {
 
   async function load() {
     setLoading(true)
-    const [{ data: gen }, { data: per }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, name, email, telephone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
+    const [{ data: gen, error: genErr }, { data: per, error: perErr }] = await Promise.all([
+      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
       supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
     ])
+    if (genErr) { showToast('일반 DB 오류: ' + genErr.message, 'error'); setLoading(false); return }
+    if (perErr) { showToast('퍼스널 DB 오류: ' + perErr.message, 'error'); setLoading(false); return }
     const generalRows: BrandRow[] = (gen ?? []).map((r: any) => ({
       id: r.id, source: 'general' as const,
-      brand: r.brand_name, name: r.name ?? null,
-      position: 'CEO',
+      brand: r.brand_name, name: null,
+      position: null,
       email: Array.isArray(r.email) ? r.email[0] ?? null : r.email,
       phone: r.telephone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
@@ -152,7 +154,8 @@ export default function BrandContact() {
       id: r.id, source: 'personal' as const,
       brand: r.brand_name, name: r.contact_name,
       position: r.position ?? null,
-      email: r.personal_email, phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
+      email: Array.isArray(r.personal_email) ? r.personal_email[0] ?? null : r.personal_email,
+      phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
       send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
     }))
