@@ -243,6 +243,16 @@ export default function Outreach() {
         else showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
       }
     }
+
+    // remove from confirmed_influencers when status changes away from 'accept'
+    if (patch.status !== undefined && patch.status !== 'accept' && inf?.status === 'accept') {
+      const { error: delErr } = await supabase
+        .from('confirmed_influencers')
+        .delete()
+        .eq('influencer_id', id)
+      if (delErr) showToast('확정 취소 실패: ' + delErr.message, 'error')
+      else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
+    }
   }, [showToast, influencers, activePhaseId])
 
   const updateMemo = useCallback((id: string, value: string) => {

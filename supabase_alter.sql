@@ -12,7 +12,7 @@
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS platform TEXT;
 
 -- influencers — contact tracking fields
--- NOTE: outreach is the existing backend column (values: accept/yes/reply/negotiate/reject/target) — do NOT modify
+-- NOTE: status is the existing backend column (values: accept/yes/reply/negotiate/reject/target) — do NOT modify
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT '';
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_round   TEXT DEFAULT '미컨택';
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS first_sent_at   TIMESTAMPTZ;
@@ -21,8 +21,8 @@ ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_stage  TEXT DEFAULT ''
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_count  INTEGER;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS memo            TEXT DEFAULT '';
 
--- Seed status from existing outreach data (run once after adding the column)
-UPDATE influencers SET status = CASE outreach
+-- Seed status from existing status data (run once after adding the column)
+UPDATE influencers SET status = CASE status
   WHEN 'target'    THEN 'target'
   WHEN 'yes'       THEN 'yes'
   WHEN 'reply'     THEN 'reply'
@@ -54,7 +54,7 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS form_submitted  BOOLE
 
 -- ALTER TABLE ems_tracking          ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE monitoring            ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
--- ALTER TABLE outreach_messages     ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
+-- ALTER TABLE status_messages     ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE beauty_news_archives  ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE email_recipients      ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE phases                ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
@@ -203,8 +203,8 @@ ALTER TABLE brand_general ALTER COLUMN email TYPE TEXT[] USING CASE WHEN email I
 --  SEED / UPDATE DATA
 -- ============================================================
 
--- Seed: confirmed influencers (outreach = 'accept')
-INSERT INTO influencers (created_at, phase_id, platform, handle, display_name, followers, outreach)
+-- Seed: confirmed influencers (status = 'accept')
+INSERT INTO influencers (created_at, phase_id, platform, handle, display_name, followers, status)
 VALUES
   ('2026-06-09T00:00:00.000Z', get_active_phase_id(), 'TikTok',    'thatgirlkierstin',       'Kierstin Sedlak',        33000,  'accept'),
   ('2026-06-09T00:00:00.000Z', get_active_phase_id(), 'TikTok',    'lovebylexis',            'Alexis Beasley',          23100,  'accept'),
@@ -261,7 +261,7 @@ ON CONFLICT (phase_id, handle) DO UPDATE SET
   platform     = EXCLUDED.platform,
   display_name = EXCLUDED.display_name,
   followers    = EXCLUDED.followers,
-  outreach     = EXCLUDED.outreach;
+  status     = EXCLUDED.status;
 
 -- Bulk update confirmed_influencers with form data (matched via influencers.handle)
 UPDATE confirmed_influencers ci
@@ -335,7 +335,7 @@ WHERE ci.influencer_id = i.id;
 INSERT INTO confirmed_influencers (influencer_id, phase_id, email, upload_status)
 SELECT i.id, i.phase_id, i.email, 'Pending'
 FROM influencers i
-WHERE i.outreach = 'accept'
+WHERE i.status = 'accept'
   AND NOT EXISTS (
     SELECT 1 FROM confirmed_influencers c WHERE c.influencer_id = i.id
   );
@@ -403,7 +403,7 @@ ALTER TABLE confirmed_influencers ADD CONSTRAINT confirmed_influencers_influence
 INSERT INTO confirmed_influencers (influencer_id, phase_id, email, upload_status)
 SELECT i.id, i.phase_id, i.email, 'Pending'
 FROM influencers i
-WHERE i.outreach = 'accept'
+WHERE i.status = 'accept'
   AND NOT EXISTS (
     SELECT 1 FROM confirmed_influencers c WHERE c.influencer_id = i.id
   );
