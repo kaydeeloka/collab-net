@@ -217,29 +217,27 @@ ON CONFLICT (brand) DO NOTHING;
 --  6. Beauty News Archives
 -- ============================================================
 CREATE TABLE beauty_news_archives (
-  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  phase_id   UUID        NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
-  date_key   TEXT        NOT NULL,               -- 'YYYY-MM-DD'
-  data       JSONB       NOT NULL,
-  UNIQUE (phase_id, date_key)
+  id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  windows_start DATE        NOT NULL,
+  windows_end   DATE,
+  report_title  TEXT,
+  categories    JSONB       NOT NULL DEFAULT '[]',
+  keywords      JSONB       DEFAULT '[]',
+  UNIQUE (windows_start)
 );
 
-CREATE INDEX idx_archives_phase    ON beauty_news_archives(phase_id);
-CREATE INDEX idx_archives_date_key ON beauty_news_archives(date_key DESC);
+CREATE INDEX idx_archives_date ON beauty_news_archives(windows_start DESC);
 
 -- ============================================================
 --  7. Email Recipients
 -- ============================================================
 CREATE TABLE email_recipients (
-  id         UUID  DEFAULT gen_random_uuid() PRIMARY KEY,
-  phase_id   UUID  NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
-  email      TEXT  NOT NULL,
-  name       TEXT,
-  UNIQUE (phase_id, email)
+  id    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT NOT NULL,
+  name  TEXT,
+  UNIQUE (email)
 );
-
-CREATE INDEX idx_recipients_phase ON email_recipients(phase_id);
 
 -- ============================================================
 --  Row Level Security
