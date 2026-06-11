@@ -56,7 +56,7 @@ const TYPE_COLOR: Record<string, string> = {
 
 const STATUS_OPTIONS = [
   { value: '',         label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
-  { value: 'yes',      label: '보냄',     bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'yes',      label: '첫발송 완료', bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
   { value: 'positive', label: '긍정 검토', bg: '#d1fae5', color: '#065f46' },

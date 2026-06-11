@@ -69,19 +69,21 @@ export default function Dashboard() {
     if (!activeDbId) return
     try {
       const [{ data: general }, { data: personal }] = await Promise.all([
-        supabase.from('brand_general').select('contacted').eq('phase_id', activeDbId),
-        supabase.from('brand_personal').select('contacted').eq('phase_id', activeDbId),
+        supabase.from('brand_general').select('contacted, status').eq('phase_id', activeDbId),
+        supabase.from('brand_personal').select('contacted, status').eq('phase_id', activeDbId),
       ])
-      const generalTotal  = general?.length ?? 0
-      const personalTotal = personal?.length ?? 0
-      const total = generalTotal + personalTotal
-      const contacted = (general?.filter((r: any) => r.contacted).length ?? 0)
-                      + (personal?.filter((r: any) => r.contacted).length ?? 0)
+      const allContacted = [
+        ...(general ?? []).filter((r: any) => r.contacted),
+        ...(personal ?? []).filter((r: any) => r.contacted),
+      ]
+      const total      = allContacted.length
+      const sent       = allContacted.filter((r: any) => r.status === 'yes').length
+      const targetCnt  = allContacted.filter((r: any) => !r.status || r.status === '').length
       setStatsOutreach(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${contacted}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}개</span></div><div class="fstat-lbl">컨택 현황</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#d97706">0</div><div class="fstat-lbl">신규 회신</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${generalTotal}</div><div class="fstat-lbl">일반 DB</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#8b5cf6">${personalTotal}</div><div class="fstat-lbl">퍼스널 DB</div></div>`
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}개</span></div><div class="fstat-lbl">발송</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${targetCnt}</div><div class="fstat-lbl">컨택 예정</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${(general ?? []).length}</div><div class="fstat-lbl">일반 DB</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#8b5cf6">${(personal ?? []).length}</div><div class="fstat-lbl">퍼스널 DB</div></div>`
       )
     } catch (e: unknown) { setStatsOutreach(statError((e as Error).message)) }
   }, [activeDbId])
