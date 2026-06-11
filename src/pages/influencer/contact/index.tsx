@@ -22,7 +22,7 @@ const TIER_COLOR: Record<string, string> = {
 
 const STATUS_OPTIONS = [
   { value: 'target',   label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
-  { value: 'yes',      label: '완료',     bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'yes',      label: '발송 완료', bg: '#dbeafe', color: '#1d4ed8' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
   { value: 'positive', label: '긍정 검토', bg: '#d1fae5', color: '#065f46' },
   { value: 'negative', label: '부정 검토', bg: '#fee2e2', color: '#991b1b' },
