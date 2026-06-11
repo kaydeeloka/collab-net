@@ -412,13 +412,15 @@ const modalForm = (form: Form, setForm: (f: Form) => void) => (
               </div>
             )}
           </div>
-          <div className="modal-actions" style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
             <button onClick={() => { if (window.confirm('삭제하시겠습니까?')) deleteRow(viewRow.id) }}
-              style={{ padding: '7px 14px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600, marginRight: 'auto' }}>
+              style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               삭제
             </button>
-            <button className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
-            <button className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+            <button onClick={() => { setShowView(false); openEdit(viewRow) }}
+              style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ✎ 편집
+            </button>
           </div>
         </Modal>
       )}

@@ -490,7 +490,12 @@ export default function BrandDbPersonal() {
               </div>
             ) : infoRow('개인 이메일', null)}
             {infoRow('개인 전화',   viewRow.personal_phone)}
-            {infoRow('홈페이지',    viewRow.website, true)}
+            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>홈페이지</span>
+              {viewRow.website
+                ? <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13, wordBreak: 'break-all' }}>↗ {viewRow.website}</a>
+                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
+            </div>
             {infoRow('대표 메일',   viewRow.rep_email)}
             {infoRow('내선 번호',   viewRow.telephone)}
             {infoRow('판매 제품',   viewRow.product_category)}

@@ -432,56 +432,56 @@ export default function BrandDbGeneral() {
       {/* ── View Modal ── */}
       {viewRow && (
         <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Emails */}
             {viewRow.email?.length ? (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>이메일</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>이메일</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {viewRow.email.map((e, i) => (
                     <a key={i} href={`mailto:${e}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{e}</a>
                   ))}
                 </div>
               </div>
-            ) : null}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-              {[
-                { label: '회사 명',           value: viewRow.company,          href: null },
-                { label: '내선번호',           value: viewRow.telephone,        href: null },
-                { label: '판매 제품 카테고리', value: viewRow.product_category, href: null },
-                { label: '해외 진출 여부',     value: viewRow.overseas ? '있음' : '없음', href: null },
-              ].map(({ label, value, href }) => (
-                <div key={label}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>
-                    {value
-                      ? href
-                        ? <a href={href} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{value}</a>
-                        : value
-                      : <span style={{ color: 'var(--gray-4)' }}>—</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {viewRow.website && (
-              <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '12px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>홈페이지</div>
-                <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website}
-                  target="_blank" rel="noopener" className="video-link">↗ {viewRow.website}</a>
+            ) : (
+              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>이메일</span>
+                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
               </div>
             )}
+            {[
+              { label: '회사 명',    value: viewRow.company },
+              { label: '내선번호',   value: viewRow.telephone },
+              { label: '판매 제품',  value: viewRow.product_category },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>{label}</span>
+                <span style={{ fontSize: 13, color: value ? 'var(--gray-8)' : 'var(--gray-3)' }}>{value || '—'}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>홈페이지</span>
+              {viewRow.website
+                ? <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13, wordBreak: 'break-all' }}>↗ {viewRow.website}</a>
+                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 12, padding: '8px 0' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110 }}>해외 진출</span>
+              {viewRow.overseas
+                ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
+                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
+            </div>
           </div>
 
-          <div className="modal-actions" style={{ marginTop: 20 }}>
-            <button
-              onClick={() => deleteRow(viewRow.id)}
-              style={{ padding: '7px 14px', background: '#fff0f0', color: '#c00', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600, marginRight: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
+            <button onClick={() => deleteRow(viewRow.id)}
+              style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               삭제
             </button>
-            <button className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
-            <button className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+            <button onClick={() => { setShowView(false); openEdit(viewRow) }}
+              style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ✎ 편집
+            </button>
           </div>
         </Modal>
       )}
