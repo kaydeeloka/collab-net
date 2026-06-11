@@ -48,16 +48,17 @@ export default function Dashboard() {
         supabase.from('influencers').select('status').eq('phase_id', activeDbId),
         supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', activeDbId),
       ])
-      const sent      = infData?.filter(r => r.status === 'yes').length ?? 0
-      const targetCnt = infData?.filter(r => !r.status || r.status === 'target').length ?? 0
+      const total   = infData?.length ?? 0
+      const sent    = infData?.filter(r => r.status === 'yes').length ?? 0
+      const replied = infData?.filter(r => r.status === 'reply').length ?? 0
       const confirmed = confirmedCount ?? 0
       const recruitPct = Math.round(confirmed / 50 * 100)
       const bar = (pct: number, color: string) =>
         `<div style="width:100%;height:4px;background:#e5e7eb;border-radius:99px;margin-top:5px;overflow:hidden">` +
         `<div style="height:100%;width:${Math.min(pct,100)}%;background:${color};border-radius:99px;transition:width .4s"></div></div>`
       setStatsListup(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}</div><div class="fstat-lbl">발송 완료 수</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${targetCnt}</div><div class="fstat-lbl">컨택 예정 수</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}명</span></div><div class="fstat-lbl">발송 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${recruitPct}%</div><div class="fstat-lbl">모집 완료</div></div>` +
         `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
       )
