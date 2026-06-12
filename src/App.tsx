@@ -37,6 +37,7 @@ import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
 // KIT — ems
 import EmsDaily   from './pages/kit/ems/daily'
 import EmsCheck   from './pages/kit/ems/check'
+import EmsData    from './pages/kit/ems-data'
 // ARCHIVE
 import ArchiveDesign        from './pages/archive/design'
 import ArchiveOverallReport from './pages/archive/overall-report'
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="/kit/ems"                              element={<Ems />} />
                 <Route path="/kit/ems/daily"                        element={<EmsDaily />} />
                 <Route path="/kit/ems/check"                        element={<EmsCheck />} />
+                <Route path="/kit/ems-data"                        element={<EmsData />} />
                 <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
 
                 {/* ── MONITORING ── */}

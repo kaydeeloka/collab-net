@@ -736,3 +736,115 @@ WHERE NOT EXISTS (
 UPDATE ems_tracking
 SET status = 'Delivered'
 WHERE status = '접수완료';
+
+-- ============================================================
+--  monitoring — add missing Instagram platform entries
+--  (some influencers post on both TikTok & Instagram)
+--  Run these 5 inserts first, then run the seed below.
+-- ============================================================
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+SELECT ip.confirmed_influencer_id, 'Instagram', 'crazybeautifulmakeup'
+FROM influencer_platforms ip
+WHERE LOWER(ip.handle) = 'crazybeautifulmakeup' AND LOWER(ip.platform) = 'tiktok'
+  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'crazybeautifulmakeup' AND LOWER(x.platform) = 'instagram');
+
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+SELECT ip.confirmed_influencer_id, 'Instagram', 'itskristv'
+FROM influencer_platforms ip
+WHERE LOWER(ip.handle) = 'itskristv' AND LOWER(ip.platform) = 'tiktok'
+  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'itskristv' AND LOWER(x.platform) = 'instagram');
+
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+SELECT ip.confirmed_influencer_id, 'Instagram', 'visualsbyaverie'
+FROM influencer_platforms ip
+WHERE LOWER(ip.handle) = 'visualsbyaverie' AND LOWER(ip.platform) = 'tiktok'
+  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'visualsbyaverie' AND LOWER(x.platform) = 'instagram');
+
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+SELECT ip.confirmed_influencer_id, 'Instagram', 'jadiet'
+FROM influencer_platforms ip
+WHERE LOWER(ip.handle) = 'jadetillman0'
+  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'jadiet');
+
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+SELECT ip.confirmed_influencer_id, 'Instagram', 'tinaangelinaa'
+FROM influencer_platforms ip
+WHERE LOWER(ip.handle) = 'tinaangelinaaa'
+  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'tinaangelinaa');
+
+-- ============================================================
+--  monitoring — seed 50 review rows
+--  Lookup: handle + platform → influencer_platform_id
+--  'Lauren Tressler' matched by display_name (her TikTok handle differs)
+--  Brands normalised to lowercase. Views '-' stored as NULL.
+-- ============================================================
+WITH seed (lookup_handle, lookup_platform, date, media, content, brand, review_link, views, likes, comments) AS (
+  VALUES
+  ('Faces.by.Jamari'::text,        'TikTok'::text,    '2026-02-18'::date, 'video'::text, 'unboxing'::text,     'mimuse'::text, 'https://www.tiktok.com/@faces.by.jamari/video/7608001718877457678?_r=1&_t=ZP-93ZaNpwNuKU'::text,                                                                                    200::integer, 11::integer,  3::integer),
+  ('Faces.by.Jamari',               'TikTok',           '2026-03-03',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@faces.by.jamari/video/7612704178598694158?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                    670,          23,           21),
+  ('Faces.by.Jamari',               'TikTok',           '2026-03-04',       'photo',       'etc',                'nesh',         'https://www.tiktok.com/@faces.by.jamari/photo/7613067077221354782?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                    203,          21,           16),
+  ('_morchelle',                    'TikTok',           '2026-03-16',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@_morchelle/video/7617588792630709534?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                         878,          117,          9),
+  ('505afrolatina.barbiee',         'TikTok',           '2026-02-27',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@505afrolatina.barbiee/video/7611293188099296543?_r=1&_t=ZP-92rbZcxzzrD',                                                                                    199,          11,           4),
+  ('505afrolatina.barbiee',         'TikTok',           '2026-03-14',       'video',       'review video',       'nesh',         'https://www.tiktok.com/@505afrolatina.barbiee/video/7616841387882941727?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                              192,          10,           1),
+  ('505afrolatina.barbiee',         'TikTok',           '2026-04-02',       'video',       'etc',                'joodoc',       'https://www.tiktok.com/@505afrolatina.barbiee/video/7623888365041077534',                                                                                                           206,          28,           2),
+  ('505afrolatina.barbiee',         'TikTok',           '2026-04-09',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@505afrolatina.barbiee/video/7626533706429189407?_r=1&_t=ZP-92rbZcxzzrD',                                                                                    127,          6,            1),
+  ('Anahiiv._',                     'TikTok',           '2026-03-18',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@anahiiv._/video/7618330206591257869?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                          642,          151,          13),
+  ('anikafong',                     'TikTok',           '2026-03-30',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@anikafong/video/7622878040212770061?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                          529,          50,           2),
+  ('crazybeautifulmakeup',          'TikTok',           '2026-02-26',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@crazybeautifulmakeup/video/7610884068388900127',                                                                                                             200,          19,           11),
+  ('crazybeautifulmakeup',          'Instagram',        '2026-02-26',       'video',       'unboxing',           'mimuse',       'https://www.instagram.com/reel/DVMVDXsDx-N/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==',                                                                                    251,          18,           7),
+  ('Dainaxox',                      'TikTok',           '2026-03-12',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@dainaxox/video/7616134318636764429',                                                                                                                        380,          91,           51),
+  ('hearherix',                     'TikTok',           '2026-03-19',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@heatherix/video/7618657463025372446',                                                                                                                       341,          22,           0),
+  ('itskristv',                     'TikTok',           '2026-03-17',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@itskristv/video/7618034128235121934',                                                                                                                       226,          13,           0),
+  ('itskristv',                     'TikTok',           '2026-03-19',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@itskristv/video/7618756315069926670',                                                                                                                       423,          43,           4),
+  ('itskristv',                     'Instagram',        '2026-03-19',       'video',       'review video',       'joodoc',       'https://www.instagram.com/p/DWC8JRWoAfL/',                                                                                                                                         484,          27,           6),
+  ('jadetillman0',                  'TikTok',           '2026-02-25',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@jadetillman0/video/7610487335435750686',                                                                                                                    917,          55,           13),
+  ('jadetillman0',                  'TikTok',           '2026-02-27',       'video',       'review video',       'aesthen',      'https://www.tiktok.com/@jadetillman0/video/7611295160890166558',                                                                                                                    840,          43,           4),
+  ('jadetillman0',                  'TikTok',           '2026-03-04',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@jadetillman0/video/7613420357109681439',                                                                                                                    174,          12,           5),
+  ('jadetillman0',                  'TikTok',           '2026-03-28',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@jadetillman0/video/7621618776974363935?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       125,          16,           2),
+  ('jadetillman0',                  'TikTok',           '2026-03-29',       'photo',       'etc',                'nesh',         'https://www.tiktok.com/@jadetillman0/photo/7621005574725045534?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       129,          12,           1),
+  ('jadiet',                        'Instagram',        '2026-02-28',       'photo',       'etc',                'mimuse',       'https://www.instagram.com/p/DVRsCybksNI/?img_index=6',                                                                                                                              NULL,         7,            0),
+  ('jadiet',                        'Instagram',        '2026-03-27',       'video',       'review video',       'joodoc',       'https://www.instagram.com/p/DWWysAIEbDO/',                                                                                                                                         229,          4,            0),
+  ('kelly_anne_81',                 'TikTok',           '2026-03-16',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@kelly_anne_81/video/7617550228098387213?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                      253,          36,           10),
+  ('Kelsey.skincareee',             'TikTok',           '2026-02-28',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@kelsey.skincareee/video/7611403403024928031?_r=1&_t=ZP-91m64Z9vqes',                                                                                        184,          21,           11),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-03',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@kelsey.skincareee/video/7612906452155419935?_r=1&_t=ZP-91m64Z9vqes',                                                                                        182,          22,           0),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-06',       'video',       'review video',       'aesthen',      'https://www.tiktok.com/@kelsey.skincareee/video/7614003202706459935',                                                                                                               127,          12,           0),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-14',       'photo',       'etc',                'varuza',       'https://www.tiktok.com/@kelsey.skincareee/photo/7616960348821720350?_r=1&_t=ZP-91m64Z9vqes',                                                                                        213,          11,           4),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-17',       'video',       'review video',       'nesh',         'https://www.tiktok.com/@kelsey.skincareee/video/7618075475272813855?_r=1&_t=ZP-91m64Z9vqes',                                                                                        178,          12,           4),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-18',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@kelsey.skincareee/video/7618444980574555423?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                  160,          19,           2),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-25',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@kelsey.skincareee/video/7620673340067433759?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                  142,          11,           0),
+  ('Lauren Tressler',               'TikTok',           '2026-03-05',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@lauren_mt904/video/7613534489939053855?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       376,          106,          69),
+  ('Lauren Tressler',               'TikTok',           '2026-03-07',       'photo',       'unboxing',           'mimuse',       'https://www.tiktok.com/@lauren_mt904/photo/7614196521197767966?_r=1&_t=8fxlQw64TVf',                                                                                               678,          113,          81),
+  ('losernamedl',                   'TikTok',           '2026-03-12',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@losernamedl/video/7616084346432130335',                                                                                                                     221,          10,           0),
+  ('renu_tamang22',                 'TikTok',           '2026-03-08',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@renu_tamang22/video/7614791630238829854',                                                                                                                    224,          23,           6),
+  ('renu_tamang22',                 'TikTok',           '2026-03-08',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@renu_tamang22/video/7614795680560811295',                                                                                                                    300,          30,           4),
+  ('tinaangelinaa',                 'Instagram',        '2026-02-22',       'photo',       'unboxing',           'mimuse',       'https://www.instagram.com/p/DVCQTnkj6uW/?img_index=1',                                                                                                                              NULL,         168,          42),
+  ('tinaangelinaaa',                'TikTok',           '2026-02-22',       'photo',       'etc',                'mimuse',       'https://www.tiktok.com/@tinaangelinaaa/photo/7609426112984206606',                                                                                                                   379,          26,           0),
+  ('tinaangelinaaa',                'TikTok',           '2026-03-03',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@tinaangelinaaa/video/7612751422823714061?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                      350,          35,           4),
+  ('visualsbyaverie',               'TikTok',           '2026-03-01',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@visualsbyaverie/video/7612042978386906382?_r=1&_t=ZT-93ZXi60Ewr0',                                                                                          243,          37,           13),
+  ('visualsbyaverie',               'Instagram',        '2026-03-01',       'video',       'unboxing',           'mimuse',       'https://www.instagram.com/p/DVUW8buEuGs/',                                                                                                                                         391,          21,           17),
+  ('yohannauc',                     'TikTok',           '2026-02-26',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@yohannauc/video/7610966674371546382',                                                                                                                       668,          58,           12),
+  ('britta.loves',                  'TikTok',           '2026-03-31',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@britta.loves/video/7622916718964264222?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       701,          197,          2),
+  ('britta.loves',                  'TikTok',           '2026-03-31',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@britta.loves/video/7622915719973342494',                                                                                                                    80,           6,            0),
+  ('ladyluck779',                   'TikTok',           '2026-03-31',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@ladyluck779/video/7623048868174761247?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                        273,          69,           22),
+  ('charity_017',                   'TikTok',           '2026-04-06',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@charity_017/video/7625475714870971678',                                                                                                                     185,          11,           1),
+  ('alohabriee',                    'TikTok',           '2026-04-22',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@alohabriee/video/7631355944999390495',                                                                                                                      424,          68,           35),
+  ('a good hue',                    'magazine',         '2026-04-18',       'video',       'unboxing',           'mimuse',       'https://www.instagram.com/reel/DXQUacDDquX/',                                                                                                                                      359,          NULL,         8)
+)
+INSERT INTO monitoring (influencer_platform_id, date, media, content, brand, review_link, views, likes, comments)
+SELECT ip.id, s.date, s.media, s.content, s.brand, s.review_link, s.views, s.likes, s.comments
+FROM seed s
+JOIN influencer_platforms ip ON (
+  LOWER(ip.handle) = LOWER(s.lookup_handle) AND LOWER(ip.platform) = LOWER(s.lookup_platform)
+  OR (
+    LOWER(ip.platform) = LOWER(s.lookup_platform)
+    AND EXISTS (
+      SELECT 1 FROM confirmed_influencers ci
+      JOIN influencers i ON i.id = ci.influencer_id
+      WHERE ci.id = ip.confirmed_influencer_id
+        AND LOWER(i.display_name) = LOWER(s.lookup_handle)
+    )
+  )
+)
+WHERE NOT EXISTS (
+  SELECT 1 FROM monitoring m WHERE m.review_link = s.review_link
+);
