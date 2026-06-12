@@ -831,7 +831,7 @@ WITH seed (lookup_handle, lookup_platform, date, media, content, brand, review_l
   ('a good hue',                    'magazine',         '2026-04-18',       'video',       'unboxing',           'mimuse',       'https://www.instagram.com/reel/DXQUacDDquX/',                                                                                                                                      359,          NULL,         8)
 )
 INSERT INTO monitoring (influencer_platform_id, date, media, content, brand, review_link, views, likes, comments)
-SELECT ip.confirmed_influencer_id, s.date, s.media, s.content, s.brand, s.review_link, s.views, s.likes, s.comments
+SELECT ip.id, s.date, s.media, s.content, s.brand, s.review_link, s.views, s.likes, s.comments
 FROM seed s
 JOIN influencer_platforms ip ON (
   LOWER(ip.handle) = LOWER(s.lookup_handle) AND LOWER(ip.platform) = LOWER(s.lookup_platform)

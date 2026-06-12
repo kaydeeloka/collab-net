@@ -108,7 +108,8 @@ const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string 
 }
 
 export default function Listup() {
-  const { selectedPhaseId } = usePhase()
+  const { selectedPhaseId, phases } = usePhase()
+  const phaseLabel = phases.find(p => p.id === selectedPhaseId)?.name ?? '1차'
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
@@ -153,43 +154,58 @@ export default function Listup() {
   // Dashboard stats
   const [dashStats, setDashStats] = useState<{ total: number; sent: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
 
-  // Load config + stats from Supabase on mount
+  // Load config once on mount
   useEffect(() => {
     ;(async () => {
-      const [{ data: cfg }, { data: infData }, { count: confirmedCount }] = await Promise.all([
-        supabase.from('app_config').select('key, value').in('key', ['tiers','kbeauty_keywords','beauty_keywords','filter_conditions','search_filters']),
-        supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', selectedPhaseId ?? ''),
-        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }),
-      ])
+      const { data: cfg } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['tiers', 'kbeauty_keywords', 'beauty_keywords', 'filter_conditions', 'search_filters'])
 
-      if (cfg) {
-        const map = Object.fromEntries(cfg.map(r => [r.key, r.value]))
-        if (map.tiers)            setTiers(map.tiers as Tier[])
-        if (map.kbeauty_keywords) setKbeautyKws(map.kbeauty_keywords as string[])
-        if (map.beauty_keywords)  setBeautyKws(map.beauty_keywords as string[])
-        if (map.filter_conditions) setFilterConds((map.filter_conditions as FilterCond[]).filter(fc => fc.cat !== '국가'))
-        if (map.search_filters) {
-          const sf = map.search_filters as { maxRatio: number; maxUploadDays: number; proxyCountry: string }
-          setMaxRatio(sf.maxRatio ?? 70)
-          setMaxUploadDays(sf.maxUploadDays ?? 30)
-          setProxyCountry(sf.proxyCountry ?? 'US')
-        }
-      }
-
-      if (infData) {
-        let total = 0, sent = 0
-        const tierCounts: Record<string, number> = {}
-        for (const r of infData as unknown as { status: string; tiers?: { rank: string } | null }[]) {
-          total++
-          if (['yes','reply','negotiate','accept'].includes(r.status)) sent++
-          const rank = r.tiers?.rank
-          if (rank) tierCounts[rank] = (tierCounts[rank] ?? 0) + 1
-        }
-        const tierStats = DB_TIERS.map(rank => ({ rank, total: tierCounts[rank] ?? 0 }))
-        setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: tierStats })
+      if (!cfg) return
+      const map = Object.fromEntries(cfg.map(r => [r.key, r.value]))
+      if (map.tiers)             setTiers(map.tiers as Tier[])
+      if (map.kbeauty_keywords)  setKbeautyKws(map.kbeauty_keywords as string[])
+      if (map.beauty_keywords)   setBeautyKws(map.beauty_keywords as string[])
+      if (map.filter_conditions) setFilterConds((map.filter_conditions as FilterCond[]).filter(fc => fc.cat !== '국가'))
+      if (map.search_filters) {
+        const sf = map.search_filters as { maxRatio: number; maxUploadDays: number; proxyCountry: string }
+        setMaxRatio(sf.maxRatio ?? 70)
+        setMaxUploadDays(sf.maxUploadDays ?? 30)
+        setProxyCountry(sf.proxyCountry ?? 'US')
       }
     })()
   }, [])
+
+  async function loadDashStats() {
+    if (!selectedPhaseId) return
+    const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
+      supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', selectedPhaseId),
+      supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', selectedPhaseId),
+    ])
+    if (!infData) return
+    let total = 0, sent = 0
+    const tierCounts: Record<string, number> = {}
+    for (const r of infData as unknown as { status: string; tiers?: { rank: string } | null }[]) {
+      total++
+      if (['yes', 'reply', 'negotiate', 'accept'].includes(r.status)) sent++
+      const rank = r.tiers?.rank
+      if (rank) tierCounts[rank] = (tierCounts[rank] ?? 0) + 1
+    }
+    const tierStats = DB_TIERS.map(rank => ({ rank, total: tierCounts[rank] ?? 0 }))
+    setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: tierStats })
+  }
+
+  // Reload stats when phase (차수) changes
+  useEffect(() => { loadDashStats() }, [selectedPhaseId])
+
+  // Reload DB list when phase changes (if already loaded)
+  useEffect(() => {
+    if (!selectedPhaseId) return
+    setDbLoaded(false)
+    setSelected(new Set())
+    if (activeTab === 'database') loadInfluencers()
+  }, [selectedPhaseId])
 
   useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
@@ -241,9 +257,10 @@ export default function Listup() {
   }
 
   async function loadInfluencers() {
+    if (!selectedPhaseId) return
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', selectedPhaseId ?? '').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', selectedPhaseId).order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
@@ -487,7 +504,7 @@ export default function Listup() {
             </div>
           </div>
           <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>
-            <div className="card-label">1차 확정 인원</div>
+            <div className="card-label">{phaseLabel} 확정 인원</div>
             <div className="card-value" style={{ color: 'var(--teal-dk)' }}>
               {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / 50</span>
             </div>
