@@ -18,9 +18,9 @@ const GROUPS: SideGroup[] = [
     children: [],
   },
   {
-    label: 'TREND', icon: <TrendingUp size={22} />, defaultTo: '/trend/news', prefix: '/trend',
+    label: 'TREND', icon: <TrendingUp size={22} />, defaultTo: '/trend/beauty-news', prefix: '/trend',
     children: [
-      { to: '/trend/news',   label: '뉴스 트렌드 분석' },
+      { to: '/trend/beauty-news',   label: '뷰티 뉴스' },
       { to: '/trend/tiktok', label: '틱톡 트렌드 분석' },
     ],
   },

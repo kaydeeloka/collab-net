@@ -7,7 +7,7 @@ import Layout from './components/Layout'
 
 import Lock        from './pages/Lock'
 import Dashboard   from './pages/home'
-import Trends      from './pages/trend/news'
+import BeautyNews  from './pages/trend/beauty-news'
 import Listup      from './pages/influencer/search'
 import Outreach    from './pages/influencer/contact'
 import Confirmed   from './pages/influencer/confirmed'
@@ -76,7 +76,8 @@ export default function App() {
                 <Route path="/"                         element={<Dashboard />} />
 
                 {/* ── TREND ── */}
-                <Route path="/trend/news"               element={<Trends />} />
+                <Route path="/trend/beauty-news"        element={<BeautyNews />} />
+                <Route path="/trend/news"               element={<Navigate to="/trend/beauty-news" replace />} />
                 <Route path="/trend/tiktok"             element={<TiktokTrend />} />
 
                 {/* ── INFLUENCER ── */}

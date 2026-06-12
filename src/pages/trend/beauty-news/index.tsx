@@ -208,7 +208,7 @@ function reportArticleCount(report: ReportData): number {
   return (report.categories ?? []).reduce((sum, cat) => sum + (cat.items?.length ?? 0), 0)
 }
 
-export default function Trends() {
+export default function BeautyNews() {
   const [activeTab, setActiveTab] = useState<'news' | 'archive'>('news')
 
   const [latestReport, setLatestReport] = useState<ReportData | null>(null)
@@ -447,7 +447,7 @@ export default function Trends() {
       }
       h += `</div>`
     }
-    const dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/news'
+    const dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/beauty-news'
     h += `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">`
     h += `<a href="${dashUrl}" target="_blank" style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">📊 대시보드 뷰티뉴스 바로가기</a>`
     h += `</div></body></html>`
@@ -523,7 +523,7 @@ export default function Trends() {
             </div>
             {(latestReport.keywords?.length ?? 0) > 0 && (
               <div className="bn-date-card-keywords">
-                {(latestReport.keywords ?? []).slice(0, 3).map(kw => (
+                {(latestReport.keywords ?? []).map(kw => (
                   <span key={kw.tag} className="bn-date-card-kw">{kw.tag}</span>
                 ))}
               </div>

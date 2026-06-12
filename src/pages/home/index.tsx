@@ -332,15 +332,15 @@ export default function Dashboard() {
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>오늘의 트렌드</span>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
-          {/* 뉴스 트렌드 */}
+          {/* 뷰티 뉴스 */}
           <div style={{
             flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
             display: 'flex', flexDirection: 'column', gap: 10,
             border: '1.5px solid var(--teal-lt)', minHeight: 110,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뉴스 트렌드 분석</div>
-              <Link to="/trend/news" style={{
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뷰티 뉴스</div>
+              <Link to="/trend/beauty-news" style={{
                 fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
                 background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
                 borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
