@@ -1,95 +1,66 @@
 // ============================================================
 //  Tab: 인플루언서 모니터링
+//  All data lives in Supabase — no Google Sheets dependency.
 // ============================================================
-
-// Column indices (0-based) — matches 모니터링 sheet:
-// no.|platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|감지된 키워드|모니터링 실행일
-const MON_C = {
-  NO       : 0,   // A — row number
-  PLATFORM : 1,   // B — TikTok / Instagram
-  HANDLE   : 2,   // C — account handle (filled manually)
-  DATE     : 3,   // D — video upload date       ← scraper fills
-  MEDIA    : 4,   // E — photo / video            (filled manually)
-  CONTENT  : 5,   // F — unboxing / review video  (filled manually)
-  BRAND    : 6,   // G — mimuse / aesthen / …     (filled manually)
-  REPOST   : 7,   // H — repost Y/N               (filled manually)
-  LINK     : 8,   // I — review link              ← scraper fills
-  VIEWS    : 9,   // J — 조회수                    ← scraper fills
-  LIKES    : 10,  // K — 좋아요 수                 ← scraper fills
-  COMMENTS : 11,  // L — 댓글 수                   ← scraper fills
-  KEYWORDS : 12,  // M — 감지된 키워드              ← scraper fills
-  UPDATED  : 13,  // N — 모니터링 실행일             ← scraper fills
-};
 
 const DEFAULT_BRAND_KEYWORDS = {
   mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
   brands: ['aesthein', 'joodoc', 'nesh', 'varuza'],
 };
 
-// ── Read ─────────────────────────────────────────────────────
+// ── Supabase helpers ──────────────────────────────────────────
+
+function _getSupabaseCredentials() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    url: props.getProperty('SUPABASE_PROJECT_URL'),
+    key: props.getProperty('SUPABASE_KEY'),
+  };
+}
+
+function _sbHeaders(key) {
+  return { apikey: key, Authorization: 'Bearer ' + key };
+}
+
+// ── Read monitoring data from Supabase ────────────────────────
 
 function getMonitoringData() {
+  const { url, key } = _getSupabaseCredentials();
+  if (!url || !key) return _emptyMonitoring('SUPABASE_PROJECT_URL / SUPABASE_KEY가 Script Properties에 설정되지 않았습니다.');
+
   try {
-    const monId = PropertiesService.getScriptProperties().getProperty('MONITORING_SHEET_ID');
-    let ws;
-    if (monId) {
-      const mss = SpreadsheetApp.openById(monId);
-      ws = mss.getSheetByName(SHEET_MONITORING) || mss.getSheetByName('모니터링');
-    } else {
-      const ss = SpreadsheetApp.openById(getActiveOutreachId());
-      ws = ss.getSheetByName(SHEET_MONITORING) || ss.getSheetByName('모니터링');
-    }
-    if (!ws) return _emptyMonitoring('모니터링 시트를 찾을 수 없습니다. 스프레드시트에 「모니터링」 탭이 있는지 확인하세요.');
+    const res = UrlFetchApp.fetch(
+      url + '/rest/v1/monitoring?select=date,brand,review_link,views,likes,comments,keywords,updated&order=date.desc',
+      { headers: _sbHeaders(key), muteHttpExceptions: true }
+    );
+    const rows = JSON.parse(res.getContentText());
+    if (!Array.isArray(rows)) return _emptyMonitoring('Supabase 오류: ' + res.getContentText());
 
-    const all = ws.getDataRange().getValues();
-    if (all.length < 2) return _emptyMonitoring('데이터가 없습니다.');
-
-    const headers = all[0].map(h => h.toString());
-    const rows    = all.slice(1).map(r => r.map(c => {
-      if (c instanceof Date) return Utilities.formatDate(c, 'Asia/Seoul', 'yyyy-MM-dd');
-      return c.toString();
-    }));
-
-    const C = MON_C;
-
-    // Use UPDATED (run date) — skip if it looks like a URL
-    const lastRunRow = rows.find(r => r[C.UPDATED] && !r[C.UPDATED].startsWith('http'));
-    const lastRun    = lastRunRow ? lastRunRow[C.UPDATED] : '아직 실행 안 됨';
-
-    const reviewRows       = rows.filter(r => r[C.LINK] && r[C.LINK].startsWith('http'));
-    const influencers      = [...new Set(rows.map(r => r[C.HANDLE]).filter(n => n))];
-    const reviewInfluencers = [...new Set(reviewRows.map(r => r[C.HANDLE]).filter(n => n))].length;
-    const totalViews    = reviewRows.reduce((s, r) => s + (parseInt(r[C.VIEWS])    || 0), 0);
-    const totalLikes    = reviewRows.reduce((s, r) => s + (parseInt(r[C.LIKES])    || 0), 0);
-    const totalComments = reviewRows.reduce((s, r) => s + (parseInt(r[C.COMMENTS]) || 0), 0);
+    const reviewRows = rows.filter(function(r) { return r.review_link && r.review_link.startsWith('http'); });
+    const totalViews    = reviewRows.reduce(function(s, r) { return s + (r.views    || 0); }, 0);
+    const totalLikes    = reviewRows.reduce(function(s, r) { return s + (r.likes    || 0); }, 0);
+    const totalComments = reviewRows.reduce(function(s, r) { return s + (r.comments || 0); }, 0);
 
     const brandCounts = {};
-    reviewRows.forEach(r => {
-      const brand = (r[C.BRAND] || '').toString().trim().toLowerCase();
-      if (!brand) return;
-      brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+    reviewRows.forEach(function(r) {
+      const brand = (r.brand || '').toLowerCase();
+      if (brand) brandCounts[brand] = (brandCounts[brand] || 0) + 1;
     });
-    const totalBrandReviews = Object.values(brandCounts).reduce((s, n) => s + (n as number), 0);
 
-    // Also return current run status for the frontend
     const runId = PropertiesService.getScriptProperties().getProperty('MON_RUN_ID');
-    const runStatus = runId ? 'RUNNING' : null;
 
     return {
-      headers,
-      rows,
-      runStatus,
-      stats: {
-        totalInfluencers  : influencers.length,
-        totalReviews      : reviewRows.length,
-        reviewInfluencers,
+      rows     : rows,
+      runStatus: runId ? 'RUNNING' : null,
+      stats    : {
+        totalReviews     : reviewRows.length,
         totalViews,
         totalLikes,
         totalComments,
         brandCounts,
-        totalBrandReviews,
-        lastRun,
-      }
+        totalBrandReviews: reviewRows.length,
+        lastRun          : (rows.find(function(r) { return r.updated; }) || {}).updated || '-',
+      },
     };
   } catch (e) {
     return _emptyMonitoring(e.toString());
@@ -99,7 +70,32 @@ function getMonitoringData() {
 // ── Keywords ─────────────────────────────────────────────────
 
 function getMonitoringKeywords() {
-  const props = PropertiesService.getScriptProperties();
+  // Read from Supabase — source of truth updated by the React dashboard
+  const { url, key } = _getSupabaseCredentials();
+  if (url && key) {
+    try {
+      const res  = UrlFetchApp.fetch(
+        url + '/rest/v1/monitoring_keywords?select=brand,keywords&brand=in.(mimuse,brands)',
+        { headers: _sbHeaders(key), muteHttpExceptions: true }
+      );
+      const data = JSON.parse(res.getContentText());
+      if (Array.isArray(data) && data.length > 0) {
+        const result = Object.assign({}, DEFAULT_BRAND_KEYWORDS);
+        data.forEach(function(row) {
+          if (row.brand && Array.isArray(row.keywords) && row.keywords.length > 0) {
+            result[row.brand] = row.keywords;
+          }
+        });
+        Logger.log('키워드 Supabase 로드: mimuse=' + (result.mimuse || []).length + '개, brands=' + (result.brands || []).length + '개');
+        return result;
+      }
+    } catch (e) {
+      Logger.log('getMonitoringKeywords Supabase 오류: ' + e);
+    }
+  }
+
+  // Script Properties fallback
+  const props  = PropertiesService.getScriptProperties();
   const stored = props.getProperty('MONITORING_BRAND_KEYWORDS');
   if (stored) return JSON.parse(stored);
   const oldStored = props.getProperty('MONITORING_KEYWORDS');
@@ -130,94 +126,52 @@ function _getAllKeywordsFlat() {
 
 // ── Apify Scrape ─────────────────────────────────────────────
 
-// clockworks~tiktok-profile-scraper — paid actor, reliable profile + date range scraping
 const MON_ACTOR        = 'clockworks~tiktok-profile-scraper';
-const MON_SCRAPE_LIMIT = 50;   // max influencers per run
-const MON_VIDEOS_PER   = 50;   // max videos per profile
+const MON_SCRAPE_LIMIT = 50;
+const MON_VIDEOS_PER   = 50;
 
-function _getMonitoringSheet() {
-  const monId = PropertiesService.getScriptProperties().getProperty('MONITORING_SHEET_ID');
-  const ss = monId
-    ? SpreadsheetApp.openById(monId)
-    : SpreadsheetApp.openById(getActiveOutreachId());
-  // Do NOT fall back to getSheets()[0] — that silently uses the wrong sheet
-  return ss.getSheetByName(SHEET_MONITORING) || ss.getSheetByName('모니터링') || null;
-}
-
-// Read TikTok handles from Supabase: confirmed_influencers JOIN influencers WHERE platform = TikTok.
+// Read TikTok handles from Supabase influencer_platform table.
 function _getTikTokInfluencers(limit) {
   limit = limit || MON_SCRAPE_LIMIT;
+  const { url, key } = _getSupabaseCredentials();
+  if (!url || !key) {
+    Logger.log('SUPABASE_PROJECT_URL / SUPABASE_KEY not set');
+    return [];
+  }
+
   try {
-    const props    = PropertiesService.getScriptProperties();
-    const sbUrl    = props.getProperty('SUPABASE_URL');
-    const sbKey    = props.getProperty('SUPABASE_ANON_KEY');
-    if (!sbUrl || !sbKey) {
-      Logger.log('SUPABASE_URL / SUPABASE_ANON_KEY not set — falling back to sheet');
-      return _getTikTokInfluencersFromSheet(limit);
-    }
-
-    // Join confirmed_influencers with influencers to get TikTok handles
-    const url = sbUrl + '/rest/v1/confirmed_influencers' +
-      '?select=influencers!inner(handle,platform)' +
-      '&influencers.platform=eq.TikTok' +
-      '&limit=' + limit;
-
-    const res  = UrlFetchApp.fetch(url, {
-      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
-      muteHttpExceptions: true,
-    });
+    const res  = UrlFetchApp.fetch(
+      url + '/rest/v1/influencer_platform?select=handle,platform&platform=eq.TikTok&limit=' + limit,
+      { headers: _sbHeaders(key), muteHttpExceptions: true }
+    );
     const data = JSON.parse(res.getContentText());
-    if (!Array.isArray(data)) { Logger.log('Supabase response: ' + res.getContentText()); return []; }
+    if (!Array.isArray(data)) { Logger.log('Supabase influencer_platform 오류: ' + res.getContentText()); return []; }
 
     const seen    = {};
     const results = [];
     data.forEach(function(row) {
-      const handle = ((row.influencers || {}).handle || '').toString().trim().replace(/^@/, '');
+      const handle = (row.handle || '').toString().trim().replace(/^@/, '');
       const key    = handle.toLowerCase();
       if (!handle || handle.includes(' ') || seen[key]) return;
       seen[key] = true;
       results.push(handle);
     });
-    Logger.log('Supabase: ' + results.length + ' TikTok handles');
+    Logger.log('Supabase TikTok 핸들: ' + results.length + '개');
     return results;
   } catch (e) {
-    Logger.log('_getTikTokInfluencers error: ' + e);
-    return [];
-  }
-}
-
-// Fallback: read from Google Sheet (used when Supabase keys not set)
-function _getTikTokInfluencersFromSheet(limit) {
-  limit = limit || MON_SCRAPE_LIMIT;
-  try {
-    const ws = _getMonitoringSheet();
-    if (!ws) return [];
-    const rows    = ws.getDataRange().getValues().slice(1);
-    const results = [];
-    const seen    = {};
-    for (var i = 0; i < rows.length && results.length < limit; i++) {
-      const handle = (rows[i][MON_C.HANDLE] || '').toString().trim().replace(/^@/, '');
-      const key    = handle.toLowerCase();
-      if (!handle || handle.includes(' ') || seen[key]) continue;
-      seen[key] = true;
-      results.push(handle);
-    }
-    return results;
-  } catch (e) {
-    Logger.log('_getTikTokInfluencersFromSheet error: ' + e);
+    Logger.log('_getTikTokInfluencers 오류: ' + e);
     return [];
   }
 }
 
 // Start Apify scrape.
 // Date range is read from Script Properties: MON_START_DATE / MON_END_DATE (YYYY-MM-DD).
-// Dates are passed directly to the actor — no post-filtering needed.
 function runMonitoringScrape() {
   const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 Script Properties에 설정되지 않았습니다.' };
 
   const handles = _getTikTokInfluencers(MON_SCRAPE_LIMIT);
-  if (handles.length === 0) return { error: '모니터링 시트에 유효한 핸들이 없습니다. C열(account)에 @없이 핸들이 입력되어 있는지 확인하세요.' };
+  if (handles.length === 0) return { error: 'Supabase influencer_platform에 유효한 TikTok 핸들이 없습니다.' };
 
   const props     = PropertiesService.getScriptProperties();
   const startDate = props.getProperty('MON_START_DATE') || '2026-02-20';
@@ -226,10 +180,9 @@ function runMonitoringScrape() {
   Logger.log('스크래핑 대상 핸들: ' + handles.join(', '));
   Logger.log('기간: ' + (startDate || '제한없음') + ' ~ ' + (endDate || '제한없음'));
 
-  // Field names match clockworks~tiktok-profile-scraper input schema
   const payload = {
-    profiles             : handles,          // usernames without @
-    resultsPerPage       : MON_VIDEOS_PER,   // videos per profile
+    profiles             : handles,
+    resultsPerPage       : MON_VIDEOS_PER,
     profileSections      : ['Videos'],
     sortVideosBy         : 'Latest',
     shouldDownloadVideos : false,
@@ -243,9 +196,9 @@ function runMonitoringScrape() {
     const res = UrlFetchApp.fetch(
       'https://api.apify.com/v2/acts/' + MON_ACTOR + '/runs?token=' + token,
       {
-        method          : 'POST',
-        contentType     : 'application/json',
-        payload         : JSON.stringify(payload),
+        method            : 'POST',
+        contentType       : 'application/json',
+        payload           : JSON.stringify(payload),
         muteHttpExceptions: true,
       }
     );
@@ -262,7 +215,7 @@ function runMonitoringScrape() {
     const period = (startDate || '제한없음') + ' ~ ' + (endDate || '제한없음');
     Logger.log('모니터링 실행 시작: ' + runId + ' (' + handles.length + '개 프로필, ' + period + ')');
     return {
-      ok: true, runId: runId,
+      ok     : true, runId: runId,
       profiles: handles.length, handles: handles,
       message: handles.length + '개 TikTok 프로필 스크래핑 시작 (' + period + ')',
     };
@@ -320,7 +273,7 @@ function _writeMonitoringResults(token, datasetId) {
     function itemText(item) {
       return [
         item.text, item.desc, item.description,
-        (item.hashtags || []).join(' '),
+        (item.hashtags  || []).join(' '),
         (item.textExtra || []).map(function(t) { return t.hashtagName || ''; }).join(' '),
       ].filter(Boolean).join(' ').toLowerCase();
     }
@@ -346,28 +299,23 @@ function _writeMonitoringResults(token, datasetId) {
 
     Logger.log('기간 내 영상: ' + items.length + '개 | 키워드 매칭: ' + Object.keys(videosByHandle).length + '개 핸들');
 
-    // Try Supabase first; fall back to sheet if not configured
-    const props = PropertiesService.getScriptProperties();
-    const sbUrl = props.getProperty('SUPABASE_URL');
-    const sbKey = props.getProperty('SUPABASE_ANON_KEY');
-
-    var updated = 0;
-
-    if (sbUrl && sbKey) {
-      updated = _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate);
-    } else {
-      updated = _writeToSheet(videosByHandle, keywords, itemText, runDate);
+    const { url, key } = _getSupabaseCredentials();
+    if (!url || !key) {
+      _clearRunProps();
+      return { error: 'SUPABASE_PROJECT_URL / SUPABASE_KEY가 설정되지 않아 결과를 저장할 수 없습니다.' };
     }
+
+    const updated = _writeToSupabase(url, key, videosByHandle, keywords, itemText, runDate);
 
     Logger.log('업데이트된 행: ' + updated + '개');
     return {
-      ok: true, matched: updated,
+      ok     : true, matched: updated,
       message: updated > 0
         ? updated + '개 인플루언서 리뷰 데이터 업데이트 완료'
         : '키워드 매칭 영상 없음 — 감지된 리뷰가 없습니다.',
     };
   } catch (e) {
-    Logger.log('Error in _writeMonitoringResults: ' + e.toString());
+    Logger.log('_writeMonitoringResults 오류: ' + e.toString());
     return { error: e.toString() };
   } finally {
     _clearRunProps();
@@ -375,34 +323,27 @@ function _writeMonitoringResults(token, datasetId) {
 }
 
 // Write Apify results to Supabase monitoring table.
-// Looks up confirmed_influencer_id via handle → influencers → confirmed_influencers.
 function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate) {
-  // Fetch handle → confirmed_influencer_id mapping from Supabase
   const mapRes = UrlFetchApp.fetch(
-    sbUrl + '/rest/v1/confirmed_influencers' +
-    '?select=id,influencers!inner(handle)',
-    {
-      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
-      muteHttpExceptions: true,
-    }
+    sbUrl + '/rest/v1/influencer_platform?select=id,handle,platform',
+    { headers: _sbHeaders(sbKey), muteHttpExceptions: true }
   );
   const mapData = JSON.parse(mapRes.getContentText());
   if (!Array.isArray(mapData)) {
-    Logger.log('Failed to fetch confirmed_influencers from Supabase');
+    Logger.log('influencer_platform 조회 실패');
     return 0;
   }
 
-  // Build handle (lowercase) → confirmed_influencer_id map
-  const handleToId = {};
+  const handlePlatformToId = {};
   mapData.forEach(function(row) {
-    const handle = ((row.influencers || {}).handle || '').toLowerCase();
-    if (handle) handleToId[handle] = row.id;
+    const k = (row.handle || '').toLowerCase() + '|' + (row.platform || '').toLowerCase();
+    if (k !== '|') handlePlatformToId[k] = row.id;
   });
 
   var inserted = 0;
   Object.keys(videosByHandle).forEach(function(handle) {
-    const confirmedId = handleToId[handle];
-    if (!confirmedId) { Logger.log('No confirmed_influencer for handle: ' + handle); return; }
+    const platformId = handlePlatformToId[handle + '|tiktok'];
+    if (!platformId) { Logger.log('influencer_platform 없음: ' + handle); return; }
 
     videosByHandle[handle].forEach(function(video) {
       var videoDate = '';
@@ -411,94 +352,38 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
 
       const videoUrl   = video.webVideoUrl || video.videoUrl || '';
       const s          = video.stats || {};
-      const views      = video.playCount    || s.playCount    || 0;
-      const likes      = video.diggCount    || s.diggCount    || 0;
-      const comments   = video.commentCount || s.commentCount || 0;
       const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
 
       const payload = JSON.stringify({
-        confirmed_influencer_id: confirmedId,
-        platform:    'TikTok',
-        account:     handle,
-        date:        videoDate || null,
-        media:       'video',
-        review_link: videoUrl || null,
-        views:       views,
-        likes:       likes,
-        comments:    comments,
-        keywords:    matchedKws.join(', ') || null,
-        updated:     runDate,
+        influencer_platform_id: platformId,
+        date       : videoDate || null,
+        media      : 'video',
+        review_link: videoUrl  || null,
+        views      : video.playCount    || s.playCount    || 0,
+        likes      : video.diggCount    || s.diggCount    || 0,
+        comments   : video.commentCount || s.commentCount || 0,
+        keywords   : matchedKws.join(', ') || null,
+        updated    : runDate,
       });
 
-      // Upsert by (confirmed_influencer_id, review_link) to avoid duplicates
       const insRes = UrlFetchApp.fetch(
         sbUrl + '/rest/v1/monitoring',
         {
-          method: 'POST',
-          headers: {
-            apikey: sbKey,
-            Authorization: 'Bearer ' + sbKey,
+          method : 'POST',
+          headers: Object.assign({}, _sbHeaders(sbKey), {
             'Content-Type': 'application/json',
-            Prefer: 'resolution=merge-duplicates',
-          },
-          payload: payload,
+            Prefer        : 'resolution=merge-duplicates',
+          }),
+          payload           : payload,
           muteHttpExceptions: true,
         }
       );
       if (insRes.getResponseCode() < 300) inserted++;
-      else Logger.log('Supabase insert error for ' + handle + ': ' + insRes.getContentText());
+      else Logger.log('Supabase insert 오류 (' + handle + '): ' + insRes.getContentText());
     });
   });
 
   return inserted;
-}
-
-// Fallback: write results to Google Sheet (legacy path)
-function _writeToSheet(videosByHandle, keywords, itemText, runDate) {
-  const ws = _getMonitoringSheet();
-  if (!ws) return 0;
-
-  const C = MON_C;
-  const dataRange = ws.getDataRange();
-  const allValues = dataRange.getValues();
-  const handleIdx = {};
-  var updated = 0;
-
-  for (var i = 1; i < allValues.length; i++) {
-    const handle = (allValues[i][C.HANDLE] || '').toString().trim().replace(/^@/, '').toLowerCase();
-    const videos = videosByHandle[handle];
-    if (!videos || !videos.length) continue;
-
-    if (handleIdx[handle] === undefined) handleIdx[handle] = 0;
-    const video = videos[handleIdx[handle]];
-    if (!video) continue;
-    handleIdx[handle]++;
-
-    var videoDate = '';
-    if (video.createTimeISO) videoDate = video.createTimeISO.slice(0, 10);
-    else if (video.createTime) videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
-
-    const videoUrl   = video.webVideoUrl || video.videoUrl || '';
-    const s          = video.stats || {};
-    const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
-
-    allValues[i][C.MEDIA]    = 'video';
-    allValues[i][C.DATE]     = videoDate;
-    allValues[i][C.LINK]     = videoUrl;
-    allValues[i][C.VIEWS]    = video.playCount    || s.playCount    || 0;
-    allValues[i][C.LIKES]    = video.diggCount    || s.diggCount    || 0;
-    allValues[i][C.COMMENTS] = video.commentCount || s.commentCount || 0;
-    allValues[i][C.UPDATED]  = runDate;
-    allValues[i][C.KEYWORDS] = matchedKws.join(', ');
-    updated++;
-  }
-
-  if (updated > 0) {
-    const requiredCols = C.UPDATED + 1;
-    allValues.forEach(function(row) { while (row.length < requiredCols) row.push(''); });
-    ws.getRange(1, 1, allValues.length, requiredCols).setValues(allValues);
-  }
-  return updated;
 }
 
 function _clearRunProps() {
@@ -514,198 +399,28 @@ function _clearRunProps() {
 function _emptyMonitoring(error) {
   return {
     error,
-    headers : [],
-    rows    : [],
-    stats   : {
-      totalInfluencers : 0,
-      totalReviews     : 0,
-      totalViews       : 0,
-      totalLikes       : 0,
-      totalComments    : 0,
-      keywordCounts    : {},
-      lastRun          : '-'
-    }
+    rows : [],
+    stats: {
+      totalReviews : 0,
+      totalViews   : 0,
+      totalLikes   : 0,
+      totalComments: 0,
+      brandCounts  : {},
+      lastRun      : '-',
+    },
   };
 }
 
-// Reset a stuck run — clears all MON_* Script Properties
 function resetMonitoringRun() {
   _clearRunProps();
   return { ok: true, message: '모니터링 상태 초기화 완료. 다시 실행하세요.' };
 }
 
-// ── Free test — no Apify call needed ─────────────────────────
-// Run this from the GAS Script Editor to verify keyword matching works
-// before spending money on a real scrape.
-function testKeywordMatching() {
-  // Simulate NESTED format (what the live Apify API actually returns)
-  const nestedItem = {
-    authorMeta   : { name: 'anikafong', uniqueId: 'anikafong' },
-    text         : 'Unbox the Mi Muse Box with me! @mimuse @nesh @varuza_global @에스테인 #kbeauty',
-    diggCount    : 55,
-    playCount    : 581,
-    commentCount : 3,
-    createTimeISO: '2026-03-30T03:00:29.000Z',
-    webVideoUrl  : 'https://www.tiktok.com/@anikafong/video/7622878040212770061',
-  };
-
-  // Simulate FLAT format (what monitoring.json / CSV export looks like)
-  const flatItem = {
-    'authorMeta.name': 'charity_017',
-    text         : 'Packaging is so cute I love it 🥰 @mimuse #prgifted #gifted',
-    diggCount    : 12,
-    playCount    : 203,
-    commentCount : 1,
-    createTimeISO: '2026-04-06T03:00:31.000Z',
-    webVideoUrl  : 'https://www.tiktok.com/@charity_017/video/7625475714870971678',
-  };
-
-  // Simulate item with NO keyword (should not match)
-  const noMatchItem = {
-    authorMeta   : { name: 'someuser', uniqueId: 'someuser' },
-    text         : 'Check out this lipstick from Fenty Beauty! #makeup',
-    diggCount    : 100, playCount: 1000, commentCount: 10,
-    createTimeISO: '2026-03-15T10:00:00.000Z',
-    webVideoUrl  : 'https://www.tiktok.com/@someuser/video/123',
-  };
-
-  const keywords = _getAllKeywordsFlat().map(function(k) { return k.toLowerCase(); });
-  Logger.log('키워드 목록 (' + keywords.length + '개): ' + keywords.join(', '));
-  Logger.log('');
-
-  function itemText(item) {
-    return [
-      item.text, item.desc, item.description,
-      (item.hashtags  || []).join(' '),
-      (item.textExtra || []).map(function(t) { return t.hashtagName || ''; }).join(' '),
-    ].filter(Boolean).join(' ').toLowerCase();
-  }
-
-  function getUniqueId(item) {
-    const meta = item.authorMeta || {};
-    return (meta.uniqueId || meta.name || item['authorMeta.name'] || item.uniqueId || '').toString().toLowerCase();
-  }
-
-  [
-    { item: nestedItem,   label: 'NESTED format (should match ✅)' },
-    { item: flatItem,     label: 'FLAT format   (should match ✅)' },
-    { item: noMatchItem,  label: 'No keyword    (should NOT match ❌)' },
-  ].forEach(function(tc) {
-    const text      = itemText(tc.item);
-    const matched   = keywords.filter(function(kw) { return text.includes(kw); });
-    const uniqueId  = getUniqueId(tc.item);
-
-    Logger.log('── ' + tc.label);
-    Logger.log('  uniqueId : ' + (uniqueId || '❌ 비어있음 — 이게 문제!'));
-    Logger.log('  키워드   : ' + (matched.length ? matched.join(', ') : '없음'));
-    Logger.log('  결과     : ' + (matched.length && uniqueId ? '✅ 매칭됨' : '❌ 건너뜀'));
-    Logger.log('');
-  });
-}
-
-// ── Run from GAS Script Editor to diagnose column / handle issues ──
-function debugMonitoringSetup() {
-  try {
-    const ws = _getMonitoringSheet();
-    if (!ws) { Logger.log('❌ 모니터링 시트 없음'); return; }
-
-    Logger.log('시트명: ' + ws.getName());
-    Logger.log('헤더 행: ' + JSON.stringify(ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0]));
-
-    const all    = ws.getDataRange().getValues().slice(1);
-    const sample = all.slice(0, 10).map(function(r) { return (r[MON_C.HANDLE] || '').toString().trim() || '(empty)'; });
-    Logger.log('C열(핸들) 첫 10개: ' + JSON.stringify(sample));
-    Logger.log('전체 데이터 행: ' + all.length + '개');
-
-    const handles = _getTikTokInfluencers(99);
-    Logger.log('감지된 핸들 ' + handles.length + '개: ' + handles.join(', '));
-
-    Logger.log('MON_START_DATE: ' + (PropertiesService.getScriptProperties().getProperty('MON_START_DATE') || '미설정'));
-    Logger.log('MON_END_DATE:   ' + (PropertiesService.getScriptProperties().getProperty('MON_END_DATE')   || '미설정'));
-    Logger.log('MON_RUN_ID:     ' + (PropertiesService.getScriptProperties().getProperty('MON_RUN_ID')     || '없음'));
-    Logger.log('APIFY_TOKEN:    ' + (PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN') ? '설정됨' : '❌ 없음'));
-  } catch (e) {
-    Logger.log('오류: ' + e);
-  }
-}
-
-// Remove exact duplicate rows — only removes rows where handle + date + link
-// are all identical. Safe for influencers with multiple legitimate videos.
-function deduplicateMonitoringSheet() {
-  const ws = _getMonitoringSheet();
-  if (!ws) { Logger.log('❌ 모니터링 시트 없음'); return; }
-
-  const allValues = ws.getDataRange().getValues();
-  const header    = allValues[0];
-  const dataRows  = allValues.slice(1);
-
-  const C    = MON_C;
-  const seen = {};
-  const kept = [];
-
-  dataRows.forEach(function(row) {
-    const handle = (row[C.HANDLE] || '').toString().trim().toLowerCase();
-    const date   = (row[C.DATE]   || '').toString().trim();
-    const link   = (row[C.LINK]   || '').toString().trim();
-    // Use handle+date+link as unique key; rows with no handle are always kept
-    const key = handle ? (handle + '|' + date + '|' + link) : null;
-    if (!key || !seen[key]) {
-      if (key) seen[key] = true;
-      kept.push(row);
-    }
-  });
-
-  const removed = dataRows.length - kept.length;
-  const newData = [header].concat(kept);
-  ws.clearContents();
-  ws.getRange(1, 1, newData.length, newData[0].length).setValues(newData);
-  Logger.log('정리 완료: ' + dataRows.length + '행 → ' + kept.length + '행 (중복 ' + removed + '개 삭제)');
-  return { ok: true, removed: removed, remaining: kept.length };
-}
-
-// ── OLD single-handle dedup (kept for reference, not used) ────
-function deduplicateByHandleOnly() {
-  const ws = _getMonitoringSheet();
-  if (!ws) { Logger.log('❌ 모니터링 시트 없음'); return; }
-
-  const allValues = ws.getDataRange().getValues();
-  const header    = allValues[0];
-  const dataRows  = allValues.slice(1);
-
-  const C = MON_C;
-  const best = {};   // handle.toLowerCase() → row index in dataRows
-
-  dataRows.forEach(function(row, idx) {
-    const handle = (row[C.HANDLE] || '').toString().trim().replace(/^@/, '').toLowerCase();
-    if (!handle) return;
-
-    if (best[handle] === undefined) {
-      best[handle] = idx;
-      return;
-    }
-    // Prefer row that already has a review link
-    const prev = dataRows[best[handle]];
-    const prevHasLink = prev[C.LINK] && prev[C.LINK].toString().startsWith('http');
-    const currHasLink = row[C.LINK]  && row[C.LINK].toString().startsWith('http');
-    if (currHasLink && !prevHasLink) best[handle] = idx;
-  });
-
-  const keepIndices = new Set(Object.values(best));
-  const kept = dataRows.filter(function(_, idx) { return keepIndices.has(idx); });
-
-  const newData = [header].concat(kept);
-  ws.clearContents();
-  ws.getRange(1, 1, newData.length, newData[0].length).setValues(newData);
-
-  Logger.log('정리 완료: ' + dataRows.length + '행 → ' + kept.length + '행 (중복 ' + (dataRows.length - kept.length) + '개 삭제)');
-}
-
-// Process any already-completed Apify run by ID — useful when the auto-poll
-// missed the result or when you want to re-apply filtering on a past run.
+// Process a previously-completed Apify run by ID.
 function processApifyRunById(runId) {
   const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
-  if (!runId) return { error: 'runId가 필요합니다.' };
+  if (!runId)  return { error: 'runId가 필요합니다.' };
 
   try {
     const statusRes = UrlFetchApp.fetch(
@@ -723,17 +438,91 @@ function processApifyRunById(runId) {
   }
 }
 
+// ── Free test — no Apify call needed ─────────────────────────
+function testKeywordMatching() {
+  const nestedItem = {
+    authorMeta   : { name: 'anikafong', uniqueId: 'anikafong' },
+    text         : 'Unbox the Mi Muse Box with me! @mimuse @nesh @varuza_global #kbeauty',
+    diggCount    : 55, playCount: 581, commentCount: 3,
+    createTimeISO: '2026-03-30T03:00:29.000Z',
+    webVideoUrl  : 'https://www.tiktok.com/@anikafong/video/7622878040212770061',
+  };
+  const flatItem = {
+    'authorMeta.name': 'charity_017',
+    text         : 'Packaging is so cute I love it @mimuse #prgifted #gifted',
+    diggCount    : 12, playCount: 203, commentCount: 1,
+    createTimeISO: '2026-04-06T03:00:31.000Z',
+    webVideoUrl  : 'https://www.tiktok.com/@charity_017/video/7625475714870971678',
+  };
+  const noMatchItem = {
+    authorMeta   : { name: 'someuser', uniqueId: 'someuser' },
+    text         : 'Check out this lipstick from Fenty Beauty! #makeup',
+    diggCount    : 100, playCount: 1000, commentCount: 10,
+    createTimeISO: '2026-03-15T10:00:00.000Z',
+    webVideoUrl  : 'https://www.tiktok.com/@someuser/video/123',
+  };
+
+  const keywords = _getAllKeywordsFlat().map(function(k) { return k.toLowerCase(); });
+  Logger.log('키워드 목록 (' + keywords.length + '개): ' + keywords.join(', '));
+
+  function itemText(item) {
+    return [
+      item.text, item.desc, item.description,
+      (item.hashtags  || []).join(' '),
+      (item.textExtra || []).map(function(t) { return t.hashtagName || ''; }).join(' '),
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function getUniqueId(item) {
+    const meta = item.authorMeta || {};
+    return (meta.uniqueId || meta.name || item['authorMeta.name'] || item.uniqueId || '').toString().toLowerCase();
+  }
+
+  [
+    { item: nestedItem,  label: 'NESTED format (should match)' },
+    { item: flatItem,    label: 'FLAT format   (should match)' },
+    { item: noMatchItem, label: 'No keyword    (should NOT match)' },
+  ].forEach(function(tc) {
+    const text     = itemText(tc.item);
+    const matched  = keywords.filter(function(kw) { return text.includes(kw); });
+    const uniqueId = getUniqueId(tc.item);
+    Logger.log('── ' + tc.label);
+    Logger.log('  uniqueId : ' + (uniqueId || '비어있음'));
+    Logger.log('  키워드   : ' + (matched.length ? matched.join(', ') : '없음'));
+    Logger.log('  결과     : ' + (matched.length && uniqueId ? '매칭됨' : '건너뜀'));
+  });
+}
+
+// ── Debug ─────────────────────────────────────────────────────
+function debugMonitoringSetup() {
+  const { url, key } = _getSupabaseCredentials();
+  Logger.log('SUPABASE_PROJECT_URL: ' + (url ? '설정됨' : '없음'));
+  Logger.log('SUPABASE_KEY:         ' + (key ? '설정됨' : '없음'));
+  Logger.log('APIFY_TOKEN:          ' + (PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN') ? '설정됨' : '없음'));
+  Logger.log('MON_START_DATE:       ' + (PropertiesService.getScriptProperties().getProperty('MON_START_DATE') || '미설정'));
+  Logger.log('MON_END_DATE:         ' + (PropertiesService.getScriptProperties().getProperty('MON_END_DATE')   || '미설정'));
+  Logger.log('MON_RUN_ID:           ' + (PropertiesService.getScriptProperties().getProperty('MON_RUN_ID')     || '없음'));
+
+  if (url && key) {
+    const handles = _getTikTokInfluencers(99);
+    Logger.log('TikTok 핸들 ' + handles.length + '개: ' + handles.join(', '));
+    const keywords = getMonitoringKeywords();
+    Logger.log('키워드: ' + JSON.stringify(keywords));
+  }
+}
+
+// ── Router ────────────────────────────────────────────────────
+
 function routeMonitoring(action, p, body) {
   switch (action) {
-    case 'getMonitoringData'      : return getMonitoringData();
-    case 'getMonitoringKeywords'  : return getMonitoringKeywords();
+    case 'getMonitoringData'       : return getMonitoringData();
+    case 'getMonitoringKeywords'   : return getMonitoringKeywords();
     case 'saveMonitoringKeywords'  : return saveMonitoringKeywords((body || {}).brandKeywords || (body || {}).keywords || {});
     case 'resetMonitoringKeywords' : return resetMonitoringKeywords();
-    case 'runMonitoringScrape'    : return runMonitoringScrape();
-    case 'checkMonitoringRun'     : return checkMonitoringRun();
-    case 'resetMonitoringRun'     : return resetMonitoringRun();
-    case 'processApifyRunById'       : return processApifyRunById((body || {}).runId || '');
-    case 'deduplicateMonitoringSheet': return deduplicateMonitoringSheet();
-    default                          : return null;
+    case 'runMonitoringScrape'     : return runMonitoringScrape();
+    case 'checkMonitoringRun'      : return checkMonitoringRun();
+    case 'resetMonitoringRun'      : return resetMonitoringRun();
+    case 'processApifyRunById'     : return processApifyRunById((body || {}).runId || '');
+    default                        : return null;
   }
 }

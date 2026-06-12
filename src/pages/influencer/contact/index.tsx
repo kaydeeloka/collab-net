@@ -253,7 +253,7 @@ export default function Outreach() {
         } else {
           const platform   = inf.platform || 'TikTok'
           const handle     = inf.handle   || ''
-          const { error: ipErr } = await supabase.from('influencer_platforms').insert({
+          const { error: ipErr } = await supabase.from('influencer_platform').insert({
             confirmed_influencer_id: ciData.id,
             platform,
             handle,

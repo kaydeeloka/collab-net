@@ -509,11 +509,11 @@ ALTER TABLE brand_personal
   USING CASE WHEN personal_email IS NULL THEN NULL ELSE ARRAY[personal_email] END;
 
 -- ============================================================
---  influencer_platforms — normalize content_platforms JSONB
+--  influencer_platform — normalize content_platforms JSONB
 --  Run this entire block once in Supabase SQL editor
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS influencer_platforms (
+CREATE TABLE IF NOT EXISTS influencer_platform (
   id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at              TIMESTAMPTZ DEFAULT now(),
   confirmed_influencer_id UUID        NOT NULL REFERENCES confirmed_influencers(id) ON DELETE CASCADE,
@@ -523,15 +523,15 @@ CREATE TABLE IF NOT EXISTS influencer_platforms (
   profile_url             TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_influencer_platforms_confirmed ON influencer_platforms(confirmed_influencer_id);
-CREATE INDEX IF NOT EXISTS idx_influencer_platforms_handle    ON influencer_platforms(handle);
+CREATE INDEX IF NOT EXISTS idx_influencer_platform_confirmed ON influencer_platform(confirmed_influencer_id);
+CREATE INDEX IF NOT EXISTS idx_influencer_platform_handle    ON influencer_platform(handle);
 
-ALTER TABLE influencer_platforms ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_influencer_platforms" ON influencer_platforms
+ALTER TABLE influencer_platform ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_influencer_platform" ON influencer_platform
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Migrate existing content_platforms JSONB → influencer_platforms rows
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle, followers, profile_url)
+-- Migrate existing content_platforms JSONB → influencer_platform rows
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle, followers, profile_url)
 SELECT
   ci.id,
   COALESCE(NULLIF(TRIM(elem->>'platform'), ''), 'TikTok'),
@@ -551,33 +551,33 @@ ON CONFLICT DO NOTHING;
 
 -- Add influencer_platform_id FK to monitoring
 ALTER TABLE monitoring ADD COLUMN IF NOT EXISTS influencer_platform_id UUID
-  REFERENCES influencer_platforms(id) ON DELETE SET NULL;
+  REFERENCES influencer_platform(id) ON DELETE SET NULL;
 
 -- Backfill: match by handle first
 UPDATE monitoring m
 SET influencer_platform_id = ip.id
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE m.influencer_platform_id IS NULL
   AND ip.handle = m.account;
 
 -- Backfill: remaining by confirmed_influencer_id + platform
 UPDATE monitoring m
 SET influencer_platform_id = ip.id
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE m.influencer_platform_id IS NULL
   AND ip.confirmed_influencer_id = m.confirmed_influencer_id
   AND ip.platform = m.platform;
 
--- Drop old columns from monitoring (data now in influencer_platforms / confirmed_influencers)
+-- Drop old columns from monitoring (data now in influencer_platform / confirmed_influencers)
 ALTER TABLE monitoring DROP COLUMN IF EXISTS account;
 ALTER TABLE monitoring DROP COLUMN IF EXISTS confirmed_influencer_id;
 ALTER TABLE monitoring DROP COLUMN IF EXISTS repost;
 
--- Drop JSONB column from confirmed_influencers (replaced by influencer_platforms table)
+-- Drop JSONB column from confirmed_influencers (replaced by influencer_platform table)
 ALTER TABLE confirmed_influencers DROP COLUMN IF EXISTS content_platforms;
 
 -- ============================================================
---  influencer_platforms — seed data
+--  influencer_platform — seed data
 --  Lookup: join influencers by handle → confirmed_influencers
 --  Secondary Instagram rows use the primary TikTok handle for lookup
 -- ============================================================
@@ -640,7 +640,7 @@ WITH seed (lookup_handle, platform, handle, followers) AS (
   ('Bust',                         'Magazine',         'Bust',                              0),
   ('Allure',                       'Magazine',         'Allure',                            0)
 )
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle, followers, profile_url)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle, followers, profile_url)
 SELECT ci.id, s.platform, s.handle, s.followers,
   CASE s.platform
     WHEN 'TikTok'    THEN 'https://www.tiktok.com/@' || s.handle
@@ -651,7 +651,7 @@ FROM seed s
 JOIN influencers i ON LOWER(i.handle) = LOWER(s.lookup_handle)
 JOIN confirmed_influencers ci ON ci.influencer_id = i.id
 WHERE NOT EXISTS (
-  SELECT 1 FROM influencer_platforms ip
+  SELECT 1 FROM influencer_platform ip
   WHERE ip.confirmed_influencer_id = ci.id
     AND ip.platform = s.platform
     AND LOWER(ip.handle) = LOWER(s.handle)
@@ -738,39 +738,53 @@ SET status = 'Delivered'
 WHERE status = '접수완료';
 
 -- ============================================================
+--  monitoring — fix FK to reference influencer_platform (not confirmed_influencers)
+--  Run this once if not already done
+-- ============================================================
+ALTER TABLE monitoring DROP CONSTRAINT IF EXISTS monitoring_influencer_platform_id_fkey;
+ALTER TABLE monitoring ADD CONSTRAINT monitoring_influencer_platform_id_fkey
+  FOREIGN KEY (influencer_platform_id) REFERENCES influencer_platform(id);
+
+-- Delete any rows inserted with wrong confirmed_influencer_id values
+DELETE FROM monitoring m
+WHERE NOT EXISTS (
+  SELECT 1 FROM influencer_platform ip WHERE ip.id = m.influencer_platform_id
+);
+
+-- ============================================================
 --  monitoring — add missing Instagram platform entries
 --  (some influencers post on both TikTok & Instagram)
 --  Run these 5 inserts first, then run the seed below.
 -- ============================================================
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle)
 SELECT ip.confirmed_influencer_id, 'Instagram', 'crazybeautifulmakeup'
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE LOWER(ip.handle) = 'crazybeautifulmakeup' AND LOWER(ip.platform) = 'tiktok'
-  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'crazybeautifulmakeup' AND LOWER(x.platform) = 'instagram');
+  AND NOT EXISTS (SELECT 1 FROM influencer_platform x WHERE LOWER(x.handle) = 'crazybeautifulmakeup' AND LOWER(x.platform) = 'instagram');
 
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle)
 SELECT ip.confirmed_influencer_id, 'Instagram', 'itskristv'
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE LOWER(ip.handle) = 'itskristv' AND LOWER(ip.platform) = 'tiktok'
-  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'itskristv' AND LOWER(x.platform) = 'instagram');
+  AND NOT EXISTS (SELECT 1 FROM influencer_platform x WHERE LOWER(x.handle) = 'itskristv' AND LOWER(x.platform) = 'instagram');
 
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle)
 SELECT ip.confirmed_influencer_id, 'Instagram', 'visualsbyaverie'
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE LOWER(ip.handle) = 'visualsbyaverie' AND LOWER(ip.platform) = 'tiktok'
-  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'visualsbyaverie' AND LOWER(x.platform) = 'instagram');
+  AND NOT EXISTS (SELECT 1 FROM influencer_platform x WHERE LOWER(x.handle) = 'visualsbyaverie' AND LOWER(x.platform) = 'instagram');
 
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle)
 SELECT ip.confirmed_influencer_id, 'Instagram', 'jadiet'
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE LOWER(ip.handle) = 'jadetillman0'
-  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'jadiet');
+  AND NOT EXISTS (SELECT 1 FROM influencer_platform x WHERE LOWER(x.handle) = 'jadiet');
 
-INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle)
+INSERT INTO influencer_platform (confirmed_influencer_id, platform, handle)
 SELECT ip.confirmed_influencer_id, 'Instagram', 'tinaangelinaa'
-FROM influencer_platforms ip
+FROM influencer_platform ip
 WHERE LOWER(ip.handle) = 'tinaangelinaaa'
-  AND NOT EXISTS (SELECT 1 FROM influencer_platforms x WHERE LOWER(x.handle) = 'tinaangelinaa');
+  AND NOT EXISTS (SELECT 1 FROM influencer_platform x WHERE LOWER(x.handle) = 'tinaangelinaa');
 
 -- ============================================================
 --  monitoring — seed 50 review rows
@@ -833,7 +847,7 @@ WITH seed (lookup_handle, lookup_platform, date, media, content, brand, review_l
 INSERT INTO monitoring (influencer_platform_id, date, media, content, brand, review_link, views, likes, comments)
 SELECT ip.id, s.date, s.media, s.content, s.brand, s.review_link, s.views, s.likes, s.comments
 FROM seed s
-JOIN influencer_platforms ip ON (
+JOIN influencer_platform ip ON (
   LOWER(ip.handle) = LOWER(s.lookup_handle) AND LOWER(ip.platform) = LOWER(s.lookup_platform)
   OR (
     LOWER(ip.platform) = LOWER(s.lookup_platform)

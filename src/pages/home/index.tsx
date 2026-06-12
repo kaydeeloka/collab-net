@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { gasGet } from '../../lib/api'
 import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '../../lib/beauty-news'
 import { usePhase } from '../../contexts/PhaseContext'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
@@ -94,26 +93,41 @@ export default function Dashboard() {
 
   const loadEmsStats = useCallback(async () => {
     try {
-      const data: { error?: string; stats?: { delivered?: number; inTransit?: number; exception?: number; pending?: number; total?: number } } = await gasGet('getEmsData')
-      if (data.error) { setStatsEms(statError(data.error)); return }
-      const s = data.stats || {}
-      const problem = (s.exception || 0)
+      const ACTIVE  = ['Info Received', 'In Transit', 'Out for Delivery', 'Pick Up']
+      const PROBLEM = ['Exception', 'Delivery Failure', 'DeliveryFailure', 'Expired']
+      const { data, error } = await supabase.from('ems_tracking').select('status')
+      if (error) throw error
+      const rows      = data || []
+      const delivered = rows.filter(r => r.status === 'Delivered').length
+      const inTransit = rows.filter(r => ACTIVE.includes(r.status || '')).length
+      const exception = rows.filter(r => PROBLEM.includes(r.status || '')).length
       setStatsEms(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${s.delivered || 0}</div><div class="fstat-lbl">배송 완료</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${s.inTransit || 0}</div><div class="fstat-lbl">배송 중</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#e53935">${problem}</div><div class="fstat-lbl">오류/미수취</div></div>`
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${delivered}</div><div class="fstat-lbl">배송 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${inTransit}</div><div class="fstat-lbl">배송 중</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:#e53935">${exception}</div><div class="fstat-lbl">오류/미수취</div></div>`
       )
     } catch (e: unknown) { setStatsEms(statError((e as Error).message)) }
   }, [])
 
   const loadMonitoringStats = useCallback(async () => {
     try {
-      const data: { stats?: { totalReviews?: number; reviewInfluencers?: number; totalBrandReviews?: number; brandCounts?: Record<string, number> }; rows?: unknown[] } = await gasGet('getMonitoringData')
-      const s = data.stats || {}
-      const mimuseCount = s.brandCounts?.mimuse || 0
-      const brandTotal  = s.totalBrandReviews || 0
+      const { data, error } = await supabase
+        .from('monitoring')
+        .select('brand, influencer_platform_id, review_link')
+      if (error) throw error
+      const rows           = data || []
+      const reviewRows     = rows.filter((r: any) => r.review_link?.startsWith('http'))
+      const totalReviews   = reviewRows.length
+      const reviewInfluencers = new Set(reviewRows.map((r: any) => r.influencer_platform_id)).size
+      const brandCounts: Record<string, number> = {}
+      reviewRows.forEach((r: any) => {
+        const b = (r.brand || '').toLowerCase()
+        if (b) brandCounts[b] = (brandCounts[b] || 0) + 1
+      })
+      const brandTotal  = Object.values(brandCounts).reduce((a, b) => a + b, 0)
+      const mimuseCount = brandCounts['mimuse'] || 0
       setStatsMonitoring(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${s.totalReviews || 0}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${s.reviewInfluencers || 0}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${totalReviews}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${reviewInfluencers}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
         `<div class="fstat"><div class="fstat-val">${brandTotal}</div><div class="fstat-lbl">브랜드 리뷰</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mimuseCount}</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
       )

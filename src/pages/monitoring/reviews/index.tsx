@@ -110,7 +110,7 @@ export default function Monitoring() {
         .select(`
           id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
           influencer_platform_id,
-          influencer_platforms(
+          influencer_platform!monitoring_influencer_platform_id_fkey(
             platform, handle,
             confirmed_influencers(
               id, seq, repost,
@@ -123,7 +123,7 @@ export default function Monitoring() {
       if (error) throw error
 
       const mapped: MonRow[] = (data || []).map((m: any) => {
-        const ip = m.influencer_platforms
+        const ip = m.influencer_platform
         const ci = ip?.confirmed_influencers
         return {
           id:                      m.id,
@@ -286,7 +286,7 @@ export default function Monitoring() {
       if (b) acc[b] = (acc[b] || 0) + 1
       return acc
     }, {} as Record<string, number>),
-    lastRun: rows.find(r => r.updated)?.updated || '아직 실행 안 됨',
+    lastRun: rows.find(r => r.updated)?.updated || '',
   }
 
   const filteredRows = rows.filter(r => {

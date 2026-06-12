@@ -46,7 +46,7 @@ interface ConfirmedRow {
   country:              string | null
   handle:               string | null
   display_name:         string | null
-  influencer_platforms: InfluencerPlatform[]
+  influencer_platform: InfluencerPlatform[]
   influencers:          InfluencerRef | null
 }
 
@@ -158,7 +158,7 @@ export default function Confirmed() {
       .select(`
         id, seq, email, upload_status, repost, review_link, notes, form_submitted,
         phone, address_line_1, address_line_2, city, state, zip, country,
-        influencer_platforms(id, platform, handle, followers, profile_url),
+        influencer_platform(id, platform, handle, followers, profile_url),
         influencers(platform, handle, display_name, followers, profile_url)
       `)
       .eq('phase_id', selectedPhaseId ?? '')
@@ -184,7 +184,7 @@ export default function Confirmed() {
       country:        r.country,
       handle:         r.influencers?.handle       ?? null,
       display_name:   r.influencers?.display_name ?? null,
-      influencer_platforms: (r.influencer_platforms ?? []).map((p: any) => ({
+      influencer_platform: (r.influencer_platform ?? []).map((p: any) => ({
         id:          p.id,
         platform:    p.platform,
         handle:      p.handle   ?? '',
@@ -224,13 +224,13 @@ export default function Confirmed() {
       zip:         r.zip            || '',
       country:     r.country        || '',
     })
-    const platforms = r.influencer_platforms.length
-      ? r.influencer_platforms.map(p => ({ ...p }))
+    const platforms = r.influencer_platform.length
+      ? r.influencer_platform.map(p => ({ ...p }))
       : r.influencers
         ? [{ id: null, platform: r.influencers.platform || 'TikTok', handle: r.influencers.handle || '', followers: r.influencers.followers || 0, profile_url: r.influencers.profile_url || '' }]
         : [emptyPlatform()]
     setEditPlatforms(platforms)
-    originalPlatformIds.current = r.influencer_platforms.map(p => p.id!).filter(Boolean)
+    originalPlatformIds.current = r.influencer_platform.map(p => p.id!).filter(Boolean)
     setShowEdit(true)
   }
 
@@ -261,17 +261,17 @@ export default function Confirmed() {
           profile_url: p.profile_url || null,
         }
         if (p.id) {
-          const { error } = await supabase.from('influencer_platforms').update(payload).eq('id', p.id)
+          const { error } = await supabase.from('influencer_platform').update(payload).eq('id', p.id)
           if (error) throw error
         } else {
-          const { error } = await supabase.from('influencer_platforms').insert(payload)
+          const { error } = await supabase.from('influencer_platform').insert(payload)
           if (error) throw error
         }
       }
 
       // DELETE removed platforms (silently skip if monitoring FK blocks it)
       for (const id of deletedIds) {
-        await supabase.from('influencer_platforms').delete().eq('id', id)
+        await supabase.from('influencer_platform').delete().eq('id', id)
       }
 
       // Save other fields
@@ -298,7 +298,7 @@ export default function Confirmed() {
   }
 
   const platforms = Array.from(new Set(
-    rows.flatMap(r => r.influencer_platforms.map(p => p.platform)).filter(Boolean),
+    rows.flatMap(r => r.influencer_platform.map(p => p.platform)).filter(Boolean),
   )) as string[]
 
   const REPOST_OPTIONS = [
@@ -313,13 +313,13 @@ export default function Confirmed() {
     if (uploadFilter !== 'all' && r.upload_status !== uploadFilter) return false
     if (reviewLinkFilter === 'has'  && !r.review_link)  return false
     if (reviewLinkFilter === 'none' && !!r.review_link) return false
-    if (platformFilter !== 'all' && !r.influencer_platforms.some(p => p.platform === platformFilter)) return false
+    if (platformFilter !== 'all' && !r.influencer_platform.some(p => p.platform === platformFilter)) return false
     if (repostFilter === 'none' && r.repost) return false
     if (repostFilter !== 'all' && repostFilter !== 'none' && r.repost !== repostFilter) return false
     if (search) {
       const q    = search.toLowerCase()
       const text = [r.influencers?.display_name, r.influencers?.handle, r.display_name, r.handle, r.email,
-        ...r.influencer_platforms.map(p => p.handle)].join(' ').toLowerCase()
+        ...r.influencer_platform.map(p => p.handle)].join(' ').toLowerCase()
       if (!text.includes(q)) return false
     }
     return true
@@ -535,7 +535,7 @@ export default function Confirmed() {
                   <tbody>
                     {filtered.map((r, i) => {
                       const inf         = r.influencers
-                      const platforms_  = r.influencer_platforms
+                      const platforms_  = r.influencer_platform
                       const firstP      = platforms_[0]
                       const handle      = firstP?.handle || inf?.handle || r.handle || ''
                       const displayName = inf?.display_name || r.display_name || ''
@@ -639,7 +639,7 @@ export default function Confirmed() {
         const r            = viewRow
         const inf          = r.influencers
         const vDisplayName = inf?.display_name || r.display_name || ''
-        const vHandle      = r.influencer_platforms[0]?.handle || inf?.handle || r.handle || ''
+        const vHandle      = r.influencer_platform[0]?.handle || inf?.handle || r.handle || ''
         const uploadStyle  = r.upload_status === 'Yes'
           ? { bg: '#d1fae5', color: '#065f46', label: '완료' }
           : r.upload_status === 'No'
@@ -655,8 +655,8 @@ export default function Confirmed() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--gray-8)', marginBottom: 4 }}>{vDisplayName || vHandle || '—'}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {r.influencer_platforms.length
-                    ? r.influencer_platforms.map((p, idx) => (
+                  {r.influencer_platform.length
+                    ? r.influencer_platform.map((p, idx) => (
                       <div key={p.id ?? idx} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <PlatformBadge platform={p.platform} />
                         {p.handle && (
