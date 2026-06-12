@@ -95,12 +95,12 @@ const ROW_TD: CSSProperties = {
 }
 
 const EXCEL_HEADERS = [
-  'No (seq)',
+  'No.',
   '받는 분 이름(Name)',
-  'E-mail(필수사항)',
   '국가(Country)',
   '우편번호(ZipCode)',
   '받는 분 주소(Detail)',
+  'E-mail(필수사항)',
   '받는 분 주소(City)',
   '받는 분 주소(State)',
   '연락처(Mobile No.) 국가번호 / 호',
@@ -151,10 +151,10 @@ function downloadEmsExcel(data: EmsDataRow[]) {
     ...data.map(r => [
       r.seq ?? '',
       r.name,
-      r.email ?? '',
       r.country ?? '',
       r.zip ?? '',
       r.address_detail ?? '',
+      r.email ?? '',
       r.city ?? '',
       r.state ?? '',
       r.phone_cc,
@@ -165,9 +165,8 @@ function downloadEmsExcel(data: EmsDataRow[]) {
   ]
   const ws = XLSX.utils.aoa_to_sheet(sheetData)
   ws['!cols'] = [
-    { wch: 8 }, { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 12 },
-    { wch: 36 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
-    { wch: 12 }, { wch: 10 },
+    { wch: 6 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 36 }, { wch: 28 },
+    { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'EMS 발송 데이터')
