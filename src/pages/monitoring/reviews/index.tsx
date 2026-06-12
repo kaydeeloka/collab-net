@@ -28,6 +28,7 @@ interface MonRow {
   seq:                     number | null  // fixed number from confirmed_influencers
   platform:                string
   handle:                  string
+  display_name:            string | null  // from influencers join
   date:                    string | null
   media:                   string | null
   content:                 string | null
@@ -111,7 +112,10 @@ export default function Monitoring() {
           influencer_platform_id,
           influencer_platforms(
             platform, handle,
-            confirmed_influencers(id, seq, repost)
+            confirmed_influencers(
+              id, seq, repost,
+              influencers(display_name)
+            )
           )
         `)
         .order('date', { ascending: false })
@@ -128,6 +132,7 @@ export default function Monitoring() {
           seq:                     ci?.seq  ?? null,
           platform:                ip?.platform || '',
           handle:                  ip?.handle   || '',
+          display_name:            ci?.influencers?.display_name || null,
           date:                    m.date,
           media:                   m.media,
           content:                 m.content,
@@ -528,9 +533,12 @@ export default function Monitoring() {
                                 : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>}
                           </td>
                           <td>
+                            {r.display_name && (
+                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)' }}>{r.display_name}</div>
+                            )}
                             {profileUrl
-                              ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{account}</a>
-                              : <span style={{ fontSize: 13, fontWeight: 600 }}>{account || '—'}</span>}
+                              ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
+                              : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account || '—'}</span>}
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
                           <td><a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a></td>
@@ -676,8 +684,13 @@ export default function Monitoring() {
                                     </span>
                                   )}
                                 </div>
+                                {group.rows[0].display_name && (
+                                  <div style={{ marginTop: 3, fontSize: 12, fontWeight: 600, color: 'var(--gray-7)' }}>
+                                    {group.rows[0].display_name}
+                                  </div>
+                                )}
                                 {account && (
-                                  <div style={{ marginTop: 3 }}>
+                                  <div style={{ marginTop: 2 }}>
                                     {profileUrl
                                       ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
                                       : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account}</span>}

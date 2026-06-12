@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { gasPost } from '../../../lib/api'
+// import { gasPost } from '../../../lib/api' // detail modal disabled
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
@@ -27,15 +27,15 @@ interface EmsRow {
   last_update:         string | null
 }
 
-interface TrackingEvent {
-  date: string; time: string; status: string; location: string; remark: string
-}
+// interface TrackingEvent {
+//   date: string; time: string; status: string; location: string; remark: string
+// }
 
-interface TrackingDetail {
-  ok: boolean; error?: string; pending?: boolean
-  carrier?: string; statusLabel?: string; statusColor?: string
-  lastTime?: string; history?: TrackingEvent[]
-}
+// interface TrackingDetail {
+//   ok: boolean; error?: string; pending?: boolean
+//   carrier?: string; statusLabel?: string; statusColor?: string
+//   lastTime?: string; history?: TrackingEvent[]
+// }
 
 const STATUS_OPTIONS = ['접수완료', 'Preparing', 'In Transit', 'Delivered', 'Exception']
 
@@ -57,11 +57,11 @@ export default function Ems() {
   const [page, setPage] = useState(1)
   const EMS_PAGE_SIZE = 25
 
-  // Detail Modal
-  const [showDetailModal,  setShowDetailModal]  = useState(false)
-  const [detailData,       setDetailData]       = useState<TrackingDetail | null>(null)
-  const [detailLoading,    setDetailLoading]    = useState(false)
-  const [detailNum,        setDetailNum]        = useState('')
+  // Detail Modal — disabled (17track lookup popup)
+  // const [showDetailModal,  setShowDetailModal]  = useState(false)
+  // const [detailData,       setDetailData]       = useState<TrackingDetail | null>(null)
+  // const [detailLoading,    setDetailLoading]    = useState(false)
+  // const [detailNum,        setDetailNum]        = useState('')
 
   // Tracking Modal
   const [showTrackingModal, setShowTrackingModal] = useState(false)
@@ -317,8 +317,8 @@ export default function Ems() {
                                   <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                       <span
-                                        onClick={() => openDetail(row.ems_number!)}
-                                        style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline' }}
+                                        // onClick={() => openDetail(row.ems_number!)}
+                                        style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)' }}
                                       >{row.ems_number}</span>
                                       <button onClick={() => openTrackingModal(row)}
                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue-dk)', fontSize: 13 }}>✎</button>
@@ -413,8 +413,8 @@ export default function Ems() {
         </div>
       </Modal>
 
-      {/* Tracking Detail Modal */}
-      <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={detailNum}>
+      {/* Tracking Detail Modal — disabled (use ↗ 17track / ↗ 우체국 links instead) */}
+      {/* <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={detailNum}>
         {detailLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '24px 0' }}>
             <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>조회 중...</span>
@@ -476,7 +476,7 @@ export default function Ems() {
             </div>
           )
         })()}
-      </Modal>
+      </Modal> */}
     </div>
   )
 }

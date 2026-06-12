@@ -30,21 +30,25 @@ function _17trackHeaders() {
   return { '17token': _17trackKey(), 'Content-Type': 'application/json' };
 }
 
+// ── DISABLED: auto-registration eats 17track credits — register manually at 17track.com
+// function register17Track(numbers) {
+//   var key = _17trackKey();
+//   if (!key) return { ok: false, error: 'TRACK17_API_KEY가 설정되지 않았습니다.' };
+//   if (!numbers || numbers.length === 0) return { ok: false, error: '운송장 번호가 없습니다.' };
+//   var payload = numbers.map(function(n) { return { number: n }; });
+//   try {
+//     var res  = UrlFetchApp.fetch(TRACK17_BASE + '/register', {
+//       method: 'post', headers: _17trackHeaders(),
+//       payload: JSON.stringify(payload), muteHttpExceptions: true,
+//     });
+//     var data = JSON.parse(res.getContentText());
+//     return { ok: data.code === 0, accepted: (data.data && data.data.accepted) || [], rejected: (data.data && data.data.rejected) || [] };
+//   } catch (e) {
+//     return { ok: false, error: e.toString() };
+//   }
+// }
 function register17Track(numbers) {
-  var key = _17trackKey();
-  if (!key) return { ok: false, error: 'TRACK17_API_KEY가 설정되지 않았습니다.' };
-  if (!numbers || numbers.length === 0) return { ok: false, error: '운송장 번호가 없습니다.' };
-  var payload = numbers.map(function(n) { return { number: n }; });
-  try {
-    var res  = UrlFetchApp.fetch(TRACK17_BASE + '/register', {
-      method: 'post', headers: _17trackHeaders(),
-      payload: JSON.stringify(payload), muteHttpExceptions: true,
-    });
-    var data = JSON.parse(res.getContentText());
-    return { ok: data.code === 0, accepted: (data.data && data.data.accepted) || [], rejected: (data.data && data.data.rejected) || [] };
-  } catch (e) {
-    return { ok: false, error: e.toString() };
-  }
+  return { ok: false, error: 'Registration disabled. Please register inside 17track manually.' };
 }
 
 // Returns true if the tracking number's row has 'Y' in column D (index 3)
@@ -444,7 +448,8 @@ function routeEms(action, p, body) {
     case 'syncAllTracking':     return syncAllTracking();
     case 'addAndSyncTracking':  return syncOneTracking(b.number, b.sheetRow);
     case 'get17TrackInfo':      return get17TrackInfo(b.number || (p && p.number));
-    case 'register17Track':     return register17Track(b.numbers || []);
+    // case 'register17Track':     return register17Track(b.numbers || []);
+    case 'register17Track':     return { ok: false, error: 'Registration disabled. Please register inside 17track manually.' };
     case 'debug17TrackRaw':     return debug17TrackRaw(b.number || (p && p.number));
     default: return null;
   }
