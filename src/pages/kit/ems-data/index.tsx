@@ -27,18 +27,16 @@ interface EmsDataRow {
   phone_2:         string
 }
 
-type EditField = 'name_email' | 'country' | 'zip' | 'address' | 'city' | 'state' | 'phone'
-
 interface EditForm {
-  name:   string
-  email:  string
+  name:    string
+  email:   string
   country: string
-  zip:    string
-  addr1:  string
-  addr2:  string
-  city:   string
-  state:  string
-  phone:  string
+  zip:     string
+  addr1:   string
+  addr2:   string
+  city:    string
+  state:   string
+  phone:   string
 }
 
 function parsePhone(phone: string | null): Pick<EmsDataRow, 'phone_cc' | 'phone_area' | 'phone_1' | 'phone_2'> {
@@ -91,7 +89,7 @@ const TD: CSSProperties = {
   verticalAlign: 'middle',
 }
 
-const EDIT_TD: CSSProperties = {
+const ROW_TD: CSSProperties = {
   ...TD,
   cursor: 'pointer',
 }
@@ -110,16 +108,6 @@ const EXCEL_HEADERS = [
   '연락처(Mobile No.) 전화번호 1 / 호1',
   '연락처(Mobile No.) 전화번호 2 / 호2',
 ] as const
-
-const FIELD_LABELS: Record<EditField, string> = {
-  name_email: '이름 · 이메일',
-  country:    '국가',
-  zip:        '우편번호',
-  address:    '주소 (Detail)',
-  city:       '도시',
-  state:      '주/도',
-  phone:      '연락처',
-}
 
 function mapCiToRow(ci: {
   id: string
@@ -188,6 +176,7 @@ function downloadEmsExcel(data: EmsDataRow[]) {
 }
 
 function rowToForm(row: EmsDataRow): EditForm {
+  const display = formatPhoneDisplay(row)
   return {
     name:    row.name === '—' ? '' : row.name,
     email:   row.email || '',
@@ -197,30 +186,26 @@ function rowToForm(row: EmsDataRow): EditForm {
     addr2:   row.address_line_2 || '',
     city:    row.city || '',
     state:   row.state || '',
-    phone:   row.phone || formatPhoneDisplay(row) === '—' ? '' : (row.phone || formatPhoneDisplay(row)),
+    phone:   row.phone || (display === '—' ? '' : display),
   }
 }
 
-function applyFormToRow(row: EmsDataRow, field: EditField, form: EditForm): EmsDataRow {
-  const next = { ...row }
-  if (field === 'name_email') {
-    next.name = form.name || '—'
-    next.email = form.email || null
+function applyFormToRow(row: EmsDataRow, form: EditForm): EmsDataRow {
+  const phone = form.phone.trim() || null
+  return {
+    ...row,
+    name:           form.name.trim() || '—',
+    email:          form.email.trim() || null,
+    country:        form.country.trim() || null,
+    zip:            form.zip.trim() || null,
+    address_line_1: form.addr1.trim() || null,
+    address_line_2: form.addr2.trim() || null,
+    address_detail: [form.addr1, form.addr2].filter(Boolean).join(', ') || null,
+    city:           form.city.trim() || null,
+    state:          form.state.trim() || null,
+    phone,
+    ...parsePhone(phone),
   }
-  if (field === 'country') next.country = form.country || null
-  if (field === 'zip') next.zip = form.zip || null
-  if (field === 'address') {
-    next.address_line_1 = form.addr1 || null
-    next.address_line_2 = form.addr2 || null
-    next.address_detail = [form.addr1, form.addr2].filter(Boolean).join(', ') || null
-  }
-  if (field === 'city') next.city = form.city || null
-  if (field === 'state') next.state = form.state || null
-  if (field === 'phone') {
-    next.phone = form.phone || null
-    Object.assign(next, parsePhone(form.phone || null))
-  }
-  return next
 }
 
 const inputStyle: CSSProperties = {
@@ -233,16 +218,40 @@ const inputStyle: CSSProperties = {
   fontFamily: 'inherit',
 }
 
+const labelStyle: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: 'var(--gray-5)',
+  textTransform: 'uppercase',
+  letterSpacing: '.4px',
+  marginBottom: 4,
+}
+
+const valueStyle: CSSProperties = {
+  fontSize: 14,
+  color: 'var(--gray-8)',
+  lineHeight: 1.5,
+}
+
+function ViewField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div style={labelStyle}>{label}</div>
+      <div style={{ ...valueStyle, fontFamily: mono ? 'monospace' : undefined, fontSize: mono ? 13 : 14 }}>{value || '—'}</div>
+    </div>
+  )
+}
+
 export default function EmsData() {
   const { showToast } = useToast()
-  const [rows,       setRows]       = useState<EmsDataRow[]>([])
-  const [loading,    setLoading]    = useState(false)
-  const [search,     setSearch]     = useState('')
-  const [page,       setPage]       = useState(1)
-  const [editRow,    setEditRow]    = useState<EmsDataRow | null>(null)
-  const [editField,  setEditField]  = useState<EditField | null>(null)
-  const [editForm,   setEditForm]   = useState<EditForm | null>(null)
-  const [saving,     setSaving]     = useState(false)
+  const [rows,      setRows]      = useState<EmsDataRow[]>([])
+  const [loading,   setLoading]   = useState(false)
+  const [search,    setSearch]    = useState('')
+  const [page,      setPage]      = useState(1)
+  const [modalRow,  setModalRow]  = useState<EmsDataRow | null>(null)
+  const [editing,   setEditing]   = useState(false)
+  const [editForm,  setEditForm]  = useState<EditForm | null>(null)
+  const [saving,    setSaving]    = useState(false)
   const PAGE_SIZE = 25
 
   useEffect(() => { loadData() }, [])
@@ -267,58 +276,63 @@ export default function EmsData() {
     setLoading(false)
   }
 
-  function openEdit(row: EmsDataRow, field: EditField) {
-    setEditRow(row)
-    setEditField(field)
+  function openRow(row: EmsDataRow) {
+    setModalRow(row)
+    setEditing(false)
     setEditForm(rowToForm(row))
   }
 
-  function closeEdit() {
-    setEditRow(null)
-    setEditField(null)
+  function closeModal() {
+    setModalRow(null)
+    setEditing(false)
     setEditForm(null)
   }
 
+  function startEditing() {
+    if (modalRow) {
+      setEditForm(rowToForm(modalRow))
+      setEditing(true)
+    }
+  }
+
+  function cancelEditing() {
+    if (modalRow) setEditForm(rowToForm(modalRow))
+    setEditing(false)
+  }
+
   async function saveEdit() {
-    if (!editRow || !editField || !editForm) return
+    if (!modalRow || !editForm) return
     setSaving(true)
     try {
-      if (editField === 'name_email') {
-        if (editRow.influencer_id && editForm.name.trim()) {
-          const { error } = await supabase
-            .from('influencers')
-            .update({ display_name: editForm.name.trim() })
-            .eq('id', editRow.influencer_id)
-          if (error) throw error
-        }
+      if (modalRow.influencer_id && editForm.name.trim()) {
         const { error } = await supabase
-          .from('confirmed_influencers')
-          .update({ email: editForm.email.trim() || null })
-          .eq('id', editRow.id)
-        if (error) throw error
-      } else {
-        const payload: Record<string, string | null> = {}
-        if (editField === 'country') payload.country = editForm.country.trim() || null
-        if (editField === 'zip')     payload.zip     = editForm.zip.trim() || null
-        if (editField === 'address') {
-          payload.address_line_1 = editForm.addr1.trim() || null
-          payload.address_line_2 = editForm.addr2.trim() || null
-        }
-        if (editField === 'city')  payload.city  = editForm.city.trim() || null
-        if (editField === 'state') payload.state = editForm.state.trim() || null
-        if (editField === 'phone') payload.phone = editForm.phone.trim() || null
-
-        const { error } = await supabase
-          .from('confirmed_influencers')
-          .update(payload)
-          .eq('id', editRow.id)
+          .from('influencers')
+          .update({ display_name: editForm.name.trim() })
+          .eq('id', modalRow.influencer_id)
         if (error) throw error
       }
 
-      const updated = applyFormToRow(editRow, editField, editForm)
-      setRows(prev => prev.map(r => r.id === editRow.id ? updated : r))
+      const { error } = await supabase
+        .from('confirmed_influencers')
+        .update({
+          email:          editForm.email.trim() || null,
+          country:        editForm.country.trim() || null,
+          zip:            editForm.zip.trim() || null,
+          address_line_1: editForm.addr1.trim() || null,
+          address_line_2: editForm.addr2.trim() || null,
+          city:           editForm.city.trim() || null,
+          state:          editForm.state.trim() || null,
+          phone:          editForm.phone.trim() || null,
+        })
+        .eq('id', modalRow.id)
+      if (error) throw error
+
+      const updated = applyFormToRow(modalRow, editForm)
+      setRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
+      setModalRow(updated)
+      setEditForm(rowToForm(updated))
+      setEditing(false)
       showToast('저장 완료', 'success')
-      closeEdit()
     } catch (e: unknown) {
       showToast((e as Error).message, 'error')
     }
@@ -354,7 +368,7 @@ export default function EmsData() {
         <span className="page-banner-deco"><FileSpreadsheet size={28} /></span>
         <div>
           <div className="page-banner-title">EMS 발송 데이터</div>
-          <div className="page-banner-desc">확정 인플루언서(seq) 배송 정보를 우체국 EMS 양식 형식으로 확인합니다. 셀을 클릭하면 수정할 수 있습니다.</div>
+          <div className="page-banner-desc">확정 인플루언서(seq) 배송 정보를 우체국 EMS 양식 형식으로 확인합니다. 행을 클릭하면 상세 정보를 볼 수 있습니다.</div>
         </div>
         <div className="page-banner-actions">
           <button className="page-banner-btn page-banner-btn--secondary" onClick={handleDownload} disabled={loading || rows.length === 0}>
@@ -404,18 +418,18 @@ export default function EmsData() {
                 {paged.length === 0
                   ? <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>데이터 없음</td></tr>
                   : paged.map((r, i) => (
-                    <tr key={r.id}>
+                    <tr key={r.id} onClick={() => openRow(r)} style={{ cursor: 'pointer' }}>
                       <td style={{ ...TD, textAlign: 'center', color: 'var(--gray-5)', fontWeight: 600 }}>{r.seq ?? startIdx + i + 1}</td>
-                      <td style={EDIT_TD} onClick={() => openEdit(r, 'name_email')} title="클릭하여 수정">
+                      <td style={ROW_TD}>
                         <div style={{ fontWeight: 600 }}>{r.name}</div>
                         <div style={{ fontSize: 11, color: 'var(--blue-dk)', marginTop: 3 }}>{r.email || '—'}</div>
                       </td>
-                      <td style={{ ...EDIT_TD, textAlign: 'center' }} onClick={() => openEdit(r, 'country')} title="클릭하여 수정">{r.country || '—'}</td>
-                      <td style={{ ...EDIT_TD, fontFamily: 'monospace', fontSize: 11 }} onClick={() => openEdit(r, 'zip')} title="클릭하여 수정">{r.zip || '—'}</td>
-                      <td style={{ ...EDIT_TD, maxWidth: 220 }} onClick={() => openEdit(r, 'address')} title="클릭하여 수정">{r.address_detail || '—'}</td>
-                      <td style={EDIT_TD} onClick={() => openEdit(r, 'city')} title="클릭하여 수정">{r.city || '—'}</td>
-                      <td style={EDIT_TD} onClick={() => openEdit(r, 'state')} title="클릭하여 수정">{r.state || '—'}</td>
-                      <td style={{ ...EDIT_TD, fontFamily: 'monospace', fontSize: 11 }} onClick={() => openEdit(r, 'phone')} title="클릭하여 수정">{formatPhoneDisplay(r)}</td>
+                      <td style={{ ...ROW_TD, textAlign: 'center' }}>{r.country || '—'}</td>
+                      <td style={{ ...ROW_TD, fontFamily: 'monospace', fontSize: 11 }}>{r.zip || '—'}</td>
+                      <td style={{ ...ROW_TD, maxWidth: 220 }}>{r.address_detail || '—'}</td>
+                      <td style={ROW_TD}>{r.city || '—'}</td>
+                      <td style={ROW_TD}>{r.state || '—'}</td>
+                      <td style={{ ...ROW_TD, fontFamily: 'monospace', fontSize: 11 }}>{formatPhoneDisplay(r)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -431,14 +445,32 @@ export default function EmsData() {
       )}
 
       <Modal
-        open={!!editRow && !!editField && !!editForm}
-        onClose={closeEdit}
-        title={editRow && editField ? `${FIELD_LABELS[editField]} 수정 · seq ${editRow.seq ?? '—'}` : ''}
+        open={!!modalRow}
+        onClose={closeModal}
+        title={modalRow ? `EMS 발송 정보 · seq ${modalRow.seq ?? '—'}` : ''}
       >
-        {editForm && editField && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {editField === 'name_email' && (
-              <>
+        {modalRow && editForm && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {!editing ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
+                <ViewField label="받는 분 이름 (Name)" value={modalRow.name} />
+                <ViewField label="E-mail (필수사항)" value={modalRow.email || ''} />
+                <ViewField label="국가 (Country)" value={modalRow.country || ''} />
+                <ViewField label="우편번호 (ZipCode)" value={modalRow.zip || ''} mono />
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <ViewField label="주소 Line 1" value={modalRow.address_line_1 || ''} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <ViewField label="주소 Line 2" value={modalRow.address_line_2 || ''} />
+                </div>
+                <ViewField label="도시 (City)" value={modalRow.city || ''} />
+                <ViewField label="주/도 (State)" value={modalRow.state || ''} />
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <ViewField label="연락처 (Mobile No.)" value={formatPhoneDisplay(modalRow)} mono />
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>받는 분 이름 (Name)</label>
                   <input value={editForm.name} onChange={e => setEditForm(f => f ? { ...f, name: e.target.value } : f)} style={inputStyle} />
@@ -447,61 +479,56 @@ export default function EmsData() {
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>E-mail (필수사항)</label>
                   <input type="email" value={editForm.email} onChange={e => setEditForm(f => f ? { ...f, email: e.target.value } : f)} style={inputStyle} />
                 </div>
-              </>
-            )}
-            {editField === 'country' && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>국가 (Country)</label>
-                <input value={editForm.country} onChange={e => setEditForm(f => f ? { ...f, country: e.target.value } : f)} style={inputStyle} />
-              </div>
-            )}
-            {editField === 'zip' && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>우편번호 (ZipCode)</label>
-                <input value={editForm.zip} onChange={e => setEditForm(f => f ? { ...f, zip: e.target.value } : f)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
-              </div>
-            )}
-            {editField === 'address' && (
-              <>
                 <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>국가 (Country)</label>
+                  <input value={editForm.country} onChange={e => setEditForm(f => f ? { ...f, country: e.target.value } : f)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>우편번호 (ZipCode)</label>
+                  <input value={editForm.zip} onChange={e => setEditForm(f => f ? { ...f, zip: e.target.value } : f)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>주소 Line 1</label>
                   <input value={editForm.addr1} onChange={e => setEditForm(f => f ? { ...f, addr1: e.target.value } : f)} style={inputStyle} />
                 </div>
-                <div>
+                <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>주소 Line 2</label>
                   <input value={editForm.addr2} onChange={e => setEditForm(f => f ? { ...f, addr2: e.target.value } : f)} style={inputStyle} />
                 </div>
-              </>
-            )}
-            {editField === 'city' && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>도시 (City)</label>
-                <input value={editForm.city} onChange={e => setEditForm(f => f ? { ...f, city: e.target.value } : f)} style={inputStyle} />
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>도시 (City)</label>
+                  <input value={editForm.city} onChange={e => setEditForm(f => f ? { ...f, city: e.target.value } : f)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>주/도 (State)</label>
+                  <input value={editForm.state} onChange={e => setEditForm(f => f ? { ...f, state: e.target.value } : f)} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>연락처 (Mobile No.)</label>
+                  <input
+                    value={editForm.phone}
+                    onChange={e => setEditForm(f => f ? { ...f, phone: e.target.value } : f)}
+                    placeholder="e.g. +1 310-555-1234"
+                    style={{ ...inputStyle, fontFamily: 'monospace' }}
+                  />
+                </div>
               </div>
             )}
-            {editField === 'state' && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>주/도 (State)</label>
-                <input value={editForm.state} onChange={e => setEditForm(f => f ? { ...f, state: e.target.value } : f)} style={inputStyle} />
-              </div>
-            )}
-            {editField === 'phone' && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>연락처 (Mobile No.)</label>
-                <input
-                  value={editForm.phone}
-                  onChange={e => setEditForm(f => f ? { ...f, phone: e.target.value } : f)}
-                  placeholder="e.g. +1 310-555-1234"
-                  style={{ ...inputStyle, fontFamily: 'monospace' }}
-                />
-                <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 6 }}>Excel 다운로드 시 국가·지역·번호로 자동 분리됩니다.</div>
-              </div>
-            )}
-            <div className="modal-actions" style={{ marginTop: 8 }}>
-              <button className="modal-btn-cancel" onClick={closeEdit}>취소</button>
-              <button className="modal-btn-confirm" onClick={saveEdit} disabled={saving}>
-                {saving ? '저장 중...' : '저장'}
-              </button>
+
+            <div className="modal-actions" style={{ marginTop: 4 }}>
+              {!editing ? (
+                <>
+                  <button className="modal-btn-cancel" onClick={closeModal}>닫기</button>
+                  <button className="modal-btn-confirm" onClick={startEditing}>수정</button>
+                </>
+              ) : (
+                <>
+                  <button className="modal-btn-cancel" onClick={cancelEditing} disabled={saving}>취소</button>
+                  <button className="modal-btn-confirm" onClick={saveEdit} disabled={saving}>
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

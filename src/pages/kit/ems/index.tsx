@@ -129,19 +129,19 @@ export default function Ems() {
     setLoading(false)
   }
 
-  async function openDetail(emsNum: string) {
-    setDetailNum(emsNum)
-    setDetailData(null)
-    setShowDetailModal(true)
-    setDetailLoading(true)
-    try {
-      const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
-      setDetailData(res)
-    } catch (e: unknown) {
-      setDetailData({ ok: false, error: (e as Error).message })
-    }
-    setDetailLoading(false)
-  }
+  // async function openDetail(emsNum: string) {
+  //   setDetailNum(emsNum)
+  //   setDetailData(null)
+  //   setShowDetailModal(true)
+  //   setDetailLoading(true)
+  //   try {
+  //     const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
+  //     setDetailData(res)
+  //   } catch (e: unknown) {
+  //     setDetailData({ ok: false, error: (e as Error).message })
+  //   }
+  //   setDetailLoading(false)
+  // }
 
   function openTrackingModal(row: EmsRow) {
     setTrackingForm({
