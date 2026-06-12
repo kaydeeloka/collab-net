@@ -46,9 +46,10 @@ import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
 import EmsDaily   from './pages/kit/ems/daily'
 import EmsCheck   from './pages/kit/ems/check'
 import EmsPending from './pages/kit/ems/pending'
-// KIT — design-archive
-import DesignArchive       from './pages/kit/design-archive'
-import DesignArchiveOrders from './pages/kit/design-archive/orders'
+// ARCHIVE
+import ArchiveDesign        from './pages/archive/design'
+import ArchiveOverallReport from './pages/archive/overall-report'
+import ArchiveBrandReport   from './pages/archive/brand-report'
 
 // MONITORING — reviews
 import ReviewsUploadStatus from './pages/monitoring/reviews/upload-status'
@@ -59,10 +60,6 @@ import ReviewsList         from './pages/monitoring/reviews/list'
 import ReviewContent   from './pages/monitoring/content'
 import ContentFollowup from './pages/monitoring/content/followup'
 import ContentReport   from './pages/monitoring/content/report'
-// MONITORING — reports
-import ReportArchive from './pages/monitoring/reports'
-import ReportsBrand  from './pages/monitoring/reports/brand'
-import ReportsAll    from './pages/monitoring/reports/all'
 
 export default function App() {
   return (
@@ -115,8 +112,7 @@ export default function App() {
                 <Route path="/kit/ems/daily"                        element={<EmsDaily />} />
                 <Route path="/kit/ems/check"                        element={<EmsCheck />} />
                 <Route path="/kit/ems/pending"                      element={<EmsPending />} />
-                <Route path="/kit/design-archive"                   element={<DesignArchive />} />
-                <Route path="/kit/design-archive/orders"            element={<DesignArchiveOrders />} />
+                <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
 
                 {/* ── MONITORING ── */}
                 <Route path="/monitoring/reviews"                   element={<Monitoring />} />
@@ -127,9 +123,14 @@ export default function App() {
                 <Route path="/monitoring/content"                   element={<ReviewContent />} />
                 <Route path="/monitoring/content/followup"          element={<ContentFollowup />} />
                 <Route path="/monitoring/content/report"            element={<ContentReport />} />
-                <Route path="/monitoring/reports"                   element={<ReportArchive />} />
-                <Route path="/monitoring/reports/brand"             element={<ReportsBrand />} />
-                <Route path="/monitoring/reports/all"               element={<ReportsAll />} />
+                <Route path="/monitoring/reports"       element={<Navigate to="/archive/overall-report" replace />} />
+                <Route path="/monitoring/reports/brand" element={<Navigate to="/archive/brand-report" replace />} />
+                <Route path="/monitoring/reports/all"   element={<Navigate to="/archive/overall-report" replace />} />
+
+                {/* ── ARCHIVE ── */}
+                <Route path="/archive/design"          element={<ArchiveDesign />} />
+                <Route path="/archive/overall-report"  element={<ArchiveOverallReport />} />
+                <Route path="/archive/brand-report"    element={<ArchiveBrandReport />} />
 
               </Route>
             </Route>

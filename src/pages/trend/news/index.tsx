@@ -124,6 +124,91 @@ const BRIEFING_PREVIEW: ReportData = {
   ],
 }
 
+// Supabase beauty_news_archives.categories supports multiple shapes:
+//   old: { items: [{ title, link, source, summary }] }
+//   new: { stories: [{ headline, url, source, summary, pubDate, date }] }
+type RawArticle = {
+  title?: string
+  headline?: string
+  link?: string
+  url?: string
+  source?: string
+  pubDate?: string
+  date?: string
+  summary?: string
+}
+
+type RawCategory = {
+  emoji?: string
+  name: string
+  count?: number
+  items?: RawArticle[]
+  stories?: RawArticle[]
+  articles?: RawArticle[]
+}
+
+function parseJsonArray(raw: unknown): RawCategory[] {
+  if (Array.isArray(raw)) return raw as RawCategory[]
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed as RawCategory[] : []
+    } catch { return [] }
+  }
+  return []
+}
+
+function normalizeCategory(cat: RawCategory): Category {
+  const raw = cat.items ?? cat.stories ?? cat.articles ?? []
+  const items: CategoryItem[] = (Array.isArray(raw) ? raw : []).map(a => ({
+    title: a.title ?? a.headline ?? '',
+    link: (a.link ?? a.url) || undefined,
+    source: a.source,
+    pubDate: a.pubDate ?? a.date,
+    summary: a.summary ?? '',
+  }))
+  return {
+    emoji: cat.emoji ?? '',
+    name: cat.name,
+    count: cat.count ?? items.length,
+    items,
+  }
+}
+
+function normalizeKeywords(raw: unknown): Keyword[] {
+  if (!raw) return []
+  const arr = typeof raw === 'string'
+    ? (() => { try { return JSON.parse(raw) } catch { return raw } })()
+    : raw
+  if (Array.isArray(arr)) {
+    return arr.map(kw => {
+      if (typeof kw === 'string') return { tag: kw, explanation: '' }
+      const o = kw as { tag?: string; explanation?: string }
+      return { tag: o.tag ?? '', explanation: o.explanation ?? '' }
+    })
+  }
+  if (typeof arr === 'string') return [{ tag: arr, explanation: '' }]
+  return []
+}
+
+function reportFromRow(row: {
+  report_title?: string
+  windows_start: string
+  windows_end?: string
+  categories?: unknown
+  keywords?: unknown
+}, fromArchive = false): ReportData {
+  return {
+    ok: true,
+    reportTitle: row.report_title,
+    windowsStart: row.windows_start,
+    windowsEnd: row.windows_end,
+    categories: parseJsonArray(row.categories).map(normalizeCategory),
+    keywords: normalizeKeywords(row.keywords),
+    fromArchive,
+  }
+}
+
 function fmtKor(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
@@ -168,19 +253,12 @@ export default function Trends() {
   const [trendLoading, setTrendLoading] = useState(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  const [showBriefingModal, setShowBriefingModal] = useState(true)
-
   useEffect(() => {
     loadRecipients()
     loadLatestReport()
     refreshArchiveList()
     loadTrends()
   }, [])
-
-  // Auto-dismiss preview the moment real data arrives
-  useEffect(() => {
-    if (latestReport && showBriefingModal) setShowBriefingModal(false)
-  }, [latestReport])
 
   useEffect(() => {
     if (trendDrafts.length > 0 && iframeRef.current) {
@@ -253,20 +331,14 @@ export default function Trends() {
       const { data, error } = await supabase
         .from('beauty_news_archives')
         .select('id, windows_start, windows_end, report_title, categories, keywords')
+        .order('windows_end', { ascending: false, nullsFirst: false })
         .order('windows_start', { ascending: false })
         .limit(1)
         .single()
-      if (error || !data) throw new Error()
-      setLatestReport({
-        ok: true,
-        reportTitle: data.report_title,
-        windowsStart: data.windows_start,
-        windowsEnd: data.windows_end,
-        categories: data.categories,
-        keywords: data.keywords,
-      })
+      if (error || !data) return
+      setLatestReport(reportFromRow(data))
     } catch {}
-    setLatestLoading(false)
+    finally { setLatestLoading(false) }
   }
 
   async function refreshArchiveList() {
@@ -275,6 +347,7 @@ export default function Trends() {
       const { data, error } = await supabase
         .from('beauty_news_archives')
         .select('id, windows_start, windows_end, report_title, created_at')
+        .order('windows_end', { ascending: false, nullsFirst: false })
         .order('windows_start', { ascending: false })
       if (error) throw error
       const groups: Record<string, ArchiveGroup> = {}
@@ -290,7 +363,7 @@ export default function Trends() {
       setArchiveOrder(order)
       if (order.length > 0) setOpenMonths(new Set([order[0]]))
     } catch {}
-    setArchiveListLoading(false)
+    finally { setArchiveListLoading(false) }
   }
 
   async function loadArchive(windowsStart: string) {
@@ -303,15 +376,7 @@ export default function Trends() {
         .eq('windows_start', windowsStart)
         .single()
       if (error || !data) throw new Error(error?.message || '불러오기 실패')
-      setArchiveReport({
-        ok: true,
-        reportTitle: data.report_title,
-        windowsStart: data.windows_start,
-        windowsEnd: data.windows_end,
-        categories: data.categories,
-        keywords: data.keywords,
-        fromArchive: true,
-      })
+      setArchiveReport(reportFromRow(data, true))
     } catch (e: unknown) {
       setArchiveReport({ ok: false, error: (e as Error).message || '오류' })
     }
@@ -369,10 +434,12 @@ export default function Trends() {
     h += `<h1 style="font-size:20px;border-bottom:2px solid #f5c518;padding-bottom:8px">🌟 MiMuse ${title}</h1>`
     if (range) h += `<p style="font-size:12px;color:#888;margin-top:4px">📅 ${range}</p>`
     for (const cat of (data.categories || [])) {
-      const count = cat.count != null ? cat.count : cat.items.length
+      const items = cat.items ?? []
+      if (items.length === 0) continue
+      const count = cat.count != null ? cat.count : items.length
       h += `<h2 style="font-size:16px;margin-top:28px">${cat.emoji} ${cat.name}</h2>`
       h += `<p style="font-size:12px;color:#888;margin:4px 0 10px">이번 주 트렌드 시그널이 감지된 뉴스는 총 <strong style="color:#1a73e8">${count}</strong>건입니다.</p>`
-      for (const item of cat.items) {
+      for (const item of items) {
         h += `<div style="background:#f9f9f9;border-left:3px solid #f5c518;padding:12px;margin-bottom:12px;border-radius:4px">`
         h += `<div style="font-weight:600;font-size:14px">${item.link ? `<a href="${item.link}" style="color:#222;text-decoration:none">${item.title}</a>` : item.title}</div>`
         if (item.source) h += `<div style="font-size:11px;color:#888;margin-bottom:6px">${item.source}${item.pubDate ? ' · ' + item.pubDate : ''}</div>`
@@ -536,15 +603,7 @@ export default function Trends() {
           <div className="bn-half-row">
             <div className="bn-date-card">
               <div className="bn-date-card-label">📅 이번 주 브리핑</div>
-              {latestLoading && <div style={{ color: 'var(--teal-dk)', fontSize: 13 }}><Spinner sm /></div>}
-              {!latestLoading && !latestReport && (
-                <>
-                  <div className="bn-date-card-range">
-                    {fmtKorFull(BRIEFING_PREVIEW.windowsStart!)} – {fmtKorFull(BRIEFING_PREVIEW.windowsEnd!)}
-                  </div>
-                  {/* <div className="bn-date-card-empty">아직 리포트가 없습니다.<br />Claude 루틴이 실행되면 자동으로 업데이트됩니다.</div> */}
-                </>
-              )}
+              {latestLoading && <Spinner sm />}
               {!latestLoading && latestReport && (
                 <>
                   <div className="bn-date-card-range">
@@ -562,7 +621,7 @@ export default function Trends() {
                 </>
               )}
             </div>
-            {emailPanel(latestReport ?? (showBriefingModal ? BRIEFING_PREVIEW : null))}
+            {emailPanel(latestReport)}
           </div>
 
           {/* Full-width report */}
@@ -572,18 +631,12 @@ export default function Trends() {
             </div>
             <div className="bn-report-body">
               {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
-              {!latestLoading && !latestReport && !showBriefingModal && (
-                <div className="bn-empty-cats">
-                  {['스킨케어', '메이크업', '퍼스널케어', 'K-뷰티', '기타'].map(cat => (
-                    <div key={cat} style={{ marginBottom: 16 }}>
-                      <div className="bn-ph-cat-title">{cat}</div>
-                      <div className="bn-ph-cat-body">아직 분석 결과가 없습니다.</div>
-                    </div>
-                  ))}
+              {!latestLoading && latestReport && <ReportBody data={latestReport} />}
+              {!latestLoading && !latestReport && (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
+                  저장된 리포트가 없습니다.
                 </div>
               )}
-              {!latestLoading && !latestReport && showBriefingModal && <ReportBody data={BRIEFING_PREVIEW} />}
-              {!latestLoading && latestReport && <ReportBody data={latestReport} />}
             </div>
           </div>
         </div>
@@ -658,14 +711,16 @@ function ReportBody({ data }: { data: ReportData }) {
       </div>
       {range && <div style={{ fontSize: 12, color: 'var(--teal-dk)', marginBottom: 16 }}>📅 {range}</div>}
       {(data.categories || []).map((cat, ci) => {
-        const count = cat.count != null ? cat.count : cat.items.length
+        const items = cat.items ?? []
+        const count = cat.count != null ? cat.count : items.length
+        if (items.length === 0) return null
         return (
           <div key={ci} className="bn-cat">
             <div className="bn-cat-title">{cat.emoji} {cat.name}</div>
             <div className="bn-cat-count">
               이번 주 트렌드 시그널이 감지된 뉴스는 총 <span className="bn-cat-count-num">{count}</span>건입니다.
             </div>
-            {cat.items.map((item, ii) => (
+            {items.map((item, ii) => (
               <div key={ii} className="bn-article">
                 <div className="bn-article-header">
                   {item.link

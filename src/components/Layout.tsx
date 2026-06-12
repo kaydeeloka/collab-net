@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Home, TrendingUp, Users, Building2, Package, Activity, Globe, Settings } from 'lucide-react'
+import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { phaseNum, escHtml, useKrClock } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -45,32 +45,22 @@ const GROUPS: SideGroup[] = [
   {
     label: 'KIT', icon: <Package size={22} />, defaultTo: '/kit/ems', prefix: '/kit',
     children: [
-      {
-        to: '/kit/ems', label: 'EMS 배송 추적',
-        sub: [
-          { to: '/kit/ems/daily', label: '배송 관리' },
-          { to: '/kit/ems/check', label: '배송 오류 관리' },
-        ],
-      },
-      {
-        to: '/kit/design-archive', label: '디자인 자료 아카이브',
-        sub: [
-          { to: '/kit/design-archive/orders', label: '발주 파일 아카이브' },
-        ],
-      },
+      { to: '/kit/ems',       label: 'EMS 배송 추적' },
+      { to: '/kit/ems/check', label: '배송 오류 관리' },
     ],
   },
   {
     label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
     children: [
       { to: '/monitoring/reviews', label: '리뷰 모니터링' },
-      {
-        to: '/monitoring/reports', label: '리포트 아카이브',
-        sub: [
-          { to: '/monitoring/reports/brand', label: '브랜드 별 리포트 아카이브' },
-          { to: '/monitoring/reports/all',   label: '전체 리포트 아카이브' },
-        ],
-      },
+    ],
+  },
+  {
+    label: 'ARCHIVE', icon: <Archive size={22} />, defaultTo: '/archive/design', prefix: '/archive',
+    children: [
+      { to: '/archive/design',         label: '디자인 자료 아카이브' },
+      { to: '/archive/overall-report', label: '전체 리포트 아카이브' },
+      { to: '/archive/brand-report',   label: '브랜드 리포트 아카이브' },
     ],
   },
 ]

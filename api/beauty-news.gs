@@ -65,7 +65,8 @@ function receiveWebhookBriefing(body) {
     if (body.autoEmail) {
       const recipients = getRecipients();
       const subject    = body.subject || ('[MiMuse] 주간 뷰티 브리핑 · ' + data.windowsEnd);
-      sendBeautyNewsEmail(recipients, body.htmlBody || '', subject);
+      const htmlBody   = body.htmlBody || buildBriefingHtml(data);
+      sendBeautyNewsEmail(recipients, htmlBody, subject);
     }
 
     return { ok: true, saved: data.windowsStart };
