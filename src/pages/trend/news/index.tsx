@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { gasPost } from '../../../lib/api'
+import { normalizeKeywords } from '../../../lib/beauty-news'
 import { supabase } from '../../../lib/supabase'
 import Spinner from '../../../components/Spinner'
 
@@ -175,22 +176,6 @@ function normalizeCategory(cat: RawCategory): Category {
   }
 }
 
-function normalizeKeywords(raw: unknown): Keyword[] {
-  if (!raw) return []
-  const arr = typeof raw === 'string'
-    ? (() => { try { return JSON.parse(raw) } catch { return raw } })()
-    : raw
-  if (Array.isArray(arr)) {
-    return arr.map(kw => {
-      if (typeof kw === 'string') return { tag: kw, explanation: '' }
-      const o = kw as { tag?: string; explanation?: string }
-      return { tag: o.tag ?? '', explanation: o.explanation ?? '' }
-    })
-  }
-  if (typeof arr === 'string') return [{ tag: arr, explanation: '' }]
-  return []
-}
-
 function reportFromRow(row: {
   report_title?: string
   windows_start: string
@@ -217,6 +202,10 @@ function fmtKor(dateStr: string): string {
 function fmtKorFull(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
+}
+
+function reportArticleCount(report: ReportData): number {
+  return (report.categories ?? []).reduce((sum, cat) => sum + (cat.items?.length ?? 0), 0)
 }
 
 export default function Trends() {
@@ -466,12 +455,12 @@ export default function Trends() {
   }
 
   const archiveListPanel = (
-    <div className="bn-archive-panel" style={{ maxHeight: 'none' }}>
+    <div className="bn-archive-panel">
       <div className="bn-archive-header">
         <span className="bn-archive-title">📁 주간 아카이브</span>
         <span className="bn-archive-hint">최대 12주</span>
       </div>
-      <div className="bn-archive-list" style={{ maxHeight: 'none', overflowY: 'visible' }}>
+      <div className="bn-archive-list">
         {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
         {!archiveListLoading && archiveOrder.length === 0 && (
           <div className="bn-archive-empty">저장된 아카이브가 없습니다.<br />Claude 루틴이 실행되면 자동으로 저장됩니다.</div>
@@ -481,14 +470,16 @@ export default function Trends() {
           const open = openMonths.has(mk)
           return (
             <div key={mk} className="bn-arch-group">
-              <button className="bn-arch-month" onClick={() => {
+              <button type="button" className={`bn-arch-month${open ? ' open' : ''}`} onClick={() => {
                 const next = new Set(openMonths)
                 open ? next.delete(mk) : next.add(mk)
                 setOpenMonths(next)
               }}>
                 <span className="bn-arch-month-label">{g.label}</span>
-                <span className="bn-arch-month-count">{g.items.length}건</span>
-                <span>{open ? '▾' : '▸'}</span>
+                <span className="bn-arch-month-right">
+                  <span className="bn-arch-month-count">{g.items.length}건</span>
+                  <span className="bn-arch-month-chevron">{open ? '▾' : '›'}</span>
+                </span>
               </button>
               {open && g.items.map(a => {
                 const rangeLabel = a.windows_end
@@ -496,11 +487,11 @@ export default function Trends() {
                   : fmtKor(a.windows_start)
                 const isSelected = a.windows_start === selectedKey
                 return (
-                  <div key={a.windows_start} className="bn-archive-item"
-                    style={isSelected ? { background: 'var(--yellow-lt)', borderLeft: '3px solid var(--teal)' } : undefined}
+                  <div key={a.windows_start}
+                    className={`bn-archive-item${isSelected ? ' selected' : ''}`}
                     onClick={() => loadArchive(a.windows_start)}>
                     <div className="bn-archive-item-date">{rangeLabel}</div>
-                    <button className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</button>
+                    <button type="button" className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</button>
                   </div>
                 )
               })}
@@ -508,6 +499,46 @@ export default function Trends() {
           )
         })}
       </div>
+    </div>
+  )
+
+  const briefingPanel = (
+    <div className="bn-date-card">
+      <div className="bn-date-card-header">
+        <span className="bn-date-card-icon">📅</span>
+        <span className="bn-date-card-label">이번 주 브리핑</span>
+      </div>
+      <div className="bn-date-card-body">
+        {latestLoading && <div className="bn-date-card-loading"><Spinner sm /> 불러오는 중...</div>}
+        {!latestLoading && latestReport && (
+          <>
+            <div className="bn-date-card-range">
+              {latestReport.windowsStart && latestReport.windowsEnd
+                ? fmtKorFull(latestReport.windowsStart) + ' – ' + fmtKorFull(latestReport.windowsEnd)
+                : latestReport.windowsEnd ? fmtKorFull(latestReport.windowsEnd) : ''}
+            </div>
+            <div className="bn-date-card-meta">
+              <span className="bn-date-card-meta-label">AI 분석 뉴스</span>
+              <span className="bn-date-card-meta-value">{reportArticleCount(latestReport)}건</span>
+            </div>
+            {(latestReport.keywords?.length ?? 0) > 0 && (
+              <div className="bn-date-card-keywords">
+                {(latestReport.keywords ?? []).slice(0, 3).map(kw => (
+                  <span key={kw.tag} className="bn-date-card-kw">{kw.tag}</span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {!latestLoading && !latestReport && (
+          <div className="bn-date-card-empty">저장된 리포트가 없습니다.</div>
+        )}
+      </div>
+      <button type="button" className="bn-action-btn"
+        disabled={!latestReport}
+        onClick={() => document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })}>
+        이번 주 뉴스 보기 ↓
+      </button>
     </div>
   )
 
@@ -519,63 +550,64 @@ export default function Trends() {
         <button className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">+</button>
       </div>
 
-      {/* Add form */}
-      {showAddForm && (
-        <div className="bn-rcpt-form">
-          <input className="bn-rcpt-input" placeholder="이름 (선택)" value={addName} onChange={e => setAddName(e.target.value)} />
-          <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addRecipient()} />
-          <div className="bn-rcpt-form-btns">
-            <button className="bn-rcpt-save" onClick={addRecipient} disabled={rcptSaving || !addEmail.trim()}>추가</button>
-            <button className="bn-rcpt-cancel" onClick={() => { setShowAddForm(false); setAddEmail(''); setAddName('') }}>취소</button>
+      <div className="bn-panel-body">
+        {showAddForm && (
+          <div className="bn-rcpt-form">
+            <input className="bn-rcpt-input" placeholder="이름 (선택)" value={addName} onChange={e => setAddName(e.target.value)} />
+            <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addRecipient()} />
+            <div className="bn-rcpt-form-btns">
+              <button className="bn-rcpt-save" onClick={addRecipient} disabled={rcptSaving || !addEmail.trim()}>추가</button>
+              <button className="bn-rcpt-cancel" onClick={() => { setShowAddForm(false); setAddEmail(''); setAddName('') }}>취소</button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Recipient list */}
-      <div className="bn-recipients">
-        {recipients.length === 0 && !showAddForm && <div className="bn-email-none">수신자 없음 — + 버튼으로 추가하세요</div>}
-        {recipients.map(r => (
-          <div key={r.email}>
-            {editingEmail === r.email ? (
-              <div className="bn-rcpt-form" style={{ margin: '4px 0' }}>
-                <input className="bn-rcpt-input" placeholder="이름 (선택)" value={editName} onChange={e => setEditName(e.target.value)} />
-                <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && saveEdit(r.email)} />
-                <div className="bn-rcpt-form-btns">
-                  <button className="bn-rcpt-save" onClick={() => saveEdit(r.email)} disabled={rcptSaving || !editEmail.trim()}>저장</button>
-                  <button className="bn-rcpt-cancel" onClick={() => setEditingEmail(null)}>취소</button>
-                </div>
-              </div>
-            ) : (
-              <div className="bn-rcpt-row">
-                <label className="bn-rcpt-label" style={{ flex: 1, minWidth: 0 }}>
-                  <input type="checkbox" checked={selectedRcpt.has(r.email)}
-                    onChange={e => {
-                      const next = new Set(selectedRcpt)
-                      e.target.checked ? next.add(r.email) : next.delete(r.email)
-                      setSelectedRcpt(next)
-                    }}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    {r.name && <div className="bn-rcpt-name">{r.name}</div>}
-                    <div className="bn-rcpt-email">{r.email}</div>
+        <div className="bn-recipients">
+          {recipients.length === 0 && !showAddForm && <div className="bn-email-none">수신자 없음 — + 버튼으로 추가하세요</div>}
+          {recipients.map(r => (
+            <div key={r.email}>
+              {editingEmail === r.email ? (
+                <div className="bn-rcpt-form" style={{ margin: '4px 0' }}>
+                  <input className="bn-rcpt-input" placeholder="이름 (선택)" value={editName} onChange={e => setEditName(e.target.value)} />
+                  <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveEdit(r.email)} />
+                  <div className="bn-rcpt-form-btns">
+                    <button className="bn-rcpt-save" onClick={() => saveEdit(r.email)} disabled={rcptSaving || !editEmail.trim()}>저장</button>
+                    <button className="bn-rcpt-cancel" onClick={() => setEditingEmail(null)}>취소</button>
                   </div>
-                </label>
-                <div className="bn-rcpt-actions">
-                  <button className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
-                  <button className="bn-archive-del" onClick={() => deleteRecipient(r.email)} title="삭제">×</button>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              ) : (
+                <div className="bn-rcpt-row">
+                  <label className="bn-rcpt-label" style={{ flex: 1, minWidth: 0 }}>
+                    <input type="checkbox" checked={selectedRcpt.has(r.email)}
+                      onChange={e => {
+                        const next = new Set(selectedRcpt)
+                        e.target.checked ? next.add(r.email) : next.delete(r.email)
+                        setSelectedRcpt(next)
+                      }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      {r.name && <div className="bn-rcpt-name">{r.name}</div>}
+                      <div className="bn-rcpt-email">{r.email}</div>
+                    </div>
+                  </label>
+                  <div className="bn-rcpt-actions">
+                    <button className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
+                    <button className="bn-archive-del" onClick={() => deleteRecipient(r.email)} title="삭제">×</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
+          {emailStatus}
+        </div>
       </div>
 
-      <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
-        {emailStatus}
-      </div>
-      <button className="bn-send-btn" onClick={() => report && sendNewsEmail(report)} disabled={emailSending || !report || selectedRcpt.size === 0}>
+      <button type="button" className="bn-action-btn" onClick={() => report && sendNewsEmail(report)} disabled={emailSending || !report || selectedRcpt.size === 0}>
         {emailSending ? '발송 중...' : '지금 즉시 전체 발송'}
       </button>
     </div>
@@ -601,26 +633,7 @@ export default function Trends() {
 
           {/* 50/50 row: date info | email panel */}
           <div className="bn-half-row">
-            <div className="bn-date-card">
-              <div className="bn-date-card-label">📅 이번 주 브리핑</div>
-              {latestLoading && <Spinner sm />}
-              {!latestLoading && latestReport && (
-                <>
-                  <div className="bn-date-card-range">
-                    {latestReport.windowsStart && latestReport.windowsEnd
-                      ? fmtKorFull(latestReport.windowsStart) + ' – ' + fmtKorFull(latestReport.windowsEnd)
-                      : latestReport.windowsEnd ? fmtKorFull(latestReport.windowsEnd) : ''}
-                  </div>
-                  {latestReport.reportTitle && (
-                    <div className="bn-date-card-title">{latestReport.reportTitle}</div>
-                  )}
-                  <a className="bn-date-card-link" href="#news-report" onClick={e => {
-                    e.preventDefault()
-                    document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
-                  }}>이번 주 뉴스 보기 ↓</a>
-                </>
-              )}
-            </div>
+            {briefingPanel}
             {emailPanel(latestReport)}
           </div>
 
@@ -644,38 +657,12 @@ export default function Trends() {
 
       {activeTab === 'archive' && (
         <div>
-          {/* 50/50 row: archive nav | email panel */}
           <div className="bn-half-row">
-            <div className="bn-date-card">
-              <div className="bn-date-card-label">📁 아카이브</div>
-              {archiveListLoading && <Spinner sm />}
-              <div className="bn-arch-nav-pills" style={{ marginTop: 10 }}>
-                {archiveOrder.flatMap(mk => archiveGroups[mk].items).map(a => {
-                  const label = a.windows_end
-                    ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end)
-                    : fmtKor(a.windows_start)
-                  return (
-                    <button key={a.windows_start}
-                      className={`bn-arch-nav-pill${a.windows_start === selectedKey ? ' active' : ''}`}
-                      onClick={() => loadArchive(a.windows_start)}>
-                      {label}
-                      <span className="bn-arch-nav-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</span>
-                    </button>
-                  )
-                })}
-                {!archiveListLoading && archiveOrder.length === 0 && (
-                  <span style={{ fontSize: 13, color: 'var(--teal-dk)', fontStyle: 'italic' }}>저장된 아카이브가 없습니다</span>
-                )}
-              </div>
-            </div>
+            {archiveListPanel}
             {emailPanel(archiveReport?.ok ? archiveReport : null)}
           </div>
 
-          {/* Full-width archive report */}
           <div className="bn-report-card">
-            <div className="bn-report-header">
-              <span className="bn-report-title">{archiveReport?.reportTitle || '아카이브 리포트'}</span>
-            </div>
             <div className="bn-report-body">
               {archiveReportLoading && <div className="bn-loading"><Spinner /><span>불러오는 중...</span></div>}
               {!archiveReportLoading && !archiveReport && (

@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { gasGet } from '../../lib/api'
+import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '../../lib/beauty-news'
 import { usePhase } from '../../contexts/PhaseContext'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
@@ -42,7 +43,7 @@ export default function Dashboard() {
   const [statsOutreach,  setStatsOutreach]  = useState(SPINNER_HTML)
   const [statsEms,       setStatsEms]       = useState(SPINNER_HTML)
   const [statsMonitoring,setStatsMonitoring]= useState(SPINNER_HTML)
-  const [trendKeywords,  setTrendKeywords]  = useState<string | null>(null)
+  const [newsKeywords,   setNewsKeywords]   = useState<BeautyNewsKeyword[]>([])
 
   const loadListupStats = useCallback(async () => {
     if (!activeDbId) return
@@ -130,16 +131,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadEmsStats()
     loadMonitoringStats()
-    ;(async () => {
-      try {
-        const list: { ok: boolean; archives?: { dateKey: string }[] } = await gasGet('getArchiveList')
-        const latest = list.archives?.[0]?.dateKey
-        if (latest) {
-          const data: { ok: boolean; keywords?: string } = await gasGet('getArchive', { dateKey: latest })
-          if (data.ok && data.keywords) setTrendKeywords(data.keywords)
-        }
-      } catch {}
-    })()
+    fetchLatestBeautyNewsKeywords().then(setNewsKeywords).catch(() => {})
   }, [])
 
   return (
@@ -355,12 +347,17 @@ export default function Dashboard() {
                 transition: 'background .15s',
               }}>트렌드 보기 →</Link>
             </div>
-            {trendKeywords ? (
-              <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.8 }}
-                dangerouslySetInnerHTML={{ __html: trendKeywords.replace(/\n/g, '<br>') }}
-              />
+            {newsKeywords.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {newsKeywords.map(kw => (
+                  <div key={kw.tag}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{kw.tag}</div>
+                    <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.55 }}>{kw.explanation}</div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>*주간 '트렌드 키워드 요약' 부분 연동</div>
+              <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>저장된 트렌드 키워드가 없습니다.</div>
             )}
           </div>
 
