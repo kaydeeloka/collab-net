@@ -144,18 +144,57 @@ function _getMonitoringSheet() {
   return ss.getSheetByName(SHEET_MONITORING) || ss.getSheetByName('모니터링') || null;
 }
 
-// Read handles from the monitoring sheet (col C = MON_C.HANDLE).
-// Deduplicates so each profile is only scraped once.
+// Read TikTok handles from Supabase: confirmed_influencers JOIN influencers WHERE platform = TikTok.
 function _getTikTokInfluencers(limit) {
+  limit = limit || MON_SCRAPE_LIMIT;
+  try {
+    const props    = PropertiesService.getScriptProperties();
+    const sbUrl    = props.getProperty('SUPABASE_URL');
+    const sbKey    = props.getProperty('SUPABASE_ANON_KEY');
+    if (!sbUrl || !sbKey) {
+      Logger.log('SUPABASE_URL / SUPABASE_ANON_KEY not set — falling back to sheet');
+      return _getTikTokInfluencersFromSheet(limit);
+    }
+
+    // Join confirmed_influencers with influencers to get TikTok handles
+    const url = sbUrl + '/rest/v1/confirmed_influencers' +
+      '?select=influencers!inner(handle,platform)' +
+      '&influencers.platform=eq.TikTok' +
+      '&limit=' + limit;
+
+    const res  = UrlFetchApp.fetch(url, {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
+      muteHttpExceptions: true,
+    });
+    const data = JSON.parse(res.getContentText());
+    if (!Array.isArray(data)) { Logger.log('Supabase response: ' + res.getContentText()); return []; }
+
+    const seen    = {};
+    const results = [];
+    data.forEach(function(row) {
+      const handle = ((row.influencers || {}).handle || '').toString().trim().replace(/^@/, '');
+      const key    = handle.toLowerCase();
+      if (!handle || handle.includes(' ') || seen[key]) return;
+      seen[key] = true;
+      results.push(handle);
+    });
+    Logger.log('Supabase: ' + results.length + ' TikTok handles');
+    return results;
+  } catch (e) {
+    Logger.log('_getTikTokInfluencers error: ' + e);
+    return [];
+  }
+}
+
+// Fallback: read from Google Sheet (used when Supabase keys not set)
+function _getTikTokInfluencersFromSheet(limit) {
   limit = limit || MON_SCRAPE_LIMIT;
   try {
     const ws = _getMonitoringSheet();
     if (!ws) return [];
-
     const rows    = ws.getDataRange().getValues().slice(1);
     const results = [];
     const seen    = {};
-
     for (var i = 0; i < rows.length && results.length < limit; i++) {
       const handle = (rows[i][MON_C.HANDLE] || '').toString().trim().replace(/^@/, '');
       const key    = handle.toLowerCase();
@@ -165,7 +204,7 @@ function _getTikTokInfluencers(limit) {
     }
     return results;
   } catch (e) {
-    Logger.log('_getTikTokInfluencers error: ' + e);
+    Logger.log('_getTikTokInfluencersFromSheet error: ' + e);
     return [];
   }
 }
@@ -286,17 +325,14 @@ function _writeMonitoringResults(token, datasetId) {
       ].filter(Boolean).join(' ').toLowerCase();
     }
 
-    // Build handle -> [all keyword-matching videos] map.
-    // Supports multiple videos per influencer — each sheet row with the same handle
-    // gets the next video in sequence (row 1 → video 0, row 2 → video 1, …).
-    // Apify can return nested objects OR flat dot-notation keys — handle both.
+    // Build handle → [keyword-matching videos] map
     const videosByHandle = {};
     items.forEach(function(item) {
       if (!keywords.some(function(kw) { return itemText(item).includes(kw); })) return;
       const meta     = item.authorMeta || {};
       const uniqueId = (
-        meta.uniqueId || meta.name ||   // nested format  { authorMeta: { name: '...' } }
-        item['authorMeta.name'] ||       // flat export format
+        meta.uniqueId || meta.name ||
+        item['authorMeta.name'] ||
         item.uniqueId || ''
       ).toString().toLowerCase();
       if (!uniqueId) return;
@@ -305,64 +341,22 @@ function _writeMonitoringResults(token, datasetId) {
     });
 
     if (items.length > 0 && Object.keys(videosByHandle).length === 0) {
-      Logger.log('경고: 키워드 매칭 0개. 첫 번째 아이템 구조: ' + JSON.stringify(Object.keys(items[0])));
+      Logger.log('경고: 키워드 매칭 0개. 첫 아이템 키: ' + JSON.stringify(Object.keys(items[0])));
     }
 
     Logger.log('기간 내 영상: ' + items.length + '개 | 키워드 매칭: ' + Object.keys(videosByHandle).length + '개 핸들');
 
-    const ws = _getMonitoringSheet();
-    if (!ws) return { error: '모니터링 시트를 찾을 수 없습니다.' };
+    // Try Supabase first; fall back to sheet if not configured
+    const props = PropertiesService.getScriptProperties();
+    const sbUrl = props.getProperty('SUPABASE_URL');
+    const sbKey = props.getProperty('SUPABASE_ANON_KEY');
 
-    const C = MON_C;
-    const dataRange = ws.getDataRange();
-    const allValues = dataRange.getValues();
-    const handleIdx = {};  // tracks how many rows we've filled per handle
     var updated = 0;
 
-    for (var i = 1; i < allValues.length; i++) {
-      const handle = (allValues[i][C.HANDLE] || '').toString().trim().replace(/^@/, '').toLowerCase();
-      const videos = videosByHandle[handle];
-      if (!videos || !videos.length) continue;
-
-      if (handleIdx[handle] === undefined) handleIdx[handle] = 0;
-      const video = videos[handleIdx[handle]];
-      if (!video) continue;  // more sheet rows than matched videos — leave blank
-      handleIdx[handle]++;
-
-      var videoDate = '';
-      if (video.createTimeISO) {
-        videoDate = video.createTimeISO.slice(0, 10);
-      } else if (video.createTime) {
-        videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
-      }
-
-      const videoUrl    = video.webVideoUrl || video.videoUrl || '';
-      const s           = video.stats || {};
-      const views       = video.playCount    || s.playCount    || 0;
-      const likes       = video.diggCount    || s.diggCount    || 0;
-      const comments    = video.commentCount || s.commentCount || 0;
-      const matchedKws  = keywords.filter(function(kw) { return itemText(video).includes(kw); });
-
-      allValues[i][C.MEDIA]    = 'video';
-      allValues[i][C.DATE]     = videoDate;
-      allValues[i][C.LINK]     = videoUrl;
-      allValues[i][C.VIEWS]    = views;
-      allValues[i][C.LIKES]    = likes;
-      allValues[i][C.COMMENTS] = comments;
-      allValues[i][C.UPDATED]  = runDate;
-      allValues[i][C.KEYWORDS] = matchedKws.join(', ');
-      updated++;
-    }
-
-    if (updated > 0) {
-      // Pad every row to the required column width so setValues doesn't throw
-      // a dimension mismatch when new columns (KEYWORDS, UPDATED) extend past
-      // the original getDataRange() width.
-      const requiredCols = C.UPDATED + 1;
-      allValues.forEach(function(row) {
-        while (row.length < requiredCols) row.push('');
-      });
-      ws.getRange(1, 1, allValues.length, requiredCols).setValues(allValues);
+    if (sbUrl && sbKey) {
+      updated = _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate);
+    } else {
+      updated = _writeToSheet(videosByHandle, keywords, itemText, runDate);
     }
 
     Logger.log('업데이트된 행: ' + updated + '개');
@@ -376,9 +370,135 @@ function _writeMonitoringResults(token, datasetId) {
     Logger.log('Error in _writeMonitoringResults: ' + e.toString());
     return { error: e.toString() };
   } finally {
-    // This blocks runs NO MATTER WHAT, preventing locked states if an error drops mid-execution
     _clearRunProps();
   }
+}
+
+// Write Apify results to Supabase monitoring table.
+// Looks up confirmed_influencer_id via handle → influencers → confirmed_influencers.
+function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate) {
+  // Fetch handle → confirmed_influencer_id mapping from Supabase
+  const mapRes = UrlFetchApp.fetch(
+    sbUrl + '/rest/v1/confirmed_influencers' +
+    '?select=id,influencers!inner(handle)',
+    {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
+      muteHttpExceptions: true,
+    }
+  );
+  const mapData = JSON.parse(mapRes.getContentText());
+  if (!Array.isArray(mapData)) {
+    Logger.log('Failed to fetch confirmed_influencers from Supabase');
+    return 0;
+  }
+
+  // Build handle (lowercase) → confirmed_influencer_id map
+  const handleToId = {};
+  mapData.forEach(function(row) {
+    const handle = ((row.influencers || {}).handle || '').toLowerCase();
+    if (handle) handleToId[handle] = row.id;
+  });
+
+  var inserted = 0;
+  Object.keys(videosByHandle).forEach(function(handle) {
+    const confirmedId = handleToId[handle];
+    if (!confirmedId) { Logger.log('No confirmed_influencer for handle: ' + handle); return; }
+
+    videosByHandle[handle].forEach(function(video) {
+      var videoDate = '';
+      if (video.createTimeISO) videoDate = video.createTimeISO.slice(0, 10);
+      else if (video.createTime) videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
+
+      const videoUrl   = video.webVideoUrl || video.videoUrl || '';
+      const s          = video.stats || {};
+      const views      = video.playCount    || s.playCount    || 0;
+      const likes      = video.diggCount    || s.diggCount    || 0;
+      const comments   = video.commentCount || s.commentCount || 0;
+      const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
+
+      const payload = JSON.stringify({
+        confirmed_influencer_id: confirmedId,
+        platform:    'TikTok',
+        account:     handle,
+        date:        videoDate || null,
+        media:       'video',
+        review_link: videoUrl || null,
+        views:       views,
+        likes:       likes,
+        comments:    comments,
+        keywords:    matchedKws.join(', ') || null,
+        updated:     runDate,
+      });
+
+      // Upsert by (confirmed_influencer_id, review_link) to avoid duplicates
+      const insRes = UrlFetchApp.fetch(
+        sbUrl + '/rest/v1/monitoring',
+        {
+          method: 'POST',
+          headers: {
+            apikey: sbKey,
+            Authorization: 'Bearer ' + sbKey,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates',
+          },
+          payload: payload,
+          muteHttpExceptions: true,
+        }
+      );
+      if (insRes.getResponseCode() < 300) inserted++;
+      else Logger.log('Supabase insert error for ' + handle + ': ' + insRes.getContentText());
+    });
+  });
+
+  return inserted;
+}
+
+// Fallback: write results to Google Sheet (legacy path)
+function _writeToSheet(videosByHandle, keywords, itemText, runDate) {
+  const ws = _getMonitoringSheet();
+  if (!ws) return 0;
+
+  const C = MON_C;
+  const dataRange = ws.getDataRange();
+  const allValues = dataRange.getValues();
+  const handleIdx = {};
+  var updated = 0;
+
+  for (var i = 1; i < allValues.length; i++) {
+    const handle = (allValues[i][C.HANDLE] || '').toString().trim().replace(/^@/, '').toLowerCase();
+    const videos = videosByHandle[handle];
+    if (!videos || !videos.length) continue;
+
+    if (handleIdx[handle] === undefined) handleIdx[handle] = 0;
+    const video = videos[handleIdx[handle]];
+    if (!video) continue;
+    handleIdx[handle]++;
+
+    var videoDate = '';
+    if (video.createTimeISO) videoDate = video.createTimeISO.slice(0, 10);
+    else if (video.createTime) videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
+
+    const videoUrl   = video.webVideoUrl || video.videoUrl || '';
+    const s          = video.stats || {};
+    const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
+
+    allValues[i][C.MEDIA]    = 'video';
+    allValues[i][C.DATE]     = videoDate;
+    allValues[i][C.LINK]     = videoUrl;
+    allValues[i][C.VIEWS]    = video.playCount    || s.playCount    || 0;
+    allValues[i][C.LIKES]    = video.diggCount    || s.diggCount    || 0;
+    allValues[i][C.COMMENTS] = video.commentCount || s.commentCount || 0;
+    allValues[i][C.UPDATED]  = runDate;
+    allValues[i][C.KEYWORDS] = matchedKws.join(', ');
+    updated++;
+  }
+
+  if (updated > 0) {
+    const requiredCols = C.UPDATED + 1;
+    allValues.forEach(function(row) { while (row.length < requiredCols) row.push(''); });
+    ws.getRange(1, 1, allValues.length, requiredCols).setValues(allValues);
+  }
+  return updated;
 }
 
 function _clearRunProps() {

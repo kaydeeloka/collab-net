@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter } from 'lucide-react'
 import { gasPost } from '../../../lib/api'
+import { defaultProfileUrl } from '../../../lib/content-platforms'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
 import { fmtNum } from '../../../lib/utils'
@@ -53,6 +54,7 @@ interface Influencer {
   video_count: number
   engagement_rate: number
   profile_url: string | null
+  platform: string | null
   status: string
   contact_round: string | null
   first_sent_at: string | null
@@ -168,7 +170,7 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
       .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -241,14 +243,26 @@ export default function Outreach() {
         .eq('influencer_id', id)
         .maybeSingle()
       if (!existing) {
-        const { error: ciErr } = await supabase.from('confirmed_influencers').insert({
-          influencer_id: id,
-          phase_id:      selectedPhaseId,
-          email:         inf.email,
-          upload_status: 'Pending',
-        })
-        if (ciErr) showToast('확정 등록 실패: ' + ciErr.message, 'error')
-        else showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
+        const { data: ciData, error: ciErr } = await supabase
+          .from('confirmed_influencers')
+          .insert({ influencer_id: id, phase_id: selectedPhaseId, email: inf.email, upload_status: 'Pending' })
+          .select('id')
+          .single()
+        if (ciErr) {
+          showToast('확정 등록 실패: ' + ciErr.message, 'error')
+        } else {
+          const platform   = inf.platform || 'TikTok'
+          const handle     = inf.handle   || ''
+          const { error: ipErr } = await supabase.from('influencer_platforms').insert({
+            confirmed_influencer_id: ciData.id,
+            platform,
+            handle,
+            followers:   inf.followers   || 0,
+            profile_url: inf.profile_url || defaultProfileUrl(platform, handle),
+          })
+          if (ipErr) showToast('플랫폼 등록 실패: ' + ipErr.message, 'error')
+          else showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
+        }
       }
     }
 

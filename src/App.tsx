@@ -19,9 +19,6 @@ import TiktokTrend from './pages/trend/tiktok'
 
 // INFLUENCER — template
 import InfluencerTemplate from './pages/influencer/template'
-// INFLUENCER — contact
-import ContactList      from './pages/influencer/contact/list'
-import ContactCompleted from './pages/influencer/contact/completed'
 // INFLUENCER — confirmed
 import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
 import ConfirmedMonitoringLink from './pages/influencer/confirmed/monitoring'
@@ -30,13 +27,8 @@ import ConfirmedMonitoringLink from './pages/influencer/confirmed/monitoring'
 import BrandDb         from './pages/brand/db'
 import BrandDbGeneral  from './pages/brand/db/general'
 import BrandDbPersonal from './pages/brand/db/personal'
-// BRAND — template
 import BrandTemplate         from './pages/brand/template'
-// BRAND — contact
 import BrandContact          from './pages/brand/contact'
-import BrandContactList      from './pages/brand/contact/list'
-import BrandContactTemplate  from './pages/brand/contact/template'
-import BrandContactCompleted from './pages/brand/contact/completed'
 // BRAND — confirmed
 import BrandConfirmed        from './pages/brand/confirmed'
 import BrandConfirmedFolders from './pages/brand/confirmed/management'
@@ -45,17 +37,11 @@ import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
 // KIT — ems
 import EmsDaily   from './pages/kit/ems/daily'
 import EmsCheck   from './pages/kit/ems/check'
-import EmsPending from './pages/kit/ems/pending'
 // ARCHIVE
 import ArchiveDesign        from './pages/archive/design'
 import ArchiveOverallReport from './pages/archive/overall-report'
 import ArchiveBrandReport   from './pages/archive/brand-report'
 
-// MONITORING — reviews
-import ReviewsUploadStatus from './pages/monitoring/reviews/upload-status'
-import ReviewsManualCheck  from './pages/monitoring/reviews/manual-check'
-import ReviewsBrandCheck   from './pages/monitoring/reviews/brand-check'
-import ReviewsList         from './pages/monitoring/reviews/list'
 // MONITORING — content
 import ReviewContent   from './pages/monitoring/content'
 import ContentFollowup from './pages/monitoring/content/followup'
@@ -85,8 +71,6 @@ export default function App() {
                 <Route path="/influencer/search/db"                 element={<Listup />} />
                 <Route path="/influencer/template"                  element={<InfluencerTemplate />} />
                 <Route path="/influencer/contact"                   element={<Outreach />} />
-                <Route path="/influencer/contact/list"              element={<ContactList />} />
-                <Route path="/influencer/contact/completed"         element={<ContactCompleted />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
                 <Route path="/influencer/confirmed/shipping"        element={<ConfirmedShipping />} />
                 <Route path="/influencer/confirmed/monitoring"      element={<ConfirmedMonitoringLink />} />
@@ -98,9 +82,6 @@ export default function App() {
                   <Route path="personal" element={<BrandDbPersonal />} />
                 </Route>
                 <Route path="/brand/contact"                        element={<BrandContact />} />
-                <Route path="/brand/contact/list"                   element={<BrandContactList />} />
-                <Route path="/brand/contact/template"               element={<BrandContactTemplate />} />
-                <Route path="/brand/contact/completed"              element={<BrandContactCompleted />} />
                 <Route path="/brand/template"                           element={<BrandTemplate />} />
                 <Route path="/brand/confirmed" element={<BrandConfirmed />}>
                   <Route index element={<Navigate to="management" replace />} />
@@ -112,15 +93,10 @@ export default function App() {
                 <Route path="/kit/ems"                              element={<Ems />} />
                 <Route path="/kit/ems/daily"                        element={<EmsDaily />} />
                 <Route path="/kit/ems/check"                        element={<EmsCheck />} />
-                <Route path="/kit/ems/pending"                      element={<EmsPending />} />
                 <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
 
                 {/* ── MONITORING ── */}
                 <Route path="/monitoring/reviews"                   element={<Monitoring />} />
-                <Route path="/monitoring/reviews/upload-status"     element={<ReviewsUploadStatus />} />
-                <Route path="/monitoring/reviews/manual-check"      element={<ReviewsManualCheck />} />
-                <Route path="/monitoring/reviews/brand-check"       element={<ReviewsBrandCheck />} />
-                <Route path="/monitoring/reviews/list"              element={<ReviewsList />} />
                 <Route path="/monitoring/content"                   element={<ReviewContent />} />
                 <Route path="/monitoring/content/followup"          element={<ContentFollowup />} />
                 <Route path="/monitoring/content/report"            element={<ContentReport />} />

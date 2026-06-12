@@ -518,7 +518,7 @@ export default function BeautyNews() {
                 : latestReport.windowsEnd ? fmtKorFull(latestReport.windowsEnd) : ''}
             </div>
             <div className="bn-date-card-meta">
-              <span className="bn-date-card-meta-label">AI 분석 뉴스</span>
+              <span className="bn-date-card-meta-label">이번 주 뷰티 뉴스</span>
               <span className="bn-date-card-meta-value">{reportArticleCount(latestReport)}건</span>
             </div>
             {(latestReport.keywords?.length ?? 0) > 0 && (

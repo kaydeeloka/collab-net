@@ -37,8 +37,10 @@ UPDATE influencers SET status = CASE status
 END WHERE (status IS NULL OR status = '');
 
 -- confirmed_influencers — Google Form data
--- NOTE: handle, display_name, email, profile_url (account_url) and platform
---       are fetched via JOIN on influencer_id — do not duplicate here
+-- NOTE: handle, display_name, email, profile_url come from influencers JOIN.
+--       content_platforms + platform store per-creator multi-platform accounts.
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS content_platforms JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'TikTok';
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS repost         TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS phone          TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS content_type   TEXT;
@@ -52,7 +54,40 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS review_link     TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes           TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS form_submitted  BOOLEAN DEFAULT FALSE;
 
--- ALTER TABLE ems_tracking          ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
+-- confirmed_influencers — fixed sequence number (1-N), same across all pages
+ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS seq INTEGER;
+
+-- Assign seq 1..N ordered by created_at within each phase (run once)
+WITH numbered AS (
+  SELECT id,
+    ROW_NUMBER() OVER (PARTITION BY phase_id ORDER BY created_at, id) AS rn
+  FROM confirmed_influencers
+)
+UPDATE confirmed_influencers ci
+SET seq = n.rn
+FROM numbered n
+WHERE ci.id = n.id AND ci.seq IS NULL;
+
+-- ems_tracking — columns matching current schema
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS registered_date   DATE;         -- 신청일
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS application_number TEXT;        -- 접수번호
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS email_sent        BOOLEAN DEFAULT false;
+-- Remove old columns not in schema
+ALTER TABLE ems_tracking DROP COLUMN IF EXISTS product;
+ALTER TABLE ems_tracking DROP COLUMN IF EXISTS application_date;
+
+-- monitoring — add account (handle) column to match sheet header directly
+-- platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|감지된 키워드|모니터링 실행일
+ALTER TABLE monitoring ADD COLUMN IF NOT EXISTS account TEXT;
+
+-- make confirmed_influencer_id optional so rows can exist without a FK match
+ALTER TABLE monitoring ALTER COLUMN confirmed_influencer_id DROP NOT NULL;
+
+-- Add a 'brands' aggregate row for the flat UI keyword list (monitoring page)
+INSERT INTO monitoring_keywords (brand, keywords)
+VALUES ('brands', ARRAY['aesthen', 'joodoc', 'nesh', 'varuza'])
+ON CONFLICT (brand) DO NOTHING;
+
 -- ALTER TABLE monitoring            ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE status_messages     ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE beauty_news_archives  ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
@@ -393,6 +428,44 @@ WHERE bp.status = 'accept'
 -- ON CONFLICT (brand) DO UPDATE SET keywords = EXCLUDED.keywords;
 
 -- ============================================================
+--  confirmed_influencers — content_platforms backfill
+-- ============================================================
+
+-- Seed JSON from linked influencer (recruitment snapshot)
+UPDATE confirmed_influencers ci
+SET
+  content_platforms = jsonb_build_array(
+    jsonb_build_object(
+      'platform',    COALESCE(i.platform, 'TikTok'),
+      'handle',      i.handle,
+      'followers',   COALESCE(i.followers, 0),
+      'profile_url', COALESCE(i.profile_url, 'https://www.tiktok.com/@' || i.handle),
+      'is_primary',  true
+    )
+  ),
+  platform = COALESCE(i.platform, 'TikTok')
+FROM influencers i
+WHERE ci.influencer_id = i.id
+  AND (ci.content_platforms IS NULL OR ci.content_platforms = '[]'::jsonb);
+
+-- Normalize platform casing
+UPDATE confirmed_influencers
+SET platform = 'TikTok'
+WHERE LOWER(platform) = 'tiktok' AND platform <> 'TikTok';
+
+-- Sync platform column from primary entry in JSON
+UPDATE confirmed_influencers
+SET platform = elem->>'platform'
+FROM LATERAL (
+  SELECT elem
+  FROM jsonb_array_elements(content_platforms) AS elem
+  WHERE (elem->>'is_primary')::boolean = true
+  LIMIT 1
+) AS primary_row
+WHERE jsonb_array_length(content_platforms) > 0
+  AND primary_row.elem IS NOT NULL;
+
+-- ============================================================
 --  POST-IMPORT UTILITIES
 -- ============================================================
 
@@ -433,3 +506,152 @@ WHERE i.status = 'accept'
 ALTER TABLE brand_personal
   ALTER COLUMN personal_email TYPE TEXT[]
   USING CASE WHEN personal_email IS NULL THEN NULL ELSE ARRAY[personal_email] END;
+
+-- ============================================================
+--  influencer_platforms — normalize content_platforms JSONB
+--  Run this entire block once in Supabase SQL editor
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS influencer_platforms (
+  id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at              TIMESTAMPTZ DEFAULT now(),
+  confirmed_influencer_id UUID        NOT NULL REFERENCES confirmed_influencers(id) ON DELETE CASCADE,
+  platform                TEXT        NOT NULL,
+  handle                  TEXT,
+  followers               INTEGER     DEFAULT 0,
+  profile_url             TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_influencer_platforms_confirmed ON influencer_platforms(confirmed_influencer_id);
+CREATE INDEX IF NOT EXISTS idx_influencer_platforms_handle    ON influencer_platforms(handle);
+
+ALTER TABLE influencer_platforms ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_influencer_platforms" ON influencer_platforms
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Migrate existing content_platforms JSONB → influencer_platforms rows
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle, followers, profile_url)
+SELECT
+  ci.id,
+  COALESCE(NULLIF(TRIM(elem->>'platform'), ''), 'TikTok'),
+  NULLIF(TRIM(elem->>'handle'), ''),
+  COALESCE((elem->>'followers')::INTEGER, 0),
+  NULLIF(TRIM(elem->>'profile_url'), '')
+FROM confirmed_influencers ci,
+LATERAL jsonb_array_elements(
+  CASE
+    WHEN ci.content_platforms IS NULL OR ci.content_platforms = '[]'::jsonb
+    THEN '[]'::jsonb
+    ELSE ci.content_platforms
+  END
+) AS elem
+WHERE TRIM(elem->>'platform') <> ''
+ON CONFLICT DO NOTHING;
+
+-- Add influencer_platform_id FK to monitoring
+ALTER TABLE monitoring ADD COLUMN IF NOT EXISTS influencer_platform_id UUID
+  REFERENCES influencer_platforms(id) ON DELETE SET NULL;
+
+-- Backfill: match by handle first
+UPDATE monitoring m
+SET influencer_platform_id = ip.id
+FROM influencer_platforms ip
+WHERE m.influencer_platform_id IS NULL
+  AND ip.handle = m.account;
+
+-- Backfill: remaining by confirmed_influencer_id + platform
+UPDATE monitoring m
+SET influencer_platform_id = ip.id
+FROM influencer_platforms ip
+WHERE m.influencer_platform_id IS NULL
+  AND ip.confirmed_influencer_id = m.confirmed_influencer_id
+  AND ip.platform = m.platform;
+
+-- Drop old columns from monitoring (data now in influencer_platforms / confirmed_influencers)
+ALTER TABLE monitoring DROP COLUMN IF EXISTS account;
+ALTER TABLE monitoring DROP COLUMN IF EXISTS confirmed_influencer_id;
+ALTER TABLE monitoring DROP COLUMN IF EXISTS repost;
+
+-- Drop JSONB column from confirmed_influencers (replaced by influencer_platforms table)
+ALTER TABLE confirmed_influencers DROP COLUMN IF EXISTS content_platforms;
+
+-- ============================================================
+--  influencer_platforms — seed data
+--  Lookup: join influencers by handle → confirmed_influencers
+--  Secondary Instagram rows use the primary TikTok handle for lookup
+-- ============================================================
+WITH seed (lookup_handle, platform, handle, followers) AS (
+  VALUES
+  ('thatgirlkierstin'::text,       'TikTok'::text,    'thatgirlkierstin'::text,        33000::int),
+  ('lovebylexis',                  'TikTok',           'lovebylexis',                   23100),
+  ('itskristv',                    'TikTok',           'itskristv',                      3300),
+  ('itskristv',                    'Instagram',        'itskristv',                         0),
+  ('stephssocute',                 'TikTok',           'stephssocute',                   3800),
+  ('charity_017',                  'TikTok',           'charity_017',                    4500),
+  ('elssielee',                    'TikTok',           'elssielee',                      7100),
+  ('Creativvely',                  'TikTok',           'Creativvely',                    3200),
+  ('anikafong',                    'TikTok',           'anikafong',                      3100),
+  ('crazybeautifulmakeup',         'TikTok',           'crazybeautifulmakeup',           4600),
+  ('crazybeautifulmakeup',         'Instagram',        'crazybeautifulmakeup',              0),
+  ('MGoldCreative',                'TikTok',           'MGoldCreative',                 20700),
+  ('jadetillman0',                 'TikTok',           'jadetillman0',                   7000),
+  ('jadetillman0',                 'Instagram',        'jadiet',                            0),
+  ('victoriaxali',                 'TikTok',           'victoriaxali',                   4400),
+  ('mamalifewali',                 'Instagram',        'mamalifewali',                   4200),
+  ('renu_tamang22',                'TikTok',           'renu_tamang22',                  5500),
+  ('_.bxbydxll.x',                 'TikTok',           '_.bxbydxll.x',                  5000),
+  ('kelly_anne_81',                'TikTok',           'kelly_anne_81',                  4300),
+  ('alohabriee',                   'TikTok',           'alohabriee',                     7400),
+  ('hearherix',                    'TikTok',           'hearherix',                      8800),
+  ('itsjudyshin',                  'TikTok',           'itsjudyshin',                   10500),
+  ('tinaangelinaaa',               'TikTok',           'tinaangelinaaa',                22100),
+  ('tinaangelinaaa',               'Instagram',        'Tinaangelinaa',                     0),
+  ('losernamedl',                  'TikTok',           'losernamedl',                    6000),
+  ('505afrolatina.barbiee',        'TikTok',           '505afrolatina.barbiee',         32300),
+  ('yohannauc',                    'TikTok',           'yohannauc',                      5100),
+  ('Kelsey.skincareee',            'TikTok',           'Kelsey.skincareee',              5000),
+  ('lazymxchi',                    'TikTok',           'lazymxchi',                      4100),
+  ('whoisasxa',                    'TikTok',           'whoisasxa',                      1100),
+  ('Pearlsearcher',                'TikTok',           'Pearlsearcher',                  5000),
+  ('britta.loves',                 'TikTok',           'britta.loves',                  10000),
+  ('thelifeofruthie',              'TikTok',           'thelifeofruthie',                4300),
+  ('burseygirl84reviews',          'TikTok',           'burseygirl84reviews',            5000),
+  ('beccaa.mor',                   'TikTok',           'beccaa.mor',                     8000),
+  ('_morchelle',                   'TikTok',           '_morchelle',                     5000),
+  ('bunnidollyy',                  'TikTok',           'bunnidollyy',                   37400),
+  ('Jordykaoir',                   'TikTok',           'Jordykaoir',                    21200),
+  ('tiltedtiramisu',               'TikTok',           'tiltedtiramisu',                55700),
+  ('vxmpirebunni',                 'TikTok',           'vxmpirebunni',                   9000),
+  ('linlxvs',                      'TikTok',           'linlxvs',                       63100),
+  ('sarampena',                    'TikTok',           'sarampena',                      5300),
+  ('Holykaran',                    'TikTok',           'Holykaran',                      5000),
+  ('Anahiiv._',                    'TikTok',           'Anahiiv._',                      3200),
+  ('sammiechennara',               'TikTok',           'sammiechennara',                 9000),
+  ('visualsbyaverie',              'TikTok',           'visualsbyaverie',               13200),
+  ('visualsbyaverie',              'Instagram',        'visualsbyaverie',                   0),
+  ('Faces.by.Jamari',              'TikTok',           'Faces.by.Jamari',                5200),
+  ('Dainaxox',                     'TikTok',           'Dainaxox',                      11000),
+  ('ladyluck779',                  'TikTok',           'ladyluck779',                   11000),
+  ('xoxoluvjoan',                  'TikTok',           'xoxoluvjoan',                   13100),
+  ('laurentressler',               'TikTok',           'laurentressler',                18300),
+  ('a good hue',                   'Magazine',         'a good hue',                        0),
+  ('Byrdie',                       'Magazine',         'Byrdie',                            0),
+  ('Bust',                         'Magazine',         'Bust',                              0),
+  ('Allure',                       'Magazine',         'Allure',                            0)
+)
+INSERT INTO influencer_platforms (confirmed_influencer_id, platform, handle, followers, profile_url)
+SELECT ci.id, s.platform, s.handle, s.followers,
+  CASE s.platform
+    WHEN 'TikTok'    THEN 'https://www.tiktok.com/@' || s.handle
+    WHEN 'Instagram' THEN 'https://www.instagram.com/' || s.handle
+    ELSE NULL
+  END
+FROM seed s
+JOIN influencers i ON LOWER(i.handle) = LOWER(s.lookup_handle)
+JOIN confirmed_influencers ci ON ci.influencer_id = i.id
+WHERE NOT EXISTS (
+  SELECT 1 FROM influencer_platforms ip
+  WHERE ip.confirmed_influencer_id = ci.id
+    AND ip.platform = s.platform
+    AND LOWER(ip.handle) = LOWER(s.handle)
+);

@@ -148,9 +148,6 @@ export default function TiktokTrend() {
             <div className="bn-engine-desc">Period: {TIKTOK_PREVIEW.period} · {TIKTOK_PREVIEW.focus}</div>
           </div>
         </div>
-        <div className="bn-engine-right">
-          <span style={{ fontSize: 12, color: 'var(--teal)', background: 'rgba(159,186,197,.15)', borderRadius: 20, padding: '4px 12px', fontWeight: 700 }}>샘플 리포트</span>
-        </div>
       </div>
 
       {/* ── Viral Videos ── */}
