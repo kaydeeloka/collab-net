@@ -55,9 +55,10 @@ ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS notes           TEXT;
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS form_submitted  BOOLEAN DEFAULT FALSE;
 
 -- confirmed_influencers — fixed sequence number (1-N), same across all pages
+-- STEP 1: run this first
 ALTER TABLE confirmed_influencers ADD COLUMN IF NOT EXISTS seq INTEGER;
 
--- Assign seq 1..N ordered by created_at within each phase (run once)
+-- STEP 2: run this separately after step 1 completes
 WITH numbered AS (
   SELECT id,
     ROW_NUMBER() OVER (PARTITION BY phase_id ORDER BY created_at, id) AS rn
@@ -66,7 +67,7 @@ WITH numbered AS (
 UPDATE confirmed_influencers ci
 SET seq = n.rn
 FROM numbered n
-WHERE ci.id = n.id AND ci.seq IS NULL;
+WHERE ci.id = n.id;
 
 -- ems_tracking — columns matching current schema
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS registered_date   DATE;         -- 신청일
@@ -654,4 +655,79 @@ WHERE NOT EXISTS (
   WHERE ip.confirmed_influencer_id = ci.id
     AND ip.platform = s.platform
     AND LOWER(ip.handle) = LOWER(s.handle)
+);
+
+-- ============================================================
+--  ems_tracking — seed shipping data
+--  Lookup by display_name (falls back to handle) → confirmed_influencer_id
+--  Some influencers appear twice (Feb + Mar shipments)
+-- ============================================================
+WITH seed (lookup_name, registered_date, application_number, status, ems_number) AS (
+  VALUES
+  -- February 2026 shipment (50 influencers)
+  ('Kierstin Sedlak'::text,          '2026-02-09'::date, 'E2026020905419'::text, '접수완료'::text, 'EB090642371KR'::text),
+  ('Alexis Beasley',                  '2026-02-09',       'E2026020905420',       '접수완료',        'EB090642385KR'),
+  ('Kristen Jones',                   '2026-02-09',       'E2026020905421',       '접수완료',        'EB090642399KR'),
+  ('Stephanie Perez',                 '2026-02-09',       'E2026020905422',       '접수완료',        'EB090642408KR'),
+  ('Charity Luster',                  '2026-02-09',       'E2026020905423',       '접수완료',        'EB090642411KR'),
+  ('Elssie Lee',                      '2026-02-09',       'E2026020905424',       '접수완료',        'EB090642425KR'),
+  ('Luna Malfabon',                   '2026-02-09',       'E2026020905425',       '접수완료',        'EB090642439KR'),
+  ('Anika Fong',                      '2026-02-09',       'E2026020905426',       '접수완료',        'EB090642442KR'),
+  ('Heather Jannett',                 '2026-02-09',       'E2026020905427',       '접수완료',        'EB090642456KR'),
+  ('Marni Gold',                      '2026-02-09',       'E2026020905428',       '접수완료',        'EB090642460KR'),
+  ('Jade Tillman',                    '2026-02-09',       'E2026020905429',       '접수완료',        'EB090642473KR'),
+  ('Alicia Cruz',                     '2026-02-09',       'E2026020905430',       '접수완료',        'EB090642487KR'),
+  ('Renu Taman',                      '2026-02-09',       'E2026020905431',       '접수완료',        'EB090642495KR'),
+  ('Brianna Potts',                   '2026-02-09',       'E2026020905432',       '접수완료',        'EB090642500KR'),
+  ('Kelly Messier',                   '2026-02-09',       'E2026020905433',       '접수완료',        'EB090642513KR'),
+  ('Brieanna Welch-Chenier',          '2026-02-09',       'E2026020905434',       '접수완료',        'EB090642527KR'),
+  ('Heather Johnson',                 '2026-02-09',       'E2026020905435',       '접수완료',        'EB090642535KR'),
+  ('Judy Shin',                       '2026-02-09',       'E2026020905436',       '접수완료',        'EB090642544KR'),
+  ('Tina Angelina',                   '2026-02-09',       'E2026020905437',       '접수완료',        'EB090642558KR'),
+  ('Lauren Mack',                     '2026-02-09',       'E2026020905438',       '접수완료',        'EB090642561KR'),
+  ('Kelsey Apodaca',                  '2026-02-09',       'E2026020905439',       '접수완료',        'EB090642575KR'),
+  ('Yohanna Urena',                   '2026-02-09',       'E2026020905440',       '접수완료',        'EB090642589KR'),
+  ('Kelsey Nash',                     '2026-02-09',       'E2026020905441',       '접수완료',        'EB090642592KR'),
+  ('Olivia Rinaldo',                  '2026-02-09',       'E2026020905442',       '접수완료',        'EB090642601KR'),
+  ('Asia Monique Mays',               '2026-02-09',       'E2026020905443',       '접수완료',        'EB090642615KR'),
+  ('Cindy Gahr',                      '2026-02-09',       'E2026020905444',       '접수완료',        'EB090642629KR'),
+  ('Britta Fernandes',                '2026-02-09',       'E2026020905445',       '접수완료',        'EB090642632KR'),
+  ('Ruth Escamilla',                  '2026-02-09',       'E2026020905446',       '접수완료',        'EB090642646KR'),
+  ('Heather G. Bursey',               '2026-02-09',       'E2026020905447',       '접수완료',        'EB090642650KR'),
+  ('Rebecca Parker',                  '2026-02-09',       'E2026020905448',       '접수완료',        'EB090642663KR'),
+  ('Morchelle Plange',                '2026-02-09',       'E2026020905449',       '접수완료',        'EB090642677KR'),
+  ('Chelsea Rojas',                   '2026-02-09',       'E2026020905450',       '접수완료',        'EB090642685KR'),
+  ('Jordann La Fleur',                '2026-02-09',       'E2026020905451',       '접수완료',        'EB090642694KR'),
+  ('Jessica Giang',                   '2026-02-09',       'E2026020905452',       '접수완료',        'EB090642703KR'),
+  ('Nicole Lorenzo',                  '2026-02-09',       'E2026020905453',       '접수완료',        'EB090642717KR'),
+  ('Soolin Hong',                     '2026-02-09',       'E2026020905454',       '접수완료',        'EB090642725KR'),
+  ('Sara Smith-Pena',                 '2026-02-09',       'E2026020905455',       '접수완료',        'EB090642734KR'),
+  ('Jone Karan',                      '2026-02-09',       'E2026020905456',       '접수완료',        'EB090642748KR'),
+  ('Anahi Macias',                    '2026-02-09',       'E2026020905457',       '접수완료',        'EB090642751KR'),
+  ('Somnang Dork',                    '2026-02-09',       'E2026020905458',       '접수완료',        'EB090642765KR'),
+  ('Averie Seno',                     '2026-02-09',       'E2026020905459',       '접수완료',        'EB090642779KR'),
+  ('Jamari Johnson',                  '2026-02-09',       'E2026020905460',       '접수완료',        'EB090642782KR'),
+  ('Ridaina Inayat',                  '2026-02-09',       'E2026020905461',       '접수완료',        'EB090642796KR'),
+  ('Sabina Gurung',                   '2026-02-09',       'E2026020905462',       '접수완료',        'EB090642805KR'),
+  ('Joan Kosisky',                    '2026-02-09',       'E2026020905463',       '접수완료',        'EB090642819KR'),
+  ('Lauren Tressler',                 '2026-02-09',       'E2026020905464',       '접수완료',        'EB090642822KR'),
+  ('Amanda Morrow',                   '2026-02-09',       'E2026020905465',       '접수완료',        'EB090642836KR'),
+  ('Derek Deng',                      '2026-02-09',       'E2026020905466',       '접수완료',        'EB090642840KR'),
+  ('Bust',                            '2026-02-09',       'E2026020905467',       '접수완료',        'EB090642853KR'),
+  ('Dianna Singh',                    '2026-02-09',       'E2026020905468',       '접수완료',        'EB090642867KR'),
+  -- March 2026 second shipment (4 influencers)
+  ('Alexis Beasley',                  '2026-03-09',       'E2026030902046',       '접수완료',        'EB091377806KR'),
+  ('Stephanie Perez',                 '2026-03-09',       'E2026030902427',       '접수완료',        'EB091380133KR'),
+  ('Anika Fong',                      '2026-03-09',       'E2026030902463',       '접수완료',        'EB091380354KR'),
+  ('Lauren Mack',                     '2026-03-09',       'E2026030902512',       '접수완료',        'EB091380751KR')
+)
+INSERT INTO ems_tracking (confirmed_influencer_id, registered_date, application_number, status, ems_number)
+SELECT ci.id, s.registered_date, s.application_number, s.status, s.ems_number
+FROM seed s
+JOIN influencers i ON LOWER(i.display_name) = LOWER(s.lookup_name)
+                   OR LOWER(i.handle)       = LOWER(s.lookup_name)
+JOIN confirmed_influencers ci ON ci.influencer_id = i.id
+WHERE NOT EXISTS (
+  SELECT 1 FROM ems_tracking et
+  WHERE et.application_number = s.application_number
 );

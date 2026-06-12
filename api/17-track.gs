@@ -48,21 +48,21 @@ function register17Track(numbers) {
 }
 
 // Returns true if the tracking number's row has 'Y' in column D (index 3)
-function _isColDMarkedY(number) {
-  try {
-    var ws = _getEmsSheet();
-    if (!ws) return false;
-    var all = ws.getDataRange().getValues();
-    var C   = _detectEmsCols(ws);
-    for (var i = 1; i < all.length; i++) {
-      if ((all[i][C.tracking] || '').toString().trim() === number) {
-        var colD = (all[i][3] || '').toString().trim().toUpperCase();
-        return colD === 'Y' || colD === 'YES';
-      }
-    }
-  } catch (e) {}
-  return false;
-}
+// function _isColDMarkedY(number) {
+//   try {
+//     var ws = _getEmsSheet();
+//     if (!ws) return false;
+//     var all = ws.getDataRange().getValues();
+//     var C   = _detectEmsCols(ws);
+//     for (var i = 1; i < all.length; i++) {
+//       if ((all[i][C.tracking] || '').toString().trim() === number) {
+//         var colD = (all[i][3] || '').toString().trim().toUpperCase();
+//         return colD === 'Y' || colD === 'YES';
+//       }
+//     }
+//   } catch (e) {}
+//   return false;
+// }
 
 function _parseEvtTime(a) {
   if (!a) return { date: '', time: '' };
@@ -93,9 +93,10 @@ function get17TrackInfo(number) {
     var accepted = data.data && data.data.accepted;
     var rejected = (data.data && data.data.rejected) || [];
     if (!accepted || accepted.length === 0) {
-      if (_isColDMarkedY(number)) return { ok: false, error: 'The number is not yet registered inside 17track' };
-      register17Track([number]);
-      return { ok: false, pending: true, error: '운송장을 17track에 등록했습니다. 잠시 후 다시 조회해 주세요.\n\n[raw] ' + rawText.slice(0, 400) };
+      return { ok: false, error: 'Please register inside 17track first.' };
+      // if (_isColDMarkedY(number)) return { ok: false, error: 'The number is not yet registered inside 17track' };
+      // register17Track([number]);
+      // return { ok: false, pending: true, error: '운송장을 17track에 등록했습니다. 잠시 후 다시 조회해 주세요.\n\n[raw] ' + rawText.slice(0, 400) };
     }
 
     // ── v2.4 response: all data is under item.track_info ────
