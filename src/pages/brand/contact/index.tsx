@@ -397,7 +397,7 @@ export default function BrandContact() {
                         </button>
                       </div>
                     </th>
-                    <th style={{ ...thBase, minWidth: 90 }}>현황</th>
+                    <th style={{ ...thBase, minWidth: 110 }}>마지막 컨택 날짜</th>
                     <th style={{ ...thBase, minWidth: 180 }}>비고</th>
                   </tr>
                 </thead>

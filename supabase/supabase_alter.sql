@@ -15,7 +15,7 @@ ALTER TABLE influencers ADD COLUMN IF NOT EXISTS platform TEXT;
 -- NOTE: status is the existing backend column (values: accept/yes/reply/negotiate/reject/target) — do NOT modify
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT '';
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_round   TEXT DEFAULT '미컨택';
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS first_sent_at   TIMESTAMPTZ;
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS last_contact_at   TIMESTAMPTZ;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS reply_count     INTEGER DEFAULT 0;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_stage  TEXT DEFAULT '';
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_count  INTEGER;

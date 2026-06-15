@@ -57,10 +57,8 @@ interface Influencer {
   platform: string | null
   status: string
   contact_round: string | null
-  first_sent_at: string | null
+  last_contact_at: string | null
   reply_count: number | null
-  progress_stage: string | null
-  progress_count: number | null
   memo: string | null
   tiers: { rank: string; label: string; category: string } | null
 }
@@ -170,7 +168,7 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_round, first_sent_at, reply_count, progress_stage, progress_count, memo, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_round, last_contact_at, reply_count, memo, tiers(rank, label, category)')
       .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -213,11 +211,6 @@ export default function Outreach() {
   const updateField = useCallback(async (id: string, patch: Partial<Influencer>) => {
     const inf = influencers.find(r => r.id === id)
     const finalPatch = { ...patch }
-
-    // stamp first_sent_at once when status becomes 'yes' (보냄)
-    if (patch.status === 'yes' && inf && !inf.first_sent_at) {
-      finalPatch.first_sent_at = new Date().toISOString()
-    }
 
     // increment reply_count when status moves to a reply-type value
     const replyStatuses = ['reply', 'positive', 'negative']
@@ -453,7 +446,7 @@ export default function Outreach() {
                   if (!inf || !inf.email) continue
                   await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
                   const nextRound = (inf.contact_round ?? '미컨택') === '미컨택' ? '1차 컨택' : '2차 컨택'
-                  await updateField(id, { contact_round: nextRound, status: 'yes' })
+                  await updateField(id, { contact_round: nextRound, status: 'yes', last_contact_at: new Date().toISOString() })
                 }
                 setBulkSending(false); setCheckedIds(new Set())
                 showToast(`${ids.length}명에게 발송 완료`, 'success')
@@ -513,8 +506,10 @@ export default function Outreach() {
                         )}
                       </div>
                     </th>
-                    {/* 현황 */}
-                    <th style={{ ...thBase, minWidth: 90 }}>현황</th>
+                    {/* 마지막 컨택 날짜 */}
+                    <th style={{ ...thBase, minWidth: 110 }}>마지막 컨택 날짜</th>
+                    {/* 비고 */}
+                    <th style={{ ...thBase, minWidth: 180 }}>비고</th>
                     {/* 컨택 차수 */}
                     <th style={{ ...thBase, minWidth: 160 }}>
                       <div ref={roundFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
@@ -536,8 +531,6 @@ export default function Outreach() {
                         )}
                       </div>
                     </th>
-                    {/* 비고 */}
-                    <th style={{ ...thBase, minWidth: 180 }}>비고</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -581,12 +574,12 @@ export default function Outreach() {
                             {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </td>
-                        {/* 현황 */}
+                        {/* 마지막 컨택 날짜 */}
                         <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {inf.first_sent_at
+                            {inf.last_contact_at
                               ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {(() => { const d = new Date(inf.first_sent_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
+                                  {(() => { const d = new Date(inf.last_contact_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
                                 </span>
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>
                             }
@@ -594,26 +587,6 @@ export default function Outreach() {
                               <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                 {inf.reply_count}회
                               </span>
-                            )}
-                          </div>
-                        </td>
-                        {/* 컨택 차수 + 건수 */}
-                        <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <select value={round} onChange={e => updateField(inf.id, { contact_round: e.target.value })}
-                              style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${roundStyle.color}55`, borderRadius: 20, padding: '3px 8px', background: roundStyle.bg, color: roundStyle.color, outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                              {CONTACT_ROUNDS.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                            {round !== '미컨택' && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <input type='number' min={1}
-                                  value={inf.progress_count ?? ''}
-                                  onChange={e => updateField(inf.id, { progress_count: e.target.value ? Number(e.target.value) : null })}
-                                  placeholder='0'
-                                  style={{ width: 36, fontSize: 11, fontWeight: 600, padding: '3px 4px', border: `1px solid ${roundStyle.color}55`, borderRadius: 6, outline: 'none', textAlign: 'center', fontFamily: 'inherit', color: roundStyle.color, background: roundStyle.bg }}
-                                />
-                                <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>건</span>
-                              </div>
                             )}
                           </div>
                         </td>
@@ -628,6 +601,13 @@ export default function Outreach() {
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = memoVal ? 'var(--gray-0)' : 'transparent' }}
                           />
+                        </td>
+                        {/* 컨택 차수 */}
+                        <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
+                          <select value={round} onChange={e => updateField(inf.id, { contact_round: e.target.value })}
+                            style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${roundStyle.color}55`, borderRadius: 20, padding: '3px 8px', background: roundStyle.bg, color: roundStyle.color, outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {CONTACT_ROUNDS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
                         </td>
                       </tr>
                     )
@@ -687,7 +667,7 @@ export default function Outreach() {
                           if (!inf || !inf.email) continue
                           await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl2.subject, inf), body: applyPlaceholders(tpl2.body, inf) })
                           const nextRound = (inf.contact_round ?? '미컨택') === '미컨택' ? '1차 컨택' : '2차 컨택'
-                          await updateField(id, { contact_round: nextRound })
+                          await updateField(id, { contact_round: nextRound, last_contact_at: new Date().toISOString() })
                         }
                         setBulkSending(false); setCheckedIds(new Set())
                         showToast(`${ids.length}명에게 발송 완료`, 'success')
