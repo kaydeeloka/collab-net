@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 interface Props {
@@ -6,16 +6,17 @@ interface Props {
   onClose: () => void
   title: string
   titleColor?: string
+  titleStyle?: CSSProperties
   children: ReactNode
 }
 
-export default function Modal({ open, onClose, title, titleColor, children }: Props) {
+export default function Modal({ open, onClose, title, titleColor, titleStyle, children }: Props) {
   if (!open) return null
   return createPortal(
     <div className="modal-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-box">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div className="modal-title" style={{ margin: 0, ...(titleColor ? { color: titleColor } : {}) }}>
+          <div className="modal-title" style={{ margin: 0, ...(titleColor ? { color: titleColor } : {}), ...titleStyle }}>
             {title}
           </div>
           <button

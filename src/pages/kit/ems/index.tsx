@@ -63,7 +63,11 @@ export default function Ems() {
   // const [detailLoading,    setDetailLoading]    = useState(false)
   // const [detailNum,        setDetailNum]        = useState('')
 
-  // Tracking Modal
+  // View Modal
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [viewRow,       setViewRow]       = useState<EmsRow | null>(null)
+
+  // Tracking (Edit) Modal
   const [showTrackingModal, setShowTrackingModal] = useState(false)
   const [trackingName,      setTrackingName]      = useState('')
   const [trackingSaving,    setTrackingSaving]    = useState(false)
@@ -92,7 +96,7 @@ export default function Ems() {
             status, last_update
           )
         `)
-        .order('id')
+        .order('seq', { ascending: true, nullsFirst: false })
 
       if (error) throw error
 
@@ -142,6 +146,11 @@ export default function Ems() {
   //   }
   //   setDetailLoading(false)
   // }
+
+  function openViewModal(row: EmsRow) {
+    setViewRow(row)
+    setShowViewModal(true)
+  }
 
   function openTrackingModal(row: EmsRow) {
     setTrackingForm({
@@ -287,7 +296,8 @@ export default function Ems() {
                             row.country,
                           ].filter(Boolean)
                           return (
-                            <tr key={row.confirmed_influencer_id}>
+                            <tr key={row.confirmed_influencer_id} onClick={() => openViewModal(row)}
+                              style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--gray-5)', textAlign: 'center' }}>{row.seq ?? i_abs + 1}</td>
 
                               {/* 이름 */}
@@ -297,7 +307,7 @@ export default function Ems() {
                               </td>
 
                               {/* 이메일 */}
-                              <td style={{ fontSize: 12 }}>
+                              <td style={{ fontSize: 12 }} onClick={e => e.stopPropagation()}>
                                 {row.email
                                   ? <a href={`mailto:${row.email}`} style={{ color: 'var(--blue-dk)' }}>{row.email}</a>
                                   : <span style={{ color: 'var(--gray-5)' }}>—</span>}
@@ -314,17 +324,10 @@ export default function Ems() {
                               </td>
 
                               {/* 등기번호 + tracking links */}
-                              <td>
+                              <td onClick={e => e.stopPropagation()}>
                                 {row.ems_number ? (
                                   <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span
-                                        // onClick={() => openDetail(row.ems_number!)}
-                                        style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)' }}
-                                      >{row.ems_number}</span>
-                                      <button onClick={() => openTrackingModal(row)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue-dk)', fontSize: 13 }}>✎</button>
-                                    </div>
+                                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)' }}>{row.ems_number}</span>
                                     <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
                                       <a href={`https://t.17track.net/en#nums=${encodeURIComponent(row.ems_number)}`} target="_blank"
                                         style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
@@ -333,10 +336,7 @@ export default function Ems() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <button onClick={() => openTrackingModal(row)}
-                                    style={{ padding: '3px 10px', background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
-                                    + 입력
-                                  </button>
+                                  <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
                                 )}
                               </td>
 
@@ -374,6 +374,93 @@ export default function Ems() {
               })()}
         </>
       )}
+
+      {/* View Modal */}
+      <Modal open={showViewModal} onClose={() => setShowViewModal(false)}
+        title={viewRow ? `배송 정보 · ${viewRow.display_name || viewRow.handle}` : ''}
+        titleStyle={{ paddingLeft: 48 }}>
+        {viewRow && (() => {
+          const badgeColor = STATUS_COLORS[viewRow.status || ''] || '#94a3b8'
+          const addrLines  = [
+            [viewRow.address_line_1, viewRow.address_line_2].filter(Boolean).join(' '),
+            [viewRow.city, ((viewRow.state || '') + ' ' + (viewRow.zip || '')).trim()].filter(Boolean).join(', '),
+            viewRow.country,
+          ].filter(Boolean)
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* 상태 배지 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 48, marginBottom: 8 }}>
+                {viewRow.status
+                  ? <span style={{ background: badgeColor, color: '#fff', padding: '4px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{viewRow.status}</span>
+                  : <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>상태 미입력</span>}
+                {viewRow.last_update && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>마지막 업데이트: {viewRow.last_update}</span>}
+              </div>
+
+              {/* 전체 정보 그리드 */}
+              <div style={{ display: 'grid', alignItems: 'center', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', padding: '0 20px 0 48px' }}>
+                {/* col 1: 신청일 */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>신청일</div>
+                  <div style={{ fontSize: 13, color: 'var(--gray-8)' }}>{viewRow.registered_date || '—'}</div>
+                </div>
+                {/* col 2: 등기번호 — spans rows 1–2 to sit beside 신청일 + 접수번호 */}
+                <div style={{ gridRow: '1 / 3', gridColumn: 2 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>등기번호</div>
+                  {viewRow.ems_number ? (
+                    <div>
+                      <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)', marginBottom: 6 }}>{viewRow.ems_number}</div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <a href={`https://t.17track.net/en#nums=${encodeURIComponent(viewRow.ems_number)}`} target="_blank"
+                          style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
+                        <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${viewRow.ems_number}`} target="_blank"
+                          style={{ fontSize: 11, color: 'var(--gray-5)' }}>↗ 우체국</a>
+                      </div>
+                    </div>
+                  ) : <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>}
+                </div>
+                {/* col 1: 접수번호 (below 신청일) */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>접수번호</div>
+                  <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)' }}>{viewRow.application_number || '—'}</div>
+                </div>
+
+                {/* col 1: 이름 */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>이름</div>
+                  <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 600 }}>{viewRow.display_name || viewRow.handle || '—'}</div>
+                  {viewRow.handle && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2 }}>@{viewRow.handle}</div>}
+                </div>
+                {/* col 2: 이메일 */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>이메일</div>
+                  {viewRow.email
+                    ? <a href={`mailto:${viewRow.email}`} style={{ fontSize: 13, color: 'var(--blue-dk)' }}>{viewRow.email}</a>
+                    : <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>}
+                </div>
+                {/* col 1: 연락처 */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>연락처</div>
+                  <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)' }}>{viewRow.phone || '—'}</div>
+                </div>
+                {/* col 2: 배송 주소 */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>배송 주소</div>
+                  {addrLines.length === 0
+                    ? <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>
+                    : addrLines.map((line, li) => (
+                      <div key={li} style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>{line}</div>
+                    ))}
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button className="modal-btn-cancel" onClick={() => setShowViewModal(false)}>닫기</button>
+                <button className="modal-btn-confirm" onClick={() => { setShowViewModal(false); openTrackingModal(viewRow) }}>수정</button>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Tracking Modal */}
       <Modal open={showTrackingModal} onClose={() => setShowTrackingModal(false)} title="배송 정보 등록 및 수정">
