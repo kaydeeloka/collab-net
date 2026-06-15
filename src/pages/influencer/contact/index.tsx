@@ -9,6 +9,12 @@ import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
+import {
+  coerceContactCount,
+  contactCountStyle,
+  formatContactCount,
+  nextContactCountAfterSend,
+} from '../../../lib/contact-count'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
@@ -34,14 +40,6 @@ const STATUS_OPTIONS = [
 ]
 const STATUS_STYLE = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
 
-const CONTACT_ROUNDS = ['미컨택', '1차 컨택', '2차 컨택']
-
-const ROUND_COLOR: Record<string, { bg: string; color: string }> = {
-  '미컨택':   { bg: '#f1f5f9', color: '#94a3b8' },
-  '1차 컨택': { bg: '#dbeafe', color: '#1d4ed8' },
-  '2차 컨택': { bg: '#ede9fe', color: '#7c3aed' },
-}
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Influencer {
   id: string
@@ -56,7 +54,7 @@ interface Influencer {
   profile_url: string | null
   platform: string | null
   status: string
-  contact_round: string | null
+  contact_count: number
   last_contact_at: string | null
   reply_count: number | null
   memo: string | null
@@ -122,12 +120,83 @@ function applyPlaceholders(text: string, inf: Influencer | null) {
 }
 
 const PAGE_SIZE = 25
+function bulkSendConfirmMessage(count: number, tpl: { name: string; subject: string }) {
+  return `${count}명에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.subject || '(제목 없음)'}`
+}
 function paginate<T>(items: T[], page: number) {
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const safe = Math.min(page, totalPages)
   const startIdx = (safe - 1) * PAGE_SIZE
   return { pageItems: items.slice(startIdx, startIdx + PAGE_SIZE), total, totalPages, page: safe, startIdx, endIdx: Math.min(startIdx + PAGE_SIZE, total) }
+}
+
+function ContactCountEditor({ count, onChange }: { count: number; onChange: (n: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const style = contactCountStyle(count)
+
+  const commit = (raw: string) => {
+    setEditing(false)
+    const v = Math.max(0, parseInt(raw, 10) || 0)
+    if (v !== count) onChange(v)
+  }
+
+  if (count === 0 && !editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          border: `1px solid ${style.color}55`,
+          borderRadius: 8,
+          padding: '3px 10px',
+          background: style.bg,
+          color: style.color,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        미컨택
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+      <input
+        type="number"
+        min={0}
+        autoFocus={count === 0}
+        defaultValue={count > 0 ? count : ''}
+        placeholder={count === 0 ? 'N' : undefined}
+        key={`cc-${count}-${editing}`}
+        onBlur={e => commit(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') { setEditing(false); (e.target as HTMLInputElement).blur() }
+        }}
+        style={{
+          width: 44,
+          padding: '3px 4px',
+          fontSize: 11,
+          fontWeight: 700,
+          textAlign: 'center',
+          border: `1px solid ${style.color}55`,
+          borderRadius: 8,
+          background: style.bg,
+          color: style.color,
+          outline: 'none',
+          fontFamily: 'inherit',
+        }}
+      />
+      {count > 0 && (
+        <span style={{ fontSize: 11, fontWeight: 700, color: style.color }}>차 컨택</span>
+      )}
+    </div>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -168,22 +237,15 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_round, last_contact_at, reply_count, memo, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, reply_count, memo, tiers(rank, label, category)')
       .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
-    const targetStatuses = ['', 'target', null]
-    const corrected = (data ?? []).map((r: any) =>
-      !targetStatuses.includes(r.status) && (r.contact_round ?? '미컨택') === '미컨택'
-        ? { ...r, contact_round: '1차 컨택' }
-        : r
-    )
-    // persist corrections to DB
-    const toFix = corrected.filter((r: any, i: number) => r.contact_round !== (data as any[])[i].contact_round)
-    if (toFix.length > 0) {
-      await supabase.from('influencers').upsert(toFix.map((r: any) => ({ id: r.id, contact_round: '1차 컨택' })))
-    }
-    setInfluencers(corrected as unknown as Influencer[])
+    const mapped = (data ?? []).map((r: any) => ({
+      ...r,
+      contact_count: coerceContactCount(r.contact_count),
+    }))
+    setInfluencers(mapped as unknown as Influencer[])
 
     const { count: ciCount } = await supabase
       .from('confirmed_influencers')
@@ -216,12 +278,6 @@ export default function Outreach() {
     const replyStatuses = ['reply', 'positive', 'negative']
     if (patch.status && replyStatuses.includes(patch.status) && inf?.status && !replyStatuses.includes(inf.status)) {
       finalPatch.reply_count = (inf.reply_count ?? 0) + 1
-    }
-
-    // auto-upgrade contact_round from 미컨택 → 1차 컨택 when status is no longer 컨택 예정
-    const targetStatuses = ['', 'target']
-    if (patch.status && !targetStatuses.includes(patch.status) && (inf?.contact_round ?? '미컨택') === '미컨택' && !patch.contact_round) {
-      finalPatch.contact_round = '1차 컨택'
     }
 
     const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
@@ -283,7 +339,7 @@ export default function Outreach() {
     .filter(r => {
       if (activeTier !== '전체' && r.tiers?.rank !== activeTier) return false
       if (statusFilter && (r.status || '') !== statusFilter) return false
-      if (roundFilter && (r.contact_round ?? '미컨택') !== roundFilter) return false
+      if (roundFilter && String(r.contact_count ?? 0) !== roundFilter) return false
       return true
     })
     .sort((a, b) => {
@@ -438,15 +494,15 @@ export default function Outreach() {
             onClick={() => {
               const tpl = templates[bulkTplIdx]
               if (!tpl) return
-              confirmToast.show(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
+              confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
                 setBulkSending(true)
                 const ids = Array.from(checkedIds)
                 for (const id of ids) {
                   const inf = filtered.find(r => r.id === id)
                   if (!inf || !inf.email) continue
                   await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
-                  const nextRound = (inf.contact_round ?? '미컨택') === '미컨택' ? '1차 컨택' : '2차 컨택'
-                  await updateField(id, { contact_round: nextRound, status: 'yes', last_contact_at: new Date().toISOString() })
+                  const nextCount = nextContactCountAfterSend(inf.contact_count)
+                  await updateField(id, { contact_count: nextCount, status: 'yes', last_contact_at: new Date().toISOString() })
                 }
                 setBulkSending(false); setCheckedIds(new Set())
                 showToast(`${ids.length}명에게 발송 완료`, 'success')
@@ -520,13 +576,43 @@ export default function Outreach() {
                           <ListFilter size={13} />
                         </button>
                         {showRoundFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 140, marginTop: 4 }}>
-                            {['', ...CONTACT_ROUNDS].map(r => (
-                              <button key={r} onClick={() => { setRoundFilter(r); setShowRoundFilter(false); setPage(1) }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: roundFilter === r ? 700 : 500, background: roundFilter === r ? '#dbeafe' : 'transparent', color: roundFilter === r ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                {r === '' ? '전체' : r}
-                              </button>
-                            ))}
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 160, marginTop: 4 }}>
+                            <button type="button" onClick={() => { setRoundFilter(''); setShowRoundFilter(false); setPage(1) }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: !roundFilter ? 700 : 500, background: !roundFilter ? '#dbeafe' : 'transparent', color: !roundFilter ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                              전체
+                            </button>
+                            <button type="button" onClick={() => { setRoundFilter('0'); setShowRoundFilter(false); setPage(1) }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: roundFilter === '0' ? 700 : 500, background: roundFilter === '0' ? '#dbeafe' : 'transparent', color: roundFilter === '0' ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                              미컨택
+                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '4px 6px', borderTop: '1px solid var(--gray-2)' }}>
+                              <input
+                                type="number"
+                                min={1}
+                                placeholder="N"
+                                defaultValue={roundFilter && roundFilter !== '0' ? roundFilter : ''}
+                                key={`round-filter-${roundFilter}`}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    const v = Math.max(1, parseInt((e.target as HTMLInputElement).value, 10) || 0)
+                                    if (v > 0) { setRoundFilter(String(v)); setShowRoundFilter(false); setPage(1) }
+                                  }
+                                }}
+                                onBlur={e => {
+                                  const raw = e.target.value.trim()
+                                  if (!raw) return
+                                  const v = Math.max(1, parseInt(raw, 10) || 0)
+                                  if (v > 0) { setRoundFilter(String(v)); setShowRoundFilter(false); setPage(1) }
+                                }}
+                                style={{ width: 48, padding: '4px 6px', fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 6, outline: 'none' }}
+                              />
+                              <span style={{ fontSize: 11, color: 'var(--gray-6)', fontWeight: 600 }}>차 컨택</span>
+                            </div>
+                            {roundFilter && roundFilter !== '0' && (
+                              <div style={{ fontSize: 10, color: 'var(--blue-dk)', marginTop: 6, paddingLeft: 6 }}>
+                                필터: {formatContactCount(+roundFilter)}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -541,8 +627,7 @@ export default function Outreach() {
                   )}
                   {pg.pageItems.map(inf => {
                     const status     = inf.status || 'target'
-                    const round      = inf.contact_round ?? '미컨택'
-                    const roundStyle = ROUND_COLOR[round] ?? ROUND_COLOR['미컨택']
+                    const count      = inf.contact_count ?? 0
                     const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['target']
                     const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                     const memoVal = memoEdits[inf.id] !== undefined ? memoEdits[inf.id] : (inf.memo ?? '')
@@ -604,10 +689,10 @@ export default function Outreach() {
                         </td>
                         {/* 컨택 차수 */}
                         <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          <select value={round} onChange={e => updateField(inf.id, { contact_round: e.target.value })}
-                            style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${roundStyle.color}55`, borderRadius: 20, padding: '3px 8px', background: roundStyle.bg, color: roundStyle.color, outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                            {CONTACT_ROUNDS.map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
+                          <ContactCountEditor
+                            count={count}
+                            onChange={n => updateField(inf.id, { contact_count: n })}
+                          />
                         </td>
                       </tr>
                     )
@@ -659,15 +744,15 @@ export default function Outreach() {
                       setShowBulkPreview(false)
                       const tpl2 = templates[bulkTplIdx]
                       if (!tpl2) return
-                      confirmToast.show(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
+                      confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
                         setBulkSending(true)
                         const ids = Array.from(checkedIds)
                         for (const id of ids) {
                           const inf = filtered.find(r => r.id === id)
                           if (!inf || !inf.email) continue
                           await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl2.subject, inf), body: applyPlaceholders(tpl2.body, inf) })
-                          const nextRound = (inf.contact_round ?? '미컨택') === '미컨택' ? '1차 컨택' : '2차 컨택'
-                          await updateField(id, { contact_round: nextRound, last_contact_at: new Date().toISOString() })
+                          const nextCount = nextContactCountAfterSend(inf.contact_count)
+                          await updateField(id, { contact_count: nextCount, last_contact_at: new Date().toISOString() })
                         }
                         setBulkSending(false); setCheckedIds(new Set())
                         showToast(`${ids.length}명에게 발송 완료`, 'success')

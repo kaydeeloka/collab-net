@@ -103,6 +103,11 @@ CREATE TABLE influencers (
   engagement_rate   NUMERIC(6,2) DEFAULT 0,
   profile_url       TEXT,
   outreach          TEXT         DEFAULT '',        -- '' | 'target' | 'yes' | 'reply' | 'negotiate' | 'accept' | 'reject'
+  status            TEXT         DEFAULT '',
+  contact_count     INTEGER      DEFAULT 0,
+  last_contact_at   TIMESTAMPTZ,
+  reply_count       INTEGER      DEFAULT 0,
+  memo              TEXT         DEFAULT '',
   UNIQUE (phase_id, handle)
 );
 

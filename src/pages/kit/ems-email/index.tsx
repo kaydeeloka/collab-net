@@ -1,9 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Mail } from 'lucide-react'
 import React from 'react'
+import {
+  EMS_TEMPLATE_CATEGORIES,
+  DEFAULT_EMS_TEMPLATES,
+  loadEmsTemplates,
+  saveEmsTemplates,
+  type EmsTemplate,
+  type EmsTemplateCategory,
+} from '../../../lib/ems-templates'
 
-const CATEGORIES = ['초기 안내', '재발송 안내', '반송 처리', '기타'] as const
-type Category = typeof CATEGORIES[number]
+const CATEGORIES = EMS_TEMPLATE_CATEGORIES
+type Category = EmsTemplateCategory
+type Template = EmsTemplate
+
+const DEFAULT_TEMPLATES = DEFAULT_EMS_TEMPLATES
 
 const CATEGORY_COLORS: Record<Category, { bg: string; color: string }> = {
   '초기 안내':  { bg: '#eff6ff', color: '#1d4ed8' },
@@ -11,28 +22,6 @@ const CATEGORY_COLORS: Record<Category, { bg: string; color: string }> = {
   '반송 처리':  { bg: '#f0fdf4', color: '#15803d' },
   '기타':       { bg: '#f3f4f6', color: '#6b7280' },
 }
-
-interface Template {
-  id: string; name: string; category: Category; subject: string; body: string
-}
-
-const DEFAULT_TEMPLATES: Template[] = [
-  {
-    id: 'ems_01', name: '기본 오류 안내', category: '초기 안내',
-    subject: '[MiMuse] 배송 오류 안내 — {운송장번호}',
-    body: `안녕하세요, {이름}님.\n\nMiMuse 팀입니다.\n\n{이름}님께 발송된 패키지({운송장번호})의 배송 과정에서 문제가 발생하여 연락드립니다.\n\n■ 오류 내용: {오류_사유}\n■ 운송장 번호: {운송장번호}\n■ 발송일: {발송일}\n\n현재 해당 건을 확인 중이며, 빠른 시일 내에 재발송 또는 해결 방안을 안내해 드리겠습니다.\n불편을 드려 대단히 죄송합니다.\n\n감사합니다,\nMiMuse 팀`,
-  },
-  {
-    id: 'ems_02', name: '재발송 안내', category: '재발송 안내',
-    subject: '[MiMuse] 패키지 재발송 안내 — {이름}님',
-    body: `안녕하세요, {이름}님.\n\nMiMuse 팀입니다.\n\n이전 배송 오류로 인해 불편을 드린 점 진심으로 사과드립니다.\n아래와 같이 패키지를 재발송하였습니다.\n\n■ 새 운송장 번호: {새_운송장번호}\n■ 재발송일: {재발송일}\n■ 예상 도착일: {예상_도착일}\n\n이번에는 정상적으로 수령하실 수 있도록 최선을 다하겠습니다.\n궁금하신 점은 언제든지 연락해 주세요.\n\n감사합니다,\nMiMuse 팀`,
-  },
-  {
-    id: 'ems_03', name: '반송 처리 완료', category: '반송 처리',
-    subject: '[MiMuse] 반송 처리 완료 — {이름}님',
-    body: `안녕하세요, {이름}님.\n\nMiMuse 팀입니다.\n\n{이름}님의 패키지({운송장번호})가 반송 처리되어 저희 측에 도착하였습니다.\n\n■ 반송 도착일: {반송_도착일}\n■ 반송 사유: {오류_사유}\n\n빠른 시일 내에 재발송 일정을 안내드리겠습니다.\n불편을 드려 대단히 죄송합니다.\n\n감사합니다,\nMiMuse 팀`,
-  },
-]
 
 const VARS = ['{이름}', '{운송장번호}', '{발송일}', '{오류_사유}', '{국가}']
 
@@ -45,10 +34,10 @@ const DUMMY_VALS: Record<string, { value: string; color: string }> = {
 }
 
 function loadTemplates(): Template[] {
-  try { const v = localStorage.getItem('mm_ems_templates'); return v ? JSON.parse(v) : DEFAULT_TEMPLATES } catch { return DEFAULT_TEMPLATES }
+  return loadEmsTemplates()
 }
 function saveTemplates(t: Template[]) {
-  localStorage.setItem('mm_ems_templates', JSON.stringify(t))
+  saveEmsTemplates(t)
 }
 
 function renderWithDummy(text: string): React.ReactNode[] {
@@ -113,8 +102,8 @@ export default function EmsEmail() {
       <div className="page-banner">
         <span className="page-banner-deco"><Mail size={28} /></span>
         <div>
-          <div className="page-banner-title">이메일 템플릿</div>
-          <div className="page-banner-desc">배송 오류·재발송 안내 이메일 서식을 관리합니다.</div>
+          <div className="page-banner-title">템플릿 관리</div>
+          <div className="page-banner-desc">배송 오류·재발송 안내 이메일 템플릿을 작성하고 관리합니다.</div>
         </div>
       </div>
 

@@ -35,7 +35,7 @@ export default function ConfirmToast({ state, onHide, confirmLabel = '삭제', c
       fontSize: 13, fontWeight: 500, boxShadow: '0 6px 24px rgba(0,0,0,.25)',
       display: 'flex', alignItems: 'center', gap: 12,
     }}>
-      <span>{state.message}</span>
+      <span style={{ whiteSpace: 'pre-line', lineHeight: 1.5 }}>{state.message}</span>
       <button
         onClick={() => { onHide(); state.onConfirm() }}
         style={{ padding: '5px 14px', background: confirmColor, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}

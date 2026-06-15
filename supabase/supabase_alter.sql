@@ -14,7 +14,7 @@ ALTER TABLE influencers ADD COLUMN IF NOT EXISTS platform TEXT;
 -- influencers — contact tracking fields
 -- NOTE: status is the existing backend column (values: accept/yes/reply/negotiate/reject/target) — do NOT modify
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS status          TEXT DEFAULT '';
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_round   TEXT DEFAULT '미컨택';
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_count   INTEGER DEFAULT 0;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS last_contact_at   TIMESTAMPTZ;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS reply_count     INTEGER DEFAULT 0;
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS progress_stage  TEXT DEFAULT '';
@@ -906,3 +906,26 @@ WHERE m.influencer_platform_id = ip.id
   AND m.phase_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_monitoring_phase ON monitoring(phase_id);
+
+-- ============================================================
+--  influencers — drop legacy contact_round (use contact_count)
+-- ============================================================
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contact_count INTEGER DEFAULT 0;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'influencers' AND column_name = 'contact_round'
+  ) THEN
+    UPDATE influencers SET contact_count = CASE
+      WHEN contact_round IS NULL OR contact_round = '미컨택' THEN 0
+      WHEN contact_round ~ '^[0-9]+차' THEN (regexp_match(contact_round, '^([0-9]+)'))[1]::INTEGER
+      WHEN contact_round LIKE '%2차%' THEN 2
+      WHEN contact_round LIKE '%1차%' THEN 1
+      ELSE COALESCE(contact_count, 0)
+    END;
+
+    ALTER TABLE influencers DROP COLUMN contact_round;
+  END IF;
+END $$;

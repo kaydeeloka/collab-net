@@ -11,6 +11,8 @@ export interface OriginalShipment {
 export interface EmsErrorRow {
   id:                  string
   name:                string
+  email:               string | null
+  email_sent:          boolean
   tracking:            string
   applicationNumber:   string
   sentDate:            string
@@ -98,9 +100,10 @@ export async function fetchEmsErrors(phaseId?: string | null): Promise<EmsErrorR
   const { data, error } = await supabase
     .from('ems_reshipments')
     .select(`
-      id, ems_number, application_number, registered_date, error_reason, status, carrier_status,
+      id, ems_number, application_number, registered_date, error_reason, status, carrier_status, email_sent,
       original_tracking_id,
       confirmed_influencers(
+        email,
         country,
         influencers(display_name, handle)
       )
@@ -137,6 +140,8 @@ export async function fetchEmsErrors(phaseId?: string | null): Promise<EmsErrorR
     return {
       id:                row.id,
       name:              inf.display_name || inf.handle || '—',
+      email:             ci.email || null,
+      email_sent:        row.email_sent ?? false,
       tracking:          row.ems_number || '—',
       applicationNumber: row.application_number || '—',
       sentDate:          row.registered_date || '—',
