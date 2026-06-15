@@ -60,6 +60,12 @@ const STATUS_FILTER_OPTIONS = [
   ...STATUS_OPTIONS.map(status => ({ value: status, label: status })),
 ]
 
+const RESHIP_FILTER_OPTIONS = [
+  { value: 'all', label: '전체' },
+  { value: 'yes', label: '재발송 등록' },
+  { value: 'no',  label: '재발송 없음' },
+] as const
+
 export default function Ems() {
   const { showToast } = useToast()
   const { refreshStats, notifyReshipChange } = useEmsLayout()
@@ -69,8 +75,11 @@ export default function Ems() {
   const [syncMsg, setSyncMsg] = useState('')
   const [searchQuery,      setSearchQuery]      = useState('')
   const [filterStatus,     setFilterStatus]     = useState('all')
+  const [filterReship,     setFilterReship]     = useState('all')
   const [showStatusFilter, setShowStatusFilter] = useState(false)
+  const [showReshipFilter, setShowReshipFilter] = useState(false)
   const statusFilterRef = useRef<HTMLDivElement>(null)
+  const reshipFilterRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(1)
   const EMS_PAGE_SIZE = 25
 
@@ -104,18 +113,21 @@ export default function Ems() {
     if (!phaseLoading && !viewPhaseId) { setRows([]); setLoading(false) }
   }, [viewPhaseId, phaseLoading])
 
-  useEffect(() => { setPage(1) }, [searchQuery, filterStatus])
+  useEffect(() => { setPage(1) }, [searchQuery, filterStatus, filterReship])
 
   useEffect(() => {
-    if (!showStatusFilter) return
+    if (!showStatusFilter && !showReshipFilter) return
     const handler = (e: MouseEvent) => {
-      if (statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) {
+      if (showStatusFilter && statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) {
         setShowStatusFilter(false)
+      }
+      if (showReshipFilter && reshipFilterRef.current && !reshipFilterRef.current.contains(e.target as Node)) {
+        setShowReshipFilter(false)
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showStatusFilter])
+  }, [showStatusFilter, showReshipFilter])
 
   async function loadEms(opts?: { silent?: boolean }) {
     if (!viewPhaseId) {
@@ -288,6 +300,8 @@ export default function Ems() {
 
   const filteredRows = rows.filter(row => {
     if (filterStatus !== 'all' && (row.status || '') !== filterStatus) return false
+    if (filterReship === 'yes' && !row.reship_id) return false
+    if (filterReship === 'no' && row.reship_id) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (![row.display_name, row.handle, row.ems_number, row.application_number, row.email]
@@ -371,7 +385,25 @@ export default function Ems() {
                   </th>
                   <th style={thBase}>배송 주소</th>
                   <th style={{ ...thBase, width: 110, maxWidth: 110 }}>비고</th>
-                  <th style={{ ...thBase, textAlign: 'center', width: 72 }}>재발송</th>
+                  <th style={{ ...thBase, textAlign: 'center', width: 72 }}>
+                    <div ref={reshipFilterRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative' }}>
+                      <span>재발송</span>
+                      <button type="button" onClick={() => setShowReshipFilter(p => !p)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: filterReship !== 'all' ? 'var(--teal-dk)' : 'transparent', color: filterReship !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                        <ListFilter size={13} />
+                      </button>
+                      {showReshipFilter && (
+                        <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                          {RESHIP_FILTER_OPTIONS.map(o => (
+                            <button key={o.value} type="button" onClick={() => { setFilterReship(o.value); setShowReshipFilter(false) }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: filterReship === o.value ? 700 : 500, background: filterReship === o.value ? '#d1fae5' : 'transparent', color: filterReship === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </th>
                   <th style={thBase}>마지막 업데이트</th>
                 </tr>
               </thead>
