@@ -281,9 +281,11 @@ export default function Ems() {
                         {pagedRows.map((row, i) => {
                           const i_abs      = startIdx + i
                           const badgeColor = STATUS_COLORS[row.status || ''] || '#94a3b8'
-                          const fullAddr   = [row.address_line_1, row.address_line_2, row.city,
-                            ((row.state || '') + ' ' + (row.zip || '')).trim(), row.country]
-                            .filter(Boolean).join(', ')
+                          const addrLines  = [
+                            [row.address_line_1, row.address_line_2].filter(Boolean).join(' '),
+                            [row.city, ((row.state || '') + ' ' + (row.zip || '')).trim()].filter(Boolean).join(', '),
+                            row.country,
+                          ].filter(Boolean)
                           return (
                             <tr key={row.confirmed_influencer_id}>
                               <td style={{ fontSize: 11, color: 'var(--gray-5)', textAlign: 'center' }}>{row.seq ?? i_abs + 1}</td>
@@ -346,7 +348,11 @@ export default function Ems() {
                               </td>
 
                               {/* 배송 주소 */}
-                              <td style={{ fontSize: 11, color: 'var(--gray-6)', maxWidth: 200 }}>{fullAddr || '—'}</td>
+                              <td style={{ fontSize: 11, color: 'var(--gray-6)', maxWidth: 200 }}>
+                                {addrLines.length === 0 ? '—' : addrLines.map((line, li) => (
+                                  <div key={li} style={{ lineHeight: 1.6 }}>{line}</div>
+                                ))}
+                              </td>
 
                               
                               {/* 마지막 업데이트 */}
@@ -393,7 +399,10 @@ export default function Ems() {
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>접수번호</label>
             <input placeholder="우체국 접수번호" value={trackingForm.applicationNumber}
-              onChange={e => setTrackingForm(p => ({ ...p, applicationNumber: e.target.value }))}
+              onChange={e => {
+                const val = e.target.value
+                setTrackingForm(p => ({ ...p, applicationNumber: val, status: val.trim() ? '접수완료' : p.status }))
+              }}
               style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'monospace' }} />
           </div>
 
