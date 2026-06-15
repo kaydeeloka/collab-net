@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ListFilter } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { PLATFORM_OPTIONS, defaultProfileUrl } from '../../../lib/content-platforms'
@@ -20,6 +21,15 @@ interface InfluencerPlatform {
   profile_url: string
 }
 
+interface MonitoringReview {
+  id:          string
+  review_link: string
+  brand:       string | null
+  date:        string | null
+  content:     string | null
+  platform:    string | null
+}
+
 interface InfluencerRef {
   platform:     string | null
   handle:       string | null
@@ -34,7 +44,7 @@ interface ConfirmedRow {
   email:                string | null
   upload_status:        string
   repost:               string | null
-  review_link:          string | null
+  review_links:         MonitoringReview[]
   notes:                string | null
   form_submitted:       boolean | null
   phone:                string | null
@@ -51,8 +61,49 @@ interface ConfirmedRow {
 }
 
 const EMPTY_FORM = {
-  phone: '', repost: '', review_link: '',
+  phone: '', repost: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
+}
+
+function isValidReviewLink(link: string | null | undefined): boolean {
+  return !!link && link.startsWith('http')
+}
+
+function reviewLinkLabel(link: MonitoringReview, index: number): string {
+  if (link.brand) return link.brand
+  if (link.content) return link.content.length > 24 ? `${link.content.slice(0, 24)}…` : link.content
+  return `리뷰 ${index + 1}`
+}
+
+function extractReviewLinks(
+  platforms: { platform: string; monitoring?: { id: string; review_link: string | null; brand: string | null; date: string | null; content: string | null }[] }[],
+  legacyLink?: string | null,
+): MonitoringReview[] {
+  const links: MonitoringReview[] = []
+  for (const p of platforms) {
+    for (const m of p.monitoring ?? []) {
+      if (!isValidReviewLink(m.review_link)) continue
+      links.push({
+        id:          m.id,
+        review_link: m.review_link!,
+        brand:       m.brand,
+        date:        m.date,
+        content:     m.content,
+        platform:    p.platform,
+      })
+    }
+  }
+  if (!links.length && isValidReviewLink(legacyLink)) {
+    links.push({
+      id:          'legacy',
+      review_link: legacyLink!,
+      brand:       null,
+      date:        null,
+      content:     null,
+      platform:    null,
+    })
+  }
+  return links.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
 }
 
 function fmtFollowers(n: number | null): string {
@@ -81,6 +132,19 @@ function PlatformBadge({ platform }: { platform: string | null }) {
       fontSize: 10, fontWeight: 700, letterSpacing: '.2px', lineHeight: '17px',
       background: cfg.bg, color: cfg.color, whiteSpace: 'nowrap', flexShrink: 0,
     }}>{cfg.label}</span>
+  )
+}
+
+function ReviewLinksCell({ links }: { links: MonitoringReview[] }) {
+  if (!links.length) return <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {links.map((l, i) => (
+        <a key={l.id} href={l.review_link} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+          ↗ {reviewLinkLabel(l, i)}
+        </a>
+      ))}
+    </div>
   )
 }
 
@@ -158,7 +222,10 @@ export default function Confirmed() {
       .select(`
         id, seq, email, upload_status, repost, review_link, notes, form_submitted,
         phone, address_line_1, address_line_2, city, state, zip, country,
-        influencer_platform(id, platform, handle, followers, profile_url),
+        influencer_platform(
+          id, platform, handle, followers, profile_url,
+          monitoring(id, review_link, brand, date, content)
+        ),
         influencers(platform, handle, display_name, followers, profile_url)
       `)
       .eq('phase_id', selectedPhaseId ?? '')
@@ -172,7 +239,7 @@ export default function Confirmed() {
       email:          r.email,
       upload_status:  r.upload_status ?? 'Pending',
       repost:         r.repost,
-      review_link:    r.review_link,
+      review_links:   extractReviewLinks(r.influencer_platform ?? [], r.review_link),
       notes:          r.notes,
       form_submitted: r.form_submitted,
       phone:          r.phone,
@@ -216,7 +283,6 @@ export default function Confirmed() {
     setEditForm({
       phone:       r.phone          || '',
       repost:      r.repost         || '',
-      review_link: r.review_link    || '',
       addr1:       r.address_line_1 || '',
       addr2:       r.address_line_2 || '',
       city:        r.city           || '',
@@ -278,7 +344,6 @@ export default function Confirmed() {
       const { error } = await supabase.from('confirmed_influencers').update({
         phone:          editForm.phone       || null,
         repost:         editForm.repost      || null,
-        review_link:    editForm.review_link || null,
         address_line_1: editForm.addr1       || null,
         address_line_2: editForm.addr2       || null,
         city:           editForm.city        || null,
@@ -311,8 +376,8 @@ export default function Confirmed() {
 
   const filtered = rows.filter(r => {
     if (uploadFilter !== 'all' && r.upload_status !== uploadFilter) return false
-    if (reviewLinkFilter === 'has'  && !r.review_link)  return false
-    if (reviewLinkFilter === 'none' && !!r.review_link) return false
+    if (reviewLinkFilter === 'has'  && !r.review_links.length) return false
+    if (reviewLinkFilter === 'none' && r.review_links.length)  return false
     if (platformFilter !== 'all' && !r.influencer_platform.some(p => p.platform === platformFilter)) return false
     if (repostFilter === 'none' && r.repost) return false
     if (repostFilter !== 'all' && repostFilter !== 'none' && r.repost !== repostFilter) return false
@@ -390,6 +455,14 @@ export default function Confirmed() {
           <div className="page-banner-desc">아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요.</div>
         </div>
         <div className="page-banner-actions">
+          <Link to="/monitoring/reviews" className="page-banner-btn"
+            style={{ textDecoration: 'none', background: 'var(--teal-dk)', color: '#fff', border: '1px solid var(--teal-dk)' }}>
+            리뷰 모니터링으로 이동
+          </Link>
+          <Link to="/kit/ems" className="page-banner-btn"
+            style={{ textDecoration: 'none', background: 'var(--teal)', color: '#fff', border: '1px solid var(--teal)' }}>
+            배송 추적 보기
+          </Link>
           {GOOGLE_FORM_URL && (
             <a href={GOOGLE_FORM_URL} target="_blank" rel="noopener"
               className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>
@@ -409,7 +482,7 @@ export default function Confirmed() {
           <div className="cards">
             <div className="card"><div className="card-label">총 확정 인플루언서</div><div className="card-value">{total}</div></div>
             <div className="card highlight"><div className="card-label">콘텐츠 업로드 완료</div><div className="card-value" style={{ color: 'var(--green)' }}>{uploaded}</div><div className="card-sub">{total ? Math.round(uploaded / total * 100) : 0}% 완료율</div></div>
-            <div className="card"><div className="card-label">총 업로드된 리뷰</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{rows.filter(r => !!r.review_link).length}</div></div>
+            <div className="card"><div className="card-label">총 업로드된 리뷰</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{rows.reduce((n, r) => n + r.review_links.length, 0)}</div></div>
             <div className="card"><div className="card-label">미업로드</div><div className="card-value">{noUpload}</div></div>
           </div>
 
@@ -589,9 +662,7 @@ export default function Confirmed() {
                             </button>
                           </td>
                           <td onClick={e => e.stopPropagation()}>
-                            {r.review_link
-                              ? <a href={r.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
-                              : <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>}
+                            <ReviewLinksCell links={r.review_links} />
                           </td>
                           <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{r.phone || '—'}</td>
                           <td style={{ fontSize: 11 }} onClick={e => e.stopPropagation()}>
@@ -693,11 +764,25 @@ export default function Confirmed() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Phone</div>
                 <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{r.phone || '—'}</div>
               </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>리뷰 링크</div>
-                <div style={{ fontSize: 13 }}>
-                  {r.review_link ? <a href={r.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a> : '—'}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>
+                  리뷰 링크 {r.review_links.length > 0 && `(${r.review_links.length})`}
                 </div>
+                {r.review_links.length
+                  ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {r.review_links.map((l, i) => (
+                        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <a href={l.review_link} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13 }}>
+                            ↗ {reviewLinkLabel(l, i)}
+                          </a>
+                          {l.platform && <PlatformBadge platform={l.platform} />}
+                          {l.date && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.date}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                  : <div style={{ fontSize: 13, color: 'var(--gray-5)' }}>—</div>}
               </div>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Repost</div>
@@ -771,8 +856,11 @@ export default function Confirmed() {
           {field('Phone', 'phone', { placeholder: '+1 310-555-0000' })}
           {selectField('Repost', 'repost', ['O', '▲', 'X'], '선택')}
         </div>
-        <div style={{ marginBottom: 16 }}>
-          {field('리뷰 모니터링 링크', 'review_link', { placeholder: 'https://www.tiktok.com/@...' })}
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>리뷰 링크</div>
+          <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
+            리뷰 링크는 <Link to="/monitoring/reviews" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>리뷰 모니터링</Link> 페이지에서 관리합니다.
+          </div>
         </div>
 
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '0 0 10px' }}>배송 주소</div>
