@@ -10,6 +10,14 @@ import Modal from '../../../components/Modal'
 
 const GOOGLE_FORM_URL = ''
 
+const EMS_STATUS_COLORS: Record<string, string> = {
+  '접수완료'   : '#6366f1',
+  'Preparing'  : '#94a3b8',
+  'In Transit' : '#6a95a5',
+  'Delivered'  : '#27ae60',
+  'Exception'  : '#e74c3c',
+}
+
 type UploadStatus     = 'Pending' | 'Yes' | 'No' | 'all'
 type ReviewLinkFilter = 'all' | 'has' | 'none'
 
@@ -56,6 +64,8 @@ interface ConfirmedRow {
   country:              string | null
   handle:               string | null
   display_name:         string | null
+  ems_number:           string | null
+  ems_status:           string | null
   influencer_platform: InfluencerPlatform[]
   influencers:          InfluencerRef | null
 }
@@ -89,7 +99,7 @@ function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand
 }
 
 const EMPTY_FORM = {
-  phone: '', repost: '',
+  phone: '', repost: '', notes: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
 }
 
@@ -148,8 +158,14 @@ function effectiveUploadStatus(row: ConfirmedRow): 'Yes' | 'No' | 'Pending' {
 
 function fmtFollowers(n: number | null): string {
   if (!n) return '—'
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + 'M'
-  if (n >= 1_000)     return (n / 1_000).toFixed(0) + 'K'
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'M'
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + 'K'
+  }
   return String(n)
 }
 
@@ -188,6 +204,75 @@ function ReviewLinksCell({ links }: { links: MonitoringReview[] }) {
   )
 }
 
+function EmsShippingCell({
+  addressLine1,
+  addressLine2,
+  city,
+  state,
+  zip,
+  country,
+  emsNumber,
+  emsStatus,
+}: {
+  addressLine1: string | null
+  addressLine2: string | null
+  city:         string | null
+  state:        string | null
+  zip:          string | null
+  country:      string | null
+  emsNumber:    string | null
+  emsStatus:    string | null
+}) {
+  const line1 = [addressLine1, addressLine2].filter(Boolean).join(', ')
+  const line2 = [city, state && zip ? `${state} ${zip}` : (state || zip)].filter(Boolean).join(', ')
+  const hasAddress = !!(line1 || line2 || country)
+  const hasEms = !!(emsNumber || emsStatus)
+
+  if (!hasAddress && !hasEms) {
+    return <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>—</span>
+  }
+
+  const badgeColor = EMS_STATUS_COLORS[emsStatus || ''] || '#94a3b8'
+  return (
+    <div>
+      {hasAddress && (
+        <div style={{ fontSize: 11, color: 'var(--gray-7)', lineHeight: 1.5, marginBottom: hasEms ? 8 : 0, whiteSpace: 'normal' }}>
+          {line1 && <div>{line1}</div>}
+          {(line2 || country) && <div style={{ color: 'var(--gray-5)' }}>{[line2, country].filter(Boolean).join(' · ')}</div>}
+        </div>
+      )}
+      {emsNumber
+        ? <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)', fontWeight: 600, wordBreak: 'break-all' }}>{emsNumber}</span>
+        : hasEms
+          ? <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>—</span>
+          : null}
+      {emsStatus && (
+        <div style={{ marginTop: 4 }}>
+          <span style={{ background: badgeColor, color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{emsStatus}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ViewField({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
+  return (
+    <div style={span ? { gridColumn: '1 / -1' } : undefined}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{children}</div>
+    </div>
+  )
+}
+
+function ViewInfoBox({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>{children}</div>
+    </div>
+  )
+}
+
 function PlatformAccountsCell({ accounts }: { accounts: InfluencerPlatform[] }) {
   if (!accounts.length) return <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
   return (
@@ -220,15 +305,12 @@ export default function Confirmed() {
   const [uploadFilter,     setUploadFilter]     = useState<UploadStatus>('all')
   const [reviewLinkFilter, setReviewLinkFilter] = useState<ReviewLinkFilter>('all')
   const [platformFilter,   setPlatformFilter]   = useState('all')
-  const [repostFilter,     setRepostFilter]     = useState('all')
   const [showUploadFilter,     setShowUploadFilter]     = useState(false)
   const [showReviewLinkFilter, setShowReviewLinkFilter] = useState(false)
   const [showPlatformFilter,   setShowPlatformFilter]   = useState(false)
-  const [showRepostFilter,     setShowRepostFilter]     = useState(false)
   const uploadFilterRef     = useRef<HTMLDivElement>(null)
   const reviewLinkFilterRef = useRef<HTMLDivElement>(null)
   const platformFilterRef   = useRef<HTMLDivElement>(null)
-  const repostFilterRef     = useRef<HTMLDivElement>(null)
 
   const [showView, setShowView] = useState(false)
   const [viewRow,  setViewRow]  = useState<ConfirmedRow | null>(null)
@@ -239,22 +321,18 @@ export default function Confirmed() {
   const originalPlatformIds = useRef<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const [notesEdits, setNotesEdits] = useState<Record<string, string>>({})
-  const notesTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
   useEffect(() => { if (selectedPhaseId) load() }, [selectedPhaseId])
 
   useEffect(() => {
-    if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter && !showRepostFilter) return
+    if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter) return
     const handler = (e: MouseEvent) => {
       if (uploadFilterRef.current     && !uploadFilterRef.current.contains(e.target as Node))     setShowUploadFilter(false)
       if (reviewLinkFilterRef.current && !reviewLinkFilterRef.current.contains(e.target as Node)) setShowReviewLinkFilter(false)
       if (platformFilterRef.current   && !platformFilterRef.current.contains(e.target as Node))   setShowPlatformFilter(false)
-      if (repostFilterRef.current     && !repostFilterRef.current.contains(e.target as Node))     setShowRepostFilter(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showUploadFilter, showReviewLinkFilter, showPlatformFilter, showRepostFilter])
+  }, [showUploadFilter, showReviewLinkFilter, showPlatformFilter])
 
   async function load() {
     setLoading(true)
@@ -267,14 +345,17 @@ export default function Confirmed() {
           id, platform, handle, followers, profile_url,
           monitoring(id, review_link, brand, date, content)
         ),
-        influencers(platform, handle, display_name, followers, profile_url)
+        influencers(platform, handle, display_name, followers, profile_url),
+        ems_tracking(id, ems_number, status)
       `)
       .eq('phase_id', selectedPhaseId ?? '')
-      .order('created_at', { ascending: false })
+      .order('seq', { ascending: true, nullsFirst: false })
 
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
 
-    const mapped: ConfirmedRow[] = (data ?? []).map((r: any) => ({
+    const mapped: ConfirmedRow[] = (data ?? []).map((r: any) => {
+      const ems = (r.ems_tracking || [])[0] || {}
+      return {
       id:             r.id,
       seq:            r.seq ?? null,
       email:          r.email,
@@ -292,6 +373,8 @@ export default function Confirmed() {
       country:        r.country,
       handle:         r.influencers?.handle       ?? null,
       display_name:   r.influencers?.display_name ?? null,
+      ems_number:     ems.ems_number ?? null,
+      ems_status:     ems.status     ?? null,
       influencer_platform: (r.influencer_platform ?? []).map((p: any) => ({
         id:          p.id,
         platform:    p.platform,
@@ -300,7 +383,8 @@ export default function Confirmed() {
         profile_url: p.profile_url ?? '',
       })),
       influencers: r.influencers ?? null,
-    }))
+      }
+    })
 
     const idsToYes = mapped
       .filter(r => r.review_links.length > 0 && r.upload_status !== 'Yes')
@@ -347,17 +431,12 @@ export default function Confirmed() {
     else setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
   }
 
-  function updateNotes(id: string, value: string) {
-    setNotesEdits(prev => ({ ...prev, [id]: value }))
-    if (notesTimers.current[id]) clearTimeout(notesTimers.current[id])
-    notesTimers.current[id] = setTimeout(() => updateField(id, 'notes', value), 800)
-  }
-
   function openEdit(r: ConfirmedRow) {
     setEditId(r.id)
     setEditForm({
       phone:       r.phone          || '',
       repost:      r.repost         || '',
+      notes:       r.notes          || '',
       addr1:       r.address_line_1 || '',
       addr2:       r.address_line_2 || '',
       city:        r.city           || '',
@@ -425,6 +504,7 @@ export default function Confirmed() {
         state:          editForm.state       || null,
         zip:            editForm.zip         || null,
         country:        editForm.country     || null,
+        notes:          editForm.notes       || null,
       }).eq('id', editId)
       if (error) throw error
 
@@ -441,21 +521,11 @@ export default function Confirmed() {
     rows.flatMap(r => r.influencer_platform.map(p => p.platform)).filter(Boolean),
   )) as string[]
 
-  const REPOST_OPTIONS = [
-    { value: 'all',  label: '전체' },
-    { value: 'O',    label: 'O' },
-    { value: '▲',   label: '▲' },
-    { value: 'X',    label: 'X' },
-    { value: 'none', label: '미설정' },
-  ]
-
   const filtered = rows.filter(r => {
     if (uploadFilter !== 'all' && effectiveUploadStatus(r) !== uploadFilter) return false
     if (reviewLinkFilter === 'has'  && !r.review_links.length) return false
     if (reviewLinkFilter === 'none' && r.review_links.length)  return false
     if (platformFilter !== 'all' && !r.influencer_platform.some(p => p.platform === platformFilter)) return false
-    if (repostFilter === 'none' && r.repost) return false
-    if (repostFilter !== 'all' && repostFilter !== 'none' && r.repost !== repostFilter) return false
     if (search) {
       const q    = search.toLowerCase()
       const text = [r.influencers?.display_name, r.influencers?.handle, r.display_name, r.handle, r.email,
@@ -474,6 +544,8 @@ export default function Confirmed() {
     instagram: rows.filter(r => rowHasPlatform(r, 'instagram')).length,
     magazine:  rows.filter(r => rowHasPlatform(r, 'magazine')).length,
   }
+  const delivered      = rows.filter(r => r.ems_status === 'Delivered').length
+  const shippingErrors = rows.filter(r => r.ems_status === 'Exception').length
 
   function cycleUpload(id: string, current: string) {
     const next = current === 'Pending' ? 'Yes' : current === 'Yes' ? 'No' : 'Pending'
@@ -506,6 +578,28 @@ export default function Confirmed() {
     textAlign: 'left', fontSize: 11, fontWeight: 700,
     color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
     borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+  }
+
+  const seqTd: React.CSSProperties = {
+    textAlign: 'center',
+    fontSize: 11,
+    color: 'var(--gray-5)',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    maxWidth: 'none',
+    padding: '10px 6px',
+    verticalAlign: 'middle',
+  }
+
+  const notesTd: React.CSSProperties = {
+    padding: '8px 10px',
+    whiteSpace: 'normal',
+    verticalAlign: 'middle',
+    maxWidth: 110,
+    width: 110,
+    overflow: 'hidden',
   }
 
   const field = (label: string, key: keyof typeof EMPTY_FORM, opts?: { type?: string; placeholder?: string }) => (
@@ -560,7 +654,7 @@ export default function Confirmed() {
 
       {!loading && (
         <>
-          <div className="cards">
+          <div className="cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr)) minmax(320px, 1.75fr)' }}>
             <div className="card">
               <div className="card-label">총 확정 인플루언서</div>
               <div className="card-value">
@@ -606,6 +700,27 @@ export default function Confirmed() {
               </div>
             </div>
             <div className="card highlight">
+              <div className="card-label">배송</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>배송 완료</div>
+                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>배송 오류</div>
+                </div>
+              </div>
+            </div>
+            <div className="card highlight">
               <div className="card-label">브랜드 횟수</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', alignItems: 'start', width: '100%' }}>
                 {BRANDS.map((brand, i) => {
@@ -641,32 +756,25 @@ export default function Confirmed() {
               style={{ flex: 1, minWidth: 200, maxWidth: 360 }} />
           </div>
 
-          {filtered.length === 0
-            ? <div className="empty">{rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}</div>
-            : (
-              <div className="table-wrap">
-                <table style={{ tableLayout: 'auto', minWidth: 1320 }}>
-                  <colgroup>
-                    <col style={{ width: 36 }} />
-                    <col style={{ width: 120 }} />
-                    <col style={{ width: 160 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 80 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 140 }} />
-                    <col style={{ width: 120 }} />
-                    <col style={{ minWidth: 180 }} />
-                    <col style={{ minWidth: 200 }} />
-                    <col style={{ minWidth: 160 }} />
-                    <col style={{ width: 60 }} />
-                  </colgroup>
-                  <thead>
+          <div className="table-wrap">
+            <table style={{ tableLayout: 'fixed', width: '100%', marginBottom: 0 }}>
+              <colgroup>
+                <col style={{ width: 48 }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: '24%' }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 52 }} />
+              </colgroup>
+              <thead>
                     <tr>
-                      <th style={{ ...thBase, textAlign: 'center' }}>No.</th>
+                      <th style={{ ...thBase, textAlign: 'center', width: 48, padding: '13px 6px', whiteSpace: 'normal' }}>No.</th>
                       <th style={thBase}>
                         <div ref={platformFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                          <span>플랫폼</span>
-                          <button onClick={() => { setShowPlatformFilter(p => !p); setShowRepostFilter(false); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
+                          <span>인플루언서</span>
+                          <button onClick={() => { setShowPlatformFilter(p => !p); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: platformFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: platformFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
                             <ListFilter size={13} />
                           </button>
@@ -682,7 +790,6 @@ export default function Confirmed() {
                           )}
                         </div>
                       </th>
-                      <th style={thBase}>NAME</th>
                       <th style={thBase}>
                         <div ref={uploadFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
                           <span>리뷰 업로드</span>
@@ -695,25 +802,6 @@ export default function Confirmed() {
                               {UPLOAD_OPTIONS.map(o => (
                                 <button key={o.value} onClick={() => { setUploadFilter(o.value as UploadStatus); setShowUploadFilter(false) }}
                                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: uploadFilter === o.value ? 700 : 500, background: uploadFilter === o.value ? '#d1fae5' : 'transparent', color: uploadFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                  {o.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </th>
-                      <th style={thBase}>
-                        <div ref={repostFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                          <span>Repost</span>
-                          <button onClick={() => { setShowRepostFilter(p => !p); setShowPlatformFilter(false); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: repostFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: repostFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                            <ListFilter size={13} />
-                          </button>
-                          {showRepostFilter && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 120, marginTop: 4 }}>
-                              {REPOST_OPTIONS.map(o => (
-                                <button key={o.value} onClick={() => { setRepostFilter(o.value); setShowRepostFilter(false) }}
-                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: repostFilter === o.value ? 700 : 500, background: repostFilter === o.value ? '#d1fae5' : 'transparent', color: repostFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                                   {o.label}
                                 </button>
                               ))}
@@ -741,35 +829,49 @@ export default function Confirmed() {
                           )}
                         </div>
                       </th>
-                      <th style={thBase}>PHONE</th>
-                      <th style={thBase}>E-mail</th>
-                      <th style={thBase}>Address</th>
-                      <th style={thBase}>비고</th>
-                      <th style={thBase}></th>
+                      <th style={thBase}>배송</th>
+                      <th style={{ ...thBase, width: 110, maxWidth: 110 }}>비고</th>
+                      <th style={{ ...thBase, textAlign: 'center', width: 52, padding: '13px 6px' }}>편집</th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r, i) => {
+              </thead>
+              <tbody>
+                {filtered.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
+                        {rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}
+                      </td>
+                    </tr>
+                  )
+                  : filtered.map((r) => {
                       const inf         = r.influencers
                       const platforms_  = r.influencer_platform
                       const firstP      = platforms_[0]
                       const handle      = firstP?.handle || inf?.handle || r.handle || ''
                       const displayName = inf?.display_name || r.display_name || ''
                       const profileUrl  = firstP?.profile_url || inf?.profile_url || ''
-                      const notesVal    = notesEdits[r.id] !== undefined ? notesEdits[r.id] : (r.notes ?? '')
                       const hasReview    = r.review_links.length > 0
                       const uploadStatus = effectiveUploadStatus(r)
                       return (
                         <tr key={r.id} onClick={() => { setViewRow(r); setShowView(true) }} style={{ cursor: 'pointer' }}>
-                          <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)' }}>{r.seq ?? i + 1}</td>
-                          <td><PlatformAccountsCell accounts={platforms_} /></td>
+                          <td style={seqTd}>{r.seq ?? '—'}</td>
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                               <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>
                                 {displayName || handle || '—'}
                               </span>
-                              {handle && (
-                                <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>@{handle}</span>
+                              {r.email && (
+                                <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--blue-dk)', wordBreak: 'break-all', textDecoration: 'none' }}>
+                                  {r.email}
+                                </a>
+                              )}
+                              {r.phone && (
+                                <span style={{ fontSize: 11, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>{r.phone}</span>
+                              )}
+                              {platforms_.length > 0 && (
+                                <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                                  <PlatformAccountsCell accounts={platforms_} />
+                                </div>
                               )}
                             </div>
                           </td>
@@ -791,16 +893,6 @@ export default function Confirmed() {
                             })()}
                           </td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                            <select value={r.repost || ''}
-                              onChange={e => updateField(r.id, 'repost', e.target.value)}
-                              style={{ fontSize: 12, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', textAlign: 'center', width: '100%' }}>
-                              <option value="">—</option>
-                              <option value="O">O</option>
-                              <option value="▲">▲</option>
-                              <option value="X">X</option>
-                            </select>
-                          </td>
-                          <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => toggleFormSubmitted(r.id, r.form_submitted)}
                               style={{ width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', border: `1.5px solid ${r.form_submitted ? '#6ee7b7' : '#e2e8f0'}`, background: r.form_submitted ? '#d1fae5' : '#f1f5f9', color: r.form_submitted ? '#065f46' : '#94a3b8', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               {r.form_submitted ? '✓' : '—'}
@@ -809,44 +901,44 @@ export default function Confirmed() {
                           <td onClick={e => e.stopPropagation()}>
                             <ReviewLinksCell links={r.review_links} />
                           </td>
-                          <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{r.phone || '—'}</td>
-                          <td style={{ fontSize: 11 }} onClick={e => e.stopPropagation()}>
-                            {r.email
-                              ? <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--blue-dk)', wordBreak: 'break-all' }}>{r.email}</a>
-                              : '—'}
-                          </td>
-                          <td style={{ fontSize: 11, whiteSpace: 'normal', lineHeight: 1.5 }}>
-                            {(() => {
-                              const line1 = [r.address_line_1, r.address_line_2].filter(Boolean).join(', ')
-                              const line2 = [r.city, r.state && r.zip ? `${r.state} ${r.zip}` : (r.state || r.zip)].filter(Boolean).join(', ')
-                              if (!line1 && !line2 && !r.country) return <span style={{ color: 'var(--gray-4)' }}>—</span>
-                              return <>
-                                {line1 && <div>{line1}</div>}
-                                {(line2 || r.country) && <div style={{ color: 'var(--gray-5)' }}>{[line2, r.country].filter(Boolean).join(' · ')}</div>}
-                              </>
-                            })()}
-                          </td>
-                          <td onClick={e => e.stopPropagation()} style={{ padding: '6px 12px' }}>
-                            <textarea value={notesVal} onChange={e => updateNotes(r.id, e.target.value)}
-                              placeholder="메모..." rows={1}
-                              style={{ width: '100%', minWidth: 120, height: 32, fontSize: 11, padding: '3px 6px', border: '1px solid transparent', borderRadius: 6, background: notesVal ? 'var(--gray-1)' : 'transparent', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)', cursor: 'text', resize: 'none', lineHeight: 1.5 }}
-                              onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
-                              onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = notesVal ? 'var(--gray-1)' : 'transparent' }}
+                          <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'normal', overflow: 'visible', maxWidth: 'none' }}>
+                            <EmsShippingCell
+                              addressLine1={r.address_line_1}
+                              addressLine2={r.address_line_2}
+                              city={r.city}
+                              state={r.state}
+                              zip={r.zip}
+                              country={r.country}
+                              emsNumber={r.ems_number}
+                              emsStatus={r.ems_status}
                             />
                           </td>
-                          <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          <td style={notesTd}>
+                            <span style={{
+                              fontSize: 11,
+                              color: r.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
+                              lineHeight: 1.5,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              wordBreak: 'break-word',
+                            }}>
+                              {r.notes?.trim() || '—'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '8px 6px', width: 52 }} onClick={e => e.stopPropagation()}>
                             <button onClick={() => openEdit(r)}
-                              style={{ fontSize: 12, padding: '2px 8px', background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer' }}>
+                              style={{ width: 28, height: 28, fontSize: 12, padding: 0, background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               ✎
                             </button>
                           </td>
                         </tr>
                       )
                     })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -900,20 +992,15 @@ export default function Confirmed() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>E-mail</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>
-                  {r.email ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{r.email}</a> : '—'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Phone</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{r.phone || '—'}</div>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>
-                  리뷰 링크 {r.review_links.length > 0 && `(${r.review_links.length})`}
-                </div>
+              <ViewField label="No.">{r.seq ?? '—'}</ViewField>
+              <ViewField label="리뷰 업로드">{uploadStyle.label}</ViewField>
+              <ViewField label="E-mail">
+                {r.email ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{r.email}</a> : '—'}
+              </ViewField>
+              <ViewField label="Phone">{r.phone || '—'}</ViewField>
+              <ViewField label="구글폼 제출">{r.form_submitted ? '✓ 제출 완료' : '—'}</ViewField>
+              <ViewField label="Repost">{r.repost || '—'}</ViewField>
+              <ViewField label={`리뷰 링크${r.review_links.length > 0 ? ` (${r.review_links.length})` : ''}`} span>
                 {r.review_links.length
                   ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -923,27 +1010,50 @@ export default function Confirmed() {
                             ↗ {reviewLinkLabel(l, i)}
                           </a>
                           {l.platform && <PlatformBadge platform={l.platform} />}
+                          {l.brand && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.brand}</span>}
                           {l.date && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.date}</span>}
                         </div>
                       ))}
                     </div>
                   )
-                  : <div style={{ fontSize: 13, color: 'var(--gray-5)' }}>—</div>}
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>Repost</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{r.repost || '—'}</div>
-              </div>
+                  : '—'}
+              </ViewField>
+              <ViewField label="비고" span>
+                {r.notes?.trim() ? r.notes : '—'}
+              </ViewField>
             </div>
 
-            {addrParts.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '12px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>Shipping Address</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>배송 주소</div>
                 <div style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>
-                  {addrParts.map((line, i) => <div key={i}>{line}</div>)}
+                  {addrParts.length
+                    ? addrParts.map((line, i) => <div key={i}>{line}</div>)
+                    : '—'}
                 </div>
               </div>
-            )}
+
+              <ViewInfoBox title="등기번호 / 배송 상태">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>등기번호</div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>
+                      {r.ems_number
+                        ? <span style={{ fontFamily: 'monospace', color: 'var(--gray-8)', fontWeight: 600, wordBreak: 'break-all' }}>{r.ems_number}</span>
+                        : <span style={{ color: 'var(--gray-5)' }}>—</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>배송 상태</div>
+                    <div>
+                      {r.ems_status
+                        ? <span style={{ background: EMS_STATUS_COLORS[r.ems_status] || '#94a3b8', color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.ems_status}</span>
+                        : <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>—</span>}
+                    </div>
+                  </div>
+                </div>
+              </ViewInfoBox>
+            </div>
 
             <div className="modal-actions" style={{ marginTop: 20 }}>
               <button className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
@@ -1009,15 +1119,36 @@ export default function Confirmed() {
           </div>
         </div>
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '0 0 10px' }}>배송 주소</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {field('Address Line 1', 'addr1', { placeholder: 'Street address' })}
-          {field('Address Line 2', 'addr2', { placeholder: 'Apartment, suite, unit (optional)' })}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {field('City', 'city', { placeholder: 'Los Angeles' })}
-            {field('State / Province', 'state', { placeholder: 'CA' })}
-            {field('ZIP / Postal Code', 'zip', { placeholder: '90001' })}
-            {field('Country', 'country', { placeholder: 'United States' })}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>비고</label>
+          <textarea
+            value={editForm.notes}
+            onChange={e => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="메모..."
+            rows={3}
+            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, alignItems: 'start' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '0 0 10px' }}>배송 주소</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {field('Address Line 1', 'addr1', { placeholder: 'Street address' })}
+              {field('Address Line 2', 'addr2', { placeholder: 'Apartment, suite, unit (optional)' })}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {field('City', 'city', { placeholder: 'Los Angeles' })}
+                {field('State / Province', 'state', { placeholder: 'CA' })}
+                {field('ZIP / Postal Code', 'zip', { placeholder: '90001' })}
+                {field('Country', 'country', { placeholder: 'United States' })}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>등기번호 / 배송 상태</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
+              등기번호 및 배송 상태는 <Link to="/kit/ems" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>EMS 배송 추적</Link> 페이지에서 관리합니다.
+            </div>
           </div>
         </div>
 

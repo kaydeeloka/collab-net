@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { gasPost } from '../../../lib/api'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
+import Modal from '../../../components/Modal'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
@@ -60,6 +61,30 @@ function fmtDate(val: string | null): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
+function ViewField({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) {
+  return (
+    <div style={span ? { gridColumn: '1 / -1' } : undefined}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500, wordBreak: 'break-word' }}>{children}</div>
+    </div>
+  )
+}
+
+function modalTitle(r: MonRow): string {
+  return r.display_name || `@${(r.handle || '').replace(/^@/, '')}`
+}
+
+function brandBadge(brand: string | null) {
+  if (!brand) return '—'
+  const key = brand.toLowerCase() as Brand
+  const color = BRAND_COLORS[key] || 'var(--gray-4)'
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: color + '18', color, border: `1px solid ${color}44` }}>
+      {brand}
+    </span>
+  )
+}
+
 export default function Monitoring() {
   const [rows,    setRows]    = useState<MonRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,7 +93,7 @@ export default function Monitoring() {
     mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
     brands: ['aesthen', 'joodoc', 'nesh', 'varuza'],
   })
-  const [kwEditMode,    setKwEditMode]    = useState(false)
+  const [showKwModal,   setShowKwModal]   = useState(false)
   const [newMimuseKw,   setNewMimuseKw]  = useState('')
   const [newBrandsKw,   setNewBrandsKw]  = useState('')
   const [kwSaving,      setKwSaving]     = useState(false)
@@ -83,7 +108,14 @@ export default function Monitoring() {
   const [manualLoading, setManualLoading] = useState(false)
   const [manualMsg,     setManualMsg]     = useState('')
 
-  const [tableEditMode,  setTableEditMode]  = useState(false)
+  const [modalRow,       setModalRow]       = useState<MonRow | null>(null)
+  const [modalGroupRows, setModalGroupRows] = useState<MonRow[]>([])
+  const [modalEditing,   setModalEditing]   = useState(false)
+  const [editForm,       setEditForm]       = useState<{
+    date: string; media: string; content: string; brand: string
+    review_link: string; views: number; likes: number; comments: number
+  } | null>(null)
+  const [editSaving,     setEditSaving]     = useState(false)
   const [activeTab,      setActiveTab]      = useState<'upload' | 'list'>('upload')
   const [uploadPage,     setUploadPage]     = useState(1)
   const [listPage,       setListPage]       = useState(1)
@@ -201,9 +233,120 @@ export default function Monitoring() {
     saveKeywords(next)
   }
 
-  async function updateRowField(id: string, field: string, value: string | number | null) {
-    await supabase.from('monitoring').update({ [field]: value || null }).eq('id', id)
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } as MonRow : r))
+  function groupKey(r: MonRow): string {
+    return r.confirmed_influencer_id || r.influencer_platform_id || r.id
+  }
+
+  function rowToEditForm(r: MonRow) {
+    return {
+      date:        r.date || '',
+      media:       r.media || '',
+      content:     r.content || '',
+      brand:       (r.brand || '').toLowerCase(),
+      review_link: r.review_link || '',
+      views:       r.views || 0,
+      likes:       r.likes || 0,
+      comments:    r.comments || 0,
+    }
+  }
+
+  function sortGroupRows(group: MonRow[]): MonRow[] {
+    return group.slice().sort((a, b) => {
+      const da = a.date || ''
+      const db = b.date || ''
+      if (da !== db) return db.localeCompare(da)
+      return a.id.localeCompare(b.id)
+    })
+  }
+
+  function getGroupRows(r: MonRow): MonRow[] {
+    const key = groupKey(r)
+    return sortGroupRows(rows.filter(row => groupKey(row) === key))
+  }
+
+  function selectModalRow(r: MonRow, editing = modalEditing) {
+    setModalRow(r)
+    if (editing) setEditForm(rowToEditForm(r))
+  }
+
+  function openModal(r: MonRow, groupRows?: MonRow[], editing = false) {
+    const group = sortGroupRows(groupRows?.length ? groupRows : getGroupRows(r))
+    setModalGroupRows(group)
+    setModalEditing(editing)
+    setModalRow(r)
+    setEditForm(editing ? rowToEditForm(r) : null)
+  }
+
+  function closeModal() {
+    setModalRow(null)
+    setModalGroupRows([])
+    setModalEditing(false)
+    setEditForm(null)
+  }
+
+  function startEditing(r?: MonRow) {
+    const target = r || modalRow
+    if (!target) return
+    setModalRow(target)
+    setModalEditing(true)
+    setEditForm(rowToEditForm(target))
+  }
+
+  function renderKeywordBadges(keywords: string | null) {
+    if (!keywords) return '—'
+    return (
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
+          const kwLow    = kw.toLowerCase()
+          const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
+          const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
+          const c        = isMimuse ? BRAND_COLORS.mimuse : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+          return (
+            <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
+          )
+        })}
+      </div>
+    )
+  }
+
+  function reviewEditLabel(r: MonRow, index: number): string {
+    const parts = [`Review ${index + 1}`]
+    if (r.brand) parts.push(r.brand)
+    if (r.date) parts.push(fmtDate(r.date))
+    return parts.join(' · ')
+  }
+
+  const editingReviewIndex = modalRow ? modalGroupRows.findIndex(r => r.id === modalRow.id) : -1
+
+  function cancelEditing() {
+    setModalEditing(false)
+    setEditForm(null)
+  }
+
+  async function saveEdit() {
+    if (!modalRow || !editForm) return
+    setEditSaving(true)
+    try {
+      const payload = {
+        date:        editForm.date || null,
+        media:       editForm.media || null,
+        content:     editForm.content || null,
+        brand:       editForm.brand || null,
+        review_link: editForm.review_link || null,
+        views:       editForm.views || 0,
+        likes:       editForm.likes || 0,
+        comments:    editForm.comments || 0,
+      }
+      await supabase.from('monitoring').update(payload).eq('id', modalRow.id)
+      setRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
+      setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
+      setModalRow(prev => prev ? { ...prev, ...payload } : prev)
+      setModalEditing(false)
+      setEditForm(null)
+    } catch (e: unknown) {
+      console.error('saveEdit error:', e)
+    }
+    setEditSaving(false)
   }
 
   function stopPolling() {
@@ -392,10 +535,9 @@ export default function Monitoring() {
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>키워드 설정</div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {kwSaving && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>저장 중…</span>}
-              {!kwEditMode
-                ? <button className="cfg-btn" onClick={() => setKwEditMode(true)}>편집</button>
-                : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => setKwEditMode(false)}>완료</button>
-              }
+              {!showKwModal
+                ? <button className="cfg-btn" onClick={() => setShowKwModal(true)}>편집</button>
+                : null}
             </div>
           </div>
 
@@ -410,21 +552,8 @@ export default function Monitoring() {
                   border: `1px solid ${BRAND_COLORS.mimuse}44`,
                 }}>
                   {kw}
-                  {kwEditMode && (
-                    <button onClick={() => setPendingDelete({ brand: 'mimuse', kw })}
-                      style={{ background: 'none', border: 'none', color: BRAND_COLORS.mimuse, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
-                  )}
                 </span>
               ))}
-              {kwEditMode && (
-                <span style={{ display: 'inline-flex', gap: 4 }}>
-                  <input className="mon-add-input" placeholder="키워드 추가" value={newMimuseKw}
-                    onChange={e => setNewMimuseKw(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw('')) } }}
-                    style={{ width: 110 }} />
-                  <button className="cfg-btn" onClick={() => addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw(''))}>+</button>
-                </span>
-              )}
             </div>
           </div>
 
@@ -440,22 +569,9 @@ export default function Monitoring() {
                     background: c + '18', color: c, border: `1px solid ${c}44`,
                   }}>
                     {kw}
-                    {kwEditMode && (
-                      <button onClick={() => setPendingDelete({ brand: 'brands', kw })}
-                        style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
-                    )}
                   </span>
                 )
               })}
-              {kwEditMode && (
-                <span style={{ display: 'inline-flex', gap: 4 }}>
-                  <input className="mon-add-input" placeholder="키워드 추가" value={newBrandsKw}
-                    onChange={e => setNewBrandsKw(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('brands', newBrandsKw, () => setNewBrandsKw('')) } }}
-                    style={{ width: 110 }} />
-                  <button className="cfg-btn" onClick={() => addKeyword('brands', newBrandsKw, () => setNewBrandsKw(''))}>+</button>
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -585,11 +701,6 @@ export default function Monitoring() {
               <option value="pending">대기중</option>
             </select>
           </div>
-          <div style={{ marginLeft: 'auto' }}>
-            {!tableEditMode
-              ? <button className="cfg-btn" onClick={() => setTableEditMode(true)}>편집</button>
-              : <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => setTableEditMode(false)}>완료</button>}
-          </div>
         </div>
 
         {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
@@ -625,13 +736,13 @@ export default function Monitoring() {
                       <th>media</th>
                       <th>content</th>
                       <th>brand</th>
-                      <th>repost</th>
                       <th>review link</th>
                       <th className="num">조회수</th>
                       <th className="num">좋아요 수</th>
                       <th className="num">댓글 수</th>
                       <th>감지된 키워드</th>
                       <th>모니터링 실행일</th>
+                      <th style={{ width: 44, textAlign: 'center' }}>편집</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -653,7 +764,6 @@ export default function Monitoring() {
                         const hasLink  = !!link.startsWith('http')
                         const rowBrand = (r.brand || '').toLowerCase()
                         const rowColor = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
-                        const ed       = tableEditMode
                         const rowStyle = isLast ? groupBorderStyle : {}
 
                         return (
@@ -668,7 +778,8 @@ export default function Monitoring() {
 
                             {/* account — rowspan so handle shows once per influencer */}
                             {isFirst && (
-                              <td rowSpan={group.rows.length} style={{ verticalAlign: 'middle', ...groupBorderStyle }}>
+                              <td rowSpan={group.rows.length} onClick={() => openModal(r, group.rows, false)}
+                                style={{ verticalAlign: 'middle', cursor: 'pointer', ...groupBorderStyle }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                                   {isTikTok
                                     ? <span className="platform-badge platform-tiktok">TikTok</span>
@@ -692,7 +803,8 @@ export default function Monitoring() {
                                 {account && (
                                   <div style={{ marginTop: 2 }}>
                                     {profileUrl
-                                      ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
+                                      ? <a href={profileUrl} target="_blank" rel="noopener" onClick={e => e.stopPropagation()}
+                                          style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
                                       : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account}</span>}
                                   </div>
                                 )}
@@ -700,76 +812,39 @@ export default function Monitoring() {
                             )}
 
                             <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
-                              {ed
-                                ? <input type="date" value={r.date || ''} className="inline-select" style={{ width: 120, fontSize: 11 }}
-                                    onChange={e => updateRowField(r.id, 'date', e.target.value || null)} />
-                                : fmtDate(r.date)}
+                              {fmtDate(r.date)}
                             </td>
 
                             <td>
-                              {ed
-                                ? <select value={r.media || ''} onChange={e => updateRowField(r.id, 'media', e.target.value)} className="inline-select">
-                                    <option value="">—</option>
-                                    {MEDIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                : <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{r.media || '—'}</span>}
+                              <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{r.media || '—'}</span>
                             </td>
 
                             <td>
-                              {ed
-                                ? <select value={r.content || ''} onChange={e => updateRowField(r.id, 'content', e.target.value)} className="inline-select">
-                                    <option value="">—</option>
-                                    {CONTENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                : <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{r.content || '—'}</span>}
+                              <span style={{ fontSize: 12, color: 'var(--gray-6)' }}>{r.content || '—'}</span>
                             </td>
 
                             <td>
-                              {ed
-                                ? <select value={rowBrand} onChange={e => updateRowField(r.id, 'brand', e.target.value)} className="inline-select"
-                                    style={{ color: rowBrand ? rowColor : 'var(--gray-4)', border: `1px solid ${rowBrand ? rowColor : 'var(--gray-2)'}`, background: rowBrand ? rowColor + '18' : 'var(--gray-0)', fontWeight: rowBrand ? 600 : 400 }}>
-                                    <option value="">—</option>
-                                    {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                                  </select>
-                                : rowBrand
-                                  ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: rowColor + '18', color: rowColor, border: `1px solid ${rowColor}44` }}>{rowBrand}</span>
-                                  : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                              {rowBrand
+                                ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: rowColor + '18', color: rowColor, border: `1px solid ${rowColor}44` }}>{rowBrand}</span>
+                                : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                             </td>
 
                             <td>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: r.repost === 'O' ? 'var(--green)' : r.repost === '▲' ? '#ef4444' : 'var(--gray-3)' }}>
-                                {r.repost || '—'}
-                              </span>
-                            </td>
-
-                            <td>
-                              {ed
-                                ? <input type="text" value={link} placeholder="https://…" className="inline-select" style={{ width: 160, fontSize: 11 }}
-                                    onChange={e => updateRowField(r.id, 'review_link', e.target.value)} />
-                                : link
-                                  ? <a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
-                                  : '—'}
+                              {link
+                                ? <a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                                : '—'}
                             </td>
 
                             <td className="num">
-                              {ed
-                                ? <input type="number" value={r.views || ''} className="inline-select" style={{ width: 70, fontSize: 11, textAlign: 'right' }}
-                                    onChange={e => updateRowField(r.id, 'views', parseInt(e.target.value) || 0)} />
-                                : r.views ? fmtNum(r.views) : '—'}
+                              {r.views ? fmtNum(r.views) : '—'}
                             </td>
 
                             <td className="num">
-                              {ed
-                                ? <input type="number" value={r.likes || ''} className="inline-select" style={{ width: 70, fontSize: 11, textAlign: 'right' }}
-                                    onChange={e => updateRowField(r.id, 'likes', parseInt(e.target.value) || 0)} />
-                                : r.likes ? fmtNum(r.likes) : '—'}
+                              {r.likes ? fmtNum(r.likes) : '—'}
                             </td>
 
                             <td className="num">
-                              {ed
-                                ? <input type="number" value={r.comments || ''} className="inline-select" style={{ width: 70, fontSize: 11, textAlign: 'right' }}
-                                    onChange={e => updateRowField(r.id, 'comments', parseInt(e.target.value) || 0)} />
-                                : r.comments ? fmtNum(r.comments) : '—'}
+                              {r.comments ? fmtNum(r.comments) : '—'}
                             </td>
 
                             <td>
@@ -791,6 +866,13 @@ export default function Monitoring() {
                             <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
                               {r.updated ? fmtDate(r.updated) : '—'}
                             </td>
+
+                            <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                              <button onClick={() => openModal(r, group.rows, true)}
+                                style={{ fontSize: 12, padding: '2px 8px', background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer' }}>
+                                ✎
+                              </button>
+                            </td>
                           </tr>
                         )
                       })
@@ -806,6 +888,204 @@ export default function Monitoring() {
             )
         })()}
       </>}
+
+      {/* ── Keyword Edit Modal ── */}
+      <Modal open={showKwModal} onClose={() => setShowKwModal(false)} title="키워드 설정">
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: BRAND_COLORS.mimuse, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(brandKws.mimuse || []).map(kw => (
+              <span key={kw} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 2,
+                fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                background: BRAND_COLORS.mimuse + '18', color: BRAND_COLORS.mimuse,
+                border: `1px solid ${BRAND_COLORS.mimuse}44`,
+              }}>
+                {kw}
+                <button onClick={() => setPendingDelete({ brand: 'mimuse', kw })}
+                  style={{ background: 'none', border: 'none', color: BRAND_COLORS.mimuse, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+            <span style={{ display: 'inline-flex', gap: 4 }}>
+              <input className="modal-input" placeholder="키워드 추가" value={newMimuseKw}
+                onChange={e => setNewMimuseKw(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw('')) } }}
+                style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
+              <button className="cfg-btn" onClick={() => addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw(''))}>+</button>
+            </span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {(brandKws.brands || []).map((kw, idx) => {
+              const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+              return (
+                <span key={kw} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 2,
+                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                  background: c + '18', color: c, border: `1px solid ${c}44`,
+                }}>
+                  {kw}
+                  <button onClick={() => setPendingDelete({ brand: 'brands', kw })}
+                    style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+                </span>
+              )
+            })}
+            <span style={{ display: 'inline-flex', gap: 4 }}>
+              <input className="modal-input" placeholder="키워드 추가" value={newBrandsKw}
+                onChange={e => setNewBrandsKw(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('brands', newBrandsKw, () => setNewBrandsKw('')) } }}
+                style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
+              <button className="cfg-btn" onClick={() => addKeyword('brands', newBrandsKw, () => setNewBrandsKw(''))}>+</button>
+            </span>
+          </div>
+        </div>
+
+        {kwSaving && <div className="modal-status">저장 중…</div>}
+
+        <div className="modal-actions">
+          <button className="modal-btn-confirm" onClick={() => setShowKwModal(false)}>완료</button>
+        </div>
+      </Modal>
+
+      {/* ── Review View / Edit Modal ── */}
+      <Modal
+        open={!!modalRow}
+        onClose={closeModal}
+        title={modalRow ? `${modalEditing ? '리뷰 데이터 편집' : '리뷰 정보'} · ${modalTitle(modalRow)}` : ''}
+      >
+        {modalRow && (
+          <>
+            {modalGroupRows.length > 1 && (
+              <div style={{ marginBottom: 16 }}>
+                <label className="modal-label" style={{ marginTop: 0 }}>리뷰 선택</label>
+                <select className="modal-input" value={modalRow.id}
+                  onChange={e => {
+                    const next = modalGroupRows.find(row => row.id === e.target.value)
+                    if (next) selectModalRow(next)
+                  }}>
+                  {modalGroupRows.map((row, i) => (
+                    <option key={row.id} value={row.id}>
+                      Review {i + 1}
+                      {row.brand ? ` · ${row.brand}` : ''}
+                      {row.date ? ` · ${fmtDate(row.date)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {!modalEditing ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+                <ViewField label="업로드일">{fmtDate(modalRow.date)}</ViewField>
+                <ViewField label="브랜드">
+                  {modalRow.brand
+                    ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: (BRAND_COLORS[(modalRow.brand || '').toLowerCase() as Brand] || 'var(--gray-4)') + '18', color: BRAND_COLORS[(modalRow.brand || '').toLowerCase() as Brand] || 'var(--gray-6)' }}>{modalRow.brand}</span>
+                    : '—'}
+                </ViewField>
+                <ViewField label="미디어">{modalRow.media || '—'}</ViewField>
+                <ViewField label="콘텐츠">{modalRow.content || '—'}</ViewField>
+                <ViewField label="리뷰 링크" span>
+                  {modalRow.review_link?.startsWith('http')
+                    ? <a href={modalRow.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
+                    : '—'}
+                </ViewField>
+                <ViewField label="조회수">{modalRow.views ? fmtNum(modalRow.views) : '—'}</ViewField>
+                <ViewField label="좋아요 수">{modalRow.likes ? fmtNum(modalRow.likes) : '—'}</ViewField>
+                <ViewField label="댓글 수">{modalRow.comments ? fmtNum(modalRow.comments) : '—'}</ViewField>
+                <ViewField label="감지된 키워드" span>
+                  {modalRow.keywords
+                    ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
+                          const kwLow    = kw.toLowerCase()
+                          const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
+                          const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
+                          const c        = isMimuse ? BRAND_COLORS.mimuse : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+                          return (
+                            <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
+                          )
+                        })}
+                      </div>
+                    )
+                    : '—'}
+                </ViewField>
+                <ViewField label="모니터링 실행일">{modalRow.updated ? fmtDate(modalRow.updated) : '—'}</ViewField>
+              </div>
+            ) : editForm && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>업로드일</label>
+                  <input type="date" className="modal-input" value={editForm.date}
+                    onChange={e => setEditForm(f => f ? { ...f, date: e.target.value } : f)} />
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>브랜드</label>
+                  <select className="modal-input" value={editForm.brand}
+                    onChange={e => setEditForm(f => f ? { ...f, brand: e.target.value } : f)}>
+                    <option value="">—</option>
+                    {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>미디어</label>
+                  <select className="modal-input" value={editForm.media}
+                    onChange={e => setEditForm(f => f ? { ...f, media: e.target.value } : f)}>
+                    <option value="">—</option>
+                    {MEDIA_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>콘텐츠</label>
+                  <select className="modal-input" value={editForm.content}
+                    onChange={e => setEditForm(f => f ? { ...f, content: e.target.value } : f)}>
+                    <option value="">—</option>
+                    {CONTENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="modal-label" style={{ marginTop: 0 }}>리뷰 링크</label>
+                  <input type="url" className="modal-input" placeholder="https://…" value={editForm.review_link}
+                    onChange={e => setEditForm(f => f ? { ...f, review_link: e.target.value } : f)} />
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>조회수</label>
+                  <input type="number" min={0} className="modal-input" value={editForm.views || ''}
+                    onChange={e => setEditForm(f => f ? { ...f, views: parseInt(e.target.value) || 0 } : f)} />
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>좋아요 수</label>
+                  <input type="number" min={0} className="modal-input" value={editForm.likes || ''}
+                    onChange={e => setEditForm(f => f ? { ...f, likes: parseInt(e.target.value) || 0 } : f)} />
+                </div>
+                <div>
+                  <label className="modal-label" style={{ marginTop: 0 }}>댓글 수</label>
+                  <input type="number" min={0} className="modal-input" value={editForm.comments || ''}
+                    onChange={e => setEditForm(f => f ? { ...f, comments: parseInt(e.target.value) || 0 } : f)} />
+                </div>
+              </div>
+            )}
+
+            <div className="modal-actions">
+              {!modalEditing ? (
+                <>
+                  <button className="modal-btn-cancel" onClick={closeModal}>닫기</button>
+                  <button className="modal-btn-confirm" onClick={() => startEditing()}>편집</button>
+                </>
+              ) : (
+                <>
+                  <button className="modal-btn-cancel" onClick={cancelEditing}>취소</button>
+                  <button className="modal-btn-confirm" onClick={saveEdit} disabled={editSaving}>
+                    {editSaving ? '저장 중...' : '저장'}
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }
