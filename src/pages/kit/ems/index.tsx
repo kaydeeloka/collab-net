@@ -6,9 +6,8 @@ import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
 import Pagination from '../../../components/Pagination'
-import { countReshipNeeded, EMS_ERROR_ROWS } from '../../../lib/ems-errors'
-
-const INFLUENCER_TARGET = 50
+import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '../../../lib/ems-errors'
+import { useEmsLayout } from './layout'
 
 interface EmsRow {
   confirmed_influencer_id: string
@@ -21,13 +20,17 @@ interface EmsRow {
   state:          string | null
   zip:            string | null
   country:        string | null
+  notes:          string | null
   handle:         string
   display_name:   string | null
   tracking_id:         string | null
   ems_number:          string | null  // 등기번호
   registered_date:     string | null  // 신청일
   application_number:  string | null  // 접수번호
+  email_sent:          boolean
   status:              string | null
+  reship_id:           string | null
+  reship_status:       string | null
   last_update:         string | null
 }
 
@@ -58,6 +61,7 @@ const STATUS_FILTER_OPTIONS = [
 
 export default function Ems() {
   const { showToast } = useToast()
+  const { refreshStats, notifyReshipChange } = useEmsLayout()
   const [rows,    setRows]    = useState<EmsRow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
@@ -81,13 +85,15 @@ export default function Ems() {
   // Tracking (Edit) Modal
   const [showTrackingModal, setShowTrackingModal] = useState(false)
   const [trackingName,      setTrackingName]      = useState('')
+  const [trackingNotes,     setTrackingNotes]     = useState('')
   const [trackingSaving,    setTrackingSaving]    = useState(false)
+  const [reshipSaving,      setReshipSaving]      = useState<string | null>(null)
   const [trackingForm, setTrackingForm] = useState({
     confirmed_influencer_id: '',
     tracking_id:       null as string | null,
-    emsNum:            '',   // 등기번호
-    registeredDate:    '',   // 신청일
-    applicationNumber: '',   // 접수번호
+    emsNum:            '',
+    registeredDate:    '',
+    applicationNumber: '',
     status:            '접수완료',
   })
 
@@ -106,27 +112,31 @@ export default function Ems() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showStatusFilter])
 
-  async function loadEms() {
-    setLoading(true)
+  async function loadEms(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('confirmed_influencers')
-        .select(`
-          id, seq, email, phone,
-          address_line_1, address_line_2, city, state, zip, country,
-          influencers!inner(handle, display_name),
-          ems_tracking(
-            id, ems_number, registered_date, application_number,
-            status, last_update
-          )
-        `)
-        .order('seq', { ascending: true, nullsFirst: false })
+      const [{ data, error }, reshipMap] = await Promise.all([
+        supabase
+          .from('confirmed_influencers')
+          .select(`
+            id, seq, email, phone, notes,
+            address_line_1, address_line_2, city, state, zip, country,
+            influencers!inner(handle, display_name),
+            ems_tracking(
+              id, ems_number, registered_date, application_number,
+              email_sent, status, last_update
+            )
+          `)
+          .order('seq', { ascending: true, nullsFirst: false }),
+        fetchReshipmentMap(),
+      ])
 
       if (error) throw error
 
       const mapped: EmsRow[] = (data || []).map((ci: any) => {
         const inf = ci.influencers || {}
-        const ems = (ci.ems_tracking || [])[0] || {}
+        const ems    = (ci.ems_tracking || [])[0] || {}
+        const reship = reshipMap.get(ci.id)
         return {
           confirmed_influencer_id: ci.id,
           seq:            ci.seq    ?? null,
@@ -138,13 +148,17 @@ export default function Ems() {
           state:          ci.state,
           zip:            ci.zip,
           country:        ci.country,
+          notes:          ci.notes,
           handle:         inf.handle       || '',
           display_name:   inf.display_name || null,
           tracking_id:        ems.id                || null,
           ems_number:         ems.ems_number        || null,
           registered_date:    ems.registered_date   || null,
           application_number: ems.application_number  || null,
+          email_sent:         ems.email_sent          ?? false,
           status:             ems.status            || null,
+          reship_id:          reship?.id             || null,
+          reship_status:      reship?.status         || null,
           last_update:        ems.last_update        || null,
         }
       })
@@ -179,14 +193,56 @@ export default function Ems() {
   function openTrackingModal(row: EmsRow) {
     setTrackingForm({
       confirmed_influencer_id: row.confirmed_influencer_id,
-      tracking_id:      row.tracking_id,
-      emsNum:           row.ems_number         || '',
-      registeredDate:   row.registered_date    || '',
-      applicationNumber: row.application_number   || '',
-      status:           row.status             || '접수완료',
+      tracking_id:       row.tracking_id,
+      emsNum:            row.ems_number         || '',
+      registeredDate:    row.registered_date    || '',
+      applicationNumber: row.application_number || '',
+      status:            row.status             || '접수완료',
     })
     setTrackingName(row.display_name || row.handle)
+    setTrackingNotes(row.notes || '')
     setShowTrackingModal(true)
+  }
+
+  async function toggleShippingError(row: EmsRow, checked: boolean, e: React.MouseEvent | React.ChangeEvent) {
+    e.stopPropagation()
+    if (checked && row.reship_id) return
+    if (!checked && !row.reship_id) return
+    setReshipSaving(row.confirmed_influencer_id)
+    try {
+      if (checked) {
+        const { data: created, error } = await createEmsReship(row.confirmed_influencer_id, {
+          id:                 row.tracking_id,
+          ems_number:         row.ems_number,
+          registered_date:    row.registered_date,
+          application_number: row.application_number,
+          last_update:        row.last_update,
+          email_sent:         row.email_sent,
+          status:             row.status,
+        })
+        if (error) throw error
+        if (row.tracking_id) {
+          await supabase.from('ems_tracking').update({ status: 'Exception' }).eq('id', row.tracking_id)
+        }
+        if (created?.id) {
+          setRows(prev => prev.map(r => r.confirmed_influencer_id === row.confirmed_influencer_id
+            ? { ...r, reship_id: created.id, reship_status: '처리 대기', status: row.tracking_id ? 'Exception' : r.status }
+            : r))
+        }
+      } else {
+        const { error } = await deleteEmsReship(row.confirmed_influencer_id)
+        if (error) throw error
+        setRows(prev => prev.map(r => r.confirmed_influencer_id === row.confirmed_influencer_id
+          ? { ...r, reship_id: null, reship_status: null }
+          : r))
+      }
+      showToast(checked ? '재발송으로 등록되었습니다' : '재발송 등록이 해제되었습니다', 'success')
+      notifyReshipChange()
+      await Promise.all([loadEms({ silent: true }), refreshStats()])
+    } catch (err: unknown) {
+      showToast((err as Error).message, 'error')
+    }
+    setReshipSaving(null)
   }
 
   async function submitTrackingForm() {
@@ -196,7 +252,7 @@ export default function Ems() {
         confirmed_influencer_id: trackingForm.confirmed_influencer_id,
         ems_number:         trackingForm.emsNum            || null,
         registered_date:    trackingForm.registeredDate    || null,
-        application_number: trackingForm.applicationNumber  || null,
+        application_number: trackingForm.applicationNumber || null,
         status:             trackingForm.status,
       }
 
@@ -212,7 +268,7 @@ export default function Ems() {
 
       showToast('배송 정보 업데이트 완료', 'success')
       setShowTrackingModal(false)
-      loadEms()
+      await Promise.all([loadEms(), refreshStats()])
     } catch (e: unknown) {
       showToast((e as Error).message, 'error')
     }
@@ -229,14 +285,6 @@ export default function Ems() {
     return true
   })
 
-  const total          = rows.length
-  const targetPct      = Math.min(Math.round(total / INFLUENCER_TARGET * 100), 100)
-  const delivered      = rows.filter(r => r.status === 'Delivered').length
-  const inTransit      = rows.filter(r => r.status === 'In Transit' || r.status === 'Preparing').length
-  const shippingErrors = rows.filter(r => r.status === 'Exception').length
-  const reshipNeeded   = countReshipNeeded()
-  const errorTotal     = EMS_ERROR_ROWS.length
-
   const thBase: React.CSSProperties = {
     position: 'sticky', top: 0, zIndex: 1,
     background: '#f0f5f8',
@@ -252,80 +300,21 @@ export default function Ems() {
   const pagedRows  = filteredRows.slice(startIdx, startIdx + EMS_PAGE_SIZE)
   const emptyMsg   = rows.length === 0 ? '데이터가 없습니다.' : '검색 결과가 없습니다.'
 
-  return (
-    <div className="page page--fill">
-      <div className="page-banner">
-        <div>
-          <div className="page-banner-title">EMS 글로벌 배송 &amp; 통합 관리 시스템</div>
-          <div className="page-banner-desc">확정 인플루언서의 배송 정보를 통합 관리합니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={loadEms}>
-            <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
-          </button>
-        </div>
-      </div>
+  const notesTd: React.CSSProperties = {
+    padding: '8px 10px',
+    whiteSpace: 'normal',
+    verticalAlign: 'middle',
+    maxWidth: 110,
+    width: 110,
+    overflow: 'hidden',
+  }
 
+  return (
+    <>
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
 
       {!loading && (
         <>
-          <div className="cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-            <div className="card highlight">
-              <div className="card-label">총 관리 대상</div>
-              <div style={{ textAlign: 'left', paddingTop: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'flex-start' }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-1px' }}>{total}</span>
-                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                </div>
-                <div className="card-sub" style={{ marginTop: 0 }}>{total} / {INFLUENCER_TARGET}명 · {targetPct}%</div>
-                <div style={{ marginTop: 8, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${targetPct}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
-                </div>
-              </div>
-            </div>
-            <div className="card highlight">
-              <div className="card-label">배송</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-                <div style={{ textAlign: 'center', paddingTop: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>배송 완료</div>
-                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
-                </div>
-                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-                <div style={{ textAlign: 'center', paddingTop: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#1e40af', letterSpacing: '-1px' }}>{inTransit}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>배송 중</div>
-                </div>
-                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-                <div style={{ textAlign: 'center', paddingTop: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>배송 오류</div>
-                </div>
-              </div>
-            </div>
-            <div className="card highlight">
-              <div className="card-label">재배송 필요</div>
-              <div style={{ textAlign: 'left', paddingTop: 4 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'flex-start' }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{reshipNeeded}</span>
-                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
-                </div>
-                <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재배송 필요</div>
-                <div className="card-sub" style={{ marginTop: 0 }}>배송 오류 {errorTotal}건 중</div>
-              </div>
-            </div>
-          </div>
-
           <div className="ems-toolbar">
             <div className="section-title section-title--inline">MiMuse 배송 &amp; 클라이언트 통합 대장</div>
             <span className="ems-sync-msg">{syncMsg}</span>
@@ -347,7 +336,6 @@ export default function Ems() {
                 <tr>
                   <th style={{ ...thBase, width: 36, textAlign: 'center' }}>No</th>
                   <th style={thBase}>이름</th>
-                  <th style={thBase}>이메일</th>
                   <th style={thBase}>신청일</th>
                   <th style={thBase}>접수번호</th>
                   <th style={thBase}>등기번호</th>
@@ -371,6 +359,8 @@ export default function Ems() {
                     </div>
                   </th>
                   <th style={thBase}>배송 주소</th>
+                  <th style={{ ...thBase, width: 110, maxWidth: 110 }}>비고</th>
+                  <th style={{ ...thBase, textAlign: 'center', width: 72 }}>재발송</th>
                   <th style={thBase}>마지막 업데이트</th>
                 </tr>
               </thead>
@@ -378,7 +368,7 @@ export default function Ems() {
                 {filteredRows.length === 0
                   ? (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>
+                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>
                         {emptyMsg}
                       </td>
                     </tr>
@@ -396,17 +386,15 @@ export default function Ems() {
                               style={{ cursor: 'pointer' }}>
                               <td style={{ fontSize: 11, color: 'var(--gray-5)', textAlign: 'center' }}>{row.seq ?? i_abs + 1}</td>
 
-                              {/* 이름 */}
-                              <td>
+                              {/* 이름 + 이메일 */}
+                              <td onClick={e => row.email && e.stopPropagation()}>
                                 <div style={{ fontWeight: 600, fontSize: 13 }}>{row.display_name || row.handle || '—'}</div>
                                 {row.handle && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 1 }}>@{row.handle}</div>}
-                              </td>
-
-                              {/* 이메일 */}
-                              <td style={{ fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                                {row.email
-                                  ? <a href={`mailto:${row.email}`} style={{ color: 'var(--blue-dk)' }}>{row.email}</a>
-                                  : <span style={{ color: 'var(--gray-5)' }}>—</span>}
+                                <div style={{ fontSize: 11, marginTop: 3 }}>
+                                  {row.email
+                                    ? <a href={`mailto:${row.email}`} style={{ color: 'var(--blue-dk)' }}>{row.email}</a>
+                                    : <span style={{ color: 'var(--gray-4)' }}>—</span>}
+                                </div>
                               </td>
 
                               {/* 신청일 */}
@@ -450,6 +438,34 @@ export default function Ems() {
                                 ))}
                               </td>
 
+                              {/* 비고 */}
+                              <td style={notesTd}>
+                                <span style={{
+                                  fontSize: 11,
+                                  color: row.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
+                                  lineHeight: 1.5,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                  wordBreak: 'break-word',
+                                }}>
+                                  {row.notes?.trim() || '—'}
+                                </span>
+                              </td>
+
+                              {/* 재발송 */}
+                              <td style={{ textAlign: 'center', verticalAlign: 'middle' }} onClick={e => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={!!row.reship_id}
+                                  disabled={reshipSaving === row.confirmed_influencer_id}
+                                  onChange={e => toggleShippingError(row, e.target.checked, e)}
+                                  title={row.reship_id ? '재발송 등록됨' : '재발송 등록'}
+                                  style={{ width: 15, height: 15, cursor: reshipSaving === row.confirmed_influencer_id ? 'wait' : 'pointer', accentColor: '#dc2626' }}
+                                />
+                              </td>
+
                               
                               {/* 마지막 업데이트 */}
                               <td style={{ fontSize: 11, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>{row.last_update || '—'}</td>
@@ -484,7 +500,7 @@ export default function Ems() {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* 상태 배지 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 48, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 48, marginBottom: 8, flexWrap: 'wrap' }}>
                 {viewRow.status
                   ? <span style={{ background: badgeColor, color: '#fff', padding: '4px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{viewRow.status}</span>
                   : <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>상태 미입력</span>}
@@ -537,14 +553,29 @@ export default function Ems() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>연락처</div>
                   <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)' }}>{viewRow.phone || '—'}</div>
                 </div>
-                {/* col 2: 배송 주소 */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>배송 주소</div>
-                  {addrLines.length === 0
-                    ? <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>
-                    : addrLines.map((line, li) => (
-                      <div key={li} style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>{line}</div>
-                    ))}
+                <div />
+
+                {/* 배송 주소 + 비고 */}
+                <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 120px', gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>배송 주소</div>
+                    {addrLines.length === 0
+                      ? <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>
+                      : addrLines.map((line, li) => (
+                        <div key={li} style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>{line}</div>
+                      ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>비고</div>
+                    <div style={{
+                      fontSize: 13,
+                      color: viewRow.notes?.trim() ? 'var(--gray-8)' : 'var(--gray-4)',
+                      lineHeight: 1.6,
+                      wordBreak: 'break-word',
+                    }}>
+                      {viewRow.notes?.trim() || '—'}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -559,7 +590,11 @@ export default function Ems() {
 
       {/* Tracking Modal */}
       <Modal open={showTrackingModal} onClose={() => setShowTrackingModal(false)} title="배송 정보 등록 및 수정">
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 16 }}>{trackingName}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 8 }}>{trackingName}</div>
+        <div style={{ fontSize: 12, color: trackingNotes.trim() ? 'var(--gray-6)' : 'var(--gray-4)', marginBottom: 16, lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 700, color: 'var(--gray-5)' }}>비고 · </span>
+          {trackingNotes.trim() || '—'}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
 
           <div>
@@ -596,6 +631,7 @@ export default function Ems() {
           </div>
 
         </div>
+
         <div className="modal-actions">
           <button className="modal-btn-cancel" onClick={() => setShowTrackingModal(false)}>취소</button>
           <button className="modal-btn-confirm" onClick={submitTrackingForm} disabled={trackingSaving}>
@@ -668,6 +704,6 @@ export default function Ems() {
           )
         })()}
       </Modal> */}
-    </div>
+    </>
   )
 }

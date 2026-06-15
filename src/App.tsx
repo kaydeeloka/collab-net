@@ -12,6 +12,9 @@ import Listup      from './pages/influencer/search'
 import Outreach    from './pages/influencer/contact'
 import Confirmed   from './pages/influencer/confirmed'
 import Ems         from './pages/kit/ems'
+import EmsLayout   from './pages/kit/ems/layout'
+import EmsErrors   from './pages/kit/ems/errors'
+import EmsEmail    from './pages/kit/ems-email'
 import Monitoring  from './pages/monitoring/reviews'
 
 // TREND
@@ -35,8 +38,6 @@ import BrandConfirmedFolders from './pages/brand/confirmed/management'
 import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
 
 // KIT — ems
-import EmsDaily   from './pages/kit/ems/daily'
-import EmsCheck   from './pages/kit/ems/check'
 import EmsData    from './pages/kit/ems-data'
 // ARCHIVE
 import ArchiveDesign        from './pages/archive/design'
@@ -91,9 +92,13 @@ export default function App() {
                 </Route>
 
                 {/* ── KIT ── */}
-                <Route path="/kit/ems"                              element={<Ems />} />
-                <Route path="/kit/ems/daily"                        element={<EmsDaily />} />
-                <Route path="/kit/ems/check"                        element={<EmsCheck />} />
+                <Route path="/kit/ems" element={<EmsLayout />}>
+                  <Route index element={<Ems />} />
+                  <Route path="errors" element={<EmsErrors />} />
+                </Route>
+                <Route path="/kit/ems-email" element={<EmsEmail />} />
+                <Route path="/kit/ems-error" element={<Navigate to="/kit/ems/errors" replace />} />
+                <Route path="/kit/ems/check"   element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems-data"                        element={<EmsData />} />
                 <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
 

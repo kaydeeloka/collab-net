@@ -5,6 +5,7 @@
 -- Drop existing objects (reverse dependency order)
 DROP TABLE IF EXISTS outreach_messages      CASCADE;
 DROP TABLE IF EXISTS influencers            CASCADE;
+DROP TABLE IF EXISTS ems_reshipments         CASCADE;
 DROP TABLE IF EXISTS ems_tracking           CASCADE;
 DROP TABLE IF EXISTS monitoring             CASCADE;
 DROP TABLE IF EXISTS confirmed_influencers  CASCADE;
@@ -161,7 +162,6 @@ CREATE TABLE ems_tracking (
   created_at              TIMESTAMPTZ DEFAULT now(),
   confirmed_influencer_id UUID        NOT NULL REFERENCES confirmed_influencers(id) ON DELETE CASCADE,
   ems_number              TEXT,
-  us_arrival              TEXT,
   registered_date         TEXT,
   status                  TEXT        DEFAULT 'Preparing', -- 'Preparing' | 'In Transit' | 'Delivered' | 'Pending' | 'Exception'
   last_update             TEXT,
@@ -170,6 +170,25 @@ CREATE TABLE ems_tracking (
 
 CREATE INDEX idx_ems_confirmed ON ems_tracking(confirmed_influencer_id);
 CREATE INDEX idx_ems_status    ON ems_tracking(status);
+
+CREATE TABLE ems_reshipments (
+  id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at              TIMESTAMPTZ DEFAULT now(),
+  confirmed_influencer_id UUID        NOT NULL REFERENCES confirmed_influencers(id) ON DELETE CASCADE,
+  original_tracking_id    UUID        REFERENCES ems_tracking(id) ON DELETE SET NULL,
+  ems_number              TEXT,
+  registered_date         TEXT,
+  application_number      TEXT,
+  carrier_status          TEXT        DEFAULT 'Preparing',
+  last_update             TEXT,
+  email_sent              BOOLEAN     DEFAULT false,
+  error_reason            TEXT,
+  status                  TEXT        DEFAULT '처리 대기',
+  CONSTRAINT ems_reshipments_one_per_influencer UNIQUE (confirmed_influencer_id)
+);
+
+CREATE INDEX idx_ems_reshipments_confirmed ON ems_reshipments(confirmed_influencer_id);
+CREATE INDEX idx_ems_reshipments_status    ON ems_reshipments(status);
 
 -- ============================================================
 --  4. Monitoring
@@ -248,6 +267,7 @@ ALTER TABLE influencers           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE outreach_messages     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_influencers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ems_tracking          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ems_reshipments       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE monitoring            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE monitoring_keywords   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE beauty_news_archives  ENABLE ROW LEVEL SECURITY;
@@ -256,7 +276,7 @@ ALTER TABLE app_config            ENABLE ROW LEVEL SECURITY;
 
 DO $$ DECLARE tbl TEXT;
 BEGIN
-  FOREACH tbl IN ARRAY ARRAY['phases','tiers','influencers','outreach_messages','confirmed_influencers','ems_tracking','monitoring','monitoring_keywords','beauty_news_archives','email_recipients','app_config']
+  FOREACH tbl IN ARRAY ARRAY['phases','tiers','influencers','outreach_messages','confirmed_influencers','ems_tracking','ems_reshipments','monitoring','monitoring_keywords','beauty_news_archives','email_recipients','app_config']
   LOOP
     EXECUTE format('CREATE POLICY "allow_all_%s" ON %I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)', tbl, tbl);
   END LOOP;

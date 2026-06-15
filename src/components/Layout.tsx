@@ -9,7 +9,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 
 interface NavSubChild { label: string; to: string; end?: boolean }
-interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[] }
+interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[]; activeWhen?: (pathname: string) => boolean }
 interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
 
 const GROUPS: SideGroup[] = [
@@ -45,9 +45,9 @@ const GROUPS: SideGroup[] = [
   {
     label: 'KIT', icon: <Package size={22} />, defaultTo: '/kit/ems', prefix: '/kit',
     children: [
-      { to: '/kit/ems',       label: 'EMS 배송 추적' },
+      { to: '/kit/ems', label: 'EMS 배송 추적', activeWhen: p => p === '/kit/ems' || p.startsWith('/kit/ems/') },
+      { to: '/kit/ems-email', label: '이메일 템플릿' },
       { to: '/kit/ems-data',  label: 'EMS 발송 데이터' },
-      { to: '/kit/ems/check', label: '배송 오류 관리' },
     ],
   },
   {
@@ -286,7 +286,10 @@ export default function Layout() {
                   <NavLink
                     to={child.to}
                     end={child.end}
-                    className={({ isActive }) => 'children-bar-tab' + (isActive ? ' active' : '')}
+                    className={({ isActive }) => {
+                      const active = isActive || (child.activeWhen?.(pathname) ?? false)
+                      return 'children-bar-tab' + (active ? ' active' : '')
+                    }}
                   >
                     {child.label}
                     {hasSub && <span className="nav-chevron">▾</span>}

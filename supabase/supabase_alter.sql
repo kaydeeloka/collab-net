@@ -73,9 +73,37 @@ WHERE ci.id = n.id;
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS registered_date   DATE;         -- 신청일
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS application_number TEXT;        -- 접수번호
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS email_sent        BOOLEAN DEFAULT false;
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS error_reason      TEXT;   -- 오류 사유 (배송 오류 관리)
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS error_status      TEXT;   -- 처리 상태: 처리 대기 | 처리 중 | 확인 중 | 재발송 예정 | 재발송 완료
 -- Remove old columns not in schema
 ALTER TABLE ems_tracking DROP COLUMN IF EXISTS product;
 ALTER TABLE ems_tracking DROP COLUMN IF EXISTS application_date;
+
+ALTER TABLE ems_tracking DROP COLUMN IF EXISTS us_arrival;
+ALTER TABLE ems_reshipments DROP COLUMN IF EXISTS us_arrival;
+
+CREATE TABLE IF NOT EXISTS ems_reshipments (
+  id                      UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at              TIMESTAMPTZ DEFAULT now(),
+  confirmed_influencer_id UUID        NOT NULL REFERENCES confirmed_influencers(id) ON DELETE CASCADE,
+  original_tracking_id    UUID        REFERENCES ems_tracking(id) ON DELETE SET NULL,
+  ems_number              TEXT,
+  registered_date         TEXT,
+  application_number      TEXT,
+  carrier_status          TEXT        DEFAULT 'Preparing',
+  last_update             TEXT,
+  email_sent              BOOLEAN     DEFAULT false,
+  error_reason            TEXT,
+  status                  TEXT        DEFAULT '처리 대기',
+  CONSTRAINT ems_reshipments_one_per_influencer UNIQUE (confirmed_influencer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ems_reshipments_confirmed ON ems_reshipments(confirmed_influencer_id);
+CREATE INDEX IF NOT EXISTS idx_ems_reshipments_status    ON ems_reshipments(status);
+
+ALTER TABLE ems_reshipments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_ems_reshipments" ON ems_reshipments;
+CREATE POLICY "allow_all_ems_reshipments" ON ems_reshipments FOR ALL USING (true) WITH CHECK (true);
 
 -- monitoring — add account (handle) column to match sheet header directly
 -- platform|account|date|media|content|brand|repost|review link|조회수|좋아요 수|댓글 수|감지된 키워드|모니터링 실행일
