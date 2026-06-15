@@ -3,6 +3,7 @@ import { Download, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../contexts/ToastContext'
+import { usePhase } from '../../../contexts/PhaseContext'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
 import Modal from '../../../components/Modal'
@@ -243,6 +244,7 @@ function ViewField({ label, value, mono }: { label: string; value: string; mono?
 
 export default function EmsData() {
   const { showToast } = useToast()
+  const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,      setRows]      = useState<EmsDataRow[]>([])
   const [loading,   setLoading]   = useState(false)
   const [search,    setSearch]    = useState('')
@@ -253,9 +255,17 @@ export default function EmsData() {
   const [saving,    setSaving]    = useState(false)
   const PAGE_SIZE = 25
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    if (!phaseLoading && viewPhaseId) loadData()
+    if (!phaseLoading && !viewPhaseId) { setRows([]); setLoading(false) }
+  }, [viewPhaseId, phaseLoading])
 
   async function loadData() {
+    if (!viewPhaseId) {
+      setRows([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const { data, error } = await supabase
@@ -265,6 +275,7 @@ export default function EmsData() {
           address_line_1, address_line_2, city, state, zip, country,
           influencers!inner(display_name, handle)
         `)
+        .eq('phase_id', viewPhaseId)
         .order('seq', { ascending: true, nullsFirst: false })
 
       if (error) throw error

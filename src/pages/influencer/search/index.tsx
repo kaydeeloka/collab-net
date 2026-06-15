@@ -108,8 +108,8 @@ const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string 
 }
 
 export default function Listup() {
-  const { selectedPhaseId, phases } = usePhase()
-  const phaseLabel = phases.find(p => p.id === selectedPhaseId)?.name ?? '1차'
+  const { viewPhaseId, phases } = usePhase()
+  const phaseLabel = phases.find(p => p.id === viewPhaseId)?.name ?? '1차'
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
@@ -178,10 +178,10 @@ export default function Listup() {
   }, [])
 
   async function loadDashStats() {
-    if (!selectedPhaseId) return
+    if (!viewPhaseId) return
     const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-      supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', selectedPhaseId),
-      supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', selectedPhaseId),
+      supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', viewPhaseId),
+      supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId),
     ])
     if (!infData) return
     let total = 0, sent = 0
@@ -197,15 +197,15 @@ export default function Listup() {
   }
 
   // Reload stats when phase (차수) changes
-  useEffect(() => { loadDashStats() }, [selectedPhaseId])
+  useEffect(() => { loadDashStats() }, [viewPhaseId])
 
   // Reload DB list when phase changes (if already loaded)
   useEffect(() => {
-    if (!selectedPhaseId) return
+    if (!viewPhaseId) return
     setDbLoaded(false)
     setSelected(new Set())
     if (activeTab === 'database') loadInfluencers()
-  }, [selectedPhaseId])
+  }, [viewPhaseId])
 
   useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
@@ -257,10 +257,10 @@ export default function Listup() {
   }
 
   async function loadInfluencers() {
-    if (!selectedPhaseId) return
+    if (!viewPhaseId) return
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', selectedPhaseId).order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', viewPhaseId).order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
@@ -301,7 +301,7 @@ export default function Listup() {
     if (!apifyResults?.length || !apifyCurrentTier) return
     setApifyLoading(true)
     const rows = apifyResults.map(c => ({
-      phase_id:         selectedPhaseId,
+      phase_id:         viewPhaseId,
       handle:           c.handle,
       display_name:     c.displayName || null,
       email:            c.email || null,

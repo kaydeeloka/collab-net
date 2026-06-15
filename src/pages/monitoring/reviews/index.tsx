@@ -95,7 +95,7 @@ function brandBadge(brand: string | null) {
 }
 
 export default function Monitoring() {
-  const { selectedPhaseId, loading: phaseLoading } = usePhase()
+  const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,           setRows]           = useState<MonRow[]>([])
   const [confirmedCount, setConfirmedCount] = useState(0)
   const [loading,        setLoading]        = useState(true)
@@ -160,13 +160,13 @@ export default function Monitoring() {
   useEffect(() => {
     if (phaseLoading) return
     loadKeywords()
-    if (selectedPhaseId) loadMonitoring()
+    if (viewPhaseId) loadMonitoring()
     else {
       setRows([])
       setConfirmedCount(0)
       setLoading(false)
     }
-  }, [selectedPhaseId, phaseLoading])
+  }, [viewPhaseId, phaseLoading])
 
   function mapMonitoringRecord(m: any): MonRow {
     const ip = m.influencer_platform
@@ -218,7 +218,7 @@ export default function Monitoring() {
   }
 
   async function loadMonitoring() {
-    if (!selectedPhaseId) return
+    if (!viewPhaseId) return
     setLoading(true)
     try {
       const monitoringSelect = `
@@ -241,7 +241,7 @@ export default function Monitoring() {
             influencers(display_name),
             influencer_platform(id, platform, handle)
           `)
-          .eq('phase_id', selectedPhaseId)
+          .eq('phase_id', viewPhaseId)
           .order('seq', { ascending: true, nullsFirst: false }),
         supabase
           .from('monitoring')

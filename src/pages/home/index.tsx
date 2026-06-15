@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '../../lib/beauty-news'
+import { fetchReshipmentMap } from '../../lib/ems-errors'
 import { usePhase } from '../../contexts/PhaseContext'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
@@ -33,8 +34,8 @@ function statError(msg: string) {
 
 export default function Dashboard() {
   const { dbOptions, activeDbId, switchPhase } = useOutletContext<PhaseCtx>()
-  const { selectedPhaseId, phases } = usePhase()
-  const currentPhase  = phases.find(p => p.id === (selectedPhaseId ?? activeDbId))
+  const { viewPhaseId, phases } = usePhase()
+  const currentPhase  = phases.find(p => p.id === (viewPhaseId ?? activeDbId))
   const dispatchDate  = currentPhase?.kit_send_date ? new Date(currentPhase.kit_send_date + 'T00:00:00') : null
   const deadlineDate  = currentPhase?.ended_at      ? new Date(currentPhase.ended_at.split('T')[0] + 'T00:00:00') : null
 
@@ -92,29 +93,72 @@ export default function Dashboard() {
   }, [activeDbId])
 
   const loadEmsStats = useCallback(async () => {
+    if (!activeDbId) return
     try {
-      const ACTIVE  = ['Info Received', 'In Transit', 'Out for Delivery', 'Pick Up']
-      const PROBLEM = ['Exception', 'Delivery Failure', 'DeliveryFailure', 'Expired']
-      const { data, error } = await supabase.from('ems_tracking').select('status')
+      const [{ data, error }, reshipMap] = await Promise.all([
+        supabase
+          .from('confirmed_influencers')
+          .select('id, ems_tracking(status)')
+          .eq('phase_id', activeDbId),
+        fetchReshipmentMap(activeDbId),
+      ])
       if (error) throw error
-      const rows      = data || []
+      const rows = (data || []).map((ci: any) => {
+        const ems = (ci.ems_tracking || [])[0] || {}
+        return {
+          status:    ems.status || null,
+          reship_id: reshipMap.get(ci.id)?.id ?? null,
+        }
+      })
       const delivered = rows.filter(r => r.status === 'Delivered').length
-      const inTransit = rows.filter(r => ACTIVE.includes(r.status || '')).length
-      const exception = rows.filter(r => PROBLEM.includes(r.status || '')).length
+      const inTransit = rows.filter(r => r.status === 'In Transit' || r.status === 'Preparing').length
+      const exception = rows.filter(r => r.status === 'Exception' || r.reship_id).length
       setStatsEms(
         `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${delivered}</div><div class="fstat-lbl">배송 완료</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${inTransit}</div><div class="fstat-lbl">배송 중</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#e53935">${exception}</div><div class="fstat-lbl">오류/미수취</div></div>`
       )
     } catch (e: unknown) { setStatsEms(statError((e as Error).message)) }
-  }, [])
+  }, [activeDbId])
+
+  const emptyMonitoringHtml =
+    `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 0명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
+    `<div class="fstat"><div class="fstat-val">0</div><div class="fstat-lbl">브랜드 리뷰</div></div>` +
+    `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
 
   const loadMonitoringStats = useCallback(async () => {
+    if (!activeDbId) return
     try {
+      const { data: confirmed, error: cErr } = await supabase
+        .from('confirmed_influencers')
+        .select('id')
+        .eq('phase_id', activeDbId)
+      if (cErr) throw cErr
+
+      const confirmedIds = (confirmed || []).map(r => r.id)
+      if (confirmedIds.length === 0) {
+        setStatsMonitoring(emptyMonitoringHtml)
+        return
+      }
+
+      const { data: platforms, error: pErr } = await supabase
+        .from('influencer_platform')
+        .select('id')
+        .in('confirmed_influencer_id', confirmedIds)
+      if (pErr) throw pErr
+
+      const platformIds = (platforms || []).map(r => r.id)
+      if (platformIds.length === 0) {
+        setStatsMonitoring(emptyMonitoringHtml)
+        return
+      }
+
       const { data, error } = await supabase
         .from('monitoring')
         .select('brand, influencer_platform_id, review_link')
+        .in('influencer_platform_id', platformIds)
       if (error) throw error
+
       const rows           = data || []
       const reviewRows     = rows.filter((r: any) => r.review_link?.startsWith('http'))
       const totalReviews   = reviewRows.length
@@ -132,7 +176,7 @@ export default function Dashboard() {
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mimuseCount}</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
       )
     } catch (e: unknown) { setStatsMonitoring(statError((e as Error).message)) }
-  }, [])
+  }, [activeDbId])
 
   useEffect(() => {
     loadListupStats()
@@ -144,7 +188,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadEmsStats()
+  }, [loadEmsStats])
+
+  useEffect(() => {
     loadMonitoringStats()
+  }, [loadMonitoringStats])
+
+  useEffect(() => {
     fetchLatestBeautyNewsKeywords().then(setNewsKeywords).catch(() => {})
   }, [])
 

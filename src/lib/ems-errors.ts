@@ -61,11 +61,26 @@ export function countReshipCompleted(rows: Pick<EmsErrorRow, 'status'>[]): numbe
 
 export type ReshipmentRef = { id: string; status: string }
 
-/** Load all reshipments keyed by confirmed_influencer_id (avoids nested embed issues). */
-export async function fetchReshipmentMap(): Promise<Map<string, ReshipmentRef>> {
+async function fetchConfirmedIdsForPhase(phaseId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('confirmed_influencers')
+    .select('id')
+    .eq('phase_id', phaseId)
+  if (error) throw error
+  return (data || []).map(r => r.id)
+}
+
+/** Load reshipments keyed by confirmed_influencer_id for the given phase. */
+export async function fetchReshipmentMap(phaseId?: string | null): Promise<Map<string, ReshipmentRef>> {
+  if (!phaseId) return new Map()
+
+  const confirmedIds = await fetchConfirmedIdsForPhase(phaseId)
+  if (confirmedIds.length === 0) return new Map()
+
   const { data, error } = await supabase
     .from('ems_reshipments')
     .select('id, status, confirmed_influencer_id')
+    .in('confirmed_influencer_id', confirmedIds)
 
   if (error) throw error
 
@@ -74,7 +89,12 @@ export async function fetchReshipmentMap(): Promise<Map<string, ReshipmentRef>> 
   )
 }
 
-export async function fetchEmsErrors(): Promise<EmsErrorRow[]> {
+export async function fetchEmsErrors(phaseId?: string | null): Promise<EmsErrorRow[]> {
+  if (!phaseId) return []
+
+  const confirmedIds = await fetchConfirmedIdsForPhase(phaseId)
+  if (confirmedIds.length === 0) return []
+
   const { data, error } = await supabase
     .from('ems_reshipments')
     .select(`
@@ -85,9 +105,8 @@ export async function fetchEmsErrors(): Promise<EmsErrorRow[]> {
         influencers(display_name, handle)
       )
     `)
+    .in('confirmed_influencer_id', confirmedIds)
     .order('created_at', { ascending: false })
-
-  if (error) throw error
 
   const trackingIds = [...new Set(
     (data || []).map((r: any) => r.original_tracking_id).filter(Boolean),

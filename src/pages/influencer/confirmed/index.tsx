@@ -293,7 +293,7 @@ function emptyPlatform(): InfluencerPlatform {
 }
 
 export default function Confirmed() {
-  const { selectedPhaseId } = usePhase()
+  const { viewPhaseId } = usePhase()
   const { showToast }       = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedRow[]>([])
@@ -321,7 +321,7 @@ export default function Confirmed() {
   const originalPlatformIds = useRef<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { if (selectedPhaseId) load() }, [selectedPhaseId])
+  useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
 
   useEffect(() => {
     if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter) return
@@ -348,7 +348,7 @@ export default function Confirmed() {
         influencers(platform, handle, display_name, followers, profile_url),
         ems_tracking(id, ems_number, status)
       `)
-      .eq('phase_id', selectedPhaseId ?? '')
+      .eq('phase_id', viewPhaseId ?? '')
       .order('seq', { ascending: true, nullsFirst: false })
 
     if (error) { showToast(error.message, 'error'); setLoading(false); return }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getDateActivePhaseId, normalizePhaseId } from '../lib/phase'
 
 interface Phase {
   id: string
@@ -12,7 +13,8 @@ interface Phase {
 }
 
 interface PhaseContextValue {
-  selectedPhaseId: string | null  // user's current viewing choice
+  selectedPhaseId: string | null  // persisted viewing choice (app_config)
+  viewPhaseId:     string | null  // phase used for data queries
   activePhaseId:   string | null  // date-based: today is between started_at and ended_at
   phases: Phase[]
   loading: boolean
@@ -21,6 +23,7 @@ interface PhaseContextValue {
 
 const PhaseContext = createContext<PhaseContextValue>({
   selectedPhaseId: null,
+  viewPhaseId:     null,
   activePhaseId:   null,
   phases: [],
   loading: true,
@@ -29,38 +32,54 @@ const PhaseContext = createContext<PhaseContextValue>({
 
 export function PhaseProvider({ children }: { children: React.ReactNode }) {
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null)
+  const [viewPhaseId,     setViewPhaseId]     = useState<string | null>(null)
   const [phases,          setPhases]          = useState<Phase[]>([])
   const [loading,         setLoading]         = useState(true)
 
   useEffect(() => {
     ;(async () => {
       const [{ data: cfg }, { data: phaseList }] = await Promise.all([
-        supabase.from('app_config').select('value').eq('key', 'active_phase_id').single(),
+        supabase.from('app_config').select('value').eq('key', 'active_phase_id').maybeSingle(),
         supabase.from('phases').select('*').order('started_at', { ascending: true }),
       ])
 
-      if (cfg?.value) setSelectedPhaseId(cfg.value as string)
-      if (phaseList)  setPhases(phaseList as Phase[])
+      const list = (phaseList || []) as Phase[]
+      setPhases(list)
+
+      const savedId    = normalizePhaseId(cfg?.value)
+      const dateActive = getDateActivePhaseId(list)
+      // Prefer date-active phase (e.g. 2차) over stale saved config (e.g. 1차)
+      const initialId  = dateActive ?? savedId ?? null
+
+      setSelectedPhaseId(initialId)
+      setViewPhaseId(initialId)
+
+      if (dateActive && dateActive !== savedId) {
+        await supabase.from('app_config').upsert({
+          key: 'active_phase_id',
+          value: dateActive,
+          updated_at: new Date().toISOString(),
+        })
+      }
+
       setLoading(false)
     })()
   }, [])
 
-  // Compute date-based active phase
-  const today = new Date().toISOString().split('T')[0]
-  const activePhaseId = phases.find(p => {
-    if (!p.started_at || !p.ended_at) return false
-    const start = p.started_at.split('T')[0]
-    const end   = p.ended_at.split('T')[0]
-    return today >= start && today <= end
-  })?.id ?? null
+  const activePhaseId = getDateActivePhaseId(phases)
 
   async function switchPhase(phaseId: string) {
-    await supabase.from('app_config').upsert({ key: 'active_phase_id', value: phaseId, updated_at: new Date().toISOString() })
+    await supabase.from('app_config').upsert({
+      key: 'active_phase_id',
+      value: phaseId,
+      updated_at: new Date().toISOString(),
+    })
     setSelectedPhaseId(phaseId)
+    setViewPhaseId(phaseId)
   }
 
   return (
-    <PhaseContext.Provider value={{ selectedPhaseId, activePhaseId, phases, loading, switchPhase }}>
+    <PhaseContext.Provider value={{ selectedPhaseId, viewPhaseId, activePhaseId, phases, loading, switchPhase }}>
       {children}
     </PhaseContext.Provider>
   )

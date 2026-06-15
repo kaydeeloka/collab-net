@@ -891,3 +891,18 @@ WHERE ip.confirmed_influencer_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM monitoring m WHERE m.review_link = s.review_link
   );
+
+-- ============================================================
+--  monitoring — phase_id (via influencer_platform → confirmed_influencers)
+-- ============================================================
+ALTER TABLE monitoring
+  ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES phases(id) ON DELETE CASCADE;
+
+UPDATE monitoring m
+SET phase_id = ci.phase_id
+FROM influencer_platform ip
+JOIN confirmed_influencers ci ON ci.id = ip.confirmed_influencer_id
+WHERE m.influencer_platform_id = ip.id
+  AND m.phase_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_monitoring_phase ON monitoring(phase_id);

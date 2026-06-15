@@ -8,6 +8,7 @@ import {
   type EmsErrorRow,
 } from '../../../../lib/ems-errors'
 import { useToast } from '../../../../contexts/ToastContext'
+import { usePhase } from '../../../../contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
 import Spinner from '../../../../components/Spinner'
 
@@ -74,6 +75,7 @@ function TrackingCell({ emsNumber, carrierStatus }: { emsNumber: string; carrier
 export default function EmsErrors() {
   const { showToast } = useToast()
   const { refreshStats, reshipVersion } = useEmsLayout()
+  const { viewPhaseId, loading: phaseLoading } = usePhase()
   const { pathname } = useLocation()
   const [rows, setRows]           = useState<EmsErrorRow[]>([])
   const [loading, setLoading]     = useState(true)
@@ -81,13 +83,18 @@ export default function EmsErrors() {
   const [tableEditMode, setTableEditMode] = useState(false)
 
   useEffect(() => {
-    if (pathname.startsWith('/kit/ems/errors')) loadErrors()
-  }, [pathname, reshipVersion])
+    if (pathname.startsWith('/kit/ems/errors') && !phaseLoading) loadErrors()
+  }, [pathname, reshipVersion, viewPhaseId, phaseLoading])
 
   async function loadErrors() {
+    if (!viewPhaseId) {
+      setRows([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      setRows(await fetchEmsErrors())
+      setRows(await fetchEmsErrors(viewPhaseId))
     } catch (e: unknown) {
       showToast((e as Error).message, 'error')
     }
@@ -161,6 +168,14 @@ export default function EmsErrors() {
     setSavingId(null)
   }
 
+  const trackingTdStyle: React.CSSProperties = {
+    whiteSpace: 'normal',
+    overflow: 'visible',
+    maxWidth: 'none',
+    minWidth: 160,
+    verticalAlign: 'top',
+  }
+
   const inputStyle: React.CSSProperties = {
     width: '100%', minWidth: 110, padding: '4px 8px',
     border: '1px solid var(--gray-3)', borderRadius: 6, fontSize: 12, outline: 'none',
@@ -217,31 +232,34 @@ export default function EmsErrors() {
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td style={trackingTdStyle}>
                     {tableEditMode ? (
-                      <div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 150 }}>
                         <input
                           key={`ems-${r.id}-${r.tracking}`}
                           defaultValue={r.tracking === '—' ? '' : r.tracking}
                           placeholder="새 등기번호"
                           disabled={savingId === r.id}
                           onBlur={e => changeField(r, 'tracking', e.target.value)}
-                          style={{ ...inputStyle, minWidth: 130, fontFamily: 'monospace' }}
+                          style={{ ...inputStyle, minWidth: 0, fontFamily: 'monospace' }}
                         />
-                        <select
-                          value={r.carrierStatus}
-                          disabled={savingId === r.id}
-                          onChange={e => changeCarrierStatus(r, e.target.value)}
-                          style={{
-                            width: '100%', marginTop: 6, minWidth: 130,
-                            background: CARRIER_STATUS_COLORS[r.carrierStatus] || '#94a3b8',
-                            color: '#fff',
-                            padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                            border: 'none', cursor: 'pointer',
-                          }}
-                        >
-                          {CARRIER_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 4 }}>배송 상태</div>
+                          <select
+                            value={r.carrierStatus}
+                            disabled={savingId === r.id}
+                            onChange={e => changeCarrierStatus(r, e.target.value)}
+                            style={{
+                              display: 'block', width: '100%',
+                              background: CARRIER_STATUS_COLORS[r.carrierStatus] || '#94a3b8',
+                              color: '#fff',
+                              padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                              border: '1px solid var(--gray-3)', cursor: 'pointer',
+                            }}
+                          >
+                            {CARRIER_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
                       </div>
                     ) : (
                       <TrackingCell emsNumber={r.tracking} carrierStatus={r.carrierStatus} />

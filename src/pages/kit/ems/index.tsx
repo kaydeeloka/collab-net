@@ -7,6 +7,7 @@ import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
 import Pagination from '../../../components/Pagination'
 import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '../../../lib/ems-errors'
+import { usePhase } from '../../../contexts/PhaseContext'
 import { useEmsLayout } from './layout'
 
 interface EmsRow {
@@ -62,6 +63,7 @@ const STATUS_FILTER_OPTIONS = [
 export default function Ems() {
   const { showToast } = useToast()
   const { refreshStats, notifyReshipChange } = useEmsLayout()
+  const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,    setRows]    = useState<EmsRow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
@@ -97,7 +99,10 @@ export default function Ems() {
     status:            '접수완료',
   })
 
-  useEffect(() => { loadEms() }, [])
+  useEffect(() => {
+    if (!phaseLoading && viewPhaseId) loadEms()
+    if (!phaseLoading && !viewPhaseId) { setRows([]); setLoading(false) }
+  }, [viewPhaseId, phaseLoading])
 
   useEffect(() => { setPage(1) }, [searchQuery, filterStatus])
 
@@ -113,6 +118,11 @@ export default function Ems() {
   }, [showStatusFilter])
 
   async function loadEms(opts?: { silent?: boolean }) {
+    if (!viewPhaseId) {
+      setRows([])
+      setLoading(false)
+      return
+    }
     if (!opts?.silent) setLoading(true)
     try {
       const [{ data, error }, reshipMap] = await Promise.all([
@@ -127,8 +137,9 @@ export default function Ems() {
               email_sent, status, last_update
             )
           `)
+          .eq('phase_id', viewPhaseId)
           .order('seq', { ascending: true, nullsFirst: false }),
-        fetchReshipmentMap(),
+        fetchReshipmentMap(viewPhaseId),
       ])
 
       if (error) throw error

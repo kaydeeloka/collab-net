@@ -85,7 +85,7 @@ export default function Layout() {
   const navigate     = useNavigate()
 
   // ── Phase state (from PhaseContext → Supabase) ──
-  const { selectedPhaseId, activePhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
+  const { selectedPhaseId, activePhaseId, viewPhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
 
   const [showManage,     setShowManage]     = useState(false)
   const [showNewPhase,   setShowNewPhase]   = useState(false)
@@ -113,9 +113,9 @@ export default function Layout() {
   const [newPhaseKitDate,     setNewPhaseKitDate]      = useState('')
   const [newPhaseSheetsUrl,   setNewPhaseSheetsUrl]    = useState('')
 
-  const activeDbId  = selectedPhaseId ?? ''
+  const activeDbId  = viewPhaseId ?? ''
   const dbOptions   = phaseList.map(p => ({ id: p.id, label: p.name })).sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
-  const phaseBadge  = phaseList.find(p => p.id === selectedPhaseId)?.name || '—'
+  const phaseBadge  = phaseList.find(p => p.id === viewPhaseId)?.name || '—'
 
   async function switchPhase(id: string) {
     if (!id || id === activeDbId) return
@@ -362,7 +362,7 @@ export default function Layout() {
                   {p.id === activePhaseId && (
                     <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '2px 7px' }}>활성</span>
                   )}
-                  {p.id === selectedPhaseId && p.id !== activePhaseId && (
+                  {p.id === viewPhaseId && p.id !== activePhaseId && (
                     <span style={{ fontSize: 10, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', borderRadius: 20, padding: '2px 7px' }}>보는 중</span>
                   )}
                 </div>

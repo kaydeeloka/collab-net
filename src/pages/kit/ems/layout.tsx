@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '../../../lib/ems-errors'
+import { usePhase } from '../../../contexts/PhaseContext'
 import Spinner from '../../../components/Spinner'
 
 export const INFLUENCER_TARGET = 50
@@ -32,7 +33,11 @@ const TABS = [
   { path: '/kit/ems/errors', label: '배송 오류 관리' },
 ] as const
 
-async function fetchEmsStats(): Promise<EmsStats> {
+async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
+  if (!phaseId) {
+    return { total: 0, targetPct: 0, delivered: 0, inTransit: 0, shippingErrors: 0, reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0 }
+  }
+
   const [{ data, error }, reshipMap] = await Promise.all([
     supabase
       .from('confirmed_influencers')
@@ -40,8 +45,9 @@ async function fetchEmsStats(): Promise<EmsStats> {
         id,
         influencers!inner(handle, display_name),
         ems_tracking(status)
-      `),
-    fetchReshipmentMap(),
+      `)
+      .eq('phase_id', phaseId),
+    fetchReshipmentMap(phaseId),
   ])
 
   if (error) throw error
@@ -142,6 +148,7 @@ function EmsStatsCards({ stats }: { stats: EmsStats }) {
 export default function EmsLayout() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
+  const { viewPhaseId, loading: phaseLoading } = usePhase()
   const activeTab    = pathname.startsWith('/kit/ems/errors') ? '/kit/ems/errors' : '/kit/ems'
   const [stats, setStats]             = useState<EmsStats | null>(null)
   const [loading, setLoading]         = useState(true)
@@ -150,14 +157,14 @@ export default function EmsLayout() {
   const loadStats = useCallback(async () => {
     setLoading(true)
     try {
-      setStats(await fetchEmsStats())
+      setStats(await fetchEmsStats(viewPhaseId))
     } catch {
       setStats({ total: 0, targetPct: 0, delivered: 0, inTransit: 0, shippingErrors: 0, reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0 })
     }
     setLoading(false)
-  }, [])
+  }, [viewPhaseId])
 
-  useEffect(() => { loadStats() }, [loadStats, pathname, reshipVersion])
+  useEffect(() => { if (!phaseLoading) loadStats() }, [loadStats, pathname, reshipVersion, phaseLoading])
 
   const notifyReshipChange = useCallback(() => {
     setReshipVersion(v => v + 1)
