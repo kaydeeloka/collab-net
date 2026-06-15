@@ -1,27 +1,13 @@
 // ============================================================
-//  MiMuse Dashboard — Shared constants + API entry point
+//  MiMuse Dashboard — API entry point
+//  Data: Supabase (influencers, EMS, monitoring, beauty news)
+//  Integrations: Apify, Microsoft Outlook Graph
 // ============================================================
-
-// Shared spreadsheet IDs — still used by monitoring.gs and 17-track.gs
-const PHASE1_SHEET_ID      = '1xjxGH0sU5pB9WeXevGZBuP-ADvdZHkA2W-jUi727Hm0';
-const SHEET_DELIVERY_LIST  = '배송리스트';
-const SHEET_DELIVERY_TRACK = '배송추적';
-const SHEET_MONITORING     = '모니터링';
-
-function getActiveOutreachId() {
-  try {
-    const id = PropertiesService.getScriptProperties().getProperty('ACTIVE_OUTREACH_ID');
-    return id || PHASE1_SHEET_ID;
-  } catch (e) {
-    return PHASE1_SHEET_ID;
-  }
-}
 
 // Feature routers — each file owns its own routeXxx(action, p, body)
 const FEATURE_ROUTERS = [
   routeListup,
   routeOutlook,
-  routeEms,
   routeMonitoring,
   routeTrend,
   routeBeautyNews,

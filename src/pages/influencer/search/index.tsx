@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
@@ -19,12 +19,32 @@ const DEFAULT_TIERS = [
   { rank:'4순위', label:'나노 (3K~10K)',       minF:3000,   maxF:9999,   tags:'beauty',  category:'일반뷰티' },
   { rank:'5순위', label:'마이크로 (60K~100K)', minF:60000,  maxF:100000, tags:'kbeauty', category:'K-뷰티' },
 ]
-const DEFAULT_FILTER_CONDS = [
-  { cat: '중복',        desc: '1~5순위까지의 중복 계정 필터링' },
-  { cat: '영상 퀄리티', desc: '영상 콘텐츠 퀄리티 기준 수기 검토 예정' },
+const DEFAULT_FILTER_CONDS: FilterCond[] = [
+  { cat: '중복', desc: '1~5순위까지의 중복 계정 필터링', type: 'dedup', enabled: true },
 ]
 
-const DB_TIERS = ['1순위','2순위','3순위','4순위','5순위']
+const FILTER_SELECT: CSSProperties = {
+  padding: '4px 10px', borderRadius: 6, border: '1px solid var(--gray-3)',
+  fontSize: 13, background: '#fff', fontWeight: 600, minWidth: 72,
+}
+const FILTER_CHECK_LABEL: CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-6)', cursor: 'pointer', margin: 0,
+}
+const FILTER_INLINE: CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--gray-6)',
+}
+
+interface SearchFilters {
+  maxRatio: number
+  maxUploadDays: number
+  proxyCountry: string
+  requireEmail: boolean
+  followerMin: number
+  followerMax: number
+  maxCreators: number
+}
+
+interface FilterCond { cat: string; desc: string; manual?: boolean; type?: 'dedup'; enabled?: boolean }
 const DB_PAGE_SIZE = 25
 
 const COUNTRY_MAP: Record<string, string> = {
@@ -71,7 +91,8 @@ const COUNTRY_MAP: Record<string, string> = {
 }
 
 interface Tier        { rank: string; label: string; minF: number; maxF: number; tags: string; category: string }
-interface FilterCond  { cat: string; desc: string }
+
+const DB_TIERS = ['1순위','2순위','3순위','4순위','5순위']
 interface Influencer  {
   id: string; created_at: string; phase_id: string; handle: string
   display_name: string | null; email: string | null; followers: number; following: number
@@ -87,6 +108,33 @@ interface ApifyCreator {
 
 function saveConfig(key: string, value: unknown) {
   supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
+}
+
+function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
+  saveConfig('search_filters', filters)
+}
+
+function isDedupCond(fc: FilterCond) {
+  return fc.type === 'dedup' || fc.cat.includes('중복')
+}
+
+function normalizeFilterConds(conds: FilterCond[]): FilterCond[] {
+  const filtered = conds.filter(fc =>
+    fc.cat !== '국가' && !fc.manual &&
+    !fc.cat.includes('영상') && !fc.cat.includes('퀄리티')
+  )
+  const normalized = filtered.map(fc => {
+    if (!isDedupCond(fc)) return fc
+    return { ...DEFAULT_FILTER_CONDS[0], ...fc, type: 'dedup' as const, enabled: fc.enabled !== false }
+  })
+  if (!normalized.some(isDedupCond)) {
+    return [DEFAULT_FILTER_CONDS[0]]
+  }
+  return normalized.filter(isDedupCond)
+}
+
+function hasDedupFilter(conds: FilterCond[]) {
+  return conds.some(fc => isDedupCond(fc) && fc.enabled !== false)
 }
 
 const TIER_COLOR: Record<string, string> = {
@@ -125,10 +173,10 @@ export default function Listup() {
   const [newKbeautyKw, setNewKbeautyKw] = useState('')
   const [newBeautyKw, setNewBeautyKw] = useState('')
   const [filterConds, setFilterConds] = useState<FilterCond[]>(DEFAULT_FILTER_CONDS)
-  const [filterEditMode, setFilterEditMode] = useState(false)
   const [maxRatio, setMaxRatio] = useState(70)
   const [maxUploadDays, setMaxUploadDays] = useState(30)
   const [proxyCountry, setProxyCountry] = useState('US')
+  const [requireEmail, setRequireEmail] = useState(true)
 
   // Apify state (still uses GAS)
   const [apifyTierIdx, setApifyTierIdx] = useState<number | null>(null)
@@ -139,7 +187,11 @@ export default function Listup() {
   const [apifyRunId, setApifyRunId] = useState('')
   const [apifyDatasetId, setApifyDatasetId] = useState('')
   const [apifyPolling, setApifyPolling] = useState(false)
+  const [apifyProcessing, setApifyProcessing] = useState(false)
   const [apifyCurrentTier, setApifyCurrentTier] = useState<Tier | null>(null)
+  const [apifyFilterStats, setApifyFilterStats] = useState<{ noEmailSkipped: number; dedupSkipped: number } | null>(null)
+  const [apifyManualId, setApifyManualId] = useState('')
+  const existingHandlesRef = useRef<string[]>([])
 
   // DB state
   const [influencers, setInfluencers] = useState<Influencer[]>([])
@@ -167,12 +219,13 @@ export default function Listup() {
       if (map.tiers)             setTiers(map.tiers as Tier[])
       if (map.kbeauty_keywords)  setKbeautyKws(map.kbeauty_keywords as string[])
       if (map.beauty_keywords)   setBeautyKws(map.beauty_keywords as string[])
-      if (map.filter_conditions) setFilterConds((map.filter_conditions as FilterCond[]).filter(fc => fc.cat !== '국가'))
+      if (map.filter_conditions) setFilterConds(normalizeFilterConds(map.filter_conditions as FilterCond[]))
       if (map.search_filters) {
-        const sf = map.search_filters as { maxRatio: number; maxUploadDays: number; proxyCountry: string }
+        const sf = map.search_filters as Partial<SearchFilters>
         setMaxRatio(sf.maxRatio ?? 70)
         setMaxUploadDays(sf.maxUploadDays ?? 30)
         setProxyCountry(sf.proxyCountry ?? 'US')
+        setRequireEmail(sf.requireEmail !== false)
       }
     })()
   }, [])
@@ -209,6 +262,107 @@ export default function Listup() {
 
   useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
+  async function fetchExistingHandles() {
+    const { data } = await supabase.from('influencers').select('handle')
+    return (data ?? []).map(r => r.handle)
+  }
+
+  function buildSearchFilters(tier: Tier | null): SearchFilters {
+    return {
+      maxRatio,
+      maxUploadDays,
+      proxyCountry: proxyCountry || 'US',
+      requireEmail,
+      followerMin: tier?.minF ?? 0,
+      followerMax: tier?.maxF ?? 0,
+      maxCreators: targetCreators,
+    }
+  }
+
+  function setDedupEnabled(enabled: boolean) {
+    const next = [{ ...DEFAULT_FILTER_CONDS[0], enabled }]
+    setFilterConds(next)
+    saveConfig('filter_conditions', next)
+  }
+
+  async function prefetchExistingHandles() {
+    if (!hasDedupFilter(filterConds)) return
+    if (!existingHandlesRef.current.length) {
+      existingHandlesRef.current = await fetchExistingHandles()
+    }
+  }
+
+  async function fetchAndApplyResults(dsId: string, tier: Tier | null) {
+    setApifyProcessing(true)
+    setApifyStatus('탐색 완료! 결과 처리 중...')
+    setApifyResults(null)
+    setApifyFilterStats(null)
+    try {
+      await prefetchExistingHandles()
+      const results: { ok?: boolean; creators?: ApifyCreator[]; dedupSkipped?: number; noEmailSkipped?: number; error?: string } =
+        await gasPost({
+          action: 'getRunResults',
+          datasetId: dsId,
+          searchFilters: buildSearchFilters(tier),
+          filterConditions: filterConds,
+          existingHandles: existingHandlesRef.current,
+        })
+      if (results.error) {
+        setApifyStatus('결과 오류: ' + results.error)
+        return
+      }
+      const list = results.creators || []
+      const noEmailSkipped = results.noEmailSkipped ?? 0
+      const dedupSkipped = results.dedupSkipped ?? 0
+      setApifyResults(list)
+      setApifyFilterStats({ noEmailSkipped, dedupSkipped })
+      setApifyStatus(`완료: ${list.length}명${noEmailSkipped > 0 ? ` · 이메일 없음 ${noEmailSkipped}명 제외` : ''}${dedupSkipped > 0 ? ` · 중복 ${dedupSkipped}명 제외` : ''}`)
+    } catch (e: unknown) {
+      setApifyStatus('결과 오류: ' + (e as Error).message)
+    } finally {
+      setApifyProcessing(false)
+    }
+  }
+
+  async function resolveApifyDatasetId(id: string): Promise<string> {
+    const statusRes = await gasPost<{ status?: string; datasetId?: string; error?: string; notFound?: boolean }>({
+      action: 'checkRunStatus',
+      runId: id,
+    })
+    if (statusRes.status) {
+      if (statusRes.status !== 'SUCCEEDED') {
+        throw new Error('Run 미완료: ' + statusRes.status)
+      }
+      if (statusRes.datasetId) return statusRes.datasetId
+    }
+    if (statusRes.error && !statusRes.notFound) {
+      throw new Error(statusRes.error)
+    }
+    return id
+  }
+
+  async function loadFromApifyId() {
+    if (apifyTierIdx === null) return
+    const id = apifyManualId.trim()
+    if (!id) return
+    const tier = tiers[apifyTierIdx]
+    setApifyPolling(false)
+    setApifyLoading(true)
+    setApifyResults(null)
+    setApifyFilterStats(null)
+    setApifyCurrentTier(tier)
+    existingHandlesRef.current = []
+    setApifyStatus('Apify Run/Dataset 확인 중...')
+    try {
+      const dsId = await resolveApifyDatasetId(id)
+      setApifyLoading(false)
+      await fetchAndApplyResults(dsId, tier)
+    } catch (e: unknown) {
+      setApifyStatus('오류: ' + (e as Error).message)
+      setApifyLoading(false)
+    }
+  }
+
   // Apify polling (GAS)
   useEffect(() => {
     if (!apifyPolling || !apifyRunId) return
@@ -221,35 +375,38 @@ export default function Listup() {
         const statusRes: { status?: string; datasetId?: string; error?: string } =
           await gasPost({ action: 'checkRunStatus', runId: apifyRunId })
         if (cancelled) return
-        if (statusRes.error) { setApifyStatus('상태 확인 오류: ' + statusRes.error); setApifyPolling(false); return }
+        if (statusRes.error) {
+          setApifyStatus('상태 확인 오류: ' + statusRes.error)
+          setApifyPolling(false)
+          setApifyProcessing(false)
+          return
+        }
         const s = statusRes.status || ''
         if (s === 'SUCCEEDED') {
           setApifyPolling(false)
-          setApifyStatus('탐색 완료! 결과 처리 중...')
           const dsId = statusRes.datasetId || apifyDatasetId
-          const t = apifyCurrentTier
-          const results: { ok?: boolean; creators?: ApifyCreator[]; dedupSkipped?: number; error?: string } =
-            await gasPost({ action: 'getRunResults', datasetId: dsId, followerMin: t?.minF || 0, followerMax: t?.maxF || 0, maxFollowingRatio: maxRatio, maxUploadDays })
           if (cancelled) return
-          if (results.error) { setApifyStatus('결과 오류: ' + results.error); return }
-          const list = results.creators || []
-          setApifyResults(list)
-          setApifyStatus(`완료: ${list.length}명 발견 (중복 제외 ${results.dedupSkipped || 0}명)`)
+          await fetchAndApplyResults(dsId, apifyCurrentTier)
         } else if (['FAILED','ABORTED','TIMED-OUT'].includes(s)) {
           setApifyPolling(false)
+          setApifyProcessing(false)
           setApifyStatus('탐색 실패: ' + s)
         } else {
-          setApifyStatus(`탐색 중... (${s})`)
-          if (!cancelled) timerId = setTimeout(poll, 10000)
+          setApifyStatus(`Apify 탐색 중... (${s})`)
+          if (!cancelled) timerId = setTimeout(poll, 5000)
         }
       } catch (e: unknown) {
-        if (!cancelled) setApifyStatus('폴링 오류: ' + (e as Error).message)
+        if (!cancelled) {
+          setApifyPolling(false)
+          setApifyProcessing(false)
+          setApifyStatus('폴링 오류: ' + (e as Error).message)
+        }
       }
     }
 
-    timerId = setTimeout(poll, 5000)
+    timerId = setTimeout(poll, 3000)
     return () => { cancelled = true; clearTimeout(timerId) }
-  }, [apifyPolling, apifyRunId, apifyDatasetId, apifyCurrentTier, maxRatio, maxUploadDays])
+  }, [apifyPolling, apifyRunId, apifyDatasetId, apifyCurrentTier, maxRatio, maxUploadDays, targetCreators, requireEmail, proxyCountry, filterConds])
 
   function switchTab(t: ListupTab) {
     navigate(t === 'database' ? '/influencer/search/db' : '/influencer/search')
@@ -298,31 +455,56 @@ export default function Listup() {
   }
 
   async function saveToSupabase() {
-    if (!apifyResults?.length || !apifyCurrentTier) return
+    if (!apifyResults?.length || !apifyCurrentTier || !viewPhaseId) return
     setApifyLoading(true)
-    const rows = apifyResults.map(c => ({
-      phase_id:         viewPhaseId,
-      handle:           c.handle,
-      display_name:     c.displayName || null,
-      email:            c.email || null,
-      followers:        c.followers,
-      following:        c.following,
-      following_ratio:  c.ratio || null,
-      total_likes:      c.totalLikes,
-      video_count:      c.videoCount,
-      avg_views:        c.avgViews,
-      engagement_rate:  c.engRate,
-      profile_url:      c.profileUrl || null,
-      status:           '',
-    }))
-    const { error, data } = await supabase.from('influencers').upsert(rows, { onConflict: 'handle', ignoreDuplicates: true }).select()
+
+    const [{ data: tierRow }, { data: existing }] = await Promise.all([
+      supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
+      supabase.from('influencers').select('handle'),
+    ])
+    const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
+
+    const dedup = hasDedupFilter(filterConds)
+    const rows = apifyResults
+      .filter(c => (!requireEmail || c.email?.trim()) && (!dedup || !existingSet.has(c.handle.toLowerCase())))
+      .map(c => ({
+        phase_id:         viewPhaseId,
+        tier_id:          tierRow?.id ?? null,
+        handle:           c.handle,
+        display_name:     c.displayName || null,
+        email:            c.email?.trim() || null,
+        platform:         'TikTok',
+        followers:        c.followers,
+        following:        c.following,
+        following_ratio:  c.ratio || null,
+        total_likes:      c.totalLikes,
+        video_count:      c.videoCount,
+        avg_views:        c.avgViews,
+        engagement_rate:  c.engRate,
+        profile_url:      c.profileUrl || null,
+        status:           '',
+      }))
+
+    if (!rows.length) {
+      setApifyStatus('저장할 신규 크리에이터가 없습니다 (이메일 없음 또는 중복)')
+      setApifyLoading(false)
+      return
+    }
+
+    const { error, data } = await supabase
+      .from('influencers')
+      .upsert(rows, { onConflict: 'phase_id,handle', ignoreDuplicates: true })
+      .select('*, tiers(rank, label, category)')
     if (error) {
       setApifyStatus('저장 오류: ' + error.message)
     } else {
       const saved = data?.length ?? 0
       const skipped = rows.length - saved
-      setApifyStatus(`저장 완료: ${saved}명 추가 (${skipped}명 중복 건너뜀)`)
-      if (data?.length) setInfluencers(prev => [...(data as Influencer[]), ...prev])
+      setApifyStatus(`저장 완료: ${saved}명 추가${skipped > 0 ? ` (${skipped}명 중복 건너뜀)` : ''}`)
+      if (data?.length) {
+        setInfluencers(prev => [...(data as Influencer[]), ...prev])
+        loadDashStats()
+      }
     }
     setApifyLoading(false)
   }
@@ -404,7 +586,7 @@ export default function Listup() {
                     }}
                   />
                 </th>
-                <th>크리에이터</th><th>이메일</th>
+                <th>크리에이터 이름 + 핸들</th><th>이메일</th>
                 <th style={{ textAlign: 'right' }}>팔로워</th><th style={{ textAlign: 'right' }}>팔로잉</th><th style={{ textAlign: 'right' }}>팔로잉 비율</th>
                 <th style={{ textAlign: 'right' }}>영상 수</th><th style={{ textAlign: 'right' }}>참여율 (%)</th><th>컨택 대상</th>
               </tr>
@@ -539,80 +721,75 @@ export default function Listup() {
           <div>
             {/* 필터링 조건 */}
             <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>인플루언서 필터링 조건</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {!filterEditMode
-                    ? <button className="cfg-btn" onClick={() => setFilterEditMode(true)}>편집</button>
-                    : <>
-                      <button className="cfg-btn" onClick={() => setFilterConds(prev => [...prev, { cat: '구분', desc: '내용을 입력하세요' }])}>+ 추가</button>
-                      <button className="cfg-btn" style={{ background: 'var(--green)', color: '#fff', borderColor: 'var(--green)' }} onClick={() => { saveConfig('filter_conditions', filterConds); setFilterEditMode(false) }}>저장</button>
-                      <button className="cfg-btn cfg-btn--ghost" title="기본값으로 초기화" onClick={() => { setFilterConds(DEFAULT_FILTER_CONDS); saveConfig('filter_conditions', DEFAULT_FILTER_CONDS) }}>↺</button>
-                    </>
-                  }
-                </div>
-              </div>
-              <div className="table-wrap">
-                <table style={{ minWidth: 0 }}>
-                  <thead><tr><th>NO.</th><th>구분</th><th>내용</th>{filterEditMode && <th></th>}</tr></thead>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>인플루언서 필터링 조건</div>
+              <div className="table-wrap listup-filter-table">
+                <table>
+                  <thead><tr><th className="filter-no">NO.</th><th className="filter-cat">구분</th><th>내용</th></tr></thead>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>1</td>
-                      <td>팔로잉 비율</td>
+                      <td className="filter-no">1</td>
+                      <td className="filter-cat">팔로잉 비율</td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>팔로잉 수가 팔로워 수의</span>
-                          <select value={maxRatio} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600 }}
-                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveConfig('search_filters', { maxRatio: v, maxUploadDays, proxyCountry }) }}>
+                        <div style={FILTER_INLINE}>
+                          <span>팔로잉 수가 팔로워 수의</span>
+                          <select value={maxRatio} style={FILTER_SELECT}
+                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail }) }}>
                             <option value={50}>50%</option>
                             <option value={60}>60%</option>
                             <option value={70}>70%</option>
                             <option value={80}>80%</option>
                           </select>
-                          <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>초과 시 제외</span>
+                          <span>초과 시 제외</span>
                         </div>
                       </td>
-                      {filterEditMode && <td />}
                     </tr>
                     <tr>
-                      <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>2</td>
-                      <td>업로드 주기</td>
+                      <td className="filter-no">2</td>
+                      <td className="filter-cat">업로드 주기</td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>최근</span>
-                          <select value={maxUploadDays} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600 }}
-                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveConfig('search_filters', { maxRatio, maxUploadDays: v, proxyCountry }) }}>
+                        <div style={FILTER_INLINE}>
+                          <span>최근</span>
+                          <select value={maxUploadDays} style={FILTER_SELECT}
+                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail }) }}>
                             <option value={30}>30일</option>
                             <option value={49}>7주</option>
                           </select>
-                          <span style={{ color: 'var(--gray-6)', fontSize: 13 }}>이내 업로드 콘텐츠가 없는 계정 제외</span>
+                          <span>이내 업로드 콘텐츠가 없는 계정 제외</span>
                         </div>
                       </td>
-                      {filterEditMode && <td />}
                     </tr>
                     <tr>
-                      <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>3</td>
-                      <td>국가</td>
+                      <td className="filter-no">3</td>
+                      <td className="filter-cat">국가</td>
                       <td>
-                        <select value={proxyCountry} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--gray-3)', fontSize: 13, background: '#fff', fontWeight: 600, maxWidth: 260 }}
-                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveConfig('search_filters', { maxRatio, maxUploadDays, proxyCountry: v }) }}>
+                        <select value={proxyCountry} style={{ ...FILTER_SELECT, minWidth: 180, maxWidth: 240 }}
+                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail }) }}>
                           {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                         </select>
                       </td>
-                      {filterEditMode && <td />}
                     </tr>
-                    {filterConds.map((fc, i) => (
-                      <tr key={i}>
-                        <td style={{ textAlign: 'center', width: 32, color: 'var(--gray-6)' }}>{i + 4}</td>
-                        <td style={{ whiteSpace: 'normal' }}>
-                          {filterEditMode ? <input className="cfg-input" value={fc.cat} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, cat: e.target.value } : c))} /> : fc.cat}
-                        </td>
-                        <td style={{ whiteSpace: 'normal', maxWidth: 'none', overflow: 'visible' }}>
-                          {filterEditMode ? <input className="cfg-input" style={{ width: '100%' }} value={fc.desc} onChange={e => setFilterConds(prev => prev.map((c, j) => j === i ? { ...c, desc: e.target.value } : c))} /> : fc.desc}
-                        </td>
-                        {filterEditMode && <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${fc.cat}" 조건을 삭제할까요?`, () => setFilterConds(prev => prev.filter((_, j) => j !== i)))}>×</button></td>}
-                      </tr>
-                    ))}
+                    <tr>
+                      <td className="filter-no">4</td>
+                      <td className="filter-cat">이메일</td>
+                      <td>
+                        <label style={FILTER_CHECK_LABEL}>
+                          <input type="checkbox" checked={requireEmail}
+                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v }) }} />
+                          bio에 이메일이 없는 계정 제외
+                        </label>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="filter-no">5</td>
+                      <td className="filter-cat">중복</td>
+                      <td>
+                        <label style={FILTER_CHECK_LABEL}>
+                          <input type="checkbox" checked={(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).enabled !== false}
+                            onChange={e => setDedupEnabled(e.target.checked)} />
+                          {(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).desc}
+                        </label>
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -716,20 +893,28 @@ export default function Listup() {
 
             {/* Find Creators box */}
             <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
-            <div className="filters" style={{ marginBottom: 16 }}>
+            <div className="filters" style={{ marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
               <div className="filter-group">
                 <label>목표 인플루언서 수 (명)</label>
                 <input type="number" value={targetCreators} min={10} max={1000} step={10} style={{ width: 70 }} onChange={e => setTargetCreators(+e.target.value)} />
               </div>
-              <button className="listup-find-btn" disabled={apifyLoading || apifyTierIdx === null} onClick={async () => {
+              <button className="listup-find-btn" disabled={apifyLoading || apifyPolling || apifyProcessing || apifyTierIdx === null} onClick={async () => {
                 if (apifyTierIdx === null) return
                 const tier = tiers[apifyTierIdx]
-                setApifyLoading(true); setApifyStatus('탐색 중...')
-                setApifyResults(null)
+                setApifyLoading(true); setApifyStatus('Apify 탐색 시작...')
+                setApifyResults(null); setApifyFilterStats(null)
+                setApifyProcessing(false)
+                existingHandlesRef.current = []
+                prefetchExistingHandles()
                 try {
                   const tags = tier.tags === 'kbeauty' ? kbeautyKws : beautyKws
-                  const res: { error?: string; runId?: string; datasetId?: string } = await gasPost({ action: 'startCreatorSearch', hashtags: tags, targetCreators, followerMin: tier.minF, followerMax: tier.maxF, rank: tier.rank, sheetName: tier.category, proxyCountry: proxyCountry || 'US' })
+                  const res: { error?: string; runId?: string; datasetId?: string } = await gasPost({
+                    action: 'startCreatorSearch',
+                    hashtags: tags,
+                    searchFilters: buildSearchFilters(tier),
+                    filterConditions: filterConds,
+                  })
                   if (res.error) {
                     setApifyStatus('오류: ' + res.error)
                   } else {
@@ -737,51 +922,112 @@ export default function Listup() {
                     setApifyDatasetId(res.datasetId || '')
                     setApifyCurrentTier(tier)
                     setApifyPolling(true)
-                    setApifyStatus('탐색 시작됨. Run ID: ' + res.runId)
+                    setApifyStatus(`Apify 탐색 중... (Run: ${res.runId || ''})`)
                   }
                 } catch (e: unknown) { setApifyStatus('오류: ' + (e as Error).message) }
                 setApifyLoading(false)
               }}>Find Creators</button>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', marginLeft: 4 }}>{apifyLoading && <Spinner sm />} {apifyStatus}</span>
+              {(apifyLoading || apifyPolling || apifyProcessing) && <Spinner sm />}
+            </div>
+            <div className="filters" style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid var(--gray-2)' }}>
+              <div className="filter-group" style={{ flex: 1, minWidth: 220 }}>
+                <label>Apify Run / Dataset ID</label>
+                <input
+                  type="text"
+                  value={apifyManualId}
+                  placeholder="완료된 Run ID 또는 Dataset ID"
+                  style={{ width: '100%', maxWidth: 320 }}
+                  onChange={e => setApifyManualId(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && apifyManualId.trim() && apifyTierIdx !== null) loadFromApifyId() }}
+                />
+              </div>
+              <button
+                className="listup-update-btn"
+                disabled={apifyLoading || apifyPolling || apifyProcessing || apifyTierIdx === null || !apifyManualId.trim()}
+                onClick={loadFromApifyId}
+              >
+                필터 적용
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>완료된 Apify run에서 바로 필터링 (대기 없음)</span>
             </div>
 
             {/* Results */}
-            {apifyResults && apifyResults.length > 0 ? (
+            {apifyResults !== null ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>
                     탐색 결과 <span style={{ color: 'var(--blue-dk)' }}>{apifyResults.length}명</span>
-                    <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>팔로잉 비율 &le;{maxRatio}% · 최근 {maxUploadDays}일 이내 업로드</span>
+                    {apifyStatus && (
+                      <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>{apifyStatus}</span>
+                    )}
+                    <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>
+                      이메일 필수 · 팔로잉 비율 &le;{maxRatio}% · 최근 {maxUploadDays}일 이내 업로드
+                      {apifyFilterStats && (apifyFilterStats.noEmailSkipped > 0 || apifyFilterStats.dedupSkipped > 0) && (
+                        <> · 제외: 이메일 없음 {apifyFilterStats.noEmailSkipped}명, 중복 {apifyFilterStats.dedupSkipped}명</>
+                      )}
+                    </span>
                   </div>
-                  <button className="cfg-btn" style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }} disabled={apifyLoading} onClick={saveToSupabase}>
+                  <button className="cfg-btn" style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }} disabled={apifyLoading || !apifyResults.length} onClick={saveToSupabase}>
                     DB에 저장
                   </button>
                 </div>
+                {apifyResults.length > 0 ? (
                 <div className="table-wrap">
                   <table style={{ minWidth: 0 }}>
-                    <thead><tr><th>Handle</th><th>이름</th><th>이메일</th><th>팔로워</th><th>팔로잉 비율</th><th>참여율</th><th>평균 조회수</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>크리에이터 이름 + 핸들</th><th>이메일</th>
+                        <th style={{ textAlign: 'right' }}>팔로워</th><th style={{ textAlign: 'right' }}>팔로잉</th><th style={{ textAlign: 'right' }}>팔로잉 비율</th>
+                        <th style={{ textAlign: 'right' }}>영상 수</th><th style={{ textAlign: 'right' }}>참여율 (%)</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {apifyResults.map((c, i) => (
                         <tr key={i}>
-                          <td><a href={`https://www.tiktok.com/@${c.handle}`} target="_blank" rel="noopener" style={{ color: 'var(--gray-8)', fontWeight: 500 }}>@{c.handle}</a></td>
-                          <td>{c.displayName}</td>
-                          <td style={{ fontSize: 12, color: 'var(--gray-6)' }}>{c.email || '—'}</td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{c.displayName || c.handle}</span>
+                              <a href={`https://www.tiktok.com/@${c.handle}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{c.handle}</a>
+                            </div>
+                          </td>
+                          <td>{c.email ? <a href={`mailto:${c.email}`} style={{ color: '#1558b0', fontSize: 13 }}>{c.email}</a> : <span style={{ color: 'var(--gray-5)' }}>—</span>}</td>
                           <td className="num">{fmtNum(c.followers)}</td>
-                          <td className="num">{c.ratio}</td>
+                          <td className="num">{fmtNum(c.following)}</td>
+                          <td className="num">{c.ratio || '—'}</td>
+                          <td className="num">{fmtNum(c.videoCount)}</td>
                           <td className="num">{c.engRate}%</td>
-                          <td className="num">{fmtNum(c.avgViews)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                ) : (
+                  <div className="listup-empty-state" style={{ padding: '32px 24px' }}>
+                    <div className="listup-empty-title">조건에 맞는 크리에이터가 없습니다</div>
+                    <div className="listup-empty-desc">필터 조건을 완화하거나 다른 티어·키워드로 다시 탐색해 보세요.</div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="listup-empty-state">
-                <div className="listup-empty-icon">🔍</div>
-                <div className="listup-empty-title">{apifyPolling ? '탐색 중...' : '티어를 선택하고 Find Creators를 누르세요'}</div>
-                <div className="listup-empty-desc">
-                  {apifyPolling ? '클라우드에서 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.' : '위 표에서 티어를 클릭해 선택하고 탐색을 시작합니다.\n탐색은 클라우드에서 실행되며 2~5분 소요됩니다.'}
+                <div className={`listup-empty-icon${(apifyPolling || apifyProcessing) ? ' listup-empty-icon--loading' : ''}`}>
+                  {(apifyPolling || apifyProcessing) ? <Spinner /> : '🔍'}
+                </div>
+                <div className="listup-empty-title">
+                  {apifyProcessing
+                    ? '탐색 완료! 결과 처리 중...'
+                    : apifyPolling
+                      ? (apifyStatus || 'Apify 탐색 중...')
+                      : apifyStatus && !apifyStatus.startsWith('Apify 탐색')
+                        ? apifyStatus
+                        : '티어를 선택하고 Find Creators를 누르세요'}
+                </div>
+                <div className="listup-empty-desc" style={{ whiteSpace: 'pre-line' }}>
+                  {apifyProcessing
+                    ? 'Apify 데이터를 가져와 필터를 적용하고 있습니다. 잠시만 기다려 주세요.'
+                    : apifyPolling
+                      ? 'Apify에서 TikTok 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.'
+                      : '위 표에서 티어를 클릭해 선택하고 Find Creators로 Apify 탐색을 시작합니다.\n이미 완료된 Run이 있으면 Run/Dataset ID를 입력해 필터 적용을 누르세요.'}
                 </div>
               </div>
             )}

@@ -1,5 +1,7 @@
 // ============================================================
-//  17-track.gs — EMS sheet management + 17track API integration
+//  DEPRECATED — EMS now managed in Supabase (dashboard).
+//  Kept for reference; no longer registered in Code.gs routers.
+//  17-track.gs — legacy EMS sheet management + 17track API
 //
 //  Script Properties required:
 //    TRACK17_API_KEY  — 17track API key (Settings → API)

@@ -1,6 +1,6 @@
 // ============================================================
 //  Microsoft Graph API — Outlook Mail Integration
-//  Outlook Mail Integration — outreach sending + reply sync
+//  Outreach email send + reply sync (Supabase status in dashboard)
 //
 //  ONE-TIME SETUP (Azure Portal → portal.azure.com):
 //  1. App registrations → New registration
@@ -143,14 +143,15 @@ function checkOutlookAuth() {
 
 // ── Send email via Graph API ─────────────────────────────────
 function sendOutlookEmail(body) {
-  if (!body.email || !body.subject) return { ok: false, error: '이메일 주소 또는 제목이 없습니다.' };
+  const email = (body.email || body.to || '').trim();
+  if (!email || !body.subject) return { ok: false, error: '이메일 주소 또는 제목이 없습니다.' };
   try {
     const token = getOutlookAccessToken();
     const payload = {
       message: {
         subject: body.subject,
         body: { contentType: 'Text', content: body.body || '' },
-        toRecipients: [{ emailAddress: { address: body.email } }],
+        toRecipients: [{ emailAddress: { address: email } }],
       },
       saveToSentItems: true,
     };
@@ -169,14 +170,7 @@ function sendOutlookEmail(body) {
       return { ok: false, error: (err.error && err.error.message) || ('HTTP ' + code) };
     }
 
-    // Update spreadsheet
     const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
-    const ws = body.sheetName ? ss.getSheetByName(body.sheetName.toString().trim()) : null;
-    if (ws && body.sheetRow) {
-      ws.getRange(body.sheetRow, COL_OUTREACH + 1).setValue('yes');
-    }
-
     return { ok: true, date: today };
   } catch (e) {
     return { ok: false, error: e.toString() };
@@ -184,16 +178,14 @@ function sendOutlookEmail(body) {
 }
 
 // ── Sync replies from Outlook inbox ─────────────────────────
-// Fetches reply content + date and writes them to the sheet.
+// Returns reply content + date per email (dashboard updates Supabase).
 function syncOutlookReplies(items) {
-  if (!items || !items.length) return { ok: true, replied: [] };
+  if (!items || !items.length) return { ok: true, replies: [] };
   try {
     const token = getOutlookAccessToken();
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
     const emails = items.map(x => (x.email || '').trim().toLowerCase()).filter(Boolean);
-    if (!emails.length) return { ok: true, replied: [] };
+    if (!emails.length) return { ok: true, replies: [] };
 
-    // email → { body, receivedDate } of the most recent reply
     const repliedMap = {};
 
     const CHUNK = 10;
@@ -217,7 +209,6 @@ function syncOutlookReplies(items) {
         const from = ((msg.from || {}).emailAddress || {}).address || '';
         if (!from) return;
         const key = from.toLowerCase();
-        // Keep only the most recent message per sender
         if (!repliedMap[key]) {
           const rawBody  = ((msg.body || {}).content || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
           const received = (msg.receivedDateTime || '').split('T')[0];
@@ -226,20 +217,18 @@ function syncOutlookReplies(items) {
       });
     }
 
-    const replied = [];
+    const replies = [];
     for (const item of items) {
       const key = (item.email || '').toLowerCase();
       if (!key || !repliedMap[key]) continue;
-      const ws = item.sheetName ? ss.getSheetByName(item.sheetName) : null;
-      if (ws && item.sheetRow) {
-        ws.getRange(item.sheetRow, COL_OUTREACH   + 1).setValue('reply');
-        ws.getRange(item.sheetRow, COL_REPLY_BODY + 1).setValue(repliedMap[key].body);
-        ws.getRange(item.sheetRow, COL_REPLY_DATE + 1).setValue(repliedMap[key].date);
-      }
-      replied.push(item.email);
+      replies.push({
+        email: item.email,
+        body: repliedMap[key].body,
+        date: repliedMap[key].date,
+      });
     }
 
-    return { ok: true, replied };
+    return { ok: true, replies };
   } catch (e) {
     return { ok: false, error: e.toString() };
   }
@@ -252,7 +241,8 @@ function routeOutlook(action, p, body) {
     case 'getOutlookAuthUrl':  return { ok: true, url: getOutlookAuthUrl() };
     case 'authorizeOutlook':   return authorizeOutlook(b.code);
     case 'checkOutlookAuth':   return checkOutlookAuth();
-    case 'sendOutlookEmail':   return sendOutlookEmail(b);
+    case 'sendOutlookEmail':
+    case 'sendOutreachEmail':  return sendOutlookEmail(b);
     case 'syncOutlookReplies': return syncOutlookReplies(b.items || []);
     default: return null;
   }

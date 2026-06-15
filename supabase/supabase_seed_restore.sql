@@ -28,8 +28,8 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO app_config (key, value) VALUES
   ('kbeauty_keywords', '["glass skin","kbeauty","korean beauty","korean skincare","kbeauty review","kbeauty routine","korean skincare routine","kbeauty products","kbeauty addict","korean makeup","olive young","kbeauty skincare"]'::jsonb),
   ('beauty_keywords',  '["beauty review","skincare","makeup tips","beauty creator","beautytok","makeup haul","beauty hacks","beauty influencer"]'::jsonb),
-  ('filter_conditions','[{"cat":"중복","desc":"1~5순위까지의 중복 계정 필터링"},{"cat":"영상 퀄리티","desc":"영상 콘텐츠 퀄리티 기준 수기 검토 예정"}]'::jsonb),
-  ('search_filters',   '{"maxRatio":70,"maxUploadDays":30,"proxyCountry":"US"}'::jsonb)
+  ('filter_conditions','[{"cat":"중복","desc":"1~5순위까지의 중복 계정 필터링","type":"dedup","enabled":true}]'::jsonb),
+  ('search_filters',   '{"maxRatio":70,"maxUploadDays":30,"proxyCountry":"US","requireEmail":true,"dedupExisting":true}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO app_config (key, value)
