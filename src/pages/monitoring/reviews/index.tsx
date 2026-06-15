@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ListFilter } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { gasPost } from '../../../lib/api'
+import { usePhase } from '../../../contexts/PhaseContext'
 import { fmtNum } from '../../../lib/utils'
 import Spinner from '../../../components/Spinner'
 import Pagination from '../../../components/Pagination'
@@ -41,6 +43,13 @@ interface MonRow {
   comments:                number
   keywords:                string | null
   updated:                 string | null
+  isPlaceholder?:          boolean
+}
+
+const MON_SCRAPE_LIMIT = 50
+
+function isPlaceholderRow(r: MonRow): boolean {
+  return !!r.isPlaceholder || r.id.startsWith('placeholder-')
 }
 
 interface MonStats {
@@ -86,8 +95,10 @@ function brandBadge(brand: string | null) {
 }
 
 export default function Monitoring() {
-  const [rows,    setRows]    = useState<MonRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const { selectedPhaseId, loading: phaseLoading } = usePhase()
+  const [rows,           setRows]           = useState<MonRow[]>([])
+  const [confirmedCount, setConfirmedCount] = useState(0)
+  const [loading,        setLoading]        = useState(true)
 
   const [brandKws,      setBrandKws]      = useState<Record<string, string[]>>({
     mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
@@ -121,64 +132,172 @@ export default function Monitoring() {
   const [listPage,       setListPage]       = useState(1)
   const MON_PAGE_SIZE = 25
 
-  const [searchQuery,    setSearchQuery]    = useState('')
-  const [platformFilter, setPlatformFilter] = useState('all')
-  const [brandFilter,    setBrandFilter]    = useState('all')
-  const [statusFilter,   setStatusFilter]   = useState('all')
+  const [searchQuery,      setSearchQuery]      = useState('')
+  const [accountFilter,    setAccountFilter]    = useState('all')
+  const [brandFilter,      setBrandFilter]      = useState('all')
+  const [statusFilter,     setStatusFilter]     = useState('all')
+  const [showAccountFilter, setShowAccountFilter] = useState(false)
+  const [showBrandFilter,    setShowBrandFilter]    = useState(false)
+  const [showStatusFilter,   setShowStatusFilter]   = useState(false)
+  const accountFilterRef = useRef<HTMLDivElement>(null)
+  const brandFilterRef    = useRef<HTMLDivElement>(null)
+  const statusFilterRef   = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { setUploadPage(1) }, [searchQuery, platformFilter, brandFilter, statusFilter])
+  useEffect(() => { setUploadPage(1) }, [searchQuery, accountFilter, brandFilter, statusFilter])
   useEffect(() => { setListPage(1) }, [activeTab])
 
   useEffect(() => {
-    loadMonitoring()
+    if (!showAccountFilter && !showBrandFilter && !showStatusFilter) return
+    const handler = (e: MouseEvent) => {
+      if (accountFilterRef.current && !accountFilterRef.current.contains(e.target as Node)) setShowAccountFilter(false)
+      if (brandFilterRef.current    && !brandFilterRef.current.contains(e.target as Node))    setShowBrandFilter(false)
+      if (statusFilterRef.current   && !statusFilterRef.current.contains(e.target as Node))   setShowStatusFilter(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showAccountFilter, showBrandFilter, showStatusFilter])
+
+  useEffect(() => {
+    if (phaseLoading) return
     loadKeywords()
-  }, [])
+    if (selectedPhaseId) loadMonitoring()
+    else {
+      setRows([])
+      setConfirmedCount(0)
+      setLoading(false)
+    }
+  }, [selectedPhaseId, phaseLoading])
+
+  function mapMonitoringRecord(m: any): MonRow {
+    const ip = m.influencer_platform
+    const ci = ip?.confirmed_influencers
+    return {
+      id:                      m.id,
+      influencer_platform_id:  m.influencer_platform_id,
+      confirmed_influencer_id: ci?.id  || null,
+      seq:                     ci?.seq  ?? null,
+      platform:                ip?.platform || '',
+      handle:                  ip?.handle   || '',
+      display_name:            ci?.influencers?.display_name || null,
+      date:                    m.date,
+      media:                   m.media,
+      content:                 m.content,
+      brand:                   m.brand,
+      repost:                  ci?.repost || null,
+      review_link:             m.review_link,
+      views:                   m.views    || 0,
+      likes:                   m.likes    || 0,
+      comments:                m.comments || 0,
+      keywords:                m.keywords,
+      updated:                 m.updated,
+    }
+  }
+
+  function buildPlaceholder(ci: any, ip: { id: string; platform: string; handle: string } | null): MonRow {
+    return {
+      id:                      `placeholder-${ip?.id || ci.id}`,
+      influencer_platform_id:  ip?.id ?? null,
+      confirmed_influencer_id: ci.id,
+      seq:                     ci.seq ?? null,
+      platform:                ip?.platform || '',
+      handle:                  ip?.handle || '',
+      display_name:            ci.influencers?.display_name ?? null,
+      date:                    null,
+      media:                   null,
+      content:                 null,
+      brand:                   null,
+      repost:                  ci.repost ?? null,
+      review_link:             null,
+      views:                   0,
+      likes:                   0,
+      comments:                0,
+      keywords:                null,
+      updated:                 null,
+      isPlaceholder:           true,
+    }
+  }
 
   async function loadMonitoring() {
+    if (!selectedPhaseId) return
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('monitoring')
-        .select(`
-          id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-          influencer_platform_id,
-          influencer_platform!monitoring_influencer_platform_id_fkey(
-            platform, handle,
-            confirmed_influencers(
-              id, seq, repost,
-              influencers(display_name)
-            )
+      const monitoringSelect = `
+        id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
+        influencer_platform_id,
+        influencer_platform!monitoring_influencer_platform_id_fkey(
+          platform, handle,
+          confirmed_influencers(
+            id, seq, repost,
+            influencers(display_name)
           )
-        `)
-        .order('date', { ascending: false })
+        )
+      `
 
-      if (error) throw error
+      const [confirmedRes, monitoringRes] = await Promise.all([
+        supabase
+          .from('confirmed_influencers')
+          .select(`
+            id, seq, repost,
+            influencers(display_name),
+            influencer_platform(id, platform, handle)
+          `)
+          .eq('phase_id', selectedPhaseId)
+          .order('seq', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('monitoring')
+          .select(monitoringSelect)
+          .order('date', { ascending: false }),
+      ])
 
-      const mapped: MonRow[] = (data || []).map((m: any) => {
-        const ip = m.influencer_platform
-        const ci = ip?.confirmed_influencers
-        return {
-          id:                      m.id,
-          influencer_platform_id:  m.influencer_platform_id,
-          confirmed_influencer_id: ci?.id  || null,
-          seq:                     ci?.seq  ?? null,
-          platform:                ip?.platform || '',
-          handle:                  ip?.handle   || '',
-          display_name:            ci?.influencers?.display_name || null,
-          date:                    m.date,
-          media:                   m.media,
-          content:                 m.content,
-          brand:                   m.brand,
-          repost:                  ci?.repost || null,
-          review_link:             m.review_link,
-          views:                   m.views    || 0,
-          likes:                   m.likes    || 0,
-          comments:                m.comments || 0,
-          keywords:                m.keywords,
-          updated:                 m.updated,
+      if (confirmedRes.error) throw confirmedRes.error
+      if (monitoringRes.error) throw monitoringRes.error
+
+      const confirmed = (confirmedRes.data || []).slice(0, MON_SCRAPE_LIMIT)
+      setConfirmedCount(confirmed.length)
+
+      const confirmedById = new Map<string, any>()
+      const platformToConfirmed = new Map<string, any>()
+      for (const ci of confirmed) {
+        confirmedById.set(ci.id, ci)
+        for (const ip of ci.influencer_platform || []) {
+          platformToConfirmed.set(ip.id, ci)
         }
-      })
-      setRows(mapped)
+      }
+
+      const monitoringByConfirmedId = new Map<string, MonRow[]>()
+      for (const m of monitoringRes.data || []) {
+        const row = mapMonitoringRecord(m)
+        let ciId = row.confirmed_influencer_id
+        if (!ciId && row.influencer_platform_id) {
+          const ci = platformToConfirmed.get(row.influencer_platform_id)
+          if (ci) {
+            ciId = ci.id
+            row.confirmed_influencer_id = ci.id
+            row.seq = ci.seq ?? null
+            row.display_name = ci.influencers?.display_name ?? null
+            row.repost = ci.repost ?? null
+          }
+        }
+        if (!ciId || !confirmedById.has(ciId)) continue
+
+        const list = monitoringByConfirmedId.get(ciId) || []
+        list.push(row)
+        monitoringByConfirmedId.set(ciId, list)
+      }
+
+      const merged: MonRow[] = []
+      for (const ci of confirmed) {
+        const monRows = monitoringByConfirmedId.get(ci.id)
+        if (monRows?.length) {
+          merged.push(...sortGroupRows(monRows))
+        } else {
+          const platforms = ci.influencer_platform || []
+          const primary = platforms.find((p: any) => (p.platform || '').toLowerCase().includes('tiktok')) || platforms[0]
+          merged.push(buildPlaceholder(ci, primary ?? null))
+        }
+      }
+
+      setRows(merged)
     } catch (e: unknown) {
       console.error('loadMonitoring error:', e)
     }
@@ -337,10 +456,25 @@ export default function Monitoring() {
         likes:       editForm.likes || 0,
         comments:    editForm.comments || 0,
       }
-      await supabase.from('monitoring').update(payload).eq('id', modalRow.id)
-      setRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
-      setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
-      setModalRow(prev => prev ? { ...prev, ...payload } : prev)
+      if (isPlaceholderRow(modalRow)) {
+        if (!modalRow.influencer_platform_id) throw new Error('platform id missing')
+        const { data, error } = await supabase
+          .from('monitoring')
+          .insert({ influencer_platform_id: modalRow.influencer_platform_id, ...payload })
+          .select('id')
+          .single()
+        if (error) throw error
+        const updated = { ...modalRow, ...payload, id: data.id, isPlaceholder: false }
+        setRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
+        setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
+        setModalRow(updated)
+      } else {
+        const { error } = await supabase.from('monitoring').update(payload).eq('id', modalRow.id)
+        if (error) throw error
+        setRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
+        setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
+        setModalRow(prev => prev ? { ...prev, ...payload } : prev)
+      }
       setModalEditing(false)
       setEditForm(null)
     } catch (e: unknown) {
@@ -419,7 +553,7 @@ export default function Monitoring() {
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
 
   const stats: MonStats = {
-    totalInfluencers: new Set(rows.map(r => r.confirmed_influencer_id).filter(Boolean)).size,
+    totalInfluencers: confirmedCount || new Set(rows.map(r => r.confirmed_influencer_id).filter(Boolean)).size,
     totalReviews:     reviewRows.length,
     totalViews:       reviewRows.reduce((s, r) => s + r.views, 0),
     totalLikes:       reviewRows.reduce((s, r) => s + r.likes, 0),
@@ -433,17 +567,42 @@ export default function Monitoring() {
   }
 
   const filteredRows = rows.filter(r => {
-    if (platformFilter !== 'all' && !(r.platform || '').toLowerCase().includes(platformFilter)) return false
     if (brandFilter !== 'all' && (r.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false
     const hasLink = !!r.review_link?.startsWith('http')
     if (statusFilter === 'matched' && !hasLink) return false
     if (statusFilter === 'pending' && hasLink) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      if (![r.handle, r.brand, r.keywords, r.review_link].join(' ').toLowerCase().includes(q)) return false
+      if (![r.handle, r.display_name, r.brand, r.keywords, r.review_link].join(' ').toLowerCase().includes(q)) return false
     }
     return true
   })
+
+  const thBase: React.CSSProperties = {
+    position: 'sticky', top: 0, zIndex: 1,
+    background: '#f0f5f8',
+    padding: '13px 18px',
+    textAlign: 'left', fontSize: 11, fontWeight: 700,
+    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+  }
+
+  const ACCOUNT_FILTER_OPTIONS = [
+    { value: 'all',          label: '전체' },
+    { value: 'uploaded',     label: '완료' },
+    { value: 'not_uploaded', label: '미업로드' },
+  ]
+
+  const BRAND_FILTER_OPTIONS = [
+    { value: 'all', label: '전체' },
+    ...BRANDS.map(b => ({ value: b, label: b })),
+  ]
+
+  const STATUS_FILTER_OPTIONS = [
+    { value: 'all', label: '전체' },
+    { value: 'matched', label: '데이터 있음' },
+    { value: 'pending', label: '대기중' },
+  ]
 
   return (
     <div className="page page--fill">
@@ -678,35 +837,11 @@ export default function Monitoring() {
         <div className="filters" style={{ marginBottom: 16 }}>
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 280 }} />
-          <div className="filter-group">
-            <label>플랫폼:</label>
-            <select className="inline-select" value={platformFilter} onChange={e => setPlatformFilter(e.target.value)}>
-              <option value="all">전체</option>
-              <option value="tiktok">TikTok</option>
-              <option value="instagram">Instagram</option>
-            </select>
-          </div>
-          <div className="filter-group">
-            <label>브랜드:</label>
-            <select className="inline-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-              <option value="all">전체</option>
-              {BRANDS.map(brand => <option key={brand} value={brand}>{brand}</option>)}
-            </select>
-          </div>
-          <div className="filter-group">
-            <label>상태:</label>
-            <select className="inline-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="all">전체</option>
-              <option value="matched">데이터 있음</option>
-              <option value="pending">대기중</option>
-            </select>
-          </div>
         </div>
 
         {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
 
         {!loading && (() => {
-          // Group filteredRows by confirmed_influencer_id, preserving order of first appearance
           type Group = { key: string; rows: MonRow[] }
           const groupMap = new Map<string, Group>()
           filteredRows.forEach(r => {
@@ -715,38 +850,115 @@ export default function Monitoring() {
             groupMap.get(key)!.rows.push(r)
           })
           const groups = Array.from(groupMap.values())
+            .filter(g => {
+              if (accountFilter === 'all') return true
+              const anyLink = g.rows.some(r => r.review_link?.startsWith('http'))
+              if (accountFilter === 'uploaded') return anyLink
+              if (accountFilter === 'not_uploaded') return !anyLink
+              return true
+            })
+            .sort((a, b) => {
+            const seqA = a.rows[0]?.seq ?? 9999
+            const seqB = b.rows[0]?.seq ?? 9999
+            if (seqA !== seqB) return seqA - seqB
+            return a.key.localeCompare(b.key)
+          })
 
-          // Paginate by group (one influencer = one "entry"), not by row
           const uploadTotalPages = Math.max(1, Math.ceil(groups.length / MON_PAGE_SIZE))
           const uploadSafePage   = Math.min(uploadPage, uploadTotalPages)
           const uploadStartIdx   = (uploadSafePage - 1) * MON_PAGE_SIZE
           const pagedGroups      = groups.slice(uploadStartIdx, uploadStartIdx + MON_PAGE_SIZE)
+          const emptyMsg = confirmedCount === 0
+            ? '확정된 인플루언서가 없습니다.'
+            : rows.length === 0
+              ? '감지된 리뷰가 없습니다.'
+              : '검색 결과가 없습니다.'
 
-          return groups.length === 0
-            ? <div className="empty">감지된 리뷰가 없습니다.</div>
-            : (
-              <>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 36, textAlign: 'center' }}>no.</th>
-                      <th>account</th>
-                      <th>date</th>
-                      <th>media</th>
-                      <th>content</th>
-                      <th>brand</th>
-                      <th>review link</th>
-                      <th className="num">조회수</th>
-                      <th className="num">좋아요 수</th>
-                      <th className="num">댓글 수</th>
-                      <th>감지된 키워드</th>
-                      <th>모니터링 실행일</th>
-                      <th style={{ width: 44, textAlign: 'center' }}>편집</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedGroups.map((group, gi) => {
+          return (
+            <>
+            <div className="table-wrap">
+              <table style={{ marginBottom: 0 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
+                    <th style={thBase}>
+                      <div ref={accountFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                        <span>account</span>
+                        <button onClick={() => { setShowAccountFilter(p => !p); setShowBrandFilter(false); setShowStatusFilter(false) }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: accountFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: accountFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                          <ListFilter size={13} />
+                        </button>
+                        {showAccountFilter && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                            {ACCOUNT_FILTER_OPTIONS.map(o => (
+                              <button key={o.value} onClick={() => { setAccountFilter(o.value); setShowAccountFilter(false) }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: accountFilter === o.value ? 700 : 500, background: accountFilter === o.value ? '#d1fae5' : 'transparent', color: accountFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th style={thBase}>date</th>
+                    <th style={thBase}>media</th>
+                    <th style={thBase}>content</th>
+                    <th style={thBase}>
+                      <div ref={brandFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                        <span>brand</span>
+                        <button onClick={() => { setShowBrandFilter(p => !p); setShowAccountFilter(false); setShowStatusFilter(false) }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: brandFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: brandFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                          <ListFilter size={13} />
+                        </button>
+                        {showBrandFilter && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                            {BRAND_FILTER_OPTIONS.map(o => (
+                              <button key={o.value} onClick={() => { setBrandFilter(o.value); setShowBrandFilter(false) }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: brandFilter === o.value ? 700 : 500, background: brandFilter === o.value ? '#d1fae5' : 'transparent', color: brandFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th style={thBase}>
+                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                        <span>review link</span>
+                        <button onClick={() => { setShowStatusFilter(p => !p); setShowAccountFilter(false); setShowBrandFilter(false) }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: statusFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: statusFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                          <ListFilter size={13} />
+                        </button>
+                        {showStatusFilter && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                            {STATUS_FILTER_OPTIONS.map(o => (
+                              <button key={o.value} onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false) }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? '#d1fae5' : 'transparent', color: statusFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th style={{ ...thBase, textAlign: 'right' }} className="num">조회수</th>
+                    <th style={{ ...thBase, textAlign: 'right' }} className="num">좋아요 수</th>
+                    <th style={{ ...thBase, textAlign: 'right' }} className="num">댓글 수</th>
+                    <th style={thBase}>감지된 키워드</th>
+                    <th style={thBase}>모니터링 실행일</th>
+                    <th style={{ ...thBase, width: 52, textAlign: 'center', padding: '13px 6px' }}>편집</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.length === 0
+                    ? (
+                      <tr>
+                        <td colSpan={13} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
+                          {emptyMsg}
+                        </td>
+                      </tr>
+                    )
+                    : pagedGroups.map((group, gi) => {
                       const groupIdx = uploadStartIdx + gi
                       const isLastGroup = gi === pagedGroups.length - 1
                       const account  = (group.rows[0].handle || '').replace(/^@/, '')
@@ -877,15 +1089,17 @@ export default function Monitoring() {
                         )
                       })
                     })}
-                  </tbody>
-                </table>
-              </div>
+                </tbody>
+              </table>
+            </div>
+            {groups.length > 0 && (
               <Pagination page={uploadSafePage} totalPages={uploadTotalPages} total={groups.length}
                 startIdx={uploadStartIdx} endIdx={uploadStartIdx + pagedGroups.length}
                 onPrev={() => setUploadPage(p => Math.max(1, p - 1))}
                 onNext={() => setUploadPage(p => Math.min(uploadTotalPages, p + 1))} />
-              </>
-            )
+            )}
+            </>
+          )
         })()}
       </>}
 

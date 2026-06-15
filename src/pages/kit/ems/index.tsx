@@ -1,10 +1,14 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
+import { ListFilter } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 // import { gasPost } from '../../../lib/api' // detail modal disabled
 import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import Modal from '../../../components/Modal'
 import Pagination from '../../../components/Pagination'
+import { countReshipNeeded, EMS_ERROR_ROWS } from '../../../lib/ems-errors'
+
+const INFLUENCER_TARGET = 50
 
 interface EmsRow {
   confirmed_influencer_id: string
@@ -47,13 +51,20 @@ const STATUS_COLORS: Record<string, string> = {
   'Exception'  : '#e74c3c',
 }
 
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: '전체' },
+  ...STATUS_OPTIONS.map(status => ({ value: status, label: status })),
+]
+
 export default function Ems() {
   const { showToast } = useToast()
   const [rows,    setRows]    = useState<EmsRow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
-  const [searchQuery,  setSearchQuery]  = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [searchQuery,      setSearchQuery]      = useState('')
+  const [filterStatus,     setFilterStatus]     = useState('all')
+  const [showStatusFilter, setShowStatusFilter] = useState(false)
+  const statusFilterRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(1)
   const EMS_PAGE_SIZE = 25
 
@@ -81,6 +92,19 @@ export default function Ems() {
   })
 
   useEffect(() => { loadEms() }, [])
+
+  useEffect(() => { setPage(1) }, [searchQuery, filterStatus])
+
+  useEffect(() => {
+    if (!showStatusFilter) return
+    const handler = (e: MouseEvent) => {
+      if (statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) {
+        setShowStatusFilter(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showStatusFilter])
 
   async function loadEms() {
     setLoading(true)
@@ -205,12 +229,28 @@ export default function Ems() {
     return true
   })
 
-  const stats = {
-    total:     rows.length,
-    received:  rows.filter(r => r.status === '접수완료').length,
-    inTransit: rows.filter(r => r.status === 'In Transit').length,
-    delivered: rows.filter(r => r.status === 'Delivered').length,
+  const total          = rows.length
+  const targetPct      = Math.min(Math.round(total / INFLUENCER_TARGET * 100), 100)
+  const delivered      = rows.filter(r => r.status === 'Delivered').length
+  const inTransit      = rows.filter(r => r.status === 'In Transit' || r.status === 'Preparing').length
+  const shippingErrors = rows.filter(r => r.status === 'Exception').length
+  const reshipNeeded   = countReshipNeeded()
+  const errorTotal     = EMS_ERROR_ROWS.length
+
+  const thBase: React.CSSProperties = {
+    position: 'sticky', top: 0, zIndex: 1,
+    background: '#f0f5f8',
+    padding: '13px 18px',
+    textAlign: 'left', fontSize: 11, fontWeight: 700,
+    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
   }
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / EMS_PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const startIdx   = (safePage - 1) * EMS_PAGE_SIZE
+  const pagedRows  = filteredRows.slice(startIdx, startIdx + EMS_PAGE_SIZE)
+  const emptyMsg   = rows.length === 0 ? '데이터가 없습니다.' : '검색 결과가 없습니다.'
 
   return (
     <div className="page page--fill">
@@ -230,14 +270,59 @@ export default function Ems() {
 
       {!loading && (
         <>
-          <div className="cards">
-            <div className="card"><div className="card-label">총 관리 대상</div><div className="card-value">{stats.total}</div></div>
-            <div className="card"><div className="card-label">접수완료</div><div className="card-value" style={{ color: '#6366f1' }}>{stats.received}</div></div>
-            <div className="card"><div className="card-label">배송 중</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{stats.inTransit}</div></div>
+          <div className="cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
             <div className="card highlight">
-              <div className="card-label">배송 완료</div>
-              <div className="card-value" style={{ color: 'var(--green)' }}>{stats.delivered}</div>
-              <div className="card-sub">{stats.total ? Math.round(stats.delivered / stats.total * 100) : 0}% 완료율</div>
+              <div className="card-label">총 관리 대상</div>
+              <div style={{ textAlign: 'left', paddingTop: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'flex-start' }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-1px' }}>{total}</span>
+                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                </div>
+                <div className="card-sub" style={{ marginTop: 0 }}>{total} / {INFLUENCER_TARGET}명 · {targetPct}%</div>
+                <div style={{ marginTop: 8, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${targetPct}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
+                </div>
+              </div>
+            </div>
+            <div className="card highlight">
+              <div className="card-label">배송</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', alignItems: 'start', width: '100%' }}>
+                <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>배송 완료</div>
+                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
+                <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#1e40af', letterSpacing: '-1px' }}>{inTransit}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>배송 중</div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
+                <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>배송 오류</div>
+                </div>
+              </div>
+            </div>
+            <div className="card highlight">
+              <div className="card-label">재배송 필요</div>
+              <div style={{ textAlign: 'left', paddingTop: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'flex-start' }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{reshipNeeded}</span>
+                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재배송 필요</div>
+                <div className="card-sub" style={{ marginTop: 0 }}>배송 오류 {errorTotal}건 중</div>
+              </div>
             </div>
           </div>
 
@@ -254,40 +339,51 @@ export default function Ems() {
               onChange={e => setSearchQuery(e.target.value)}
               style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
             />
-            <div className="filter-group">
-              <label>배송 상태:</label>
-              {([['all', '전체'], ['접수완료', '접수완료'], ['In Transit', '배송중'], ['Delivered', '완료']] as const).map(([v, l]) => (
-                <button key={v} className={'ems-filter-btn' + (filterStatus === v ? ' active' : '')} onClick={() => setFilterStatus(v)}>{l}</button>
-              ))}
-            </div>
           </div>
 
-          {filteredRows.length === 0
-            ? <div className="empty">데이터가 없습니다.</div>
-            : (() => {
-                const totalPages = Math.max(1, Math.ceil(filteredRows.length / EMS_PAGE_SIZE))
-                const safePage   = Math.min(page, totalPages)
-                const startIdx   = (safePage - 1) * EMS_PAGE_SIZE
-                const pagedRows  = filteredRows.slice(startIdx, startIdx + EMS_PAGE_SIZE)
-                return (
-                  <>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style={{ width: 36 }}>No</th>
-                          <th>이름</th>
-                          <th>이메일</th>
-                          <th>신청일</th>
-                          <th>접수번호</th>
-                          <th>등기번호</th>
-                          <th>상태</th>
-                          <th>배송 주소</th>
-                          <th>마지막 업데이트</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedRows.map((row, i) => {
+          <div className="table-wrap">
+            <table style={{ marginBottom: 0 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thBase, width: 36, textAlign: 'center' }}>No</th>
+                  <th style={thBase}>이름</th>
+                  <th style={thBase}>이메일</th>
+                  <th style={thBase}>신청일</th>
+                  <th style={thBase}>접수번호</th>
+                  <th style={thBase}>등기번호</th>
+                  <th style={thBase}>
+                    <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
+                      <span>배송 상태</span>
+                      <button onClick={() => setShowStatusFilter(p => !p)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: filterStatus !== 'all' ? 'var(--teal-dk)' : 'transparent', color: filterStatus !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
+                        <ListFilter size={13} />
+                      </button>
+                      {showStatusFilter && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
+                          {STATUS_FILTER_OPTIONS.map(o => (
+                            <button key={o.value} onClick={() => { setFilterStatus(o.value); setShowStatusFilter(false) }}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: filterStatus === o.value ? 700 : 500, background: filterStatus === o.value ? '#d1fae5' : 'transparent', color: filterStatus === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                  <th style={thBase}>배송 주소</th>
+                  <th style={thBase}>마지막 업데이트</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>
+                        {emptyMsg}
+                      </td>
+                    </tr>
+                  )
+                  : pagedRows.map((row, i) => {
                           const i_abs      = startIdx + i
                           const badgeColor = STATUS_COLORS[row.status || ''] || '#94a3b8'
                           const addrLines  = [
@@ -360,18 +456,17 @@ export default function Ems() {
                             </tr>
                           )
                         })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination
-                    page={safePage} totalPages={totalPages} total={filteredRows.length}
-                    startIdx={startIdx} endIdx={Math.min(startIdx + EMS_PAGE_SIZE, filteredRows.length)}
-                    onPrev={() => setPage(p => Math.max(1, p - 1))}
-                    onNext={() => setPage(p => Math.min(totalPages, p + 1))}
-                  />
-                  </>
-                )
-              })()}
+              </tbody>
+            </table>
+          </div>
+          {filteredRows.length > 0 && (
+            <Pagination
+              page={safePage} totalPages={totalPages} total={filteredRows.length}
+              startIdx={startIdx} endIdx={Math.min(startIdx + EMS_PAGE_SIZE, filteredRows.length)}
+              onPrev={() => setPage(p => Math.max(1, p - 1))}
+              onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+            />
+          )}
         </>
       )}
 

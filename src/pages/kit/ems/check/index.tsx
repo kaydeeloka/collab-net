@@ -3,27 +3,7 @@ import { PackageSearch } from 'lucide-react'
 
 type Tab = 'data' | 'email'
 
-/* ── Data tab ── */
-interface ErrorRow {
-  name: string; tracking: string; sentDate: string
-  country: string; reason: string; status: string
-}
-
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  '처리 중':     { bg: '#fff3cd', text: '#856404' },
-  '재발송 예정': { bg: '#cff4fc', text: '#055160' },
-  '확인 중':     { bg: '#e2d9f3', text: '#4a2c8a' },
-  '재발송 완료': { bg: '#d1e7dd', text: '#0f5132' },
-  '처리 대기':   { bg: '#f8d7da', text: '#842029' },
-}
-
-const DUMMY_ROWS: ErrorRow[] = [
-  { name: 'Sarah Kim',   tracking: 'EMS123456789KR', sentDate: '2026-05-12', country: '미국',   reason: '주소 불명',   status: '처리 중' },
-  { name: 'Emily Chen',  tracking: 'EMS234567890KR', sentDate: '2026-05-14', country: '미국',   reason: '수취인 부재', status: '재발송 예정' },
-  { name: 'Mia Johnson', tracking: 'EMS345678901KR', sentDate: '2026-05-15', country: '캐나다', reason: '세관 보류',   status: '확인 중' },
-  { name: 'Jessica Lee', tracking: 'EMS456789012KR', sentDate: '2026-05-18', country: '미국',   reason: '주소 오류',   status: '재발송 완료' },
-  { name: 'Ashley Park', tracking: 'EMS567890123KR', sentDate: '2026-05-20', country: '미국',   reason: '반송 처리',   status: '처리 대기' },
-]
+import { EMS_ERROR_ROWS, EMS_ERROR_STATUS_STYLE } from '../../../../lib/ems-errors'
 
 /* ── Email template tab ── */
 const CATEGORIES = ['초기 안내', '재발송 안내', '반송 처리', '기타'] as const
@@ -260,10 +240,10 @@ export default function EmsCheck() {
       </div>
 
       <div className="cards" style={{ marginBottom: 0 }}>
-        <div className="card highlight"><div className="card-label">오류 건</div><div className="card-value">5</div></div>
-        <div className="card"><div className="card-label">반송 건</div><div className="card-value">1</div></div>
-        <div className="card"><div className="card-label">재발송 완료</div><div className="card-value">1</div></div>
-        <div className="card"><div className="card-label">처리 대기</div><div className="card-value">3</div></div>
+        <div className="card highlight"><div className="card-label">오류 건</div><div className="card-value">{EMS_ERROR_ROWS.length}</div></div>
+        <div className="card"><div className="card-label">반송 건</div><div className="card-value">{EMS_ERROR_ROWS.filter(r => r.reason.includes('반송')).length}</div></div>
+        <div className="card"><div className="card-label">재발송 완료</div><div className="card-value">{EMS_ERROR_ROWS.filter(r => r.status === '재발송 완료').length}</div></div>
+        <div className="card"><div className="card-label">처리 대기</div><div className="card-value">{EMS_ERROR_ROWS.filter(r => r.status === '처리 대기').length}</div></div>
       </div>
 
       <div className="bn-tab-bar">
@@ -285,8 +265,8 @@ export default function EmsCheck() {
                 </tr>
               </thead>
               <tbody>
-                {DUMMY_ROWS.map((r, i) => {
-                  const st = STATUS_STYLE[r.status] ?? { bg: '#e9ecef', text: '#495057' }
+                {EMS_ERROR_ROWS.map((r, i) => {
+                  const st = EMS_ERROR_STATUS_STYLE[r.status] ?? { bg: '#e9ecef', text: '#495057' }
                   return (
                     <tr key={i}>
                       <td style={{ fontWeight: 600 }}>{r.name}</td>
