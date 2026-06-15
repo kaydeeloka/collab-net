@@ -60,6 +60,34 @@ interface ConfirmedRow {
   influencers:          InfluencerRef | null
 }
 
+const INFLUENCER_TARGET = 50
+
+const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
+const BRAND_COLORS: Record<(typeof BRANDS)[number], string> = {
+  mimuse:  '#3b82f6',
+  aesthen: '#8b5cf6',
+  joodoc:  '#ec4899',
+  nesh:    '#f59e0b',
+  varuza:  '#10b981',
+}
+
+function emptyBrandCounts(): Record<(typeof BRANDS)[number], number> {
+  return { mimuse: 0, aesthen: 0, joodoc: 0, nesh: 0, varuza: 0 }
+}
+
+function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand: string | null }[] }[] }[]): Record<(typeof BRANDS)[number], number> {
+  const counts = emptyBrandCounts()
+  for (const r of data) {
+    for (const p of r.influencer_platform ?? []) {
+      for (const m of p.monitoring ?? []) {
+        const b = (m.brand || '').toLowerCase() as (typeof BRANDS)[number]
+        if (b in counts) counts[b]++
+      }
+    }
+  }
+  return counts
+}
+
 const EMPTY_FORM = {
   phone: '', repost: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
@@ -104,6 +132,18 @@ function extractReviewLinks(
     })
   }
   return links.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+}
+
+function rowHasPlatform(row: ConfirmedRow, key: string): boolean {
+  const match = (platform: string | null | undefined) => platform?.toLowerCase().includes(key) ?? false
+  if (row.influencer_platform.some(p => match(p.platform))) return true
+  return match(row.influencers?.platform)
+}
+
+function effectiveUploadStatus(row: ConfirmedRow): 'Yes' | 'No' | 'Pending' {
+  if (row.review_links.length > 0) return 'Yes'
+  if (row.upload_status === 'No') return 'No'
+  return 'Pending'
 }
 
 function fmtFollowers(n: number | null): string {
@@ -172,6 +212,7 @@ export default function Confirmed() {
   const { showToast }       = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedRow[]>([])
+  const [brandCounts, setBrandCounts] = useState(emptyBrandCounts())
   const [loading, setLoading] = useState(false)
   const [search,  setSearch]  = useState('')
   const [syncMsg, setSyncMsg] = useState('')
@@ -261,7 +302,41 @@ export default function Confirmed() {
       influencers: r.influencers ?? null,
     }))
 
+    const idsToYes = mapped
+      .filter(r => r.review_links.length > 0 && r.upload_status !== 'Yes')
+      .map(r => r.id)
+    const idsToPending = mapped
+      .filter(r => r.review_links.length === 0 && r.upload_status === 'Yes')
+      .map(r => r.id)
+
+    if (idsToYes.length) {
+      const { error: syncError } = await supabase
+        .from('confirmed_influencers')
+        .update({ upload_status: 'Yes' })
+        .in('id', idsToYes)
+      if (syncError) showToast(syncError.message, 'error')
+      else {
+        for (const row of mapped) {
+          if (idsToYes.includes(row.id)) row.upload_status = 'Yes'
+        }
+      }
+    }
+
+    if (idsToPending.length) {
+      const { error: syncError } = await supabase
+        .from('confirmed_influencers')
+        .update({ upload_status: 'Pending' })
+        .in('id', idsToPending)
+      if (syncError) showToast(syncError.message, 'error')
+      else {
+        for (const row of mapped) {
+          if (idsToPending.includes(row.id)) row.upload_status = 'Pending'
+        }
+      }
+    }
+
     setRows(mapped)
+    setBrandCounts(computeBrandCounts(data ?? []))
     setSyncMsg(`마지막 동기화: ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`)
     setLoading(false)
   }
@@ -375,7 +450,7 @@ export default function Confirmed() {
   ]
 
   const filtered = rows.filter(r => {
-    if (uploadFilter !== 'all' && r.upload_status !== uploadFilter) return false
+    if (uploadFilter !== 'all' && effectiveUploadStatus(r) !== uploadFilter) return false
     if (reviewLinkFilter === 'has'  && !r.review_links.length) return false
     if (reviewLinkFilter === 'none' && r.review_links.length)  return false
     if (platformFilter !== 'all' && !r.influencer_platform.some(p => p.platform === platformFilter)) return false
@@ -391,8 +466,14 @@ export default function Confirmed() {
   })
 
   const total    = rows.length
-  const uploaded = rows.filter(r => r.upload_status === 'Yes').length
-  const noUpload = rows.filter(r => r.upload_status === 'No').length
+  const uploaded = rows.filter(r => effectiveUploadStatus(r) === 'Yes').length
+  const noUpload = rows.filter(r => effectiveUploadStatus(r) === 'No').length
+  const targetPct = Math.min(Math.round(total / INFLUENCER_TARGET * 100), 100)
+  const platformCounts = {
+    tiktok:    rows.filter(r => rowHasPlatform(r, 'tiktok')).length,
+    instagram: rows.filter(r => rowHasPlatform(r, 'instagram')).length,
+    magazine:  rows.filter(r => rowHasPlatform(r, 'magazine')).length,
+  }
 
   function cycleUpload(id: string, current: string) {
     const next = current === 'Pending' ? 'Yes' : current === 'Yes' ? 'No' : 'Pending'
@@ -480,10 +561,74 @@ export default function Confirmed() {
       {!loading && (
         <>
           <div className="cards">
-            <div className="card"><div className="card-label">총 확정 인플루언서</div><div className="card-value">{total}</div></div>
-            <div className="card highlight"><div className="card-label">콘텐츠 업로드 완료</div><div className="card-value" style={{ color: 'var(--green)' }}>{uploaded}</div><div className="card-sub">{total ? Math.round(uploaded / total * 100) : 0}% 완료율</div></div>
-            <div className="card"><div className="card-label">총 업로드된 리뷰</div><div className="card-value" style={{ color: 'var(--blue-dk)' }}>{rows.reduce((n, r) => n + r.review_links.length, 0)}</div></div>
-            <div className="card"><div className="card-label">미업로드</div><div className="card-value">{noUpload}</div></div>
+            <div className="card">
+              <div className="card-label">총 확정 인플루언서</div>
+              <div className="card-value">
+                {targetPct}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}>%</span>
+              </div>
+              <div className="card-sub">{total} / {INFLUENCER_TARGET}명</div>
+              <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${targetPct}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
+              </div>
+              <div style={{ fontSize: 11, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 0', lineHeight: 1.8 }}>
+                {([
+                  { key: 'tiktok',    label: 'TikTok',    count: platformCounts.tiktok,    color: '#111' },
+                  { key: 'instagram', label: 'Instagram', count: platformCounts.instagram, color: '#dc2743' },
+                  { key: 'magazine',  label: 'Magazine',  count: platformCounts.magazine,  color: '#6366f1' },
+                ] as const).map((p, i) => (
+                  <span key={p.key}>
+                    {i > 0 && <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>}
+                    <span style={{ color: p.color, fontWeight: 700 }}>{p.label}</span>
+                    <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{p.count}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="card highlight">
+              <div className="card-label">콘텐츠 업로드</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{uploaded}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>완료</div>
+                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(uploaded / total * 100) : 0}% 완료율</div>
+                </div>
+                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{noUpload}</span>
+                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>미업로드</div>
+                </div>
+              </div>
+            </div>
+            <div className="card highlight">
+              <div className="card-label">브랜드 횟수</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', alignItems: 'start', width: '100%' }}>
+                {BRANDS.map((brand, i) => {
+                  const count = brandCounts[brand] ?? 0
+                  return (
+                    <div
+                      key={brand}
+                      style={{
+                        textAlign: 'center',
+                        minWidth: 0,
+                        borderLeft: i > 0 ? '1px solid var(--gray-2)' : undefined,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
+                        <span style={{ fontSize: 36, fontWeight: 800, color: BRAND_COLORS[brand], letterSpacing: '-1px' }}>{count}</span>
+                        <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>회</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: BRAND_COLORS[brand], fontWeight: 600 }}>{brand}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="ems-toolbar" style={{ marginTop: 16 }}>
@@ -500,12 +645,11 @@ export default function Confirmed() {
             ? <div className="empty">{rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}</div>
             : (
               <div className="table-wrap">
-                <table style={{ tableLayout: 'auto', minWidth: 1400 }}>
+                <table style={{ tableLayout: 'auto', minWidth: 1320 }}>
                   <colgroup>
                     <col style={{ width: 36 }} />
                     <col style={{ width: 120 }} />
                     <col style={{ width: 160 }} />
-                    <col style={{ width: 70 }} />
                     <col style={{ width: 100 }} />
                     <col style={{ width: 80 }} />
                     <col style={{ width: 100 }} />
@@ -539,7 +683,6 @@ export default function Confirmed() {
                         </div>
                       </th>
                       <th style={thBase}>NAME</th>
-                      <th style={{ ...thBase, textAlign: 'right' }}>팔로워</th>
                       <th style={thBase}>
                         <div ref={uploadFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
                           <span>리뷰 업로드</span>
@@ -614,6 +757,8 @@ export default function Confirmed() {
                       const displayName = inf?.display_name || r.display_name || ''
                       const profileUrl  = firstP?.profile_url || inf?.profile_url || ''
                       const notesVal    = notesEdits[r.id] !== undefined ? notesEdits[r.id] : (r.notes ?? '')
+                      const hasReview    = r.review_links.length > 0
+                      const uploadStatus = effectiveUploadStatus(r)
                       return (
                         <tr key={r.id} onClick={() => { setViewRow(r); setShowView(true) }} style={{ cursor: 'pointer' }}>
                           <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-5)' }}>{r.seq ?? i + 1}</td>
@@ -628,18 +773,18 @@ export default function Confirmed() {
                               )}
                             </div>
                           </td>
-                          <td style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{fmtFollowers(firstP?.followers ?? inf?.followers ?? null)}</td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                             {(() => {
-                              const s = r.upload_status
+                              const s = uploadStatus
                               const cfg = s === 'Yes'
                                 ? { label: '✓', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
                                 : s === 'No'
                                 ? { label: '✕', bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
                                 : { label: '—', bg: '#f1f5f9', color: '#94a3b8', border: '#e2e8f0' }
                               return (
-                                <button onClick={() => cycleUpload(r.id, s)}
-                                  style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <button onClick={() => !hasReview && cycleUpload(r.id, r.upload_status)}
+                                  disabled={hasReview}
+                                  style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontWeight: 700, fontSize: 13, cursor: hasReview ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                   {cfg.label}
                                 </button>
                               )
@@ -711,9 +856,10 @@ export default function Confirmed() {
         const inf          = r.influencers
         const vDisplayName = inf?.display_name || r.display_name || ''
         const vHandle      = r.influencer_platform[0]?.handle || inf?.handle || r.handle || ''
-        const uploadStyle  = r.upload_status === 'Yes'
+        const uploadStatus = effectiveUploadStatus(r)
+        const uploadStyle  = uploadStatus === 'Yes'
           ? { bg: '#d1fae5', color: '#065f46', label: '완료' }
-          : r.upload_status === 'No'
+          : uploadStatus === 'No'
           ? { bg: '#fee2e2', color: '#991b1b', label: '미업로드' }
           : { bg: '#fef3c7', color: '#d97706', label: '대기중' }
         const addrParts = [r.address_line_1, r.address_line_2, r.city, [r.state, r.zip].filter(Boolean).join(' '), r.country].filter(Boolean) as string[]
