@@ -232,9 +232,13 @@ a { text-decoration: none; }
 .main-area {
   flex: 1; margin-left: 64px;
   display: flex; flex-direction: column;
-  height: 100vh; overflow-y: auto;
+  height: 100vh; overflow: hidden;
   min-width: 0; max-width: calc(100vw - 64px);
   background: #eef2f7;
+}
+.main-scroll {
+  flex: 1; min-height: 0; min-width: 0;
+  overflow-y: auto; overflow-x: hidden;
 }
 /* ─────────────────────────────────────
    CHILDREN TAB BAR
@@ -244,11 +248,12 @@ a { text-decoration: none; }
   border-bottom: 1px solid var(--surface-md);
   padding: 0 36px;
   display: flex; align-items: center; gap: 6px;
-  height: 62px; position: sticky; top: 0; z-index: 150;
-  box-shadow: var(--sh-xs); flex-shrink: 0;
+  height: 62px; flex-shrink: 0; z-index: 150;
+  box-shadow: var(--sh-xs);
 }
 .children-bar-right {
   margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  position: relative; z-index: 2;
 }
 
 .children-bar-group { position: relative; }

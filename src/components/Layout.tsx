@@ -321,12 +321,11 @@ export default function Layout() {
               {dbOptions.length > 0 ? (
                 <select
                   className="phase-select"
-                  value=""
-                  onChange={e => { if (e.target.value) switchPhase(e.target.value) }}
+                  value={activeDbId}
+                  onChange={e => switchPhase(e.target.value)}
                   title="차수 전환"
                 >
-                  <option value="" disabled>{phaseBadge}</option>
-                  {dbOptions.filter(o => o.id !== activeDbId).map(o => (
+                  {dbOptions.map(o => (
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
@@ -338,7 +337,9 @@ export default function Layout() {
           </div>
         )}
 
-        <Outlet context={{ dbOptions, activeDbId, switchPhase }} />
+        <div className="main-scroll">
+          <Outlet context={{ dbOptions, activeDbId, switchPhase }} />
+        </div>
       </div>
 
       {/* ── Phase Management modal ── */}

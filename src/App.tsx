@@ -35,7 +35,9 @@ import BrandContact          from './pages/brand/contact'
 // BRAND — confirmed
 import BrandConfirmed        from './pages/brand/confirmed'
 import BrandConfirmedFolders from './pages/brand/confirmed/management'
-import BrandConfirmedFiles   from './pages/brand/confirmed/archive'
+import BrandConfirmedArchive from './pages/brand/confirmed/archive'
+import BrandArchiveList       from './pages/brand/confirmed/archive/list'
+import BrandArchiveDetail     from './pages/brand/confirmed/archive/detail'
 
 // KIT — ems
 import EmsData    from './pages/kit/ems-data'
@@ -88,7 +90,10 @@ export default function App() {
                 <Route path="/brand/confirmed" element={<BrandConfirmed />}>
                   <Route index element={<Navigate to="management" replace />} />
                   <Route path="management" element={<BrandConfirmedFolders />} />
-                  <Route path="archive"    element={<BrandConfirmedFiles />} />
+                  <Route path="archive" element={<BrandConfirmedArchive />}>
+                    <Route index element={<BrandArchiveList />} />
+                    <Route path=":slug" element={<BrandArchiveDetail />} />
+                  </Route>
                 </Route>
 
                 {/* ── KIT ── */}

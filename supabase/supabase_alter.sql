@@ -971,3 +971,7 @@ ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "brand_archive_storage_all" ON storage.objects;
 CREATE POLICY "brand_archive_storage_all" ON storage.objects
   FOR ALL USING (bucket_id = 'brand-archive') WITH CHECK (bucket_id = 'brand-archive');
+
+-- influencers — track imports from a previous phase (contact page)
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_influencers_source_phase ON influencers(source_phase_id);

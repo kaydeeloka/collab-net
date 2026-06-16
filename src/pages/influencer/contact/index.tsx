@@ -58,6 +58,7 @@ interface Influencer {
   last_contact_at: string | null
   reply_count: number | null
   memo: string | null
+  source_phase_id: string | null
   tiers: { rank: string; label: string; category: string } | null
 }
 
@@ -202,8 +203,9 @@ function ContactCountEditor({ count, onChange }: { count: number; onChange: (n: 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Outreach() {
   const { showToast }     = useToast()
-  const { selectedPhaseId } = usePhase()
+  const { selectedPhaseId, phases } = usePhase()
   const confirmToast      = useConfirmToast()
+  const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
 
   // ── Data ──
   const [influencers,    setInfluencers]    = useState<Influencer[]>([])
@@ -237,7 +239,7 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, reply_count, memo, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
       .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -642,7 +644,15 @@ export default function Outreach() {
                         {/* 이름 + 핸들 */}
                         <td style={{ padding: '0 12px', verticalAlign: 'middle' }}>
                           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{inf.display_name || inf.handle}</div>
-                          {inf.handle && <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500 }}>@{inf.handle}</a>}
+                          {inf.source_phase_id && (
+                            <span style={{
+                              display: 'inline-block', marginTop: 3, fontSize: 10, fontWeight: 700,
+                              background: '#ede9fe', color: '#6d28d9', borderRadius: 6, padding: '1px 6px',
+                            }}>
+                              {phaseNameById[inf.source_phase_id] ?? '이전 차수'} 이관
+                            </span>
+                          )}
+                          {inf.handle && <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 500, display: 'block', marginTop: 2 }}>@{inf.handle}</a>}
                         </td>
                         {/* 이메일 */}
                         <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200, verticalAlign: 'middle' }}>

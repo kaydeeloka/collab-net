@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../../../lib/supabase'
 import { usePhase } from '../../../../contexts/PhaseContext'
 import { useToast } from '../../../../contexts/ToastContext'
 import Modal from '../../../../components/Modal'
 import Pagination from '../../../../components/Pagination'
+import { archiveDetailPath } from '../archive/slug'
+import type { ConfirmedBrand as ArchiveBrandRef } from '../archive/shared'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -41,6 +44,26 @@ const EMPTY_FORM = {
   notes:           '',
 }
 type Form = typeof EMPTY_FORM
+
+function formatWebsiteUrl(website: string) {
+  return website.startsWith('http') ? website : `https://${website}`
+}
+
+function toArchiveBrandRef(r: ConfirmedBrand): ArchiveBrandRef {
+  return {
+    id: r.id,
+    brand_name: r.brand_name,
+    product: r.product,
+    received: r.received,
+  }
+}
+
+function archiveLinkFor(brand: ConfirmedBrand, allRows: ConfirmedBrand[]) {
+  const brands = [...allRows]
+    .sort((a, b) => a.brand_name.localeCompare(b.brand_name))
+    .map(toArchiveBrandRef)
+  return archiveDetailPath(toArchiveBrandRef(brand), brands)
+}
 
 export default function BrandConfirmedManagement() {
   const { selectedPhaseId } = usePhase()
@@ -172,6 +195,7 @@ export default function BrandConfirmedManagement() {
 
   const receivedCount = rows.filter(r => r.received).length
   const pendingCount  = rows.length - receivedCount
+  const viewArchivePath = viewRow ? archiveLinkFor(viewRow, rows) : null
 
 const modalForm = (form: Form, setForm: (f: Form) => void) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -401,9 +425,42 @@ const modalForm = (form: Form, setForm: (f: Form) => void) => (
             </div>
             <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>홈페이지</span>
-              {viewRow.website
-                ? <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website} target="_blank" rel="noopener" className="video-link">↗ 방문</a>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
+              {viewRow.website ? (
+                <a
+                  href={formatWebsiteUrl(viewRow.website)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}
+                >
+                  {viewRow.website}
+                </a>
+              ) : (
+                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>자료 아카이브</span>
+              {viewArchivePath ? (
+                <Link
+                  to={viewArchivePath}
+                  onClick={() => setShowView(false)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    background: 'var(--teal-dk)',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                  }}
+                >
+                  {viewRow.brand_name} 아카이브
+                </Link>
+              ) : (
+                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
+              )}
             </div>
             {viewRow.notes && (
               <div style={{ display: 'flex', gap: 12, padding: '8px 0' }}>

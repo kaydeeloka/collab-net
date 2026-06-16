@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '../../../lib/api'
 import { supabase } from '../../../lib/supabase'
 import { usePhase } from '../../../contexts/PhaseContext'
 import { fmtNum } from '../../../lib/utils'
+import { useToast } from '../../../contexts/ToastContext'
 import Spinner from '../../../components/Spinner'
 import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
 import Pagination from '../../../components/Pagination'
+import Modal from '../../../components/Modal'
 
 type ListupTab = 'search' | 'database'
 
@@ -117,6 +119,7 @@ interface Influencer  {
   display_name: string | null; email: string | null; followers: number; following: number
   following_ratio: string | null;   total_likes: number; video_count: number
   engagement_rate: number; profile_url: string | null; status: string
+  source_phase_id?: string | null
   tiers?: { rank: string; label: string; category: string } | null
 }
 interface ApifyCreator {
@@ -215,6 +218,9 @@ const TIER_COLOR: Record<string, string> = {
 export default function Listup() {
   const { viewPhaseId, phases } = usePhase()
   const phaseLabel = phases.find(p => p.id === viewPhaseId)?.name ?? '1차'
+  const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
+  const otherPhases = phases.filter(p => p.id !== viewPhaseId)
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
@@ -394,6 +400,13 @@ export default function Listup() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
 
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importPhaseId, setImportPhaseId] = useState('')
+  const [importTier, setImportTier] = useState('전체')
+  const [importAcceptOnly, setImportAcceptOnly] = useState(false)
+  const [importPreview, setImportPreview] = useState<{ add: number; skip: number } | null>(null)
+  const [importing, setImporting] = useState(false)
+
   // Dashboard stats
   const [dashStats, setDashStats] = useState<{ total: number; sent: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
 
@@ -512,6 +525,93 @@ export default function Listup() {
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
+  }
+
+  const loadImportPreview = useCallback(async () => {
+    if (!viewPhaseId || !importPhaseId) { setImportPreview(null); return }
+    const [{ data: current }, { data: source }] = await Promise.all([
+      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
+      supabase.from('influencers').select('handle, status, tiers(rank)').eq('phase_id', importPhaseId),
+    ])
+    const existingSet = new Set((current ?? []).map(r => r.handle.toLowerCase()))
+    const sourceRows = (source ?? []) as unknown as Array<{ handle: string; status: string; tiers?: { rank: string } | null }>
+    const filtered = sourceRows.filter(r => {
+      if (importTier !== '전체' && r.tiers?.rank !== importTier) return false
+      if (importAcceptOnly && r.status !== 'accept') return false
+      return true
+    })
+    const add = filtered.filter(r => !existingSet.has(r.handle.toLowerCase())).length
+    setImportPreview({ add, skip: filtered.length - add })
+  }, [viewPhaseId, importPhaseId, importTier, importAcceptOnly])
+
+  useEffect(() => {
+    if (!showImportModal) return
+    loadImportPreview()
+  }, [showImportModal, loadImportPreview])
+
+  async function importFromPhase() {
+    if (!viewPhaseId || !importPhaseId) { showToast('불러올 차수를 선택하세요.', 'error'); return }
+    if (!importPreview?.add) { showToast('추가할 인플루언서가 없습니다.', 'error'); return }
+
+    setImporting(true)
+    try {
+      const [{ data: current }, { data: source }] = await Promise.all([
+        supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
+        supabase.from('influencers').select(
+          'handle, display_name, email, platform, followers, following, following_ratio, total_likes, video_count, engagement_rate, profile_url, tier_id, memo, status, tiers(rank)',
+        ).eq('phase_id', importPhaseId),
+      ])
+      const existingSet = new Set((current ?? []).map(r => r.handle.toLowerCase()))
+      const sourceRows = (source ?? []) as unknown as Array<{
+        handle: string; display_name: string | null; email: string | null; platform: string | null
+        followers: number; following: number; following_ratio: string | null; total_likes: number
+        video_count: number; engagement_rate: number; profile_url: string | null; tier_id: string | null
+        memo: string | null; status: string; tiers?: { rank: string } | null
+      }>
+      const rows = sourceRows
+        .filter(r => {
+          if (importTier !== '전체' && r.tiers?.rank !== importTier) return false
+          if (importAcceptOnly && r.status !== 'accept') return false
+          return !existingSet.has(r.handle.toLowerCase())
+        })
+        .map(r => ({
+          phase_id:         viewPhaseId,
+          source_phase_id:  importPhaseId,
+          handle:           r.handle,
+          display_name:     r.display_name,
+          email:            r.email,
+          platform:         r.platform,
+          followers:        r.followers ?? 0,
+          following:        r.following ?? 0,
+          following_ratio:  r.following_ratio,
+          total_likes:      r.total_likes ?? 0,
+          video_count:      r.video_count ?? 0,
+          engagement_rate:  r.engagement_rate ?? 0,
+          profile_url:      r.profile_url,
+          tier_id:          r.tier_id,
+          memo:             r.memo,
+          status:           '',
+          contact_count:    0,
+          last_contact_at:  null,
+          reply_count:      0,
+        }))
+
+      if (!rows.length) {
+        showToast('추가할 인플루언서가 없습니다.', 'error')
+        return
+      }
+
+      const { error } = await supabase.from('influencers').insert(rows)
+      if (error) { showToast(error.message, 'error'); return }
+
+      showToast(`${rows.length}명을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
+      setShowImportModal(false)
+      setImportPhaseId('')
+      setImportPreview(null)
+      loadInfluencers()
+    } finally {
+      setImporting(false)
+    }
   }
 
   async function deleteInfluencer(id: string) {
@@ -656,8 +756,20 @@ export default function Listup() {
               </button>
             )}
             <button
+              type="button"
+              onClick={() => {
+                setImportPhaseId(otherPhases[0]?.id ?? '')
+                setImportTier('전체')
+                setImportAcceptOnly(false)
+                setShowImportModal(true)
+              }}
+              disabled={!otherPhases.length}
+              style={{ marginLeft: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: '#6d28d9', color: '#fff', cursor: otherPhases.length ? 'pointer' : 'not-allowed', opacity: otherPhases.length ? 1 : 0.5, whiteSpace: 'nowrap' }}>
+              이전 차수 불러오기
+            </button>
+            <button
               onClick={() => navigate('/influencer/contact')}
-              style={{ marginLeft: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--teal-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--teal-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               컨택 페이지 →
             </button>
           </div>
@@ -703,6 +815,14 @@ export default function Listup() {
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{inf.display_name || inf.handle}</span>
+                          {inf.source_phase_id && (
+                            <span style={{
+                              display: 'inline-block', fontSize: 10, fontWeight: 700, width: 'fit-content',
+                              background: '#ede9fe', color: '#6d28d9', borderRadius: 6, padding: '1px 6px',
+                            }}>
+                              {phaseNameById[inf.source_phase_id] ?? '이전 차수'} 이관
+                            </span>
+                          )}
                           <a href={`https://www.tiktok.com/@${inf.handle}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{inf.handle}</a>
                         </div>
                       </td>
@@ -1150,6 +1270,47 @@ export default function Listup() {
       </div>
 
       <ConfirmToast state={confirmState} onHide={hideConfirm} />
+
+      <Modal open={showImportModal} onClose={() => !importing && setShowImportModal(false)} title="이전 차수 불러오기">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 320 }}>
+          <p style={{ fontSize: 13, color: 'var(--gray-6)', lineHeight: 1.6, margin: 0 }}>
+            다른 차수의 인플루언서를 현재 차수 DB에 복사합니다. 프로필·티어는 유지되며, 중복 핸들은 제외됩니다.
+          </p>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 6 }}>불러올 차수</label>
+            <select value={importPhaseId} onChange={e => setImportPhaseId(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }}>
+              <option value="">선택…</option>
+              {otherPhases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 6 }}>티어</label>
+            <select value={importTier} onChange={e => setImportTier(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, fontFamily: 'inherit' }}>
+              <option value="전체">전체</option>
+              {DB_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={importAcceptOnly} onChange={e => setImportAcceptOnly(e.target.checked)} />
+            확정(accept) 상태만 불러오기
+          </label>
+          {importPreview && importPhaseId && (
+            <div style={{ fontSize: 12, color: 'var(--gray-6)', background: 'var(--gray-1)', borderRadius: 8, padding: '10px 12px' }}>
+              <strong style={{ color: 'var(--teal-dk)' }}>{importPreview.add}명</strong> 추가 · 중복 {importPreview.skip}명 제외
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <button type="button" className="cfg-btn cfg-btn--ghost" disabled={importing} onClick={() => setShowImportModal(false)}>취소</button>
+            <button type="button" className="cfg-btn" disabled={importing || !importPhaseId || !importPreview?.add}
+              style={{ background: 'var(--teal-dk)', color: '#fff', borderColor: 'var(--teal-dk)' }}
+              onClick={importFromPhase}>
+              {importing ? '불러오는 중…' : `${importPreview?.add ?? 0}명 불러오기`}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
