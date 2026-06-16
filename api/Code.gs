@@ -6,7 +6,7 @@
 
 // Feature routers — each file owns its own routeXxx(action, p, body)
 const FEATURE_ROUTERS = [
-  routeListup,
+  routeTcmListup,
   routeOutlook,
   routeMonitoring,
   routeTrend,

@@ -2,37 +2,13 @@
 //  TCM Creator Listup — TikTok Creator Marketplace API
 //  Script Properties required:
 //    TIKTOK_ACCESS_TOKEN, TIKTOK_APP_ID, TIKTOK_SECRET_KEY
+//    APIFY_TOKEN
 //
-//  One tier per call: params.tierRank + params.targetCount
-//  Results saved to K-뷰티 / 일반뷰티 sheets (18 columns each)
+//  Flow: TCM discover → pre-filter (dedup, follow ratio) → Apify profile metadata → regex email
 // ============================================================
 
-// 17 columns — must match the K-뷰티 / 일반뷰티 sheet headers exactly
-const TCM_LISTUP_HEADERS = [
-  'Timestamp', '순위', 'Handle', 'Display Name', 'Email',
-  'Followers', 'Following', 'Following Ratio (%)',
-  'Total Likes', 'Video Count', 'Avg Views',
-  'Engagement Rate (%)', 'Bio', 'Profile URL',
-  'Outreach', 'Reply Body', 'Reply Date',
-];
-
-const TCM_MAX_RATIO = 0.70;
-
-const TCM_KBEAUTY_KEYWORDS = [
-  'kbeauty', 'korean skincare', 'glass skin',
-  'korean beauty', 'korean makeup', 'kbeauty review',
-];
-const TCM_BEAUTY_KEYWORDS = [
-  'beauty creator', 'beauty influencer', 'makeup tips',
-  'skincare', 'skincare routine', 'glow skin',
-];
-const TCM_TIERS = [
-  { rank: '1순위', label: '마이크로 (10K~50K)', minF:  10000, maxF:  50000, tags: 'kbeauty' },
-  { rank: '2순위', label: '마이크로 (10K~50K)', minF:  10000, maxF:  50000, tags: 'beauty'  },
-  { rank: '3순위', label: '나노 (3K~10K)',      minF:   3000, maxF:  10000, tags: 'kbeauty' },
-  { rank: '4순위', label: '나노 (3K~10K)',      minF:   3000, maxF:  10000, tags: 'beauty'  },
-  { rank: '5순위', label: '미드 (60K~100K)',    minF:  60000, maxF: 100000, tags: 'kbeauty' },
-];
+const TCM_PROFILE_ACTOR = 'automation-lab~tiktok-profile-scraper';
+const TCM_SCRAPE_BUFFER = 4; // Apify candidates = target × buffer (email misses)
 
 function _tcmCfg() {
   const p = PropertiesService.getScriptProperties();
@@ -103,13 +79,18 @@ function _tcmGetAccountId(cfg) {
   return ids[0];
 }
 
-function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio) {
+function _tcmCountryCode(raw) {
+  var c = String(raw || '').trim().toUpperCase();
+  return c || 'US';
+}
+
+function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio, countryCode) {
   const params = {
     tto_tcm_account_id: accountId,
     keyword_search    : keyword,
     min_followers     : minF,
     max_followers     : maxF,
-    country_codes     : ['US'],
+    country_codes     : [_tcmCountryCode(countryCode)],
     page              : page,
     page_size         : 50,
   };
@@ -122,7 +103,7 @@ function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio
   );
 }
 
-function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, deadline, genderRatio) {
+function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, deadline, genderRatio, countryCode) {
   const pool = {};
   let lastError = null;
   for (const kw of keywords) {
@@ -131,7 +112,7 @@ function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, 
     let page = 1;
     while (Object.keys(pool).length < collectTarget) {
       if (deadline && Date.now() > deadline) break;
-      const d = _tcmSearchPage(accountId, kw, minF, maxF, page, token, genderRatio);
+      const d = _tcmSearchPage(accountId, kw, minF, maxF, page, token, genderRatio, countryCode);
       if ((d.code || 0) !== 0) {
         lastError = 'code ' + d.code + ': ' + (d.message || JSON.stringify(d));
         break;
@@ -153,277 +134,417 @@ function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, 
   return { pool, lastError };
 }
 
-function _scrapeBio(handle) {
-  try {
-    const res = UrlFetchApp.fetch('https://www.tiktok.com/@' + handle, {
-      headers: {
-        'User-Agent'     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      muteHttpExceptions: true,
-      followRedirects   : true,
-    });
-    const html = res.getContentText();
-
-    // Try JSON blob first
-    const m1 = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
-    if (m1) {
-      try {
-        const data = JSON.parse(m1[1]);
-        const user = ((data.__DEFAULT_SCOPE__ || {})['webapp.user-detail'] || {}).userInfo?.user || {};
-        if (user.signature) return user.signature;
-      } catch(e) {}
-    }
-
-    // Fallback: og:description — format: "Name (@h) on TikTok | X Likes. Y Followers. {BIO}.Watch..."
-    const m2 = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)/);
-    if (m2) {
-      let desc = m2[1]
-        .replace(/&#x27;/g, "'").replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&').replace(/&#x2F;/g, '/');
-      const bioMatch = desc.match(/Followers\.\s*([\s\S]*?)\s*[.。](?:Watch|Join)\s/);
-      if (bioMatch) return bioMatch[1].trim();
-      return desc;
-    }
-  } catch(e) {}
-  return '';
+function _buildHandleSet_(raw) {
+  var set = {};
+  if (!raw) return set;
+  var list = Array.isArray(raw) ? raw : String(raw).split(',');
+  for (var i = 0; i < list.length; i++) {
+    var h = String(list[i] || '').trim().toLowerCase();
+    if (h) set[h] = true;
+  }
+  return set;
 }
 
 function _regexEmail(bio) {
-  const m = (bio || '').match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  var m = (bio || '').match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   return m ? m[0] : '';
 }
 
-function _groqEmail(bio, handle) {
-  const key = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY') || '';
-  if (!key || !bio) return '';
-  try {
-    const res = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method     : 'post',
-      contentType: 'application/json',
-      headers    : { 'Authorization': 'Bearer ' + key },
-      payload    : JSON.stringify({
-        model   : 'llama-3.1-8b-instant',
-        messages: [{ role: 'user', content:
-          'Extract the contact email from this TikTok bio for @' + handle + '.\n' +
-          'Bio: "' + bio + '"\n' +
-          'Reply with ONLY the email address (e.g. name@gmail.com), or "none".'
-        }],
-        max_tokens : 50,
-        temperature: 0,
-      }),
-      muteHttpExceptions: true,
-    });
-    const d      = JSON.parse(res.getContentText());
-    const result = (((d.choices || [])[0] || {}).message || {}).content || '';
-    const trimmed = result.trim();
-    if (!trimmed || trimmed.toLowerCase() === 'none') return '';
-    return _regexEmail(trimmed) || (trimmed.includes('@') ? trimmed : '');
-  } catch(e) {
-    return '';
+// Step 2 — free filters on TCM data BEFORE Apify (dedup + follow ratio)
+function _tcmSelectCandidates(pool, existingSet, maxRatioDec, limit, deadline, stats) {
+  var candidates = [];
+  for (var handle in pool) {
+    if (candidates.length >= limit) break;
+    if (deadline && Date.now() > deadline) break;
+    var c = pool[handle];
+    var hl = String(handle).toLowerCase();
+    if (existingSet[hl]) { stats.dupes++; continue; }
+    var followers = c.followers_count || 0;
+    var following = c.following_count || 0;
+    if (followers > 0 && following / followers > maxRatioDec) { stats.followRatio++; continue; }
+    candidates.push({ handle: handle, tcm: c });
   }
+  stats.apifyQueued = candidates.length;
+  return candidates;
 }
 
-function _extractEmailFromBio(c) {
-  const bio = c.bio_description || c.signature || c.bio || '';
-  return c._email || _regexEmail(bio);
+function _apifyToken_() {
+  return PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN') || '';
 }
 
-function _tcmBuildRow(c, rank, tierLabel, group) {
-  const handle    = c.handle_name    || '';
-  const followers = c.followers_count || 0;
-  const following = c.following_count || 0;
-  const avgViews  = c.avg_video_views || c.average_views || c.avg_views || c.averageViews || 0;
-  // Prefer API-provided engagement_rate (decimal 0–1); fall back to likes/avg-views calc
-  let engRate = '';
-  if (c.engagement_rate != null) {
-    const raw = Number(c.engagement_rate);
-    engRate = parseFloat((raw < 1 ? raw * 100 : raw).toFixed(2));
-  } else if (avgViews > 0) {
-    engRate = parseFloat(((c.likes_count || 0) / avgViews * 100).toFixed(2));
+function _apifyStartProfileRun(handles, token) {
+  var payload = { profiles: handles };
+  var res = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/acts/' + TCM_PROFILE_ACTOR + '/runs?token=' + token,
+    { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true }
+  );
+  var body = JSON.parse(res.getContentText());
+  if (!body.data) return { error: 'Apify 오류: ' + res.getContentText().substring(0, 300) };
+  return { runId: body.data.id, datasetId: body.data.defaultDatasetId };
+}
+
+function _apifyWaitForRun(runId, token, deadline) {
+  while (Date.now() < deadline) {
+    var res = UrlFetchApp.fetch(
+      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+      { muteHttpExceptions: true }
+    );
+    var data = JSON.parse(res.getContentText()).data;
+    var status = data && data.status;
+    if (status === 'SUCCEEDED') return { ok: true, datasetId: data.defaultDatasetId };
+    if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+      return { error: 'Apify 실행 실패: ' + status };
+    }
+    Utilities.sleep(4000);
   }
-  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  return [
-    today,                                              // Timestamp
-    rank,                                               // 순위
-    handle,                                             // Handle
-    c.display_name || '',                               // Display Name
-    _extractEmailFromBio(c),                            // Email
-    followers,                                          // Followers
-    following,                                          // Following
-    followers ? (following / followers * 100).toFixed(1) + '%' : '', // Following Ratio (%)
-    c.likes_count  || 0,                                // Total Likes
-    c.videos_count || 0,                                // Video Count
-    avgViews,                                           // Avg Views
-    engRate,                                            // Engagement Rate (%)
-    c.bio_description || c.signature || c.bio || '',    // Bio
-    handle ? 'https://www.tiktok.com/@' + handle : '',  // Profile URL
-    '',                                                 // Outreach
-    '',                                                 // Reply Body
-    '',                                                 // Reply Date
-  ];
+  return { error: 'Apify 시간 초과' };
 }
 
-function _tcmGetExistingHandles(ss, sheetName) {
-  const existing = new Set();
-  try {
-    const ws = ss.getSheetByName(sheetName);
-    if (!ws || ws.getLastRow() < 2) return existing;
-    const handleCol = TCM_LISTUP_HEADERS.findIndex(h => h.toLowerCase() === 'handle') + 1;
-    if (handleCol < 1) return existing;
-    ws.getRange(2, handleCol, ws.getLastRow() - 1, 1)
-      .getValues()
-      .forEach(r => { if (r[0]) existing.add(r[0].toString().toLowerCase()); });
-  } catch(e) {}
-  return existing;
+function _apifyFetchDataset(datasetId, token) {
+  var res = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=2000',
+    { muteHttpExceptions: true }
+  );
+  var items = JSON.parse(res.getContentText());
+  return Array.isArray(items) ? items : [];
 }
 
-// ── Main entry ────────────────────────────────────────────────
-// params.tierRank   : '1순위' | '2순위' | '3순위' | '4순위' | '5순위'
-// params.targetCount: number — how many creators WITH email to return
-// params.keyword    : single keyword string (required from UI)
+// Rough engagement % from profile stats: (likes/video ÷ followers) × 100
+function _tcmEngagementPct(followers, likesCount, videoCount) {
+  if (!followers || !videoCount || !likesCount) return 0;
+  return parseFloat(((likesCount / videoCount / followers) * 100).toFixed(2));
+}
+
+// automation-lab/tiktok-profile-scraper — one dataset row per profile (type: "profile")
+function _parseAutomationLabProfile(item) {
+  if (!item || item.errorCode) return null;
+  if (item.type && item.type !== 'profile') return null;
+
+  var handle = String(item.username || '').trim();
+  if (!handle) return null;
+
+  var bio = String(item.bio || '');
+  var email = _regexEmail(bio) || _regexEmail(String(item.bioLink || ''));
+  var followers = Number(item.followerCount) || 0;
+  var following = Number(item.followingCount) || 0;
+  var videoCount = Number(item.videoCount) || 0;
+  var likesCount = Number(item.likesCount) || 0;
+
+  return {
+    handle      : handle,
+    displayName : String(item.displayName || ''),
+    bio         : bio.substring(0, 500),
+    email       : email,
+    profileUrl  : String(item.profileUrl || ('https://www.tiktok.com/@' + handle)),
+    followers   : followers,
+    following   : following,
+    totalLikes  : likesCount,
+    videoCount  : videoCount,
+    avgViews    : 0,
+    engRate     : _tcmEngagementPct(followers, likesCount, videoCount),
+  };
+}
+
+function _creatorFromProfile(p) {
+  var followers = p.followers || 0;
+  var following = p.following || 0;
+  return {
+    handle      : p.handle,
+    displayName : p.displayName || '',
+    email       : p.email || '',
+    followers   : followers,
+    following   : following,
+    ratio       : followers ? Math.round(following / followers * 100) + '%' : '',
+    totalLikes  : p.totalLikes || 0,
+    videoCount  : p.videoCount || 0,
+    avgViews    : p.avgViews || 0,
+    engRate     : p.engRate || 0,
+    bio         : p.bio || '',
+    profileUrl  : p.profileUrl || '',
+  };
+}
+
+function _apifyProfilesToMap(items, requireEmail) {
+  var byHandle = {};
+  var noEmail = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var p = _parseAutomationLabProfile(items[i]);
+    if (!p) continue;
+    byHandle[p.handle.toLowerCase()] = p;
+  }
+
+  var result = {};
+  for (var k in byHandle) {
+    var prof = byHandle[k];
+    if (requireEmail && !prof.email) { noEmail++; continue; }
+    result[k] = prof;
+  }
+
+  return { byHandle: result, noEmail: noEmail, uploadSkipped: 0 };
+}
+
+// params: tierRank, tierLabel, tierTags, category, targetCount, keyword, minF, maxF,
+//         existingHandles, maxRatio (%), requireEmail, proxyCountry, genderRatio
 function tcmRunSearch(params) {
   try {
     const cfg = _tcmCfg();
     if (!cfg.token) return { error: 'Script Properties에 TIKTOK_ACCESS_TOKEN을 추가하세요.' };
 
+    const apifyToken = _apifyToken_();
+    if (!apifyToken) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요.' };
+
     const accountId = _tcmGetAccountId(cfg);
     const tierRank  = params.tierRank;
     const target    = parseInt(params.targetCount) || 20;
 
-    const tier = TCM_TIERS.find(t => t.rank === tierRank);
-    if (!tier) return { error: '티어를 선택하세요.' };
+    if (!tierRank) return { error: '티어를 선택하세요.' };
 
-    const kws         = params.keyword
-      ? [params.keyword]
-      : (tier.tags === 'kbeauty' ? TCM_KBEAUTY_KEYWORDS : TCM_BEAUTY_KEYWORDS);
-    const minF        = parseInt(params.minF) || tier.minF;
-    const maxF        = parseInt(params.maxF) || tier.maxF;
-    const genderRatio = params.genderRatio || ''; // 'FEMALE_50' | 'FEMALE_60' | ''
-    const collect     = target * 8;
-    const deadline    = Date.now() + 4.5 * 60 * 1000;
+    const keyword = String(params.keyword || '').trim();
+    if (!keyword) return { error: '키워드를 선택하세요.' };
 
-    // Step 1: collect raw pool
-    const { pool, lastError } = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, deadline, genderRatio);
+    const minF = parseInt(params.minF);
+    const maxF = parseInt(params.maxF);
+    if (!minF || !maxF) return { error: '팔로워 범위가 필요합니다.' };
 
-    // Pre-load handles already in the target sheet so duplicates don't consume target slots
-    const sheetName = tier.tags === 'kbeauty' ? SHEET_K_BEAUTY : SHEET_GENERAL_BEAUTY;
-    let existingHandles;
-    try {
-      const ssRef = SpreadsheetApp.openById(getActiveOutreachId());
-      existingHandles = _tcmGetExistingHandles(ssRef, sheetName);
-    } catch(e) {
-      existingHandles = new Set();
-    }
+    const tierLabel = params.tierLabel || tierRank;
+    const tierTags  = params.tierTags || params.tags || '';
+    const category  = params.category || (tierTags === 'kbeauty' ? 'K-뷰티' : '일반뷰티');
+    const kws       = [keyword];
+    const genderRatio   = params.genderRatio || '';
+    const maxRatioDec   = (parseFloat(params.maxRatio) || 70) / 100;
+    const requireEmail  = params.requireEmail !== false;
+    const countryCode   = _tcmCountryCode(params.proxyCountry || params.country);
+    const collect       = target * 8;
+    const deadline      = Date.now() + 4.5 * 60 * 1000;
+
+    // Step 1: TCM discover
+    const { pool, lastError } = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, deadline, genderRatio, countryCode);
+
+    const existingSet = _buildHandleSet_(params.existingHandles);
 
     const stats = {
-      poolSize    : Object.keys(pool).length,
-      existing    : existingHandles.size,
-      dupes       : 0,
-      followRatio : 0,
-      noProfile   : 0,
-      noEmail     : 0,
-      checked     : 0,
-      deadlineHit : false,
-      apiError    : lastError,
+      poolSize      : Object.keys(pool).length,
+      dupes         : 0,
+      followRatio   : 0,
+      apifyQueued   : 0,
+      apifyScraped  : 0,
+      noEmail       : 0,
+      uploadSkipped : 0,
+      deadlineHit   : false,
+      apiError      : lastError,
+      country       : countryCode,
     };
 
-    // Step 2: filter by follow ratio, then fetch /creator/public/ for bio/email.
-    // 40100 per creator = that creator has no public TCM profile → skip, try next.
-    const rows = [];
-    for (const [handle, c] of Object.entries(pool)) {
-      if (rows.length >= target) break;
-      if (Date.now() > deadline) { stats.deadlineHit = true; break; }
+    // Step 2: pre-filter BEFORE Apify (dedup + follow ratio) — saves Apify credits
+    const scrapeLimit = target * TCM_SCRAPE_BUFFER;
+    const candidates  = _tcmSelectCandidates(pool, existingSet, maxRatioDec, scrapeLimit, deadline, stats);
 
-      // Skip creators already saved in the sheet
-      if (existingHandles.has(handle.toLowerCase())) { stats.dupes++; continue; }
-
-      const followers = c.followers_count || 0;
-      const following = c.following_count || 0;
-      if (followers > 0 && following / followers > TCM_MAX_RATIO) { stats.followRatio++; continue; }
-
-      const d = _tcmGet(
-        'https://business-api.tiktok.com/open_api/v1.3/tto/tcm/creator/public/',
-        { tto_tcm_account_id: accountId, handle_name: handle },
-        cfg.token
-      );
-      stats.checked++;
-
-      // Try /creator/public/ first; fall back to scraping profile page if 40100
-      const code = d.code || 0;
-      let bio = '';
-      if (code === 0) {
-        const pub = d.data || {};
-        bio = pub.bio_description || pub.signature || pub.bio || pub.introduction || '';
-        if (pub.engagement_rate != null) c.engagement_rate = pub.engagement_rate;
-      } else {
-        stats.noProfile++;
-        bio = _scrapeBio(handle);
-      }
-      c.bio_description = bio;
-
-      // Regex first, Groq fallback for obfuscated emails
-      let email = _regexEmail(bio);
-      if (!email && bio) email = _groqEmail(bio, handle);
-      if (!email) { stats.noEmail++; continue; }
-
-      c._email = email;
-      rows.push(_tcmBuildRow(c, tier.rank, tier.label, tier.tags));
-      Utilities.sleep(200);
+    if (!candidates.length) {
+      return { ok: true, creators: [], count: 0, tier: tierRank, tierLabel: tierLabel, category, stats };
     }
 
-    const category = tier.tags === 'kbeauty' ? 'K-뷰티' : '뷰티';
-    return { ok: true, rows, count: rows.length, tier: tier.rank, tierLabel: tier.label, category, stats };
+    // Step 3: Apify profile scrape (only filtered candidates)
+    const handles = candidates.map(function(c) { return c.handle; });
+    const started = _apifyStartProfileRun(handles, apifyToken);
+    if (started.error) return { error: started.error };
+
+    const waited = _apifyWaitForRun(started.runId, apifyToken, deadline);
+    if (waited.error) return { error: waited.error };
+
+    const items  = _apifyFetchDataset(waited.datasetId, apifyToken);
+    const parsed = _apifyProfilesToMap(items, requireEmail);
+    stats.apifyScraped = Object.keys(parsed.byHandle).length;
+    stats.noEmail += parsed.noEmail;
+
+    // Step 4: build creators up to target (preserve TCM discover order)
+    const creators = [];
+    for (var ci = 0; ci < candidates.length; ci++) {
+      if (creators.length >= target) break;
+      var cand = candidates[ci];
+      var prof = parsed.byHandle[String(cand.handle).toLowerCase()];
+      if (!prof) continue;
+      creators.push(_creatorFromProfile(prof));
+    }
+
+    return { ok: true, creators: creators, count: creators.length, tier: tierRank, tierLabel: tierLabel, category, stats };
   } catch(e) {
     return { error: e.toString() };
   }
 }
 
-function tcmSaveToSheet(kRows, bRows) {
+// ── Apify run helpers (manual Run/Dataset ID load + polling) ──
+
+function _tcmResolveSearchFilters(searchFilters, filterConditions, legacy) {
+  var sf = searchFilters || {};
+  var leg = legacy || {};
+
+  var flags = {
+    followerMin:         +(sf.followerMin || leg.followerMin) || 0,
+    followerMax:         +(sf.followerMax || leg.followerMax) || 0,
+    maxCreators:         +(sf.maxCreators || leg.maxCreators || leg.targetCreators) || 0,
+    maxFollowingRatio:   +(sf.maxRatio || sf.maxFollowingRatio || leg.maxFollowingRatio) || 0,
+    maxUploadDays:       +(sf.maxUploadDays || leg.maxUploadDays) || 0,
+    proxyCountry:        sf.proxyCountry || leg.proxyCountry || 'US',
+    requireEmail:        sf.requireEmail !== false,
+    dedupExisting:       false,
+    manualReview:        [],
+  };
+
+  if (filterConditions && filterConditions.length) {
+    for (var i = 0; i < filterConditions.length; i++) {
+      var fc = filterConditions[i] || {};
+      var cat = String(fc.cat || '').trim();
+      var desc = String(fc.desc || '').trim();
+
+      if (fc.manual || cat.indexOf('영상') !== -1 || cat.indexOf('퀄리티') !== -1) {
+        if (cat) flags.manualReview.push({ cat: cat, desc: desc });
+        continue;
+      }
+      if (fc.type === 'dedup' || cat.indexOf('중복') !== -1 || desc.indexOf('중복') !== -1) {
+        if (fc.enabled !== false) flags.dedupExisting = true;
+      }
+      if (cat.indexOf('이메일') !== -1 || desc.indexOf('이메일') !== -1) {
+        flags.requireEmail = true;
+      }
+    }
+  }
+
+  return flags;
+}
+
+function tcmCheckRunStatus(runId) {
   try {
-    const ss = SpreadsheetApp.openById(getActiveOutreachId());
-    const kRes = kRows.length ? _tcmAppendTab(ss, SHEET_K_BEAUTY,       kRows, TCM_LISTUP_HEADERS) : { added: 0, dupes: 0 };
-    const bRes = bRows.length ? _tcmAppendTab(ss, SHEET_GENERAL_BEAUTY, bRows, TCM_LISTUP_HEADERS) : { added: 0, dupes: 0 };
-    return { ok: true, kCount: kRes.added, bCount: bRes.added, kDupes: kRes.dupes, bDupes: bRes.dupes };
-  } catch(e) {
+    const token = _apifyToken_();
+    if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요.' };
+    const res = UrlFetchApp.fetch(
+      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+      { muteHttpExceptions: true }
+    );
+    if (res.getResponseCode() !== 200) {
+      return { error: 'Run not found', notFound: true };
+    }
+    const body = JSON.parse(res.getContentText());
+    if (!body.data) return { error: 'Run not found', notFound: true };
+    return { status: body.data.status, datasetId: body.data.defaultDatasetId };
+  } catch (e) {
     return { error: e.toString() };
   }
 }
 
-function _tcmAppendTab(ss, name, rows, headers) {
-  let ws = ss.getSheetByName(name);
-  if (!ws) ws = ss.insertSheet(name);
-  if (ws.getLastRow() === 0) {
-    ws.getRange(1, 1, 1, headers.length).setValues([headers]);
-    ws.setFrozenRows(1);
+function tcmGetRunResults(datasetId, searchFilters, filterConditions, existingHandles, legacy) {
+  try {
+    const flags = _tcmResolveSearchFilters(searchFilters, filterConditions, legacy);
+    const token = _apifyToken_();
+    if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요.' };
+    const limit = Math.min(500, Math.max(50, (flags.maxCreators || 100) * 5));
+    const res = UrlFetchApp.fetch(
+      'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=' + limit,
+      { muteHttpExceptions: true }
+    );
+    const items = JSON.parse(res.getContentText());
+    const existingSet = flags.dedupExisting ? _buildHandleSet_(existingHandles) : {};
+
+    var noEmailSkipped = 0;
+    var dedupSkipped = 0;
+    var filtered = [];
+    var cap = flags.maxCreators > 0 ? flags.maxCreators : 0;
+
+    for (var i = 0; i < items.length; i++) {
+      var p = _parseAutomationLabProfile(items[i]);
+      if (!p) continue;
+
+      if (flags.followerMin && p.followers < flags.followerMin) continue;
+      if (flags.followerMax && p.followers > flags.followerMax) continue;
+      if (flags.maxFollowingRatio > 0 && p.followers > 0 &&
+          (p.following / p.followers * 100) > flags.maxFollowingRatio) continue;
+      if (flags.requireEmail && (!p.email || !String(p.email).trim())) { noEmailSkipped++; continue; }
+      if (flags.dedupExisting && existingSet[String(p.handle).toLowerCase()]) { dedupSkipped++; continue; }
+
+      filtered.push(_creatorFromProfile(p));
+      if (cap > 0 && filtered.length >= cap) break;
+    }
+
+    const limited = cap > 0 ? filtered.slice(0, cap) : filtered;
+    return {
+      ok: true,
+      creators: limited,
+      noEmailSkipped: noEmailSkipped,
+      dedupSkipped: dedupSkipped,
+      appliedFilters: {
+        followerMin: flags.followerMin,
+        followerMax: flags.followerMax,
+        maxFollowingRatio: flags.maxFollowingRatio,
+        maxUploadDays: flags.maxUploadDays,
+        maxCreators: flags.maxCreators,
+        requireEmail: flags.requireEmail,
+        dedupExisting: flags.dedupExisting,
+      },
+      manualReview: flags.manualReview,
+    };
+  } catch (e) {
+    return { error: e.toString() };
+  }
+}
+
+function _tcmResolveDatasetId(id) {
+  if (!id) return { error: 'ID가 필요합니다.' };
+  var token = _apifyToken_();
+  if (!token) return { error: 'Script Properties에 APIFY_TOKEN을 추가하세요.' };
+
+  var runRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/actor-runs/' + id + '?token=' + token,
+    { muteHttpExceptions: true }
+  );
+  if (runRes.getResponseCode() === 200) {
+    var runBody = JSON.parse(runRes.getContentText());
+    if (runBody.data) {
+      if (runBody.data.status !== 'SUCCEEDED') {
+        return { error: 'Run 미완료: ' + runBody.data.status, status: runBody.data.status };
+      }
+      return { datasetId: runBody.data.defaultDatasetId };
+    }
   }
 
-  // Deduplicate by Handle — skip rows whose handle already exists in the sheet
-  const handleIdx = headers.findIndex(h => h.toLowerCase() === 'handle');
-  const existingHandles = new Set();
-  if (handleIdx >= 0 && ws.getLastRow() > 1) {
-    ws.getRange(2, handleIdx + 1, ws.getLastRow() - 1, 1)
-      .getValues()
-      .forEach(r => { if (r[0]) existingHandles.add(r[0].toString().toLowerCase()); });
-  }
-  const newRows = handleIdx >= 0
-    ? rows.filter(r => {
-        const h = (r[handleIdx] || '').toString().toLowerCase();
-        return h && !existingHandles.has(h);
-      })
-    : rows;
+  var dsRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + id + '?token=' + token,
+    { muteHttpExceptions: true }
+  );
+  if (dsRes.getResponseCode() === 200) return { datasetId: id };
 
-  if (newRows.length > 0) {
-    ws.getRange(ws.getLastRow() + 1, 1, newRows.length, headers.length).setValues(newRows);
+  return { error: '유효하지 않은 Run ID 또는 Dataset ID입니다.' };
+}
+
+function tcmLoadCreatorResults(params) {
+  var p = params || {};
+  var datasetId = p.datasetId;
+  if (!datasetId) {
+    var resolved = _tcmResolveDatasetId(p.runId || p.id);
+    if (resolved.error) return resolved;
+    datasetId = resolved.datasetId;
   }
-  return { added: newRows.length, dupes: rows.length - newRows.length };
+  return tcmGetRunResults(
+    datasetId,
+    p.searchFilters,
+    p.filterConditions,
+    p.existingHandles,
+    p
+  );
 }
 
 function routeTcmListup(action, p, body) {
-  const b = body || {};
+  const b = body || {}, q = p || {};
   switch (action) {
-    case 'tcmRunSearch':   return tcmRunSearch(b.params);
-    case 'tcmSaveToSheet': return tcmSaveToSheet(b.kRows || [], b.bRows || []);
+    case 'tcmRunSearch':      return tcmRunSearch(b.params);
+    case 'checkRunStatus':    return tcmCheckRunStatus(q.runId || b.runId);
+    case 'getRunResults':     return tcmGetRunResults(
+      q.datasetId || b.datasetId,
+      b.searchFilters || q.searchFilters,
+      b.filterConditions || q.filterConditions,
+      b.existingHandles || q.existingHandles,
+      b
+    );
+    case 'loadCreatorResults': return tcmLoadCreatorResults(b);
     default: return null;
   }
 }

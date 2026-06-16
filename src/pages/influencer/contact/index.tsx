@@ -660,17 +660,16 @@ export default function Outreach() {
                           </select>
                         </td>
                         {/* 마지막 컨택 날짜 */}
-                        <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {inf.last_contact_at
+                        <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {inf.last_contact_at && count > 0
                               ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {(() => { const d = new Date(inf.last_contact_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
+                                  {count}차 발송 {(() => { const d = new Date(inf.last_contact_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
                                 </span>
-                              : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>
-                            }
+                              : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                             {(inf.reply_count ?? 0) > 0 && (
                               <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {inf.reply_count}회
+                                {inf.reply_count}차 회신
                               </span>
                             )}
                           </div>

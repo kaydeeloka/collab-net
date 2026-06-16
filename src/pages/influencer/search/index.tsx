@@ -10,15 +10,6 @@ import Pagination from '../../../components/Pagination'
 
 type ListupTab = 'search' | 'database'
 
-const DEFAULT_KBEAUTY_KEYWORDS = ['glass skin','kbeauty','korean beauty','korean skincare','kbeauty review','kbeauty routine','korean skincare routine','kbeauty products','kbeauty addict','korean makeup','olive young','kbeauty skincare']
-const DEFAULT_BEAUTY_KEYWORDS  = ['beauty review','skincare','makeup tips','beauty creator','beautytok','makeup haul','beauty hacks','beauty influencer']
-const DEFAULT_TIERS = [
-  { rank:'1순위', label:'마이크로 (10K~50K)',  minF:10000,  maxF:50000,  tags:'kbeauty', category:'K-뷰티' },
-  { rank:'2순위', label:'마이크로 (10K~50K)',  minF:10000,  maxF:50000,  tags:'beauty',  category:'일반뷰티' },
-  { rank:'3순위', label:'나노 (3K~10K)',       minF:3000,   maxF:9999,   tags:'kbeauty', category:'K-뷰티' },
-  { rank:'4순위', label:'나노 (3K~10K)',       minF:3000,   maxF:9999,   tags:'beauty',  category:'일반뷰티' },
-  { rank:'5순위', label:'마이크로 (60K~100K)', minF:60000,  maxF:100000, tags:'kbeauty', category:'K-뷰티' },
-]
 const DEFAULT_FILTER_CONDS: FilterCond[] = [
   { cat: '중복', desc: '1~5순위까지의 중복 계정 필터링', type: 'dedup', enabled: true },
 ]
@@ -39,10 +30,19 @@ interface SearchFilters {
   maxUploadDays: number
   proxyCountry: string
   requireEmail: boolean
+  genderRatio?: '' | 'FEMALE_50' | 'FEMALE_60'
   followerMin: number
   followerMax: number
   maxCreators: number
 }
+
+type GenderRatioOption = '' | 'FEMALE_50' | 'FEMALE_60'
+
+const GENDER_RATIO_OPTIONS: { value: GenderRatioOption; label: string }[] = [
+  { value: '',          label: '없음 (전체)' },
+  { value: 'FEMALE_50', label: '여성 50% 이상' },
+  { value: 'FEMALE_60', label: '여성 60% 이상' },
+]
 
 interface FilterCond { cat: string; desc: string; manual?: boolean; type?: 'dedup'; enabled?: boolean }
 const DB_PAGE_SIZE = 25
@@ -90,14 +90,42 @@ const COUNTRY_MAP: Record<string, string> = {
   'WF':'Wallis and Futuna','YE':'Yemen','ZM':'Zambia','ZW':'Zimbabwe','AX':'Åland Islands',
 }
 
-interface Tier        { rank: string; label: string; minF: number; maxF: number; tags: string; category: string }
+interface Tier { rank: string; label: string; minF: number; maxF: number; tags: string; category: string }
+
+type DbTierRow = {
+  rank: string
+  label: string
+  category: string
+  tags: string
+  min_followers: number
+  max_followers: number
+}
+
+function mapDbTier(row: DbTierRow): Tier {
+  return {
+    rank: row.rank,
+    label: row.label,
+    category: row.category,
+    tags: row.tags,
+    minF: row.min_followers,
+    maxF: row.max_followers,
+  }
+}
+
+async function fetchTiersFromDb(): Promise<Tier[]> {
+  const { data } = await supabase
+    .from('tiers')
+    .select('rank, label, category, tags, min_followers, max_followers')
+    .order('sort_order')
+  return (data ?? []).map(mapDbTier)
+}
 
 const DB_TIERS = ['1순위','2순위','3순위','4순위','5순위']
 interface Influencer  {
   id: string; created_at: string; phase_id: string; handle: string
   display_name: string | null; email: string | null; followers: number; following: number
-  following_ratio: string | null; total_likes: number; video_count: number
-  avg_views: number; engagement_rate: number; profile_url: string | null; status: string
+  following_ratio: string | null;   total_likes: number; video_count: number
+  engagement_rate: number; profile_url: string | null; status: string
   tiers?: { rank: string; label: string; category: string } | null
 }
 interface ApifyCreator {
@@ -106,11 +134,35 @@ interface ApifyCreator {
   avgViews: number; engRate: number; bio: string; profileUrl: string
 }
 
+function formatExclusionStats(stats: { noEmailSkipped: number; dedupSkipped: number } | null) {
+  if (!stats) return ''
+  const parts: string[] = []
+  if (stats.noEmailSkipped > 0) parts.push(`이메일 없음 ${stats.noEmailSkipped}명 제외`)
+  if (stats.dedupSkipped > 0) parts.push(`중복 ${stats.dedupSkipped}명 제외`)
+  return parts.join(' · ')
+}
+
+function formatSearchDuration(ms: number) {
+  const totalSec = Math.max(1, Math.round(ms / 1000))
+  if (totalSec < 60) return `${totalSec}초`
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  return sec > 0 ? `${min}분 ${sec}초` : `${min}분`
+}
+
+function formatSearchMeta(elapsedMs: number | null, stats: { noEmailSkipped: number; dedupSkipped: number } | null) {
+  const parts: string[] = []
+  if (elapsedMs != null) parts.push(formatSearchDuration(elapsedMs))
+  const exclusions = formatExclusionStats(stats)
+  if (exclusions) parts.push(exclusions)
+  return parts.join(' · ')
+}
+
 function saveConfig(key: string, value: unknown) {
   supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
 }
 
-function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
+function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail' | 'genderRatio'>) {
   saveConfig('search_filters', filters)
 }
 
@@ -145,16 +197,6 @@ const TIER_COLOR: Record<string, string> = {
   '5순위': '#ec4899',
 }
 
-const OUTREACH_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  yes:       { bg: '#dbeafe', color: '#1d4ed8', label: '완료' },
-  reply:     { bg: '#fef3c7', color: '#d97706', label: '답장' },
-  negotiate: { bg: '#d1fae5', color: '#065f46', label: '협의중' },
-  accept:    { bg: '#bbf7d0', color: '#14532d', label: '수락확정' },
-  reject:    { bg: '#fee2e2', color: '#991b1b', label: '거절' },
-  target:    { bg: '#ede9fe', color: '#6d28d9', label: '컨택예정' },
-  default:   { bg: '#f1f5f9', color: '#64748b', label: '미발송' },
-}
-
 export default function Listup() {
   const { viewPhaseId, phases } = usePhase()
   const phaseLabel = phases.find(p => p.id === viewPhaseId)?.name ?? '1차'
@@ -163,11 +205,14 @@ export default function Listup() {
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
   const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
-  // Config state (loaded from Supabase app_config)
-  const [tiers, setTiers] = useState<Tier[]>(DEFAULT_TIERS)
+  // Config state (loaded from Supabase)
+  const [configLoading, setConfigLoading] = useState(true)
+  const [tiers, setTiers] = useState<Tier[]>([])
   const [tierEditMode, setTierEditMode] = useState(false)
-  const [kbeautyKws, setKbeautyKws] = useState<string[]>(DEFAULT_KBEAUTY_KEYWORDS)
-  const [beautyKws, setBeautyKws] = useState<string[]>(DEFAULT_BEAUTY_KEYWORDS)
+  const [kbeautyKws, setKbeautyKws] = useState<string[]>([])
+  const [beautyKws, setBeautyKws] = useState<string[]>([])
+  const initialKbeautyKwsRef = useRef<string[]>([])
+  const initialBeautyKwsRef = useRef<string[]>([])
   const [kbeautyEdit, setKbeautyEdit] = useState(false)
   const [beautyEdit, setBeautyEdit] = useState(false)
   const [newKbeautyKw, setNewKbeautyKw] = useState('')
@@ -176,22 +221,111 @@ export default function Listup() {
   const [maxRatio, setMaxRatio] = useState(70)
   const [maxUploadDays, setMaxUploadDays] = useState(30)
   const [proxyCountry, setProxyCountry] = useState('US')
+  const [genderRatio, setGenderRatio] = useState<GenderRatioOption>('')
   const [requireEmail, setRequireEmail] = useState(true)
 
-  // Apify state (still uses GAS)
+  // Apify / TCM search state
   const [apifyTierIdx, setApifyTierIdx] = useState<number | null>(null)
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
   const [targetCreators, setTargetCreators] = useState(100)
-  const [apifyStatus, setApifyStatus] = useState('')
   const [apifyLoading, setApifyLoading] = useState(false)
   const [apifyResults, setApifyResults] = useState<ApifyCreator[] | null>(null)
-  const [apifyRunId, setApifyRunId] = useState('')
-  const [apifyDatasetId, setApifyDatasetId] = useState('')
-  const [apifyPolling, setApifyPolling] = useState(false)
-  const [apifyProcessing, setApifyProcessing] = useState(false)
   const [apifyCurrentTier, setApifyCurrentTier] = useState<Tier | null>(null)
   const [apifyFilterStats, setApifyFilterStats] = useState<{ noEmailSkipped: number; dedupSkipped: number } | null>(null)
-  const [apifyManualId, setApifyManualId] = useState('')
+  const [searchElapsedMs, setSearchElapsedMs] = useState<number | null>(null)
   const existingHandlesRef = useRef<string[]>([])
+
+  const selectedTier = apifyTierIdx !== null ? tiers[apifyTierIdx] ?? null : null
+
+  const keywordCategories = [
+    {
+      tag: 'kbeauty' as const,
+      title: 'K-뷰티',
+      badgeBg: '#111',
+      keywords: kbeautyKws,
+      cfgKey: 'kbeauty_keywords' as const,
+      initialRef: initialKbeautyKwsRef,
+      edit: kbeautyEdit,
+      setEdit: setKbeautyEdit,
+      newKw: newKbeautyKw,
+      setNewKw: setNewKbeautyKw,
+      setKws: setKbeautyKws,
+    },
+    {
+      tag: 'beauty' as const,
+      title: '일반뷰티',
+      badgeBg: 'var(--blue)',
+      keywords: beautyKws,
+      cfgKey: 'beauty_keywords' as const,
+      initialRef: initialBeautyKwsRef,
+      edit: beautyEdit,
+      setEdit: setBeautyEdit,
+      newKw: newBeautyKw,
+      setNewKw: setNewBeautyKw,
+      setKws: setBeautyKws,
+    },
+  ]
+
+  function selectTier(idx: number) {
+    setApifyTierIdx(idx)
+    setSelectedKeyword(null)
+  }
+
+  async function runTcmSearch() {
+    if (apifyTierIdx === null || !selectedKeyword) return
+    const tier = tiers[apifyTierIdx]
+    setApifyLoading(true)
+    setApifyResults(null)
+    setApifyFilterStats(null)
+    setSearchElapsedMs(null)
+    setApifyCurrentTier(tier)
+    existingHandlesRef.current = []
+    const startedAt = Date.now()
+    try {
+      await prefetchExistingHandles()
+      const res: {
+        error?: string
+        ok?: boolean
+        creators?: ApifyCreator[]
+        count?: number
+        stats?: { noEmail?: number; followRatio?: number; dupes?: number; poolSize?: number; apifyQueued?: number; uploadSkipped?: number; country?: string }
+      } = await gasPost({
+        action: 'tcmRunSearch',
+        params: {
+          tierRank: tier.rank,
+          tierLabel: tier.label,
+          tierTags: tier.tags,
+          category: tier.category,
+          targetCount: targetCreators,
+          keyword: selectedKeyword,
+          minF: tier.minF,
+          maxF: tier.maxF,
+          existingHandles: existingHandlesRef.current,
+          maxRatio,
+          maxUploadDays,
+          requireEmail,
+          proxyCountry: proxyCountry || 'US',
+          genderRatio: genderRatio || '',
+        },
+      })
+      if (res.error) {
+        alert('오류: ' + res.error)
+        return
+      }
+      const list = res.creators ?? []
+      const stats = res.stats
+      setApifyResults(list)
+      setApifyFilterStats({
+        noEmailSkipped: stats?.noEmail ?? 0,
+        dedupSkipped: stats?.dupes ?? 0,
+      })
+      setSearchElapsedMs(Date.now() - startedAt)
+    } catch (e: unknown) {
+      alert('오류: ' + (e as Error).message)
+    } finally {
+      setApifyLoading(false)
+    }
+  }
 
   // DB state
   const [influencers, setInfluencers] = useState<Influencer[]>([])
@@ -209,26 +343,56 @@ export default function Listup() {
   // Load config once on mount
   useEffect(() => {
     ;(async () => {
-      const { data: cfg } = await supabase
-        .from('app_config')
-        .select('key, value')
-        .in('key', ['tiers', 'kbeauty_keywords', 'beauty_keywords', 'filter_conditions', 'search_filters'])
+      setConfigLoading(true)
+      try {
+        const [{ data: cfg }, dbTiers] = await Promise.all([
+          supabase
+            .from('app_config')
+            .select('key, value')
+            .in('key', ['tiers', 'kbeauty_keywords', 'beauty_keywords', 'filter_conditions', 'search_filters']),
+          fetchTiersFromDb(),
+        ])
 
-      if (!cfg) return
-      const map = Object.fromEntries(cfg.map(r => [r.key, r.value]))
-      if (map.tiers)             setTiers(map.tiers as Tier[])
-      if (map.kbeauty_keywords)  setKbeautyKws(map.kbeauty_keywords as string[])
-      if (map.beauty_keywords)   setBeautyKws(map.beauty_keywords as string[])
-      if (map.filter_conditions) setFilterConds(normalizeFilterConds(map.filter_conditions as FilterCond[]))
-      if (map.search_filters) {
-        const sf = map.search_filters as Partial<SearchFilters>
-        setMaxRatio(sf.maxRatio ?? 70)
-        setMaxUploadDays(sf.maxUploadDays ?? 30)
-        setProxyCountry(sf.proxyCountry ?? 'US')
-        setRequireEmail(sf.requireEmail !== false)
+        const map = Object.fromEntries((cfg ?? []).map(r => [r.key, r.value]))
+
+        const loadedTiers = map.tiers
+          ? (map.tiers as Tier[])
+          : dbTiers
+        setTiers(loadedTiers)
+
+        if (map.kbeauty_keywords) {
+          const kws = map.kbeauty_keywords as string[]
+          setKbeautyKws(kws)
+          initialKbeautyKwsRef.current = [...kws]
+        }
+        if (map.beauty_keywords) {
+          const kws = map.beauty_keywords as string[]
+          setBeautyKws(kws)
+          initialBeautyKwsRef.current = [...kws]
+        }
+        if (map.filter_conditions) setFilterConds(normalizeFilterConds(map.filter_conditions as FilterCond[]))
+        if (map.search_filters) {
+          const sf = map.search_filters as Partial<SearchFilters>
+          setMaxRatio(sf.maxRatio ?? 70)
+          setMaxUploadDays(sf.maxUploadDays ?? 30)
+          setProxyCountry(sf.proxyCountry ?? 'US')
+          setRequireEmail(sf.requireEmail !== false)
+          const gr = sf.genderRatio
+          if (gr === 'FEMALE_50' || gr === 'FEMALE_60') setGenderRatio(gr)
+          else setGenderRatio('')
+        }
+      } finally {
+        setConfigLoading(false)
       }
     })()
   }, [])
+
+  async function resetTiersFromDb() {
+    const dbTiers = await fetchTiersFromDb()
+    setTiers(dbTiers)
+    saveConfig('tiers', dbTiers)
+    setTierEditMode(false)
+  }
 
   async function loadDashStats() {
     if (!viewPhaseId) return
@@ -267,18 +431,6 @@ export default function Listup() {
     return (data ?? []).map(r => r.handle)
   }
 
-  function buildSearchFilters(tier: Tier | null): SearchFilters {
-    return {
-      maxRatio,
-      maxUploadDays,
-      proxyCountry: proxyCountry || 'US',
-      requireEmail,
-      followerMin: tier?.minF ?? 0,
-      followerMax: tier?.maxF ?? 0,
-      maxCreators: targetCreators,
-    }
-  }
-
   function setDedupEnabled(enabled: boolean) {
     const next = [{ ...DEFAULT_FILTER_CONDS[0], enabled }]
     setFilterConds(next)
@@ -291,122 +443,6 @@ export default function Listup() {
       existingHandlesRef.current = await fetchExistingHandles()
     }
   }
-
-  async function fetchAndApplyResults(dsId: string, tier: Tier | null) {
-    setApifyProcessing(true)
-    setApifyStatus('탐색 완료! 결과 처리 중...')
-    setApifyResults(null)
-    setApifyFilterStats(null)
-    try {
-      await prefetchExistingHandles()
-      const results: { ok?: boolean; creators?: ApifyCreator[]; dedupSkipped?: number; noEmailSkipped?: number; error?: string } =
-        await gasPost({
-          action: 'getRunResults',
-          datasetId: dsId,
-          searchFilters: buildSearchFilters(tier),
-          filterConditions: filterConds,
-          existingHandles: existingHandlesRef.current,
-        })
-      if (results.error) {
-        setApifyStatus('결과 오류: ' + results.error)
-        return
-      }
-      const list = results.creators || []
-      const noEmailSkipped = results.noEmailSkipped ?? 0
-      const dedupSkipped = results.dedupSkipped ?? 0
-      setApifyResults(list)
-      setApifyFilterStats({ noEmailSkipped, dedupSkipped })
-      setApifyStatus(`완료: ${list.length}명${noEmailSkipped > 0 ? ` · 이메일 없음 ${noEmailSkipped}명 제외` : ''}${dedupSkipped > 0 ? ` · 중복 ${dedupSkipped}명 제외` : ''}`)
-    } catch (e: unknown) {
-      setApifyStatus('결과 오류: ' + (e as Error).message)
-    } finally {
-      setApifyProcessing(false)
-    }
-  }
-
-  async function resolveApifyDatasetId(id: string): Promise<string> {
-    const statusRes = await gasPost<{ status?: string; datasetId?: string; error?: string; notFound?: boolean }>({
-      action: 'checkRunStatus',
-      runId: id,
-    })
-    if (statusRes.status) {
-      if (statusRes.status !== 'SUCCEEDED') {
-        throw new Error('Run 미완료: ' + statusRes.status)
-      }
-      if (statusRes.datasetId) return statusRes.datasetId
-    }
-    if (statusRes.error && !statusRes.notFound) {
-      throw new Error(statusRes.error)
-    }
-    return id
-  }
-
-  async function loadFromApifyId() {
-    if (apifyTierIdx === null) return
-    const id = apifyManualId.trim()
-    if (!id) return
-    const tier = tiers[apifyTierIdx]
-    setApifyPolling(false)
-    setApifyLoading(true)
-    setApifyResults(null)
-    setApifyFilterStats(null)
-    setApifyCurrentTier(tier)
-    existingHandlesRef.current = []
-    setApifyStatus('Apify Run/Dataset 확인 중...')
-    try {
-      const dsId = await resolveApifyDatasetId(id)
-      setApifyLoading(false)
-      await fetchAndApplyResults(dsId, tier)
-    } catch (e: unknown) {
-      setApifyStatus('오류: ' + (e as Error).message)
-      setApifyLoading(false)
-    }
-  }
-
-  // Apify polling (GAS)
-  useEffect(() => {
-    if (!apifyPolling || !apifyRunId) return
-    let cancelled = false
-    let timerId: ReturnType<typeof setTimeout>
-
-    const poll = async () => {
-      if (cancelled) return
-      try {
-        const statusRes: { status?: string; datasetId?: string; error?: string } =
-          await gasPost({ action: 'checkRunStatus', runId: apifyRunId })
-        if (cancelled) return
-        if (statusRes.error) {
-          setApifyStatus('상태 확인 오류: ' + statusRes.error)
-          setApifyPolling(false)
-          setApifyProcessing(false)
-          return
-        }
-        const s = statusRes.status || ''
-        if (s === 'SUCCEEDED') {
-          setApifyPolling(false)
-          const dsId = statusRes.datasetId || apifyDatasetId
-          if (cancelled) return
-          await fetchAndApplyResults(dsId, apifyCurrentTier)
-        } else if (['FAILED','ABORTED','TIMED-OUT'].includes(s)) {
-          setApifyPolling(false)
-          setApifyProcessing(false)
-          setApifyStatus('탐색 실패: ' + s)
-        } else {
-          setApifyStatus(`Apify 탐색 중... (${s})`)
-          if (!cancelled) timerId = setTimeout(poll, 5000)
-        }
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setApifyPolling(false)
-          setApifyProcessing(false)
-          setApifyStatus('폴링 오류: ' + (e as Error).message)
-        }
-      }
-    }
-
-    timerId = setTimeout(poll, 3000)
-    return () => { cancelled = true; clearTimeout(timerId) }
-  }, [apifyPolling, apifyRunId, apifyDatasetId, apifyCurrentTier, maxRatio, maxUploadDays, targetCreators, requireEmail, proxyCountry, filterConds])
 
   function switchTab(t: ListupTab) {
     navigate(t === 'database' ? '/influencer/search/db' : '/influencer/search')
@@ -479,14 +515,13 @@ export default function Listup() {
         following_ratio:  c.ratio || null,
         total_likes:      c.totalLikes,
         video_count:      c.videoCount,
-        avg_views:        c.avgViews,
         engagement_rate:  c.engRate,
         profile_url:      c.profileUrl || null,
         status:           '',
       }))
 
     if (!rows.length) {
-      setApifyStatus('저장할 신규 크리에이터가 없습니다 (이메일 없음 또는 중복)')
+      alert('저장할 신규 크리에이터가 없습니다 (이메일 없음 또는 중복)')
       setApifyLoading(false)
       return
     }
@@ -496,11 +531,11 @@ export default function Listup() {
       .upsert(rows, { onConflict: 'phase_id,handle', ignoreDuplicates: true })
       .select('*, tiers(rank, label, category)')
     if (error) {
-      setApifyStatus('저장 오류: ' + error.message)
+      alert('저장 오류: ' + error.message)
     } else {
       const saved = data?.length ?? 0
       const skipped = rows.length - saved
-      setApifyStatus(`저장 완료: ${saved}명 추가${skipped > 0 ? ` (${skipped}명 중복 건너뜀)` : ''}`)
+      alert(`저장 완료: ${saved}명 추가${skipped > 0 ? ` (${skipped}명 중복 건너뜀)` : ''}`)
       if (data?.length) {
         setInfluencers(prev => [...(data as Influencer[]), ...prev])
         loadDashStats()
@@ -650,6 +685,10 @@ export default function Listup() {
     )
   }
 
+  const searchResultMeta = apifyResults !== null
+    ? formatSearchMeta(searchElapsedMs, apifyFilterStats)
+    : ''
+
   return (
     <div className="page page--fill" id="page-listup">
       <div className="page-banner">
@@ -733,7 +772,7 @@ export default function Listup() {
                         <div style={FILTER_INLINE}>
                           <span>팔로잉 수가 팔로워 수의</span>
                           <select value={maxRatio} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail }) }}>
+                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail, genderRatio }) }}>
                             <option value={50}>50%</option>
                             <option value={60}>60%</option>
                             <option value={70}>70%</option>
@@ -750,7 +789,7 @@ export default function Listup() {
                         <div style={FILTER_INLINE}>
                           <span>최근</span>
                           <select value={maxUploadDays} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail }) }}>
+                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail, genderRatio }) }}>
                             <option value={30}>30일</option>
                             <option value={49}>7주</option>
                           </select>
@@ -763,24 +802,41 @@ export default function Listup() {
                       <td className="filter-cat">국가</td>
                       <td>
                         <select value={proxyCountry} style={{ ...FILTER_SELECT, minWidth: 180, maxWidth: 240 }}
-                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail }) }}>
+                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail, genderRatio }) }}>
                           {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                         </select>
                       </td>
                     </tr>
                     <tr>
                       <td className="filter-no">4</td>
+                      <td className="filter-cat">여성 팔로워</td>
+                      <td>
+                        <div style={FILTER_INLINE}>
+                          <span>TCM 팔로워 성별</span>
+                          <select value={genderRatio} style={{ ...FILTER_SELECT, minWidth: 140 }}
+                            onChange={e => {
+                              const v = e.target.value as GenderRatioOption
+                              setGenderRatio(v)
+                              saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail, genderRatio: v })
+                            }}>
+                            {GENDER_RATIO_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="filter-no">5</td>
                       <td className="filter-cat">이메일</td>
                       <td>
                         <label style={FILTER_CHECK_LABEL}>
                           <input type="checkbox" checked={requireEmail}
-                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v }) }} />
+                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v, genderRatio }) }} />
                           bio에 이메일이 없는 계정 제외
                         </label>
                       </td>
                     </tr>
                     <tr>
-                      <td className="filter-no">5</td>
+                      <td className="filter-no">6</td>
                       <td className="filter-cat">중복</td>
                       <td>
                         <label style={FILTER_CHECK_LABEL}>
@@ -802,16 +858,19 @@ export default function Listup() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveConfig('tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('DB 기본값으로 초기화하시겠습니까?')) resetTiersFromDb() }}>↺</button>
                   </div>
                 </div>
+                {configLoading ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--gray-5)' }}><Spinner sm /> 불러오는 중...</div>
+                ) : (
                 <div className="table-wrap">
                   <table style={{ minWidth: 0 }}>
                     <thead><tr><th>순위</th><th>규모</th><th>팔로워 범위</th><th>카테고리</th>{tierEditMode && <th></th>}</tr></thead>
                     <tbody>
                       {tiers.map((t, i) => (
                         <tr key={i} style={{ cursor: tierEditMode ? undefined : 'pointer', background: apifyTierIdx === i ? 'var(--blue-lt)' : undefined }}
-                          onClick={() => !tierEditMode && setApifyTierIdx(i)}>
+                          onClick={() => !tierEditMode && selectTier(i)}>
                           {tierEditMode ? (
                             <>
                               <td><input className="cfg-input" style={{ width: 60 }} value={t.rank} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, rank: e.target.value } : r))} /></td>
@@ -844,111 +903,123 @@ export default function Listup() {
                     </tbody>
                   </table>
                 </div>
-                {tierEditMode && (
+                )}
+                {tierEditMode && !configLoading && (
                   <button className="cfg-btn" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setTiers(prev => [...prev, { rank: (prev.length + 1) + '순위', label: '새 티어', minF: 1000, maxF: 10000, tags: 'beauty', category: '일반뷰티' }])}>+ 티어 추가</button>
                 )}
               </div>
 
-              {/* Keywords */}
+              {/* Keywords — both categories, single selection for selected tier */}
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>키워드 설정</div>
-                {[
-                  { key: 'kbeauty', label: 'K-뷰티 키워드', kws: kbeautyKws, editMode: kbeautyEdit, setEdit: setKbeautyEdit, newKw: newKbeautyKw, setNewKw: setNewKbeautyKw, setKws: setKbeautyKws, cfgKey: 'kbeauty_keywords', defaults: DEFAULT_KBEAUTY_KEYWORDS },
-                  { key: 'beauty',  label: '일반뷰티 키워드', kws: beautyKws,  editMode: beautyEdit,   setEdit: setBeautyEdit,   newKw: newBeautyKw,  setNewKw: setNewBeautyKw,  setKws: setBeautyKws,  cfgKey: 'beauty_keywords',  defaults: DEFAULT_BEAUTY_KEYWORDS },
-                ].map(({ key, label, kws, editMode, setEdit, newKw, setNewKw, setKws, cfgKey, defaults }) => {
-                  const isChosen = apifyTierIdx !== null && tiers[apifyTierIdx]?.tags === key
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>키워드 설정</div>
+                <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 12 }}>
+                  키워드 1개 선택 (TCM)
+                  {selectedTier
+                    ? <> · <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier.category}</strong> 목록에서 선택</>
+                    : ' · 티어 선택 시 해당 카테고리에서 선택'}
+                </div>
+                {keywordCategories.map((cat, idx) => {
+                  const selectable = selectedTier?.tags === cat.tag
                   const yellow = { background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)' }
                   const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
+                  const muted  = { background: 'var(--gray-1)', color: 'var(--gray-5)', border: '1px solid var(--gray-2)' }
                   return (
-                    <div key={key} style={{ marginBottom: 14 }}>
+                    <div key={cat.tag} style={{ marginBottom: idx < keywordCategories.length - 1 ? 16 : 0, paddingBottom: idx < keywordCategories.length - 1 ? 16 : 0, borderBottom: idx < keywordCategories.length - 1 ? '1px solid var(--gray-2)' : undefined }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: isChosen ? 'var(--yellow-text)' : 'var(--gray-6)' }}>
-                          {label} {isChosen && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 8, padding: '1px 6px', marginLeft: 4 }}>선택됨</span>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="platform-badge" style={{ background: cat.badgeBg, color: '#fff' }}>{cat.title}</span>
+                          {selectable && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--yellow-text)' }}>선택 가능</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 5 }}>
-                          <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
-                          <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화?')) { setKws([...defaults]); saveConfig(cfgKey, defaults); setEdit(false) } }}>↺</button>
+                          <button className="cfg-btn" onClick={() => cat.setEdit(!cat.edit)}>{cat.edit ? '완료' : '편집'}</button>
+                          <button className="cfg-btn cfg-btn--ghost" onClick={() => {
+                            if (!confirm('처음 불러온 값으로 초기화?')) return
+                            const kws = [...cat.initialRef.current]
+                            cat.setKws(kws)
+                            saveConfig(cat.cfgKey, kws)
+                            if (selectedKeyword && !kws.includes(selectedKeyword)) setSelectedKeyword(null)
+                            cat.setEdit(false)
+                          }}>↺</button>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                        {kws.map(kw => (
-                          <span key={kw} className="tag-pill" style={{ ...(isChosen ? yellow : blue) }}>
-                            {kw}
-                            {editMode && <button className="tag-remove" onClick={() => { const next = kws.filter(k => k !== kw); setKws(next); saveConfig(cfgKey, next) }}>×</button>}
-                          </span>
-                        ))}
+                        {cat.keywords.map(kw => {
+                          const isSelected = selectable && selectedKeyword === kw
+                          return (
+                            <span
+                              key={kw}
+                              className="tag-pill"
+                              style={{
+                                ...(isSelected ? yellow : selectable ? blue : muted),
+                                cursor: cat.edit || selectable ? (cat.edit ? 'default' : 'pointer') : 'default',
+                                opacity: selectable || cat.edit ? 1 : 0.85,
+                              }}
+                              onClick={() => { if (!cat.edit && selectable) setSelectedKeyword(isSelected ? null : kw) }}
+                            >
+                              {kw}
+                              {cat.edit && (
+                                <button className="tag-remove" onClick={e => {
+                                  e.stopPropagation()
+                                  const next = cat.keywords.filter(k => k !== kw)
+                                  cat.setKws(next)
+                                  saveConfig(cat.cfgKey, next)
+                                  if (selectedKeyword === kw) setSelectedKeyword(null)
+                                }}>×</button>
+                              )}
+                            </span>
+                          )
+                        })}
+                        {!configLoading && cat.keywords.length === 0 && (
+                          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>키워드 없음</span>
+                        )}
                       </div>
-                      {editMode && (
+                      {cat.edit && (
                         <div className="tag-input-row" style={{ marginTop: 6 }}>
-                          <input className="cfg-input" placeholder="키워드 입력" value={newKw} onChange={e => setNewKw(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveConfig(cfgKey, next); setNewKw('') } }} />
-                          <button className="cfg-btn" onClick={() => { if (newKw.trim() && !kws.includes(newKw.trim())) { const next = [...kws, newKw.trim()]; setKws(next); saveConfig(cfgKey, next); setNewKw('') } }}>추가</button>
+                          <input className="cfg-input" placeholder="키워드 입력" value={cat.newKw} onChange={e => cat.setNewKw(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && cat.newKw.trim() && !cat.keywords.includes(cat.newKw.trim())) {
+                                const next = [...cat.keywords, cat.newKw.trim()]
+                                cat.setKws(next)
+                                saveConfig(cat.cfgKey, next)
+                                cat.setNewKw('')
+                              }
+                            }} />
+                          <button className="cfg-btn" onClick={() => {
+                            if (cat.newKw.trim() && !cat.keywords.includes(cat.newKw.trim())) {
+                              const next = [...cat.keywords, cat.newKw.trim()]
+                              cat.setKws(next)
+                              saveConfig(cat.cfgKey, next)
+                              cat.setNewKw('')
+                            }
+                          }}>추가</button>
                         </div>
                       )}
                     </div>
                   )
                 })}
+                {selectedTier && !selectedKeyword && (
+                  <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 12 }}>탐색할 키워드를 1개 선택하세요.</div>
+                )}
               </div>
             </div>
 
             {/* Find Creators box */}
             <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
             <div className="filters" style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{apifyTierIdx !== null ? tiers[apifyTierIdx]?.rank : '← 위 표에서 선택'}</strong></span>
+              <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
+                선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier?.rank ?? '← 위 표에서 선택'}</strong>
+                {selectedKeyword && <> · 키워드 <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeyword}</strong></>}
+              </span>
               <div className="filter-group">
                 <label>목표 인플루언서 수 (명)</label>
                 <input type="number" value={targetCreators} min={10} max={1000} step={10} style={{ width: 70 }} onChange={e => setTargetCreators(+e.target.value)} />
               </div>
-              <button className="listup-find-btn" disabled={apifyLoading || apifyPolling || apifyProcessing || apifyTierIdx === null} onClick={async () => {
-                if (apifyTierIdx === null) return
-                const tier = tiers[apifyTierIdx]
-                setApifyLoading(true); setApifyStatus('Apify 탐색 시작...')
-                setApifyResults(null); setApifyFilterStats(null)
-                setApifyProcessing(false)
-                existingHandlesRef.current = []
-                prefetchExistingHandles()
-                try {
-                  const tags = tier.tags === 'kbeauty' ? kbeautyKws : beautyKws
-                  const res: { error?: string; runId?: string; datasetId?: string } = await gasPost({
-                    action: 'startCreatorSearch',
-                    hashtags: tags,
-                    searchFilters: buildSearchFilters(tier),
-                    filterConditions: filterConds,
-                  })
-                  if (res.error) {
-                    setApifyStatus('오류: ' + res.error)
-                  } else {
-                    setApifyRunId(res.runId || '')
-                    setApifyDatasetId(res.datasetId || '')
-                    setApifyCurrentTier(tier)
-                    setApifyPolling(true)
-                    setApifyStatus(`Apify 탐색 중... (Run: ${res.runId || ''})`)
-                  }
-                } catch (e: unknown) { setApifyStatus('오류: ' + (e as Error).message) }
-                setApifyLoading(false)
-              }}>Find Creators</button>
-              {(apifyLoading || apifyPolling || apifyProcessing) && <Spinner sm />}
-            </div>
-            <div className="filters" style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid var(--gray-2)' }}>
-              <div className="filter-group" style={{ flex: 1, minWidth: 220 }}>
-                <label>Apify Run / Dataset ID</label>
-                <input
-                  type="text"
-                  value={apifyManualId}
-                  placeholder="완료된 Run ID 또는 Dataset ID"
-                  style={{ width: '100%', maxWidth: 320 }}
-                  onChange={e => setApifyManualId(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && apifyManualId.trim() && apifyTierIdx !== null) loadFromApifyId() }}
-                />
-              </div>
               <button
-                className="listup-update-btn"
-                disabled={apifyLoading || apifyPolling || apifyProcessing || apifyTierIdx === null || !apifyManualId.trim()}
-                onClick={loadFromApifyId}
-              >
-                필터 적용
-              </button>
-              <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>완료된 Apify run에서 바로 필터링 (대기 없음)</span>
+                className="listup-find-btn"
+                disabled={apifyLoading || apifyTierIdx === null || !selectedKeyword}
+                onClick={runTcmSearch}
+              >Find Creators (TCM)</button>
+              {apifyLoading && <Spinner sm />}
             </div>
 
             {/* Results */}
@@ -957,15 +1028,11 @@ export default function Listup() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>
                     탐색 결과 <span style={{ color: 'var(--blue-dk)' }}>{apifyResults.length}명</span>
-                    {apifyStatus && (
-                      <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>{apifyStatus}</span>
+                    {searchResultMeta && (
+                      <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>
+                        · {searchResultMeta}
+                      </span>
                     )}
-                    <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>
-                      이메일 필수 · 팔로잉 비율 &le;{maxRatio}% · 최근 {maxUploadDays}일 이내 업로드
-                      {apifyFilterStats && (apifyFilterStats.noEmailSkipped > 0 || apifyFilterStats.dedupSkipped > 0) && (
-                        <> · 제외: 이메일 없음 {apifyFilterStats.noEmailSkipped}명, 중복 {apifyFilterStats.dedupSkipped}명</>
-                      )}
-                    </span>
                   </div>
                   <button className="cfg-btn" style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }} disabled={apifyLoading || !apifyResults.length} onClick={saveToSupabase}>
                     DB에 저장
@@ -1010,24 +1077,18 @@ export default function Listup() {
               </div>
             ) : (
               <div className="listup-empty-state">
-                <div className={`listup-empty-icon${(apifyPolling || apifyProcessing) ? ' listup-empty-icon--loading' : ''}`}>
-                  {(apifyPolling || apifyProcessing) ? <Spinner /> : '🔍'}
+                <div className={`listup-empty-icon${apifyLoading ? ' listup-empty-icon--loading' : ''}`}>
+                  {apifyLoading ? <Spinner /> : '🔍'}
                 </div>
                 <div className="listup-empty-title">
-                  {apifyProcessing
-                    ? '탐색 완료! 결과 처리 중...'
-                    : apifyPolling
-                      ? (apifyStatus || 'Apify 탐색 중...')
-                      : apifyStatus && !apifyStatus.startsWith('Apify 탐색')
-                        ? apifyStatus
-                        : '티어를 선택하고 Find Creators를 누르세요'}
+                  {apifyLoading
+                    ? 'TCM 탐색 중...'
+                    : '티어와 키워드를 선택하고 Find Creators를 누르세요'}
                 </div>
-                <div className="listup-empty-desc" style={{ whiteSpace: 'pre-line' }}>
-                  {apifyProcessing
-                    ? 'Apify 데이터를 가져와 필터를 적용하고 있습니다. 잠시만 기다려 주세요.'
-                    : apifyPolling
-                      ? 'Apify에서 TikTok 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.'
-                      : '위 표에서 티어를 클릭해 선택하고 Find Creators로 Apify 탐색을 시작합니다.\n이미 완료된 Run이 있으면 Run/Dataset ID를 입력해 필터 적용을 누르세요.'}
+                <div className="listup-empty-desc">
+                  {apifyLoading
+                    ? 'TCM 키워드 탐색 후 프로필 메타데이터를 수집합니다. 수 분 소요될 수 있습니다.'
+                    : '위 표에서 티어를 클릭해 선택하고 Find Creators로 탐색을 시작하세요.'}
                 </div>
               </div>
             )}
