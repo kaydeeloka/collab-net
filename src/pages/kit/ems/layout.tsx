@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems-errors'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
+import { PageTabs } from '@/components/ui'
 
 export const INFLUENCER_TARGET = 50
 
@@ -187,18 +188,13 @@ export default function EmsLayout() {
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
       {!loading && stats && <EmsStatsCards stats={stats} />}
 
-      <div className="bn-tab-bar" style={{ marginTop: 16, marginBottom: 0 }}>
-        {TABS.map(t => (
-          <button
-            key={t.path}
-            type="button"
-            className={`bn-tab-btn${activeTab === t.path ? ' active' : ''}`}
-            onClick={() => navigate(t.path)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PageTabs
+        className="page-tab-bar--compact"
+        style={{ marginTop: 16 }}
+        tabs={TABS.map(t => ({ id: t.path, label: t.label }))}
+        active={activeTab}
+        onChange={path => navigate(path)}
+      />
 
       <div style={{ paddingTop: 16 }}>
         <Outlet context={{ refreshStats: loadStats, notifyReshipChange, reshipVersion }} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { gasGet, gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
+import { PageTabs } from '@/components/ui'
 
 interface Recipient {
   email: string
@@ -636,14 +637,14 @@ export default function TiktokTrend() {
         </div>
       </div>
 
-      <div className="bn-tab-bar">
-        <button type="button" className={`bn-tab-btn${activeTab === 'week' ? ' active' : ''}`} onClick={() => setActiveTab('week')}>
-          이번 주 트렌드
-        </button>
-        <button type="button" className={`bn-tab-btn${activeTab === 'archive' ? ' active' : ''}`} onClick={() => setActiveTab('archive')}>
-          아카이브
-        </button>
-      </div>
+      <PageTabs
+        tabs={[
+          { id: 'week', label: '이번 주 트렌드' },
+          { id: 'archive', label: '지난 주 아카이브' },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === 'week' && (
         <div>

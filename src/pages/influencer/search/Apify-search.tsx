@@ -7,6 +7,7 @@ import { fmtNum } from '@/lib/utils'
 import Spinner from '@/components/Spinner'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import Pagination from '@/components/Pagination'
+import { PageTabs } from '@/components/ui'
 
 type ListupTab = 'search' | 'database'
 
@@ -698,23 +699,14 @@ export default function Listup() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--gray-2)', marginBottom: 24 }}>
-        {(['search', 'database'] as ListupTab[]).map((t, i) => {
-          const active = activeTab === t
-          return (
-            <button key={t} onClick={() => switchTab(t)}
-              style={{
-                padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
-                background: 'transparent', fontFamily: 'inherit',
-                color: active ? 'var(--blue-dk)' : 'var(--gray-5)',
-                borderBottom: active ? '2px solid var(--blue-dk)' : '2px solid transparent',
-                marginBottom: -2,
-              }}>
-              {['인플루언서 찾기', '인플루언서 DB'][i]}
-            </button>
-          )
-        })}
-      </div>
+      <PageTabs
+        tabs={[
+          { id: 'search', label: '인플루언서 찾기' },
+          { id: 'database', label: '인플루언서 DB' },
+        ]}
+        active={activeTab}
+        onChange={switchTab}
+      />
 
       <div className={activeTab === 'database' ? 'ftab-content' : ''} style={activeTab === 'search' ? { padding: 0 } : undefined}>
 

@@ -486,29 +486,73 @@ td {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─────────────────────────────────────
-   FOLDER TABS
+   PAGE TABS (unified — influencer underline style)
 ───────────────────────────────────── */
-.ftab-bar { display: flex; align-items: flex-end; gap: 4px; padding-left: 2px; }
-.ftab {
-  padding: 10px 22px;
-  border: 1px solid var(--surface-md); border-bottom: none;
-  border-radius: 10px 10px 0 0;
-  background: var(--surface); color: var(--teal-dk);
-  font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
-  transition: background .15s, color .15s;
-  position: relative; bottom: -1px; z-index: 1; white-space: nowrap;
+.page-tab-bar,
+.ftab-bar,
+.bn-tab-bar {
+  display: flex;
+  gap: 0;
+  align-items: flex-end;
+  border-bottom: 2px solid var(--gray-2);
+  margin-bottom: 24px;
+  padding-left: 0;
 }
-.ftab:hover { background: var(--white); color: var(--ink); }
-.ftab.active {
-  background: var(--white); color: var(--teal-dk); font-weight: 700;
-  border-color: var(--surface-md); border-top: 2px solid var(--teal);
-  padding-top: 9px; z-index: 3;
+
+.page-tab-bar--compact,
+.ftab-bar.ftab-bar--compact,
+.bn-tab-bar.bn-tab-bar--compact {
+  margin-bottom: 16px;
 }
+
+.page-tab,
+.ftab,
+.bn-tab-btn {
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  background: transparent;
+  font-family: inherit;
+  color: var(--gray-5);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+  position: static;
+  z-index: auto;
+}
+
+.page-tab:hover,
+.ftab:hover,
+.bn-tab-btn:hover {
+  color: var(--blue-dk);
+  background: transparent;
+}
+
+.page-tab.is-active,
+.page-tab.active,
+.ftab.active,
+.ftab.is-active,
+.bn-tab-btn.active {
+  color: var(--blue-dk);
+  border-bottom-color: var(--blue-dk);
+  background: transparent;
+  font-weight: 700;
+}
+
 .ftab-content {
-  background: var(--white); border: 1px solid var(--surface-md);
+  background: var(--white);
+  border: 1px solid var(--surface-md);
   border-radius: var(--r);
-  box-shadow: var(--sh); padding: 22px; position: relative; z-index: 2;
+  box-shadow: var(--sh);
+  padding: 22px;
+  position: relative;
+  z-index: 2;
 }
+
 
 /* ─────────────────────────────────────
    WEEKLY TABS
@@ -938,10 +982,10 @@ a.bn-article-link { color: var(--teal-dk); }
 .bn-spinner-wrap { display: flex; justify-content: center; padding: 16px; }
 .bn-email-none { font-size: 13px; color: var(--teal-dk); font-style: italic; }
 .bn-cache-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; }
-.bn-tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--surface-md); }
-.bn-tab-btn { background: none; border: none; padding: 10px 20px; font-size: 13px; font-weight: 600; color: var(--teal-dk); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; transition: color .15s, border-color .15s; }
-.bn-tab-btn:hover { color: var(--ink); }
-.bn-tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+.bn-tab-bar { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--gray-2); }
+.bn-tab-btn { background: none; border: none; padding: 10px 24px; font-size: 13px; font-weight: 700; color: var(--gray-5); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-family: inherit; transition: color .15s, border-color .15s; border-radius: 0; }
+.bn-tab-btn:hover { color: var(--blue-dk); }
+.bn-tab-btn.active { color: var(--blue-dk); border-bottom-color: var(--blue-dk); }
 /* 50/50 split row */
 .bn-half-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; align-items: stretch; }
 .bn-half-row .bn-date-card,

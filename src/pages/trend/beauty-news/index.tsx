@@ -3,6 +3,7 @@ import { gasPost } from '@/lib/api'
 import { normalizeKeywords } from '@/lib/beauty-news'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
+import { PageTabs } from '@/components/ui'
 
 interface ArchiveItem {
   id: string
@@ -623,10 +624,14 @@ export default function BeautyNews() {
         </div>
       </div>
 
-      <div className="bn-tab-bar">
-        <button className={`bn-tab-btn${activeTab === 'news' ? ' active' : ''}`} onClick={() => setActiveTab('news')}>이번 주 뉴스</button>
-        <button className={`bn-tab-btn${activeTab === 'archive' ? ' active' : ''}`} onClick={() => setActiveTab('archive')}>아카이브</button>
-      </div>
+      <PageTabs
+        tabs={[
+          { id: 'news', label: '이번 주 뉴스' },
+          { id: 'archive', label: '아카이브' },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === 'news' && (
         <div>

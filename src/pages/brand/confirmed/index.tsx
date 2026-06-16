@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
+import { PageTabs } from '@/components/ui'
 
 export default function BrandConfirmed() {
   const { pathname } = useLocation()
@@ -47,21 +48,11 @@ export default function BrandConfirmed() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '2px solid var(--gray-2)' }}>
-        {tabs.map(t => (
-          <button key={t.path} type="button" onClick={() => navigate(t.path)}
-            style={{
-              padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              border: 'none', background: 'transparent',
-              color: activeTab === t.path ? 'var(--teal-dk)' : 'var(--gray-5)',
-              borderBottom: activeTab === t.path ? '2px solid var(--teal-dk)' : '2px solid transparent',
-              marginBottom: -2, borderRadius: 0, transition: 'all .15s',
-            }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PageTabs
+        tabs={tabs.map(t => ({ id: t.path, label: t.label }))}
+        active={activeTab}
+        onChange={path => navigate(path)}
+      />
 
       <Outlet />
     </div>

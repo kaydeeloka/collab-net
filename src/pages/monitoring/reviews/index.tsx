@@ -7,6 +7,7 @@ import { fmtNum } from '@/lib/utils'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
+import { PageTabs } from '@/components/ui'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
@@ -736,19 +737,14 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--gray-2)', marginBottom: 20 }}>
-        {([['upload', '리뷰 업로드'], ['list', '리뷰 리스트']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setActiveTab(key)}
-            style={{
-              padding: '10px 22px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
-              background: 'transparent',
-              color: activeTab === key ? 'var(--blue-dk)' : 'var(--gray-5)',
-              borderBottom: activeTab === key ? '2px solid var(--blue-dk)' : '2px solid transparent',
-              marginBottom: -2, transition: 'color .15s',
-            }}>{label}</button>
-        ))}
-      </div>
+      <PageTabs
+        tabs={[
+          { id: 'upload', label: '리뷰 업로드' },
+          { id: 'list', label: '리뷰 리스트' },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Delete keyword toast */}
       {pendingDelete && (

@@ -5,6 +5,17 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
+import {
+  Badge,
+  Button,
+  DetailList,
+  DetailRow,
+  FormGrid,
+  FormInput,
+  FormSection,
+  ModalFooter,
+  PageToolbar,
+} from '@/components/ui'
 import { archiveDetailPath } from '../archive/slug'
 import type { ConfirmedBrand as ArchiveBrandRef } from '../archive/shared'
 
@@ -197,61 +208,28 @@ export default function BrandConfirmedManagement() {
   const pendingCount  = rows.length - receivedCount
   const viewArchivePath = viewRow ? archiveLinkFor(viewRow, rows) : null
 
-const modalForm = (form: Form, setForm: (f: Form) => void) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-      <div>
-        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
-          브랜드<span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>
-        </label>
-        <input value={form.brand_name} onChange={e => setForm({ ...form, brand_name: e.target.value })}
-          placeholder="브랜드명 입력"
-          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-      </div>
+  const modalForm = (form: Form, setForm: (f: Form) => void) => (
+    <div className="ui-form">
+      <FormSection title="필수 입력" />
+      <FormInput
+        label="브랜드"
+        required
+        value={form.brand_name}
+        onChange={e => setForm({ ...form, brand_name: e.target.value })}
+        placeholder="브랜드명 입력"
+      />
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>담당자</label>
-          <input value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} placeholder="이름 입력"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>직급</label>
-          <input value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} placeholder="직급 입력"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>이메일</label>
-          <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@brand.com"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>휴대폰</label>
-          <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="010-0000-0000"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>홈페이지</label>
-          <input value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} placeholder="https://"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>제품</label>
-          <input value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} placeholder="제품명 입력"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>생산원가</label>
-          <input value={form.production_cost} onChange={e => setForm({ ...form, production_cost: e.target.value })} placeholder="예: $12.50"
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-        </div>
-      </div>
-      <div>
-        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>비고</label>
-        <input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="메모"
-          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-      </div>
+      <FormSection title="선택 입력" />
+      <FormGrid>
+        <FormInput label="담당자" value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} placeholder="이름 입력" />
+        <FormInput label="직급" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} placeholder="직급 입력" />
+        <FormInput label="이메일" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@brand.com" />
+        <FormInput label="휴대폰" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="010-0000-0000" />
+        <FormInput label="홈페이지" value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} placeholder="https://" />
+        <FormInput label="제품" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} placeholder="제품명 입력" />
+        <FormInput label="생산원가" value={form.production_cost} onChange={e => setForm({ ...form, production_cost: e.target.value })} placeholder="예: $12.50" />
+      </FormGrid>
+      <FormInput label="비고" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="메모" />
     </div>
   )
 
@@ -274,25 +252,22 @@ const modalForm = (form: Form, setForm: (f: Form) => void) => (
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
-          placeholder="브랜드, 담당자, 이메일, 제품으로 검색..."
-          style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
-        />
-        <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
-        <button
-          onClick={() => { setEditId(''); setAddForm({ ...EMPTY_FORM }); setShowAdd(true) }}
-          style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
-          + 추가
-        </button>
-      </div>
+      <PageToolbar
+        search={{
+          value: search,
+          onChange: v => { setSearch(v); setPage(1) },
+          placeholder: '브랜드, 담당자, 이메일, 제품으로 검색...',
+        }}
+        count={filtered.length}
+        actions={
+          <Button variant="primary" onClick={() => { setEditId(''); setAddForm({ ...EMPTY_FORM }); setShowAdd(true) }}>
+            + 추가
+          </Button>
+        }
+      />
 
-      {/* Table */}
-      <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
-        <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
+      <div className="ui-panel">
+        <div className="ui-panel__scroll">
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1100 }}>
             <colgroup>
               <col style={{ width: 40 }} />
@@ -383,114 +358,93 @@ const modalForm = (form: Form, setForm: (f: Form) => void) => (
           onNext={() => setPage(p => Math.min(pg.totalPages, p + 1))} />
       </div>
 
-      {/* Add Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="확정 브랜드 추가">
+      <Modal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="확정 브랜드 추가"
+        footer={
+          <ModalFooter
+            cancel={{ label: '취소', onClick: () => setShowAdd(false) }}
+            confirm={{
+              label: '추가',
+              onClick: addBrand,
+              disabled: adding || !addForm.brand_name.trim(),
+              loading: '추가 중...',
+            }}
+          />
+        }
+      >
         {modalForm(addForm, setAddForm)}
-        <div className="modal-actions" style={{ marginTop: 20 }}>
-          <button className="modal-btn-cancel" onClick={() => setShowAdd(false)}>취소</button>
-          <button className="modal-btn-confirm" onClick={addBrand} disabled={adding || !addForm.brand_name.trim()}>
-            {adding ? '추가 중...' : '추가'}
-          </button>
-        </div>
       </Modal>
 
       {/* View Modal */}
       {viewRow && (
-        <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '3px 12px',
-              background: viewRow.received ? '#d1fae5' : '#f1f5f9',
-              color:      viewRow.received ? '#065f46' : '#94a3b8' }}>
-              {viewRow.received ? '✓ 제품 받음' : '미수령'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {[
-              { label: '담당자',   value: viewRow.contact_name },
-              { label: '직급',     value: viewRow.position },
-              { label: '휴대폰',   value: viewRow.phone },
-              { label: '제품',     value: viewRow.product },
-              { label: '생산원가', value: viewRow.production_cost },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>{label}</span>
-                <span style={{ fontSize: 13, color: value ? 'var(--gray-8)' : 'var(--gray-3)' }}>{value || '—'}</span>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>이메일</span>
-              {viewRow.email
-                ? <a href={`mailto:${viewRow.email}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{viewRow.email}</a>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
-            </div>
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>홈페이지</span>
-              {viewRow.website ? (
-                <a
-                  href={formatWebsiteUrl(viewRow.website)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}
-                >
+        <Modal
+          open={showView}
+          onClose={() => setShowView(false)}
+          title={viewRow.brand_name}
+          footer={
+            <ModalFooter
+              split
+              danger={{ label: '삭제', onClick: () => { if (window.confirm('삭제하시겠습니까?')) deleteRow(viewRow.id) } }}
+              confirm={{ label: '✎ 편집', onClick: () => { setShowView(false); openEdit(viewRow) } }}
+            />
+          }
+        >
+          <Badge tone={viewRow.received ? 'success' : 'muted'} style={{ marginBottom: 16 }}>
+            {viewRow.received ? '✓ 제품 받음' : '미수령'}
+          </Badge>
+          <DetailList>
+            <DetailRow label="담당자" value={viewRow.contact_name} />
+            <DetailRow label="직급" value={viewRow.position} />
+            <DetailRow label="휴대폰" value={viewRow.phone} />
+            <DetailRow label="제품" value={viewRow.product} />
+            <DetailRow label="생산원가" value={viewRow.production_cost} />
+            <DetailRow
+              label="이메일"
+              value={viewRow.email ? <a href={`mailto:${viewRow.email}`}>{viewRow.email}</a> : undefined}
+              empty={!viewRow.email}
+            />
+            <DetailRow
+              label="홈페이지"
+              value={viewRow.website ? (
+                <a href={formatWebsiteUrl(viewRow.website)} target="_blank" rel="noopener noreferrer">
                   {viewRow.website}
                 </a>
-              ) : (
-                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>자료 아카이브</span>
-              {viewArchivePath ? (
-                <Link
-                  to={viewArchivePath}
-                  onClick={() => setShowView(false)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '7px 14px',
-                    borderRadius: 8,
-                    background: 'var(--teal-dk)',
-                    color: '#fff',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textDecoration: 'none',
-                  }}
-                >
+              ) : undefined}
+              empty={!viewRow.website}
+            />
+            <DetailRow
+              label="자료 아카이브"
+              value={viewArchivePath ? (
+                <Link to={viewArchivePath} onClick={() => setShowView(false)} className="ui-btn ui-btn--primary ui-btn--sm">
                   {viewRow.brand_name} 아카이브
                 </Link>
-              ) : (
-                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
-              )}
-            </div>
-            {viewRow.notes && (
-              <div style={{ display: 'flex', gap: 12, padding: '8px 0' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 80, flexShrink: 0 }}>비고</span>
-                <span style={{ fontSize: 13, color: 'var(--gray-7)' }}>{viewRow.notes}</span>
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-            <button onClick={() => { if (window.confirm('삭제하시겠습니까?')) deleteRow(viewRow.id) }}
-              style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              삭제
-            </button>
-            <button onClick={() => { setShowView(false); openEdit(viewRow) }}
-              style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              ✎ 편집
-            </button>
-          </div>
+              ) : undefined}
+              empty={!viewArchivePath}
+            />
+            {viewRow.notes && <DetailRow label="비고" value={viewRow.notes} />}
+          </DetailList>
         </Modal>
       )}
 
-      {/* Edit Modal */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="확정 브랜드 편집">
+      <Modal
+        open={showEdit}
+        onClose={() => setShowEdit(false)}
+        title="확정 브랜드 편집"
+        footer={
+          <ModalFooter
+            cancel={{ label: '취소', onClick: () => setShowEdit(false) }}
+            confirm={{
+              label: '저장',
+              onClick: saveEdit,
+              disabled: saving || !editForm.brand_name.trim(),
+              loading: '저장 중...',
+            }}
+          />
+        }
+      >
         {modalForm(editForm, setEditForm)}
-        <div className="modal-actions" style={{ marginTop: 20 }}>
-          <button className="modal-btn-cancel" onClick={() => setShowEdit(false)}>취소</button>
-          <button className="modal-btn-confirm" onClick={saveEdit} disabled={saving || !editForm.brand_name.trim()}>
-            {saving ? '저장 중...' : '저장'}
-          </button>
-        </div>
       </Modal>
     </div>
   )

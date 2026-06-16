@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
+import { PageTabs } from '@/components/ui'
 
 interface Stats {
   generalCount:  number
@@ -71,15 +72,11 @@ export default function BrandDb() {
         </div>
       )}
 
-      <div className="ftab-bar">
-        {tabs.map(t => (
-          <button key={t.path}
-            className={'ftab' + (activeTab === t.path ? ' active' : '')}
-            onClick={() => navigate(t.path)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PageTabs
+        tabs={tabs.map(t => ({ id: t.path, label: t.label }))}
+        active={activeTab}
+        onChange={path => navigate(path)}
+      />
 
       <div className="ftab-content">
         <Outlet />
