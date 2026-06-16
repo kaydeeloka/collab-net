@@ -263,7 +263,8 @@ export default function Listup() {
   useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
   async function fetchExistingHandles() {
-    const { data } = await supabase.from('influencers').select('handle')
+    if (!viewPhaseId) return []
+    const { data } = await supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId)
     return (data ?? []).map(r => r.handle)
   }
 
@@ -460,7 +461,7 @@ export default function Listup() {
 
     const [{ data: tierRow }, { data: existing }] = await Promise.all([
       supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
-      supabase.from('influencers').select('handle'),
+      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
     ])
     const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
 

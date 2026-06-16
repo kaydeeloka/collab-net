@@ -929,3 +929,45 @@ BEGIN
     ALTER TABLE influencers DROP COLUMN contact_round;
   END IF;
 END $$;
+
+-- ============================================================
+--  confirmed brand archive — assets + storage
+-- ============================================================
+CREATE TABLE IF NOT EXISTS confirmed_brand_archive_meta (
+  confirmed_brand_id UUID PRIMARY KEY REFERENCES confirmed_brands(id) ON DELETE CASCADE,
+  archive_memo       TEXT,
+  updated_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS confirmed_brand_assets (
+  id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  confirmed_brand_id UUID        NOT NULL REFERENCES confirmed_brands(id) ON DELETE CASCADE,
+  category           TEXT        NOT NULL CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients')),
+  file_name          TEXT        NOT NULL,
+  storage_path       TEXT        NOT NULL UNIQUE,
+  file_size          INTEGER,
+  mime_type          TEXT,
+  label              TEXT,
+  sort_order         INTEGER     DEFAULT 0,
+  created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_confirmed_brand_assets_brand
+  ON confirmed_brand_assets(confirmed_brand_id);
+CREATE INDEX IF NOT EXISTS idx_confirmed_brand_assets_brand_cat
+  ON confirmed_brand_assets(confirmed_brand_id, category);
+
+ALTER TABLE confirmed_brand_archive_meta ENABLE ROW LEVEL SECURITY;
+ALTER TABLE confirmed_brand_assets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_confirmed_brand_archive_meta" ON confirmed_brand_archive_meta;
+CREATE POLICY "allow_all_confirmed_brand_archive_meta" ON confirmed_brand_archive_meta FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "allow_all_confirmed_brand_assets" ON confirmed_brand_assets;
+CREATE POLICY "allow_all_confirmed_brand_assets" ON confirmed_brand_assets FOR ALL USING (true) WITH CHECK (true);
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('brand-archive', 'brand-archive', false, 52428800)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "brand_archive_storage_all" ON storage.objects;
+CREATE POLICY "brand_archive_storage_all" ON storage.objects
+  FOR ALL USING (bucket_id = 'brand-archive') WITH CHECK (bucket_id = 'brand-archive');

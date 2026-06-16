@@ -8,7 +8,17 @@
 // ============================================================
 
 const TCM_PROFILE_ACTOR = 'automation-lab~tiktok-profile-scraper';
-const TCM_SCRAPE_BUFFER = 4; // Apify candidates = target × buffer (email misses)
+
+const GAS_MAX_MS       = 5.75 * 60 * 1000; // hard cap — Google Apps Script ~6 min
+const TCM_TIMEOUT_MS   = 2 * 60 * 1000;   // TCM discover only (independent clock)
+const APIFY_TIMEOUT_MS = 5 * 60 * 1000;   // max Apify wait (clamped to remaining GAS time)
+const APIFY_MIN_TIMEOUT_SEC = 300;        // Apify actor default is often 300s — too short for large runs
+
+// TCM pool + Apify queue = ceil(target × buffer)
+function _tcmSearchBuffer_(minF, maxF) {
+  if (maxF <= 10000) return 6; // nano (e.g. 3K–10K) — sparse pool, needs more oversampling
+  return 2.5;                  // micro+ (e.g. 10K–50K, 60K–100K)
+}
 
 function _tcmCfg() {
   const p = PropertiesService.getScriptProperties();
@@ -84,7 +94,7 @@ function _tcmCountryCode(raw) {
   return c || 'US';
 }
 
-function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio, countryCode) {
+function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, countryCode) {
   const params = {
     tto_tcm_account_id: accountId,
     keyword_search    : keyword,
@@ -94,8 +104,6 @@ function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio
     page              : page,
     page_size         : 50,
   };
-  // 'FEMALE_50' = >50% female audience, 'FEMALE_60' = >60% female audience
-  if (genderRatio) params.follower_gender_ratio = genderRatio;
   return _tcmGet(
     'https://business-api.tiktok.com/open_api/v1.3/tto/tcm/creator/discover/',
     params,
@@ -103,7 +111,7 @@ function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, genderRatio
   );
 }
 
-function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, deadline, genderRatio, countryCode) {
+function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, deadline, countryCode) {
   const pool = {};
   let lastError = null;
   for (const kw of keywords) {
@@ -112,7 +120,7 @@ function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, 
     let page = 1;
     while (Object.keys(pool).length < collectTarget) {
       if (deadline && Date.now() > deadline) break;
-      const d = _tcmSearchPage(accountId, kw, minF, maxF, page, token, genderRatio, countryCode);
+      const d = _tcmSearchPage(accountId, kw, minF, maxF, page, token, countryCode);
       if ((d.code || 0) !== 0) {
         lastError = 'code ' + d.code + ': ' + (d.message || JSON.stringify(d));
         break;
@@ -150,12 +158,11 @@ function _regexEmail(bio) {
   return m ? m[0] : '';
 }
 
-// Step 2 — free filters on TCM data BEFORE Apify (dedup + follow ratio)
-function _tcmSelectCandidates(pool, existingSet, maxRatioDec, limit, deadline, stats) {
+// Step 2 — free filters on TCM data BEFORE Apify (dedup + follow ratio); sync, no timeout
+function _tcmSelectCandidates(pool, existingSet, maxRatioDec, limit, stats) {
   var candidates = [];
   for (var handle in pool) {
     if (candidates.length >= limit) break;
-    if (deadline && Date.now() > deadline) break;
     var c = pool[handle];
     var hl = String(handle).toLowerCase();
     if (existingSet[hl]) { stats.dupes++; continue; }
@@ -172,30 +179,49 @@ function _apifyToken_() {
   return PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN') || '';
 }
 
+function _apifyActorTimeoutSec_(profileCount) {
+  // ~2–3s per profile; avoid Apify default ~300s "Actor timed out" on large batches
+  return Math.min(3600, Math.max(APIFY_MIN_TIMEOUT_SEC, Math.ceil(profileCount * 3)));
+}
+
 function _apifyStartProfileRun(handles, token) {
   var payload = { profiles: handles };
+  var timeoutSec = _apifyActorTimeoutSec_(handles.length);
   var res = UrlFetchApp.fetch(
-    'https://api.apify.com/v2/acts/' + TCM_PROFILE_ACTOR + '/runs?token=' + token,
+    'https://api.apify.com/v2/acts/' + TCM_PROFILE_ACTOR + '/runs?token=' + token + '&timeout=' + timeoutSec,
     { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true }
   );
   var body = JSON.parse(res.getContentText());
   if (!body.data) return { error: 'Apify 오류: ' + res.getContentText().substring(0, 300) };
-  return { runId: body.data.id, datasetId: body.data.defaultDatasetId };
+  return { runId: body.data.id, datasetId: body.data.defaultDatasetId, timeoutSec: timeoutSec };
+}
+
+function _apifyGetRun_(runId, token) {
+  var res = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+    { muteHttpExceptions: true }
+  );
+  var data = JSON.parse(res.getContentText()).data;
+  if (!data) return { error: 'Apify run 조회 실패' };
+  return { status: data.status, datasetId: data.defaultDatasetId };
 }
 
 function _apifyWaitForRun(runId, token, deadline) {
   while (Date.now() < deadline) {
-    var res = UrlFetchApp.fetch(
-      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
-      { muteHttpExceptions: true }
-    );
-    var data = JSON.parse(res.getContentText()).data;
-    var status = data && data.status;
-    if (status === 'SUCCEEDED') return { ok: true, datasetId: data.defaultDatasetId };
-    if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-      return { error: 'Apify 실행 실패: ' + status };
+    var run = _apifyGetRun_(runId, token);
+    if (run.error) return { error: run.error };
+    if (run.status === 'SUCCEEDED') return { ok: true, datasetId: run.datasetId };
+    if (run.status === 'FAILED' || run.status === 'ABORTED' || run.status === 'TIMED-OUT') {
+      return { error: 'Apify 실행 실패: ' + run.status };
     }
     Utilities.sleep(4000);
+  }
+  // One last check — Apify often finishes seconds after our poll deadline
+  var finalRun = _apifyGetRun_(runId, token);
+  if (finalRun.status === 'SUCCEEDED') return { ok: true, datasetId: finalRun.datasetId };
+  if (finalRun.error) return { error: finalRun.error };
+  if (finalRun.status === 'FAILED' || finalRun.status === 'ABORTED' || finalRun.status === 'TIMED-OUT') {
+    return { error: 'Apify 실행 실패: ' + finalRun.status };
   }
   return { error: 'Apify 시간 초과' };
 }
@@ -285,7 +311,7 @@ function _apifyProfilesToMap(items, requireEmail) {
 }
 
 // params: tierRank, tierLabel, tierTags, category, targetCount, keyword, minF, maxF,
-//         existingHandles, maxRatio (%), requireEmail, proxyCountry, genderRatio
+//         existingHandles, maxRatio (%), requireEmail, proxyCountry
 function tcmRunSearch(params) {
   try {
     const cfg = _tcmCfg();
@@ -311,59 +337,78 @@ function tcmRunSearch(params) {
     const tierTags  = params.tierTags || params.tags || '';
     const category  = params.category || (tierTags === 'kbeauty' ? 'K-뷰티' : '일반뷰티');
     const kws       = [keyword];
-    const genderRatio   = params.genderRatio || '';
     const maxRatioDec   = (parseFloat(params.maxRatio) || 70) / 100;
     const requireEmail  = params.requireEmail !== false;
     const countryCode   = _tcmCountryCode(params.proxyCountry || params.country);
-    const collect       = target * 8;
-    const deadline      = Date.now() + 4.5 * 60 * 1000;
+    const buffer        = _tcmSearchBuffer_(minF, maxF);
+    const collect       = Math.ceil(target * buffer);
+    const runStart      = Date.now();
+    const gasLimit      = runStart + GAS_MAX_MS;
+    const tcmDeadline   = runStart + TCM_TIMEOUT_MS;
 
-    // Step 1: TCM discover
-    const { pool, lastError } = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, deadline, genderRatio, countryCode);
+    // Step 1: TCM discover (own timeout — does not eat into Apify time)
+    const { pool, lastError } = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, tcmDeadline, countryCode);
 
     const existingSet = _buildHandleSet_(params.existingHandles);
+    const scrapeLimit = Math.ceil(target * buffer);
 
     const stats = {
       poolSize      : Object.keys(pool).length,
+      buffer        : buffer,
+      collectTarget : collect,
+      scrapeLimit   : scrapeLimit,
       dupes         : 0,
       followRatio   : 0,
       apifyQueued   : 0,
       apifyScraped  : 0,
       noEmail       : 0,
       uploadSkipped : 0,
+      followerRange : 0,
       deadlineHit   : false,
       apiError      : lastError,
       country       : countryCode,
     };
 
     // Step 2: pre-filter BEFORE Apify (dedup + follow ratio) — saves Apify credits
-    const scrapeLimit = target * TCM_SCRAPE_BUFFER;
-    const candidates  = _tcmSelectCandidates(pool, existingSet, maxRatioDec, scrapeLimit, deadline, stats);
+    const candidates  = _tcmSelectCandidates(pool, existingSet, maxRatioDec, scrapeLimit, stats);
 
     if (!candidates.length) {
       return { ok: true, creators: [], count: 0, tier: tierRank, tierLabel: tierLabel, category, stats };
     }
 
-    // Step 3: Apify profile scrape (only filtered candidates)
+    // Step 3: Apify profile scrape (own timeout — starts here, not shared with TCM)
     const handles = candidates.map(function(c) { return c.handle; });
     const started = _apifyStartProfileRun(handles, apifyToken);
     if (started.error) return { error: started.error };
 
-    const waited = _apifyWaitForRun(started.runId, apifyToken, deadline);
-    if (waited.error) return { error: waited.error };
+    // Wait long enough for batch size, but never beyond GAS hard cap
+    var apifyWaitMs = Math.min(
+      APIFY_TIMEOUT_MS,
+      Math.max(3 * 60 * 1000, handles.length * 2500)
+    );
+    var apifyDeadline = Math.min(gasLimit, Date.now() + apifyWaitMs);
+    const waited = _apifyWaitForRun(started.runId, apifyToken, apifyDeadline);
+    if (waited.error) {
+      stats.deadlineHit = waited.error.indexOf('시간 초과') !== -1;
+      return { error: waited.error };
+    }
 
     const items  = _apifyFetchDataset(waited.datasetId, apifyToken);
     const parsed = _apifyProfilesToMap(items, requireEmail);
     stats.apifyScraped = Object.keys(parsed.byHandle).length;
     stats.noEmail += parsed.noEmail;
 
-    // Step 4: build creators up to target (preserve TCM discover order)
+    // Step 4: build creators up to target (Apify counts = source of truth for display)
     const creators = [];
     for (var ci = 0; ci < candidates.length; ci++) {
       if (creators.length >= target) break;
       var cand = candidates[ci];
       var prof = parsed.byHandle[String(cand.handle).toLowerCase()];
       if (!prof) continue;
+      if (prof.followers < minF || prof.followers > maxF) {
+        stats.followerRange++;
+        continue;
+      }
       creators.push(_creatorFromProfile(prof));
     }
 

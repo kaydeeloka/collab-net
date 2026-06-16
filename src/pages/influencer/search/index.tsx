@@ -30,19 +30,10 @@ interface SearchFilters {
   maxUploadDays: number
   proxyCountry: string
   requireEmail: boolean
-  genderRatio?: '' | 'FEMALE_50' | 'FEMALE_60'
   followerMin: number
   followerMax: number
   maxCreators: number
 }
-
-type GenderRatioOption = '' | 'FEMALE_50' | 'FEMALE_60'
-
-const GENDER_RATIO_OPTIONS: { value: GenderRatioOption; label: string }[] = [
-  { value: '',          label: '없음 (전체)' },
-  { value: 'FEMALE_50', label: '여성 50% 이상' },
-  { value: 'FEMALE_60', label: '여성 60% 이상' },
-]
 
 interface FilterCond { cat: string; desc: string; manual?: boolean; type?: 'dedup'; enabled?: boolean }
 const DB_PAGE_SIZE = 25
@@ -134,25 +125,49 @@ interface ApifyCreator {
   avgViews: number; engRate: number; bio: string; profileUrl: string
 }
 
-function formatExclusionStats(stats: { noEmailSkipped: number; dedupSkipped: number } | null) {
+function formatPipelineStats(stats: { poolSize?: number; collectTarget?: number; apifyQueued?: number; scrapeLimit?: number } | null) {
+  if (!stats || stats.poolSize == null) return ''
+  const parts: string[] = [`TCM ${stats.poolSize}명`]
+  if (stats.collectTarget != null && stats.poolSize < stats.collectTarget) {
+    parts[0] = `TCM ${stats.poolSize}/${stats.collectTarget}명`
+  }
+  if (stats.apifyQueued != null) parts.push(`Apify ${stats.apifyQueued}명`)
+  return parts.join(' · ')
+}
+
+function formatExclusionStats(stats: { noEmailSkipped: number; dedupSkipped: number; followRatioSkipped?: number } | null) {
   if (!stats) return ''
   const parts: string[] = []
   if (stats.noEmailSkipped > 0) parts.push(`이메일 없음 ${stats.noEmailSkipped}명 제외`)
   if (stats.dedupSkipped > 0) parts.push(`중복 ${stats.dedupSkipped}명 제외`)
+  if (stats.followRatioSkipped && stats.followRatioSkipped > 0) parts.push(`팔로잉 비율 ${stats.followRatioSkipped}명 제외`)
   return parts.join(' · ')
 }
 
-function formatSearchDuration(ms: number) {
-  const totalSec = Math.max(1, Math.round(ms / 1000))
+function formatSearchDuration(ms: number, live = false) {
+  const totalSec = live ? Math.floor(ms / 1000) : Math.max(1, Math.round(ms / 1000))
   if (totalSec < 60) return `${totalSec}초`
   const min = Math.floor(totalSec / 60)
   const sec = totalSec % 60
   return sec > 0 ? `${min}분 ${sec}초` : `${min}분`
 }
 
-function formatSearchMeta(elapsedMs: number | null, stats: { noEmailSkipped: number; dedupSkipped: number } | null) {
+function formatSearchMeta(
+  elapsedMs: number | null,
+  stats: {
+    noEmailSkipped: number
+    dedupSkipped: number
+    followRatioSkipped?: number
+    poolSize?: number
+    collectTarget?: number
+    apifyQueued?: number
+    scrapeLimit?: number
+  } | null,
+) {
   const parts: string[] = []
   if (elapsedMs != null) parts.push(formatSearchDuration(elapsedMs))
+  const pipeline = formatPipelineStats(stats)
+  if (pipeline) parts.push(pipeline)
   const exclusions = formatExclusionStats(stats)
   if (exclusions) parts.push(exclusions)
   return parts.join(' · ')
@@ -162,7 +177,7 @@ function saveConfig(key: string, value: unknown) {
   supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
 }
 
-function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail' | 'genderRatio'>) {
+function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
   saveConfig('search_filters', filters)
 }
 
@@ -221,7 +236,6 @@ export default function Listup() {
   const [maxRatio, setMaxRatio] = useState(70)
   const [maxUploadDays, setMaxUploadDays] = useState(30)
   const [proxyCountry, setProxyCountry] = useState('US')
-  const [genderRatio, setGenderRatio] = useState<GenderRatioOption>('')
   const [requireEmail, setRequireEmail] = useState(true)
 
   // Apify / TCM search state
@@ -231,9 +245,31 @@ export default function Listup() {
   const [apifyLoading, setApifyLoading] = useState(false)
   const [apifyResults, setApifyResults] = useState<ApifyCreator[] | null>(null)
   const [apifyCurrentTier, setApifyCurrentTier] = useState<Tier | null>(null)
-  const [apifyFilterStats, setApifyFilterStats] = useState<{ noEmailSkipped: number; dedupSkipped: number } | null>(null)
+  const [apifyFilterStats, setApifyFilterStats] = useState<{
+    noEmailSkipped: number
+    dedupSkipped: number
+    followRatioSkipped?: number
+    poolSize?: number
+    collectTarget?: number
+    apifyQueued?: number
+    scrapeLimit?: number
+  } | null>(null)
   const [searchElapsedMs, setSearchElapsedMs] = useState<number | null>(null)
+  const [searchLiveMs, setSearchLiveMs] = useState(0)
   const existingHandlesRef = useRef<string[]>([])
+  const searchStartedAtRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!apifyLoading) return
+    const tick = () => {
+      if (searchStartedAtRef.current != null) {
+        setSearchLiveMs(Date.now() - searchStartedAtRef.current)
+      }
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [apifyLoading])
 
   const selectedTier = apifyTierIdx !== null ? tiers[apifyTierIdx] ?? null : null
 
@@ -278,9 +314,11 @@ export default function Listup() {
     setApifyResults(null)
     setApifyFilterStats(null)
     setSearchElapsedMs(null)
+    setSearchLiveMs(0)
     setApifyCurrentTier(tier)
     existingHandlesRef.current = []
     const startedAt = Date.now()
+    searchStartedAtRef.current = startedAt
     try {
       await prefetchExistingHandles()
       const res: {
@@ -288,7 +326,20 @@ export default function Listup() {
         ok?: boolean
         creators?: ApifyCreator[]
         count?: number
-        stats?: { noEmail?: number; followRatio?: number; dupes?: number; poolSize?: number; apifyQueued?: number; uploadSkipped?: number; country?: string }
+        stats?: {
+          noEmail?: number
+          followRatio?: number
+          dupes?: number
+          followerRange?: number
+          poolSize?: number
+          collectTarget?: number
+          scrapeLimit?: number
+          apifyQueued?: number
+          apifyScraped?: number
+          buffer?: number
+          uploadSkipped?: number
+          country?: string
+        }
       } = await gasPost({
         action: 'tcmRunSearch',
         params: {
@@ -305,7 +356,6 @@ export default function Listup() {
           maxUploadDays,
           requireEmail,
           proxyCountry: proxyCountry || 'US',
-          genderRatio: genderRatio || '',
         },
       })
       if (res.error) {
@@ -318,11 +368,18 @@ export default function Listup() {
       setApifyFilterStats({
         noEmailSkipped: stats?.noEmail ?? 0,
         dedupSkipped: stats?.dupes ?? 0,
+        followRatioSkipped: stats?.followRatio ?? 0,
+        poolSize: stats?.poolSize,
+        collectTarget: stats?.collectTarget,
+        apifyQueued: stats?.apifyQueued,
+        scrapeLimit: stats?.scrapeLimit,
       })
-      setSearchElapsedMs(Date.now() - startedAt)
     } catch (e: unknown) {
       alert('오류: ' + (e as Error).message)
     } finally {
+      if (searchStartedAtRef.current != null) {
+        setSearchElapsedMs(Date.now() - searchStartedAtRef.current)
+      }
       setApifyLoading(false)
     }
   }
@@ -377,9 +434,6 @@ export default function Listup() {
           setMaxUploadDays(sf.maxUploadDays ?? 30)
           setProxyCountry(sf.proxyCountry ?? 'US')
           setRequireEmail(sf.requireEmail !== false)
-          const gr = sf.genderRatio
-          if (gr === 'FEMALE_50' || gr === 'FEMALE_60') setGenderRatio(gr)
-          else setGenderRatio('')
         }
       } finally {
         setConfigLoading(false)
@@ -427,7 +481,8 @@ export default function Listup() {
   useEffect(() => { setDbPage(1) }, [currentDbTab, dateFrom])
 
   async function fetchExistingHandles() {
-    const { data } = await supabase.from('influencers').select('handle')
+    if (!viewPhaseId) return []
+    const { data } = await supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId)
     return (data ?? []).map(r => r.handle)
   }
 
@@ -496,7 +551,7 @@ export default function Listup() {
 
     const [{ data: tierRow }, { data: existing }] = await Promise.all([
       supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
-      supabase.from('influencers').select('handle'),
+      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
     ])
     const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
 
@@ -540,6 +595,8 @@ export default function Listup() {
         setInfluencers(prev => [...(data as Influencer[]), ...prev])
         loadDashStats()
       }
+      setDbLoaded(false)
+      switchTab('database')
     }
     setApifyLoading(false)
   }
@@ -772,7 +829,7 @@ export default function Listup() {
                         <div style={FILTER_INLINE}>
                           <span>팔로잉 수가 팔로워 수의</span>
                           <select value={maxRatio} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail, genderRatio }) }}>
+                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail }) }}>
                             <option value={50}>50%</option>
                             <option value={60}>60%</option>
                             <option value={70}>70%</option>
@@ -789,7 +846,7 @@ export default function Listup() {
                         <div style={FILTER_INLINE}>
                           <span>최근</span>
                           <select value={maxUploadDays} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail, genderRatio }) }}>
+                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail }) }}>
                             <option value={30}>30일</option>
                             <option value={49}>7주</option>
                           </select>
@@ -802,41 +859,24 @@ export default function Listup() {
                       <td className="filter-cat">국가</td>
                       <td>
                         <select value={proxyCountry} style={{ ...FILTER_SELECT, minWidth: 180, maxWidth: 240 }}
-                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail, genderRatio }) }}>
+                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail }) }}>
                           {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                         </select>
                       </td>
                     </tr>
                     <tr>
                       <td className="filter-no">4</td>
-                      <td className="filter-cat">여성 팔로워</td>
-                      <td>
-                        <div style={FILTER_INLINE}>
-                          <span>TCM 팔로워 성별</span>
-                          <select value={genderRatio} style={{ ...FILTER_SELECT, minWidth: 140 }}
-                            onChange={e => {
-                              const v = e.target.value as GenderRatioOption
-                              setGenderRatio(v)
-                              saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail, genderRatio: v })
-                            }}>
-                            {GENDER_RATIO_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="filter-no">5</td>
                       <td className="filter-cat">이메일</td>
                       <td>
                         <label style={FILTER_CHECK_LABEL}>
                           <input type="checkbox" checked={requireEmail}
-                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v, genderRatio }) }} />
+                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v }) }} />
                           bio에 이메일이 없는 계정 제외
                         </label>
                       </td>
                     </tr>
                     <tr>
-                      <td className="filter-no">6</td>
+                      <td className="filter-no">5</td>
                       <td className="filter-cat">중복</td>
                       <td>
                         <label style={FILTER_CHECK_LABEL}>
@@ -1019,7 +1059,11 @@ export default function Listup() {
                 disabled={apifyLoading || apifyTierIdx === null || !selectedKeyword}
                 onClick={runTcmSearch}
               >Find Creators (TCM)</button>
-              {apifyLoading && <Spinner sm />}
+              {apifyLoading && (
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-5)', fontVariantNumeric: 'tabular-nums' }}>
+                  {formatSearchDuration(searchLiveMs, true)}
+                </span>
+              )}
             </div>
 
             {/* Results */}
