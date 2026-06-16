@@ -1,20 +1,20 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter } from 'lucide-react'
-import { gasPost } from '../../../lib/api'
-import { defaultProfileUrl } from '../../../lib/content-platforms'
-import { supabase } from '../../../lib/supabase'
-import { usePhase } from '../../../contexts/PhaseContext'
-import { fmtNum } from '../../../lib/utils'
-import { useToast } from '../../../contexts/ToastContext'
-import Spinner from '../../../components/Spinner'
-import Pagination from '../../../components/Pagination'
-import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
+import { gasPost } from '@/lib/api'
+import { defaultProfileUrl } from '@/lib/content-platforms'
+import { supabase } from '@/lib/supabase'
+import { usePhase } from '@/contexts/PhaseContext'
+import { fmtNum } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
+import Pagination from '@/components/Pagination'
+import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import {
   coerceContactCount,
   contactCountStyle,
   formatContactCount,
   nextContactCountAfterSend,
-} from '../../../lib/contact-count'
+} from '@/lib/contact-count'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']

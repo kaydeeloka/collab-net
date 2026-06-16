@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { gasPost } from '../../../../lib/api'
+import { gasPost } from '@/lib/api'
 import {
   EMS_ERROR_STATUS_STYLE,
   ERROR_STATUS_OPTIONS,
   fetchEmsErrors,
   updateEmsReship,
   type EmsErrorRow,
-} from '../../../../lib/ems-errors'
-import { applyEmsPlaceholders, loadEmsTemplates } from '../../../../lib/ems-templates'
-import { useToast } from '../../../../contexts/ToastContext'
-import { usePhase } from '../../../../contexts/PhaseContext'
+} from '@/lib/ems-errors'
+import { applyEmsPlaceholders, loadEmsTemplates } from '@/lib/ems-templates'
+import { useToast } from '@/contexts/ToastContext'
+import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
-import Spinner from '../../../../components/Spinner'
-import ConfirmToast, { useConfirmToast } from '../../../../components/ConfirmToast'
+import Spinner from '@/components/Spinner'
+import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 
 function displayVal(v: string) {
   return v === '—' || !v.trim() ? '—' : v

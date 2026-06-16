@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Package, Search } from 'lucide-react'
-import { supabase } from '../../../../lib/supabase'
-import { usePhase } from '../../../../contexts/PhaseContext'
-import { useToast } from '../../../../contexts/ToastContext'
-import Spinner from '../../../../components/Spinner'
+import { supabase } from '@/lib/supabase'
+import { usePhase } from '@/contexts/PhaseContext'
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
 import {
   type ConfirmedBrand,
   type BrandAsset,

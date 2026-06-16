@@ -1,12 +1,12 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { supabase } from '../../../lib/supabase'
-import { useToast } from '../../../contexts/ToastContext'
-import { usePhase } from '../../../contexts/PhaseContext'
-import Spinner from '../../../components/Spinner'
-import Pagination from '../../../components/Pagination'
-import Modal from '../../../components/Modal'
+import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
+import { usePhase } from '@/contexts/PhaseContext'
+import Spinner from '@/components/Spinner'
+import Pagination from '@/components/Pagination'
+import Modal from '@/components/Modal'
 
 interface EmsDataRow {
   id:              string

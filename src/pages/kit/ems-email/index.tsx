@@ -8,7 +8,7 @@ import {
   saveEmsTemplates,
   type EmsTemplate,
   type EmsTemplateCategory,
-} from '../../../lib/ems-templates'
+} from '@/lib/ems-templates'
 
 const CATEGORIES = EMS_TEMPLATE_CATEGORIES
 type Category = EmsTemplateCategory

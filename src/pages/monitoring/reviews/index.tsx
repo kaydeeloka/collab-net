@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ListFilter } from 'lucide-react'
-import { supabase } from '../../../lib/supabase'
-import { gasPost } from '../../../lib/api'
-import { usePhase } from '../../../contexts/PhaseContext'
-import { fmtNum } from '../../../lib/utils'
-import Spinner from '../../../components/Spinner'
-import Pagination from '../../../components/Pagination'
-import Modal from '../../../components/Modal'
+import { supabase } from '@/lib/supabase'
+import { gasPost } from '@/lib/api'
+import { usePhase } from '@/contexts/PhaseContext'
+import { fmtNum } from '@/lib/utils'
+import Spinner from '@/components/Spinner'
+import Pagination from '@/components/Pagination'
+import Modal from '@/components/Modal'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]

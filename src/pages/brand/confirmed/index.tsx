@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '../../../lib/supabase'
-import { usePhase } from '../../../contexts/PhaseContext'
+import { supabase } from '@/lib/supabase'
+import { usePhase } from '@/contexts/PhaseContext'
 
 export default function BrandConfirmed() {
   const { pathname } = useLocation()

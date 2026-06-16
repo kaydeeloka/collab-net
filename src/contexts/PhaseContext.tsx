@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { getDateActivePhaseId, normalizePhaseId } from '../lib/phase'
+import { supabase } from '@/lib/supabase'
+import { getDateActivePhaseId, normalizePhaseId } from '@/lib/phase'
 
 interface Phase {
   id: string

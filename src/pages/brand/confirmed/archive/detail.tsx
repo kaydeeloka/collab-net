@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import JSZip from 'jszip'
 import { ArrowLeft, Download, Pencil, Save, Trash2, Upload } from 'lucide-react'
-import { supabase } from '../../../../lib/supabase'
-import { usePhase } from '../../../../contexts/PhaseContext'
-import { useToast } from '../../../../contexts/ToastContext'
-import Spinner from '../../../../components/Spinner'
+import { supabase } from '@/lib/supabase'
+import { usePhase } from '@/contexts/PhaseContext'
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
 import {
   BUCKET,
   CATEGORIES,

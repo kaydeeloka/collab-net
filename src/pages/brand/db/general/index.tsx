@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../../../lib/supabase'
-import { useToast } from '../../../../contexts/ToastContext'
-import { usePhase } from '../../../../contexts/PhaseContext'
-import Modal from '../../../../components/Modal'
-import Pagination from '../../../../components/Pagination'
+import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
+import { usePhase } from '@/contexts/PhaseContext'
+import Modal from '@/components/Modal'
+import Pagination from '@/components/Pagination'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {

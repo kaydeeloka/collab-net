@@ -1,13 +1,13 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { ListFilter } from 'lucide-react'
-import { supabase } from '../../../lib/supabase'
-// import { gasPost } from '../../../lib/api' // detail modal disabled
-import { useToast } from '../../../contexts/ToastContext'
-import Spinner from '../../../components/Spinner'
-import Modal from '../../../components/Modal'
-import Pagination from '../../../components/Pagination'
-import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '../../../lib/ems-errors'
-import { usePhase } from '../../../contexts/PhaseContext'
+import { supabase } from '@/lib/supabase'
+// import { gasPost } from '@/lib/api' // detail modal disabled
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
+import Modal from '@/components/Modal'
+import Pagination from '@/components/Pagination'
+import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems-errors'
+import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from './layout'
 
 interface EmsRow {

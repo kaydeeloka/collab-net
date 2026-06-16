@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ListFilter } from 'lucide-react'
-import { supabase } from '../../../lib/supabase'
-import { PLATFORM_OPTIONS, defaultProfileUrl } from '../../../lib/content-platforms'
-import { usePhase } from '../../../contexts/PhaseContext'
-import { useToast } from '../../../contexts/ToastContext'
-import Spinner from '../../../components/Spinner'
-import Modal from '../../../components/Modal'
+import { supabase } from '@/lib/supabase'
+import { PLATFORM_OPTIONS, defaultProfileUrl } from '@/lib/content-platforms'
+import { usePhase } from '@/contexts/PhaseContext'
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
+import Modal from '@/components/Modal'
 
 const GOOGLE_FORM_URL = ''
 

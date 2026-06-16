@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter } from 'lucide-react'
-import { gasPost } from '../../../lib/api'
-import { supabase } from '../../../lib/supabase'
-import { useToast } from '../../../contexts/ToastContext'
-import Spinner from '../../../components/Spinner'
-import Pagination from '../../../components/Pagination'
-import ConfirmToast, { useConfirmToast } from '../../../components/ConfirmToast'
+import { gasPost } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
+import Spinner from '@/components/Spinner'
+import Pagination from '@/components/Pagination'
+import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 
 // ── Templates (shared with /brand/template page via localStorage) ─────────────
 const BRAND_TPL_KEY = 'mm_brand_email_templates'

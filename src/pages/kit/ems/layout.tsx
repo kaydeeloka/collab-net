@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
-import { supabase } from '../../../lib/supabase'
-import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '../../../lib/ems-errors'
-import { usePhase } from '../../../contexts/PhaseContext'
-import Spinner from '../../../components/Spinner'
+import { supabase } from '@/lib/supabase'
+import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems-errors'
+import { usePhase } from '@/contexts/PhaseContext'
+import Spinner from '@/components/Spinner'
 
 export const INFLUENCER_TARGET = 50
 

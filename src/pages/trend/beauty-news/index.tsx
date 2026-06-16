@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { gasPost } from '../../../lib/api'
-import { normalizeKeywords } from '../../../lib/beauty-news'
-import { supabase } from '../../../lib/supabase'
-import Spinner from '../../../components/Spinner'
+import { gasPost } from '@/lib/api'
+import { normalizeKeywords } from '@/lib/beauty-news'
+import { supabase } from '@/lib/supabase'
+import Spinner from '@/components/Spinner'
 
 interface ArchiveItem {
   id: string

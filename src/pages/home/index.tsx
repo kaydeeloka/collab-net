@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '../../lib/beauty-news'
-import { fetchReshipmentMap } from '../../lib/ems-errors'
-import { usePhase } from '../../contexts/PhaseContext'
+import { supabase } from '@/lib/supabase'
+import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '@/lib/beauty-news'
+import { fetchReshipmentMap } from '@/lib/ems-errors'
+import { usePhase } from '@/contexts/PhaseContext'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]

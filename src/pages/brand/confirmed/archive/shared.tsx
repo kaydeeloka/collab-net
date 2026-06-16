@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
 import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, ZoomIn, ZoomOut, X } from 'lucide-react'
-import { supabase } from '../../../../lib/supabase'
-import Spinner from '../../../../components/Spinner'
+import { supabase } from '@/lib/supabase'
+import Spinner from '@/components/Spinner'
 
 export const BUCKET = 'brand-archive'
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { gasGet, gasPost } from '../../../lib/api'
-import { supabase } from '../../../lib/supabase'
-import Spinner from '../../../components/Spinner'
+import { gasGet, gasPost } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
+import Spinner from '@/components/Spinner'
 
 interface Recipient {
   email: string
