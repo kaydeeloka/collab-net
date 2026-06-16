@@ -178,57 +178,90 @@ function sendOutlookEmail(body) {
 }
 
 // ── Sync replies from Outlook inbox ─────────────────────────
-// Returns reply content + date per email (dashboard updates Supabase).
+// Latest inbound message per email (filter + orderby — reliable newest-first).
+function _fetchLatestFromSender(token, email) {
+  const safeEmail = (email || '').replace(/'/g, "''");
+  if (!safeEmail) return null;
+  const filter = "from/emailAddress/address eq '" + safeEmail + "'";
+  const url = GRAPH_MESSAGES_URL
+    + '?$filter=' + encodeURIComponent(filter)
+    + '&$select=id,from,receivedDateTime,body,isRead'
+    + '&$orderby=receivedDateTime desc'
+    + '&$top=1';
+
+  const res = UrlFetchApp.fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + token },
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) return null;
+
+  const data = JSON.parse(res.getContentText());
+  const msg = (data.value || [])[0];
+  if (!msg) return null;
+
+  const received = msg.receivedDateTime || '';
+  const rawBody = ((msg.body || {}).content || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  return {
+    messageId: msg.id || '',
+    body: rawBody.substring(0, 1000),
+    date: received ? received.split('T')[0] : '',
+    receivedAt: received,
+    isRead: !!msg.isRead,
+  };
+}
+
 function syncOutlookReplies(items) {
   if (!items || !items.length) return { ok: true, replies: [] };
   try {
     const token = getOutlookAccessToken();
-    const emails = items.map(x => (x.email || '').trim().toLowerCase()).filter(Boolean);
-    if (!emails.length) return { ok: true, replies: [] };
-
-    const repliedMap = {};
-
-    const CHUNK = 10;
-    for (let i = 0; i < emails.length; i += CHUNK) {
-      const chunk = emails.slice(i, i + CHUNK);
-      const searchQuery = chunk.map(e => 'from:' + e).join(' OR ');
-      const url = GRAPH_MESSAGES_URL
-        + '?$search=' + encodeURIComponent('"' + searchQuery + '"')
-        + '&$select=from,receivedDateTime,body'
-        + '&$top=50';
-
-      const res = UrlFetchApp.fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + token, 'ConsistencyLevel': 'eventual' },
-        muteHttpExceptions: true,
-      });
-
-      if (res.getResponseCode() !== 200) continue;
-      const data = JSON.parse(res.getContentText());
-
-      (data.value || []).forEach(function(msg) {
-        const from = ((msg.from || {}).emailAddress || {}).address || '';
-        if (!from) return;
-        const key = from.toLowerCase();
-        if (!repliedMap[key]) {
-          const rawBody  = ((msg.body || {}).content || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-          const received = (msg.receivedDateTime || '').split('T')[0];
-          repliedMap[key] = { body: rawBody.substring(0, 1000), date: received };
-        }
-      });
-    }
+    if (!token) return { ok: false, error: 'Outlook token missing' };
 
     const replies = [];
-    for (const item of items) {
-      const key = (item.email || '').toLowerCase();
-      if (!key || !repliedMap[key]) continue;
+    for (var i = 0; i < items.length; i++) {
+      const item = items[i];
+      const key = (item.email || '').trim().toLowerCase();
+      if (!key) continue;
+
+      const entry = _fetchLatestFromSender(token, key);
+      if (!entry || !entry.receivedAt) continue;
+
+      if (item.since && entry.receivedAt <= item.since) continue;
+      if (item.lastReplyAt && entry.receivedAt <= item.lastReplyAt) continue;
+
       replies.push({
         email: item.email,
-        body: repliedMap[key].body,
-        date: repliedMap[key].date,
+        body: entry.body,
+        date: entry.date,
+        receivedAt: entry.receivedAt,
+        isRead: entry.isRead,
+        messageId: entry.messageId,
       });
     }
 
     return { ok: true, replies };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
+function markOutlookMessagesRead(messageIds) {
+  const ids = (messageIds || []).filter(Boolean);
+  if (!ids.length) return { ok: true, marked: 0 };
+  try {
+    const token = getOutlookAccessToken();
+    let marked = 0;
+    ids.forEach(function(id) {
+      const url = GRAPH_BASE + '/me/messages/' + encodeURIComponent(id);
+      const res = UrlFetchApp.fetch(url, {
+        method: 'patch',
+        contentType: 'application/json',
+        headers: { 'Authorization': 'Bearer ' + token },
+        payload: JSON.stringify({ isRead: true }),
+        muteHttpExceptions: true,
+      });
+      if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) marked++;
+    });
+    return { ok: true, marked: marked };
   } catch (e) {
     return { ok: false, error: e.toString() };
   }
@@ -244,6 +277,7 @@ function routeOutlook(action, p, body) {
     case 'sendOutlookEmail':
     case 'sendOutreachEmail':  return sendOutlookEmail(b);
     case 'syncOutlookReplies': return syncOutlookReplies(b.items || []);
+    case 'markOutlookMessagesRead': return markOutlookMessagesRead(b.messageIds || []);
     default: return null;
   }
 }

@@ -13,7 +13,7 @@ interface Props<T extends string = string> {
   style?: CSSProperties
 }
 
-/** Unified in-page tabs — influencer underline style (blue-dk active, gray-5 inactive). */
+/** In-page tabs — underline style (blue-dk active, gray-5 inactive). */
 export default function PageTabs<T extends string = string>({
   tabs,
   active,

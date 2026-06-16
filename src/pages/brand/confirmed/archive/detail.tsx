@@ -23,6 +23,8 @@ import {
   ViewEmptyPlaceholder,
   ArchiveMemoPanel,
   getSignedUrl,
+  isWordAsset,
+  isWordUploadFile,
   type ConfirmedBrand,
   type BrandAsset,
   type CategoryKey,
@@ -225,6 +227,10 @@ export default function BrandArchiveDetail() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
+        if (category === 'ingredients' && isWordUploadFile(file)) {
+          showToast('전성분표는 PDF, Excel, 이미지만 업로드할 수 있습니다.', 'error')
+          continue
+        }
         const path = buildStoragePath(selectedPhaseId, brandId, category, file.name, i)
         const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
           cacheControl: '3600',
@@ -303,6 +309,12 @@ export default function BrandArchiveDetail() {
   }
 
   const assetsFor = (cat: CategoryKey) => assets.filter(a => a.category === cat)
+
+  const countCategoryAssets = (cat: CategoryKey) => {
+    const list = assetsFor(cat)
+    if (cat === 'ingredients') return list.filter(a => !isWordAsset(a)).length
+    return list.length
+  }
 
   const galleryImages = useMemo(() => {
     const order: CategoryKey[] = [...VIEW_TOP_ROW, 'ingredients']
@@ -394,7 +406,7 @@ export default function BrandArchiveDetail() {
                 <div>
                   <div className="brand-archive-cat-head__title">{cat.label}</div>
                   <div className="brand-archive-cat-head__hint">
-                    {cat.hint} · {catAssets.length}개
+                    {cat.hint} · {countCategoryAssets(cat.key)}개
                   </div>
                 </div>
                 <label className="cfg-btn" style={{ cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1 }}>

@@ -975,3 +975,9 @@ CREATE POLICY "brand_archive_storage_all" ON storage.objects
 -- influencers — track imports from a previous phase (contact page)
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_influencers_source_phase ON influencers(source_phase_id);
+
+-- contact reply timestamps — sort recently-replied rows to top
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_influencers_last_reply ON influencers(last_reply_at DESC NULLS LAST);
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
+ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;

@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { ListFilter } from 'lucide-react'
+import { ListFilter, MailCheck } from 'lucide-react'
 import { gasPost } from '@/lib/api'
 import { defaultProfileUrl } from '@/lib/content-platforms'
+import {
+  checkOutlookConnected,
+  compareByRecentReply,
+  fetchOutlookReplies,
+  isNewReply,
+  markRepliesReadInOutlook,
+  replyTimestamp,
+  shouldAutoMarkReply,
+} from '@/lib/reply-sync'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
@@ -9,11 +18,14 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
+import { TableActionBar } from '@/components/StickyBar'
+import { Button } from '@/components/ui'
 import {
   coerceContactCount,
   contactCountStyle,
   formatContactCount,
   nextContactCountAfterSend,
+  formatShortContactDate,
 } from '@/lib/contact-count'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -56,6 +68,7 @@ interface Influencer {
   status: string
   contact_count: number
   last_contact_at: string | null
+  last_reply_at: string | null
   reply_count: number | null
   memo: string | null
   source_phase_id: string | null
@@ -226,6 +239,7 @@ export default function Outreach() {
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [bulkSending,     setBulkSending]     = useState(false)
+  const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
   const [templates,       setTemplates]       = useState(loadTemplates)
 
@@ -239,8 +253,9 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, last_reply_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
       .eq('phase_id', selectedPhaseId)
+      .order('last_reply_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     const mapped = (data ?? []).map((r: any) => ({
@@ -270,6 +285,82 @@ export default function Outreach() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showRoundFilter, showStatusFilter])
 
+  const syncReplies = useCallback(async () => {
+    const candidates = influencers.filter(r => {
+      const email = r.email?.trim()
+      if (!email) return false
+      return (r.contact_count ?? 0) > 0 || ['yes', 'noreply', 'reply'].includes(r.status || '')
+    })
+    if (!candidates.length) {
+      showToast('회신 확인할 발송 대상이 없습니다', 'error')
+      return
+    }
+
+    setSyncingReplies(true)
+    try {
+      const auth = await checkOutlookConnected()
+      if (!auth.configured || !auth.authorized) {
+        showToast('Outlook 미연결 — GAS Script Properties 설정 및 authorizeOutlook() 인증이 필요합니다', 'error')
+        return
+      }
+
+      const syncItems = candidates.map(r => ({
+        email: r.email!,
+        since: r.last_contact_at,
+        lastReplyAt: r.last_reply_at,
+      }))
+      const replies = await fetchOutlookReplies(syncItems)
+
+      const messageIds: string[] = []
+      let newReplies = 0
+      let statusUpdates = 0
+
+      for (const reply of replies) {
+        const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
+        if (!inf || !isNewReply(inf, reply)) continue
+
+        newReplies++
+        const replyAt = replyTimestamp(reply)
+        const patch: Partial<Influencer> = {
+          last_reply_at: replyAt,
+          reply_count: (inf.reply_count ?? 0) + 1,
+        }
+
+        if (shouldAutoMarkReply(inf.status || '')) {
+          patch.status = 'reply'
+          statusUpdates++
+        }
+
+        const { error } = await supabase.from('influencers').update(patch).eq('id', inf.id)
+        if (error) { showToast(error.message, 'error'); continue }
+
+        await supabase.from('outreach_messages').insert({
+          influencer_id: inf.id,
+          direction: 'inbound',
+          subject: '회신 (Outlook 자동 감지)',
+          body: reply.body,
+          sent_at: replyAt,
+        })
+
+        if (reply.messageId) messageIds.push(reply.messageId)
+      }
+
+      if (messageIds.length) await markRepliesReadInOutlook(messageIds)
+
+      setPage(1)
+      await loadInfluencers()
+
+      if (newReplies === 0) {
+        showToast('새 회신 없음 (이미 반영된 회신이거나 마지막 발송 이후 회신 없음)', 'success')
+      } else {
+        showToast(`새 회신 ${newReplies}건 반영 · 상태 ${statusUpdates}건 업데이트`, 'success')
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '회신 확인 실패', 'error')
+    } finally {
+      setSyncingReplies(false)
+    }
+  }, [influencers, loadInfluencers, showToast])
 
   // ── Field update helpers ──
   const updateField = useCallback(async (id: string, patch: Partial<Influencer>) => {
@@ -280,6 +371,9 @@ export default function Outreach() {
     const replyStatuses = ['reply', 'positive', 'negative']
     if (patch.status && replyStatuses.includes(patch.status) && inf?.status && !replyStatuses.includes(inf.status)) {
       finalPatch.reply_count = (inf.reply_count ?? 0) + 1
+    }
+    if (patch.status && replyStatuses.includes(patch.status)) {
+      finalPatch.last_reply_at = new Date().toISOString()
     }
 
     const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
@@ -344,11 +438,7 @@ export default function Outreach() {
       if (roundFilter && String(r.contact_count ?? 0) !== roundFilter) return false
       return true
     })
-    .sort((a, b) => {
-      const aAccepted = a.status === 'accept' ? 1 : 0
-      const bAccepted = b.status === 'accept' ? 1 : 0
-      return aAccepted - bAccepted
-    })
+    .sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
 
   const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
@@ -376,10 +466,21 @@ export default function Outreach() {
           <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>인플루언서 컨택 관리</h1>
           <p style={{ fontSize: 13, color: '#555' }}>컨택 차수와 상태를 관리하고 일괄 발송합니다.</p>
         </div>
-        <button onClick={() => { loadInfluencers(); setCheckedIds(new Set()) }}
-          style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
-          ↻ 새로고침
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={syncReplies}
+            disabled={syncingReplies || loading}
+            title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
+            style={{ padding: '7px 14px', background: '#fff', color: '#d97706', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid #fcd34d', cursor: syncingReplies ? 'wait' : 'pointer', opacity: syncingReplies ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <MailCheck size={14} />
+            {syncingReplies ? '확인 중…' : '회신 확인'}
+          </button>
+          <button onClick={() => { loadInfluencers(); setCheckedIds(new Set()) }}
+            style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
+            ↻ 새로고침
+          </button>
+        </div>
       </div>
 
       {/* ── Stats ── */}
@@ -478,48 +579,50 @@ export default function Outreach() {
       {/* ── Table ── */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
 
-        {/* Bulk toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--gray-2)', background: checkedIds.size > 0 ? '#f0f5ff' : 'var(--gray-0)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, flexShrink: 0, minWidth: 70, color: checkedIds.size > 0 ? 'var(--blue-dk)' : 'var(--gray-4)' }}>
-            {checkedIds.size > 0 ? `${checkedIds.size}명 선택됨` : '선택 없음'}
-          </span>
-          <div style={{ width: 1, height: 18, background: 'var(--gray-3)', flexShrink: 0 }} />
-          <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
-            style={{ flex: 1, minWidth: 160, maxWidth: 300, fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 7, padding: '5px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)' }}>
-            {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+        <TableActionBar
+          selectedCount={checkedIds.size}
+          unit="명"
+          actions={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)}>
+                미리보기
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={bulkSending || checkedIds.size === 0}
+                onClick={() => {
+                  const tpl = templates[bulkTplIdx]
+                  if (!tpl) return
+                  confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
+                    setBulkSending(true)
+                    const ids = Array.from(checkedIds)
+                    for (const id of ids) {
+                      const inf = filtered.find(r => r.id === id)
+                      if (!inf || !inf.email) continue
+                      await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
+                      const nextCount = nextContactCountAfterSend(inf.contact_count)
+                      await updateField(id, { contact_count: nextCount, status: 'yes', last_contact_at: new Date().toISOString() })
+                    }
+                    setBulkSending(false); setCheckedIds(new Set())
+                    showToast(`${ids.length}명에게 발송 완료`, 'success')
+                  })
+                }}
+              >
+                {bulkSending ? '발송 중...' : '일괄 발송'}
+              </Button>
+              {checkedIds.size > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
+                  선택 해제
+                </Button>
+              )}
+            </>
+          }
+        >
+          <select className="table-action-bar__select" value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}>
+            {templates.map((t: { id: string; name: string }, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
           </select>
-          <button onClick={() => setShowBulkPreview(true)}
-            style={{ padding: '5px 12px', background: '#fff', color: 'var(--gray-7)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 'auto' }}>
-            미리보기
-          </button>
-          <button disabled={bulkSending || checkedIds.size === 0}
-            onClick={() => {
-              const tpl = templates[bulkTplIdx]
-              if (!tpl) return
-              confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
-                setBulkSending(true)
-                const ids = Array.from(checkedIds)
-                for (const id of ids) {
-                  const inf = filtered.find(r => r.id === id)
-                  if (!inf || !inf.email) continue
-                  await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
-                  const nextCount = nextContactCountAfterSend(inf.contact_count)
-                  await updateField(id, { contact_count: nextCount, status: 'yes', last_contact_at: new Date().toISOString() })
-                }
-                setBulkSending(false); setCheckedIds(new Set())
-                showToast(`${ids.length}명에게 발송 완료`, 'success')
-              })
-            }}
-            style={{ padding: '5px 14px', background: checkedIds.size === 0 ? 'var(--gray-2)' : 'var(--blue-dk)', color: checkedIds.size === 0 ? 'var(--gray-5)' : '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.55 : 1, flexShrink: 0 }}>
-            {bulkSending ? '발송 중...' : '일괄 발송'}
-          </button>
-          {checkedIds.size > 0 && (
-            <button onClick={() => setCheckedIds(new Set())}
-              style={{ padding: '5px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-              선택 해제
-            </button>
-          )}
-        </div>
+        </TableActionBar>
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
           : <>
@@ -633,6 +736,8 @@ export default function Outreach() {
                     const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['target']
                     const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                     const memoVal = memoEdits[inf.id] !== undefined ? memoEdits[inf.id] : (inf.memo ?? '')
+                    const contactDateLabel = formatShortContactDate(inf.last_contact_at)
+                    const replyDateLabel = formatShortContactDate(inf.last_reply_at)
                     return (
                       <tr key={inf.id} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: tc ? `3px solid ${tc}` : undefined, height: 48 }}>
                         {/* Checkbox */}
@@ -674,12 +779,12 @@ export default function Outreach() {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {inf.last_contact_at && count > 0
                               ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {count}차 발송 {(() => { const d = new Date(inf.last_contact_at); return `${d.getMonth() + 1}/${d.getDate()}` })()}
+                                  {count}차 발송{contactDateLabel ? ` ${contactDateLabel}` : ''}
                                 </span>
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                             {(inf.reply_count ?? 0) > 0 && (
                               <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {inf.reply_count}차 회신
+                                {inf.reply_count}차 회신{replyDateLabel ? ` ${replyDateLabel}` : ''}
                               </span>
                             )}
                           </div>

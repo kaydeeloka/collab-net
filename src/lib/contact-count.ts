@@ -24,3 +24,11 @@ export function contactCountStyle(count: number): { bg: string; color: string } 
 export function nextContactCountAfterSend(current: number | null | undefined): number {
   return coerceContactCount(current) + 1
 }
+
+/** M/D label for contact / reply badges (e.g. 6/16) */
+export function formatShortContactDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}

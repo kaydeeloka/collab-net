@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
 import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, ZoomIn, ZoomOut, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -13,7 +12,7 @@ export const CATEGORIES = [
   { key: 'product_main',  label: '제품 이미지 (대표)',    hint: '대표 사진 1장',   viewHint: '권장 크기: 800px × 800px',  accept: 'image/*',                                 single: true  },
   { key: 'product_sub',   label: '제품 이미지 (서브)',    hint: '서브 사진 (복수)', viewHint: '권장 크기: 800px × 800px', accept: 'image/*',                                 single: false },
   { key: 'cutout',        label: '제품 누끼',             hint: '누끼 PNG 등',     viewHint: '권장 크기: 800px × 800px',  accept: 'image/*',                                 single: false },
-  { key: 'ingredients',   label: '전성분표',              hint: 'PDF / Excel / 이미지', viewHint: 'PDF / Excel / 이미지 / Word', accept: '.pdf,.xlsx,.xls,.xlsm,.doc,.docx,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document', single: false },
+  { key: 'ingredients',   label: '전성분표',              hint: 'PDF / Excel / 이미지', viewHint: 'PDF / Excel / 이미지', accept: '.pdf,.xlsx,.xls,.xlsm,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel', single: false },
 ] as const
 
 export type CategoryKey = typeof CATEGORIES[number]['key']
@@ -102,7 +101,7 @@ function isSpreadsheetAsset(asset: BrandAsset) {
     || mime === 'text/csv'
 }
 
-function isWordAsset(asset: BrandAsset) {
+export function isWordAsset(asset: BrandAsset) {
   const mime = asset.mime_type ?? ''
   const name = asset.file_name.toLowerCase()
   return /\.(docx?|doc)$/i.test(name)
@@ -110,11 +109,12 @@ function isWordAsset(asset: BrandAsset) {
     || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 }
 
-function isDocxAsset(asset: BrandAsset) {
-  const mime = asset.mime_type ?? ''
-  const name = asset.file_name.toLowerCase()
-  return name.endsWith('.docx')
-    || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+/** Word files are not accepted for 전성분표 uploads */
+export function isWordUploadFile(file: File) {
+  const name = file.name.toLowerCase()
+  return /\.(docx?|doc)$/i.test(name)
+    || file.type === 'application/msword'
+    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 }
 
 export async function getSignedUrl(storagePath: string) {
@@ -143,121 +143,6 @@ const SHEET_TABLE_CSS = `
 const SHEET_ZOOM_STEP = 0.25
 const SHEET_ZOOM_MIN = 0.5
 const SHEET_ZOOM_MAX = 2.5
-
-const DOC_PREVIEW_CSS = `
-  .archive-doc-wrap { font-size: 13px; line-height: 1.65; color: var(--ink); word-break: break-word; }
-  .archive-doc-wrap p { margin: 0 0 10px; }
-  .archive-doc-wrap h1, .archive-doc-wrap h2, .archive-doc-wrap h3, .archive-doc-wrap h4 {
-    margin: 14px 0 8px; font-weight: 700; line-height: 1.35;
-  }
-  .archive-doc-wrap table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12px; }
-  .archive-doc-wrap td, .archive-doc-wrap th {
-    border: 1px solid var(--surface-md); padding: 6px 8px; text-align: left; vertical-align: top;
-  }
-  .archive-doc-wrap ul, .archive-doc-wrap ol { margin: 0 0 10px; padding-left: 22px; }
-  .archive-doc-wrap img { max-width: 100%; height: auto; }
-  .archive-doc-wrap strong { font-weight: 700; }
-`
-
-function WordPreview({ asset, variant = 'thumb' }: { asset: BrandAsset; variant?: PreviewVariant }) {
-  const [html, setHtml] = useState<string | null>(null)
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const heights = PREVIEW_HEIGHTS[variant]
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setErr(null)
-    setHtml(null)
-    setDownloadUrl(null)
-
-    Promise.all([
-      supabase.storage.from(BUCKET).download(asset.storage_path),
-      getSignedUrl(asset.storage_path),
-    ]).then(async ([{ data: blob, error: dlErr }, { url: signed, error: urlErr }]) => {
-      if (cancelled) return
-      if (urlErr || !signed) {
-        setErr(urlErr ?? '미리보기 불가')
-        setLoading(false)
-        return
-      }
-      setDownloadUrl(signed)
-      if (dlErr || !blob) {
-        setErr(dlErr?.message ?? '파일 불러오기 실패')
-        setLoading(false)
-        return
-      }
-      try {
-        const buf = await blob.arrayBuffer()
-        const { value, messages } = await mammoth.convertToHtml({ arrayBuffer: buf })
-        if (messages.some(m => m.type === 'error')) {
-          const msg = messages.find(m => m.type === 'error')?.message
-          if (!value.trim()) throw new Error(msg ?? 'Word 미리보기 실패')
-        }
-        if (!value.trim()) throw new Error('문서 내용이 비어 있습니다')
-        setHtml(value)
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : 'Word 미리보기 실패')
-      }
-      setLoading(false)
-    })
-
-    return () => { cancelled = true }
-  }, [asset.storage_path, asset.id])
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: heights.box, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', borderRadius: 'var(--r-sm)' }}>
-        <Spinner sm />
-      </div>
-    )
-  }
-
-  if (err || !html) {
-    return (
-      <div style={{
-        minHeight: heights.box, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        background: '#fef0f0', borderRadius: 'var(--r-sm)', padding: 12, textAlign: 'center', gap: 6,
-      }}>
-        <FileText size={28} color="#dc2626" />
-        <div style={{ fontSize: 11, color: '#991b1b', lineHeight: 1.4 }}>
-          {err?.includes('Invalid key') || err?.includes('invalid')
-            ? '파일 경로 오류 — 편집 모드에서 다시 업로드하세요'
-            : (err ?? '미리보기 불가')}
-        </div>
-        {downloadUrl && (
-          <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download={asset.file_name}
-            style={{ fontSize: 11, fontWeight: 600, color: 'var(--teal-dk)', textDecoration: 'none' }}>
-            원본 파일 다운로드
-          </a>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ borderRadius: 'var(--r-sm)', overflow: 'hidden', border: '1px solid var(--surface-md)', background: 'var(--white)' }}>
-      <style>{DOC_PREVIEW_CSS}</style>
-      <div style={{
-        maxHeight: heights.pdf,
-        overflowY: 'auto',
-        overflowX: 'auto',
-        padding: 16,
-        background: '#fff',
-      }}>
-        <div className="archive-doc-wrap" dangerouslySetInnerHTML={{ __html: html }} />
-      </div>
-      {downloadUrl && (
-        <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download={asset.file_name}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 10px', fontSize: 11, fontWeight: 600, color: 'var(--teal-dk)', background: 'var(--surface)', textDecoration: 'none', borderTop: '1px solid var(--surface-md)' }}>
-          <ExternalLink size={12} /> 원본 파일 다운로드
-        </a>
-      )}
-    </div>
-  )
-}
 
 function SpreadsheetPreview({ asset, variant = 'thumb' }: { asset: BrandAsset; variant?: PreviewVariant }) {
   const [sheetNames, setSheetNames] = useState<string[]>([])
@@ -700,19 +585,25 @@ export function AssetPreview({
   }
 
   if (isWordAsset(asset)) {
+    const unsupportedIngredients = asset.category === 'ingredients'
     return (
       <div style={{
         minHeight: heights.box, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--surface)', borderRadius: 'var(--r-sm)', border: '1px solid var(--surface-md)', padding: 16, gap: 10,
+        background: unsupportedIngredients ? '#fef0f0' : 'var(--surface)', borderRadius: 'var(--r-sm)',
+        border: `1px solid ${unsupportedIngredients ? '#fecaca' : 'var(--surface-md)'}`, padding: 16, gap: 10,
       }}>
-        <FileText size={36} color="var(--teal-dk)" />
-        <div style={{ fontSize: 11, color: 'var(--gray-5)', textAlign: 'center', wordBreak: 'break-all', lineHeight: 1.4 }}>
-          {asset.file_name}
+        <FileText size={36} color={unsupportedIngredients ? '#dc2626' : 'var(--teal-dk)'} />
+        <div style={{ fontSize: 11, color: unsupportedIngredients ? '#991b1b' : 'var(--gray-5)', textAlign: 'center', wordBreak: 'break-all', lineHeight: 1.4 }}>
+          {unsupportedIngredients
+            ? 'Word 파일은 전성분표로 사용할 수 없습니다. PDF, Excel 또는 이미지로 다시 업로드하세요.'
+            : asset.file_name}
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer" download={asset.file_name}
-          style={{ fontSize: 11, fontWeight: 600, color: 'var(--teal-dk)', textDecoration: 'none' }}>
-          다운로드 / 열기
-        </a>
+        {!unsupportedIngredients && (
+          <a href={url} target="_blank" rel="noopener noreferrer" download={asset.file_name}
+            style={{ fontSize: 11, fontWeight: 600, color: 'var(--teal-dk)', textDecoration: 'none' }}>
+            다운로드 / 열기
+          </a>
+        )}
       </div>
     )
   }

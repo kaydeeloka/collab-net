@@ -1,11 +1,23 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { ListFilter } from 'lucide-react'
+import { ListFilter, MailCheck } from 'lucide-react'
 import { gasPost } from '@/lib/api'
+import {
+  checkOutlookConnected,
+  compareByRecentReply,
+  fetchOutlookReplies,
+  isNewReply,
+  markRepliesReadInOutlook,
+  replyTimestamp,
+  shouldAutoMarkReply,
+} from '@/lib/reply-sync'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
+import { TableActionBar } from '@/components/StickyBar'
+import { Button } from '@/components/ui'
+import { formatShortContactDate } from '@/lib/contact-count'
 
 // ── Templates (shared with /brand/template page via localStorage) ─────────────
 const BRAND_TPL_KEY = 'mm_brand_email_templates'
@@ -79,6 +91,7 @@ interface BrandRow {
   status:      string
   send_count:  number
   reply_count: number
+  last_reply_at: string | null
   notes:       string | null
 }
 
@@ -108,6 +121,7 @@ export default function BrandContact() {
 
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
+  const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [templates,       setTemplates]       = useState<any[]>(loadTemplates)
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
@@ -136,8 +150,8 @@ export default function BrandContact() {
   async function load() {
     setLoading(true)
     const [{ data: gen, error: genErr }, { data: per, error: perErr }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, notes').eq('contacted', true),
+      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).order('last_reply_at', { ascending: false, nullsFirst: false }),
+      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).order('last_reply_at', { ascending: false, nullsFirst: false }),
     ])
     if (genErr) { showToast('일반 DB 오류: ' + genErr.message, 'error'); setLoading(false); return }
     if (perErr) { showToast('퍼스널 DB 오류: ' + perErr.message, 'error'); setLoading(false); return }
@@ -148,7 +162,7 @@ export default function BrandContact() {
       email: Array.isArray(r.email) ? r.email[0] ?? null : r.email,
       phone: r.telephone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
     }))
     const personalRows: BrandRow[] = (per ?? []).map((r: any) => ({
       id: r.id, source: 'personal' as const,
@@ -157,7 +171,7 @@ export default function BrandContact() {
       email: Array.isArray(r.personal_email) ? r.personal_email[0] ?? null : r.personal_email,
       phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
     }))
     setRows([...generalRows, ...personalRows])
     setLoading(false)
@@ -168,14 +182,20 @@ export default function BrandContact() {
     const dbPatch: Record<string, unknown> = {}
     const REPLY_STATUSES = ['reply', 'positive', 'negative', 'reject', 'accept']
     if (patch.status !== undefined) {
-      dbPatch.status = patch.status
-      if (REPLY_STATUSES.includes(patch.status) && !REPLY_STATUSES.includes(row.status)) {
+      const nextStatus = patch.status
+      dbPatch.status = nextStatus
+      if (REPLY_STATUSES.includes(nextStatus) && !REPLY_STATUSES.includes(row.status)) {
         dbPatch.reply_count = row.reply_count + 1
         patch = { ...patch, reply_count: row.reply_count + 1 }
+      }
+      if (REPLY_STATUSES.includes(nextStatus)) {
+        dbPatch.last_reply_at = new Date().toISOString()
+        patch = { ...patch, last_reply_at: dbPatch.last_reply_at as string }
       }
     }
     if (patch.send_count  !== undefined) dbPatch.send_count  = patch.send_count
     if (patch.reply_count !== undefined) dbPatch.reply_count = patch.reply_count
+    if (patch.last_reply_at !== undefined) dbPatch.last_reply_at = patch.last_reply_at
     if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
     const { error } = await supabase.from(table).update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
@@ -203,6 +223,69 @@ export default function BrandContact() {
     }
   }, [showToast])
 
+  const syncReplies = useCallback(async () => {
+    const candidates = rows.filter(r => {
+      const email = r.email?.trim()
+      if (!email) return false
+      return r.send_count > 0 || ['yes', 'noreply', 'reply'].includes(r.status)
+    })
+    if (!candidates.length) {
+      showToast('회신 확인할 발송 대상이 없습니다', 'error')
+      return
+    }
+
+    setSyncingReplies(true)
+    try {
+      const auth = await checkOutlookConnected()
+      if (!auth.configured || !auth.authorized) {
+        showToast('Outlook 미연결 — GAS Script Properties 설정 및 authorizeOutlook() 인증이 필요합니다', 'error')
+        return
+      }
+
+      const syncItems = candidates.map(r => ({
+        email: r.email!,
+        lastReplyAt: r.last_reply_at,
+      }))
+      const replies = await fetchOutlookReplies(syncItems)
+
+      const messageIds: string[] = []
+      let newReplies = 0
+      let statusUpdates = 0
+
+      for (const reply of replies) {
+        const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
+        if (!row || !isNewReply({ last_reply_at: row.last_reply_at }, reply)) continue
+
+        newReplies++
+        const patch: Partial<BrandRow> = {
+          last_reply_at: replyTimestamp(reply),
+          reply_count: row.reply_count + 1,
+        }
+        if (shouldAutoMarkReply(row.status)) {
+          patch.status = 'reply'
+          statusUpdates++
+        }
+
+        await updateField(row, patch)
+        if (reply.messageId) messageIds.push(reply.messageId)
+      }
+
+      if (messageIds.length) await markRepliesReadInOutlook(messageIds)
+
+      setPage(1)
+      await load()
+      if (newReplies === 0) {
+        showToast('새 회신 없음 (이미 반영된 회신)', 'success')
+      } else {
+        showToast(`새 회신 ${newReplies}건 반영 · 상태 ${statusUpdates}건 업데이트`, 'success')
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '회신 확인 실패', 'error')
+    } finally {
+      setSyncingReplies(false)
+    }
+  }, [rows, showToast, updateField])
+
   const updateNote = useCallback((row: BrandRow, value: string) => {
     const key = row.id + row.source
     setNoteEdits(prev => ({ ...prev, [key]: value }))
@@ -217,7 +300,7 @@ export default function BrandContact() {
     if (activeType === '퍼스널' && r.source !== 'personal') return false
     if (statusFilter && r.status !== statusFilter) return false
     return true
-  })
+  }).sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
 
   const sentCount    = rows.filter(r => r.send_count > 0).length
@@ -239,10 +322,21 @@ export default function BrandContact() {
           <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>브랜드 컨택 관리</h1>
           <p style={{ fontSize: 13, color: '#555' }}>컨택 대상 브랜드의 상태를 관리하고 이메일을 발송합니다.</p>
         </div>
-        <button onClick={() => { load(); setCheckedIds(new Set()) }}
-          style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
-          ↻ 새로고침
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={syncReplies}
+            disabled={syncingReplies || loading}
+            title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
+            style={{ padding: '7px 14px', background: '#fff', color: '#d97706', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid #fcd34d', cursor: syncingReplies ? 'wait' : 'pointer', opacity: syncingReplies ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <MailCheck size={14} />
+            {syncingReplies ? '확인 중…' : '회신 확인'}
+          </button>
+          <button onClick={() => { load(); setCheckedIds(new Set()) }}
+            style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
+            ↻ 새로고침
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -317,49 +411,52 @@ export default function BrandContact() {
       {/* Table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
 
-        {/* Bulk toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--gray-2)', background: checkedIds.size > 0 ? '#f0f5ff' : 'var(--gray-0)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, flexShrink: 0, minWidth: 70, color: checkedIds.size > 0 ? 'var(--blue-dk)' : 'var(--gray-4)' }}>
-            {checkedIds.size > 0 ? `${checkedIds.size}건 선택됨` : '선택 없음'}
-          </span>
-          <div style={{ width: 1, height: 18, background: 'var(--gray-3)', flexShrink: 0 }} />
-          {templates.length === 0
-            ? <span style={{ fontSize: 12, color: 'var(--gray-4)', fontStyle: 'italic' }}>템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요</span>
-            : <select value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}
-                style={{ flex: 1, minWidth: 160, maxWidth: 300, fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 7, padding: '5px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)' }}>
-                {templates.map((t: any, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-              </select>
+        <TableActionBar
+          selectedCount={checkedIds.size}
+          unit="건"
+          actions={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
+                미리보기
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={bulkSending || checkedIds.size === 0 || templates.length === 0}
+                onClick={() => {
+                  const tpl = templates[bulkTplIdx]
+                  if (!tpl) return
+                  confirmToast.show(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
+                    setBulkSending(true)
+                    for (const key of Array.from(checkedIds)) {
+                      const row = filtered.find(r => rowKey(r) === key)
+                      if (!row || !row.email) continue
+                      await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
+                      await updateField(row, { send_count: row.send_count + 1, status: 'yes' })
+                    }
+                    setBulkSending(false); setCheckedIds(new Set())
+                    showToast('일괄 발송 완료', 'success')
+                  })
+                }}
+              >
+                {bulkSending ? '발송 중...' : '일괄 발송'}
+              </Button>
+              {checkedIds.size > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
+                  선택 해제
+                </Button>
+              )}
+            </>
           }
-          <button onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}
-            style={{ padding: '5px 12px', background: '#fff', color: 'var(--gray-7)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, marginLeft: 'auto' }}>
-            미리보기
-          </button>
-          <button disabled={bulkSending || checkedIds.size === 0 || templates.length === 0}
-            style={{ padding: '5px 14px', background: checkedIds.size === 0 ? 'var(--gray-2)' : 'var(--blue-dk)', color: checkedIds.size === 0 ? 'var(--gray-5)' : '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.55 : 1, flexShrink: 0 }}
-            onClick={() => {
-              const tpl = templates[bulkTplIdx]
-              if (!tpl) return
-              confirmToast.show(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
-                setBulkSending(true)
-                for (const key of Array.from(checkedIds)) {
-                  const row = filtered.find(r => rowKey(r) === key)
-                  if (!row || !row.email) continue
-                  await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
-                  await updateField(row, { send_count: row.send_count + 1, status: 'yes' })
-                }
-                setBulkSending(false); setCheckedIds(new Set())
-                showToast('일괄 발송 완료', 'success')
-              })
-            }}>
-            {bulkSending ? '발송 중...' : '일괄 발송'}
-          </button>
-          {checkedIds.size > 0 && (
-            <button onClick={() => setCheckedIds(new Set())}
-              style={{ padding: '5px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-              선택 해제
-            </button>
-          )}
-        </div>
+        >
+          {templates.length === 0
+            ? <span style={{ fontSize: 12, color: 'var(--gray-5)', fontStyle: 'italic' }}>템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요</span>
+            : (
+              <select className="table-action-bar__select" value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}>
+                {templates.map((t: { id: string; name: string }, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
+              </select>
+            )}
+        </TableActionBar>
 
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
@@ -413,6 +510,7 @@ export default function BrandContact() {
                     const typeColor = row.source === 'general' ? TYPE_COLOR['일반'] : TYPE_COLOR['퍼스널']
                     const key = rowKey(row)
                     const noteVal = noteEdits[key] !== undefined ? noteEdits[key] : (row.notes ?? '')
+                    const replyDateLabel = formatShortContactDate(row.last_reply_at)
                     return (
                       <tr key={key} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, height: 48 }}>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
@@ -447,7 +545,7 @@ export default function BrandContact() {
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                             {row.reply_count > 0 && (
                               <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {row.reply_count}차 회신
+                                {row.reply_count}차 회신{replyDateLabel ? ` ${replyDateLabel}` : ''}
                               </span>
                             )}
                           </div>

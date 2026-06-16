@@ -61,3 +61,20 @@ function doPost(e) {
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+function doGet(e) {
+  const action = e.parameter.action;
+
+  if (action === 'test') {
+    const result = sendBeautyNewsEmail(
+      getRecipients(),
+      '<p>WebFetch 테스트 이메일입니다. 이게 도착하면 GET 방식 연결 성공!</p>',
+      '[테스트] WebFetch 연결 확인'
+    );
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, sent: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'Unknown action' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}

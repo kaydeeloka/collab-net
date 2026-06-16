@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────
    UI SYSTEM — shared primitives
-   Tabs: unified via .page-tab-bar in index.css — see PageTabs component.
+   Tabs: in-page underline via .page-tab-bar in index.css — see PageTabs component.
 ───────────────────────────────────── */
 
 /* Toolbar (list pages: search + count + actions) */

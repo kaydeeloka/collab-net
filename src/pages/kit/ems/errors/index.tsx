@@ -14,6 +14,8 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
 import Spinner from '@/components/Spinner'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
+import { TableActionBar } from '@/components/StickyBar'
+import { Button } from '@/components/ui'
 
 function displayVal(v: string) {
   return v === '—' || !v.trim() ? '—' : v
@@ -204,64 +206,62 @@ export default function EmsErrors() {
       </div>
 
       {!loading && rows.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--gray-2)', background: checkedIds.size > 0 ? '#f0f5ff' : 'var(--gray-0)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, flexShrink: 0, minWidth: 70, color: checkedIds.size > 0 ? 'var(--blue-dk)' : 'var(--gray-4)' }}>
-            {checkedIds.size > 0 ? `${checkedIds.size}명 선택됨` : '선택 없음'}
-          </span>
-          <div style={{ width: 1, height: 18, background: 'var(--gray-3)', flexShrink: 0 }} />
-          <select
-            value={bulkTplIdx}
-            onChange={e => setBulkTplIdx(+e.target.value)}
-            style={{ flex: 1, minWidth: 160, maxWidth: 300, fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 7, padding: '5px 10px', background: '#fff', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)' }}
-          >
+        <TableActionBar
+          selectedCount={checkedIds.size}
+          unit="명"
+          actions={
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={bulkSending || checkedIds.size === 0 || !templates[bulkTplIdx]}
+                onClick={() => {
+                  const tpl = templates[bulkTplIdx]
+                  if (!tpl) return
+                  confirmToast.show(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
+                    setBulkSending(true)
+                    let sent = 0
+                    let failed = 0
+                    for (const id of checkedIds) {
+                      const row = rows.find(r => r.id === id)
+                      if (!row?.email) continue
+                      try {
+                        const res = await gasPost<{ ok?: boolean; error?: string }>({
+                          action: 'sendOutreachEmail',
+                          to: row.email,
+                          subject: applyEmsPlaceholders(tpl.subject, row),
+                          body: applyEmsPlaceholders(tpl.body, row),
+                        })
+                        if (res.error || res.ok === false) throw new Error(res.error || '발송 실패')
+                        await updateEmsReship(row.id, { email_sent: true })
+                        setRows(prev => prev.map(r => r.id === row.id ? { ...r, email_sent: true } : r))
+                        sent++
+                      } catch (e: unknown) {
+                        failed++
+                        showToast(`${row.name}: ${(e as Error).message}`, 'error')
+                      }
+                    }
+                    setBulkSending(false)
+                    setCheckedIds(new Set())
+                    if (sent > 0) showToast(`${sent}명 일괄 발송 완료${failed > 0 ? ` (${failed}건 실패)` : ''}`, 'success')
+                    else if (failed === 0) showToast('이메일이 있는 선택 항목이 없습니다', 'error')
+                  })
+                }}
+              >
+                {bulkSending ? '발송 중...' : '일괄 발송'}
+              </Button>
+              {checkedIds.size > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
+                  선택 해제
+                </Button>
+              )}
+            </>
+          }
+        >
+          <select className="table-action-bar__select" value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}>
             {templates.map((t, i) => <option key={t.id} value={i}>{t.name}</option>)}
           </select>
-          <button
-            type="button"
-            disabled={bulkSending || checkedIds.size === 0 || !templates[bulkTplIdx]}
-            onClick={() => {
-              const tpl = templates[bulkTplIdx]
-              if (!tpl) return
-              confirmToast.show(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
-                setBulkSending(true)
-                let sent = 0
-                let failed = 0
-                for (const id of checkedIds) {
-                  const row = rows.find(r => r.id === id)
-                  if (!row?.email) continue
-                  try {
-                    const res = await gasPost<{ ok?: boolean; error?: string }>({
-                      action: 'sendOutreachEmail',
-                      to: row.email,
-                      subject: applyEmsPlaceholders(tpl.subject, row),
-                      body: applyEmsPlaceholders(tpl.body, row),
-                    })
-                    if (res.error || res.ok === false) throw new Error(res.error || '발송 실패')
-                    await updateEmsReship(row.id, { email_sent: true })
-                    setRows(prev => prev.map(r => r.id === row.id ? { ...r, email_sent: true } : r))
-                    sent++
-                  } catch (e: unknown) {
-                    failed++
-                    showToast(`${row.name}: ${(e as Error).message}`, 'error')
-                  }
-                }
-                setBulkSending(false)
-                setCheckedIds(new Set())
-                if (sent > 0) showToast(`${sent}명 일괄 발송 완료${failed > 0 ? ` (${failed}건 실패)` : ''}`, 'success')
-                else if (failed === 0) showToast('이메일이 있는 선택 항목이 없습니다', 'error')
-              })
-            }}
-            style={{ padding: '5px 14px', background: checkedIds.size === 0 ? 'var(--gray-2)' : 'var(--blue-dk)', color: checkedIds.size === 0 ? 'var(--gray-5)' : '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.55 : 1, flexShrink: 0 }}
-          >
-            {bulkSending ? '발송 중...' : '일괄 발송'}
-          </button>
-          {checkedIds.size > 0 && (
-            <button type="button" onClick={() => setCheckedIds(new Set())}
-              style={{ padding: '5px 10px', background: 'transparent', color: 'var(--gray-5)', border: '1px solid var(--gray-3)', borderRadius: 7, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-              선택 해제
-            </button>
-          )}
-        </div>
+        </TableActionBar>
       )}
 
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}

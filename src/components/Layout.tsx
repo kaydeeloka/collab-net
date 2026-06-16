@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabase'
 import { phaseNum, escHtml, useKrClock } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
+import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
 
-interface NavSubChild { label: string; to: string; end?: boolean }
-interface NavChild    { label: string; to: string; end?: boolean; sub?: NavSubChild[]; activeWhen?: (pathname: string) => boolean }
-interface SideGroup   { label: string; icon: ReactNode; defaultTo: string; prefix: string; children: NavChild[] }
+interface NavSubChild extends StickyBarNavSubChild {}
+interface NavChild extends StickyBarNavChild {}
+interface SideGroup extends StickyBarGroup { icon: ReactNode; children: NavChild[] }
 
 const GROUPS: SideGroup[] = [
   {
@@ -59,9 +60,9 @@ const GROUPS: SideGroup[] = [
   {
     label: 'ARCHIVE', icon: <Archive size={22} />, defaultTo: '/archive/design', prefix: '/archive',
     children: [
-      { to: '/archive/design',         label: '디자인 자료 아카이브' },
-      { to: '/archive/overall-report', label: '전체 리포트 아카이브' },
-      { to: '/archive/brand-report',   label: '브랜드 리포트 아카이브' },
+      { to: '/archive/design',         label: '디자인 자료' },
+      { to: '/archive/overall-report', label: '전체 리포트' },
+      { to: '/archive/brand-report',   label: '브랜드 리포트' },
     ],
   },
 ]
@@ -270,71 +271,21 @@ export default function Layout() {
       {/* ── Main ── */}
       <div className="main-area">
 
-        {/* Sticky children tab bar */}
-        {activeGroup && activeGroup.children.length > 0 && (
-          <div className="children-bar">
-            {activeGroup.children.map(child => {
-              const hasSub  = !!child.sub?.length
-              const subOpen = openSub === child.to
-              return (
-                <div
-                  key={child.to}
-                  className="children-bar-group"
-                  onMouseEnter={() => hasSub && onSubEnter(child.to)}
-                  onMouseLeave={() => hasSub && onSubLeave()}
-                >
-                  <NavLink
-                    to={child.to}
-                    end={child.end}
-                    className={({ isActive }) => {
-                      const active = isActive || (child.activeWhen?.(pathname) ?? false)
-                      return 'children-bar-tab' + (active ? ' active' : '')
-                    }}
-                  >
-                    {child.label}
-                    {hasSub && <span className="nav-chevron">▾</span>}
-                  </NavLink>
-                  {hasSub && subOpen && (
-                    <div className="children-bar-dropdown">
-                      {child.sub!.map(s => (
-                        <NavLink
-                          key={s.to}
-                          to={s.to}
-                          end={s.end}
-                          className={({ isActive }) => 'children-bar-sub-item' + (isActive ? ' active' : '')}
-                        >
-                          <span className="nav-dot">•</span>{s.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            <div className="children-bar-right">
-              {activePhaseId && activePhaseId !== activeDbId && (
-                <span style={{ fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '3px 10px', whiteSpace: 'nowrap' }}>
-                  🟢 활성: {phaseList.find(p => p.id === activePhaseId)?.name}
-                </span>
-              )}
-              {dbOptions.length > 0 ? (
-                <select
-                  className="phase-select"
-                  value={activeDbId}
-                  onChange={e => switchPhase(e.target.value)}
-                  title="차수 전환"
-                >
-                  {dbOptions.map(o => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="phase-badge-nav">{phaseBadge}</span>
-              )}
-            </div>
-
-          </div>
+        {activeGroup && (
+          <StickyBar
+            group={activeGroup}
+            pathname={pathname}
+            openSub={openSub}
+            onSubEnter={onSubEnter}
+            onSubLeave={onSubLeave}
+            activePhaseId={activePhaseId}
+            viewPhaseId={viewPhaseId}
+            phaseList={phaseList}
+            activeDbId={activeDbId}
+            dbOptions={dbOptions}
+            phaseBadge={phaseBadge}
+            onSwitchPhase={switchPhase}
+          />
         )}
 
         <div className="main-scroll">
