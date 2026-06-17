@@ -535,15 +535,15 @@ export default function BeautyNews() {
                 </span>
               </button>
               {open && g.items.map(a => {
-                const rangeLabel = a.windows_end
-                  ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end)
-                  : fmtKor(a.windows_start)
+                const label = a.report_title
+                  ? a.report_title.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
+                  : (a.windows_end ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end) : fmtKor(a.windows_start))
                 const isSelected = a.windows_start === selectedKey
                 return (
                   <div key={a.windows_start}
                     className={`bn-archive-item${isSelected ? ' selected' : ''}`}
                     onClick={() => loadArchive(a.windows_start)}>
-                    <div className="bn-archive-item-date">{rangeLabel}</div>
+                    <div className="bn-archive-item-date">{label}</div>
                   </div>
                 )
               })}
@@ -593,7 +593,7 @@ export default function BeautyNews() {
     </div>
   )
 
-  const emailPanel = (report: ReportData | null) => (
+  const emailPanel = (report: ReportData | null, autoNote = true) => (
     <div className="bn-email-panel">
       <div className="bn-email-header">
         <span className="bn-email-icon">@</span>
@@ -666,9 +666,11 @@ export default function BeautyNews() {
       >
         {emailSending ? '발송 중...' : '브리핑 이메일 발송'}
       </button>
-      <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 8, lineHeight: 1.5 }}>
-        수신자 목록 전원에게 발송 · 자동 발송: 매주 월요일 09:00 (KST)
-      </div>
+      {autoNote && (
+        <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 8, lineHeight: 1.5 }}>
+          수신자 목록 전원에게 발송 · 자동 발송: 매주 월요일 09:00 (KST)
+        </div>
+      )}
     </div>
   )
 
@@ -702,8 +704,13 @@ export default function BeautyNews() {
 
           {/* Full-width report */}
           <div className="bn-report-card" id="news-report">
-            <div className="bn-report-header">
+            <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
+              {latestReport?.windowsStart && (
+                <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
+                  {fmtKorFull(latestReport.windowsStart)}{latestReport.windowsEnd ? ' – ' + fmtKorFull(latestReport.windowsEnd) : ''}
+                </span>
+              )}
             </div>
             <div className="bn-report-body">
               {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
@@ -722,10 +729,18 @@ export default function BeautyNews() {
         <div>
           <div className="bn-half-row">
             {archiveListPanel}
-            {emailPanel(archiveReport?.ok ? archiveReport : null)}
+            {emailPanel(archiveReport?.ok ? archiveReport : null, false)}
           </div>
 
           <div className="bn-report-card">
+            <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              <span className="bn-report-title">뷰티 뉴스 아카이브</span>
+              {archiveReport?.ok && archiveReport.windowsStart && (
+                <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
+                  {fmtKorFull(archiveReport.windowsStart)}{archiveReport.windowsEnd ? ' – ' + fmtKorFull(archiveReport.windowsEnd) : ''}
+                </span>
+              )}
+            </div>
             <div className="bn-report-body">
               {archiveReportLoading && <div className="bn-loading"><Spinner /><span>불러오는 중...</span></div>}
               {!archiveReportLoading && !archiveReport && (
@@ -747,19 +762,11 @@ export default function BeautyNews() {
 }
 
 function ReportBody({ data }: { data: ReportData }) {
-  const ws    = data.windowsStart ? fmtKorFull(data.windowsStart) : ''
-  const we    = data.windowsEnd   ? fmtKorFull(data.windowsEnd)   : ''
-  const range = ws + (we ? ' – ' + we : '')
   const keywords = data.keywords || []
 
   return (
     <div>
-      {range && (
-        <div style={{ fontSize: 12, color: 'var(--teal-dk)', marginBottom: 16 }}>
-          📅 {range}
-          {data.fromArchive && <span className="bn-cache-badge" style={{ background: '#e8f5e9', color: '#2e7d32', marginLeft: 8 }}>📁 아카이브</span>}
-        </div>
-      )}
+
       {(data.categories || []).map((cat, ci) => {
         const items = cat.items ?? []
         const count = cat.count != null ? cat.count : items.length
@@ -793,8 +800,8 @@ function ReportBody({ data }: { data: ReportData }) {
         <div className="bn-keywords-section">
           <div className="bn-keywords-title">트렌드 키워드</div>
           {keywords.map((kw, i) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{kw.tag}</div>
+            <div key={i} className="bn-keyword-item">
+              <div className="bn-keyword-tag">{kw.tag}</div>
               <div className="bn-keywords-body">{kw.explanation}</div>
             </div>
           ))}
