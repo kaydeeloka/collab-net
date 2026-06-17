@@ -1,8 +1,11 @@
 // ============================================================
-//  Beauty News — Gmail draft import + weekly email
+//  Beauty News — Google Sheet import + weekly email
 //
-//  Archive flow: Claude Cowork → Gmail draft → importBeautyNewsFromGmailDrafts()
-//                 → Supabase beauty_news_archives (draft deleted after import)
+//  Archive flow: Claude → Google Sheet → importBeautyNewsFromSheet()
+//                 → Supabase beauty_news_archives (latest row only)
+//
+//  Sheet columns: id | created_at | report_title | windows_start | windows_end | categories | keywords
+//  Default sheet ID below; override with Script Property BEAUTY_NEWS_SHEET_ID
 //
 //  Script Properties required:
 //    SENDER_EMAIL         — Outlook from address (optional)
@@ -14,6 +17,8 @@
 //    Recipients: all rows in Supabase email_recipients (same list as UI)
 //    Dedup: Script Property BEAUTY_NEWS_LAST_SENT_WINDOWS_START
 // ============================================================
+
+var BEAUTY_NEWS_SHEET_ID_DEFAULT = '1u2FAbqv1-GIJc-59rqccEQt07ok4SXCJx8VpOBz3tL0';
 
 function _fetchLatestArchiveRow() {
   var rows = supabaseGet(
@@ -61,11 +66,13 @@ function _fetchArchiveRowByWindowsStart(windowsStart) {
 }
 
 /**
- * Weekly job or manual button: send archive to all UI recipients.
- * @param {boolean} force Skip dedup when true (manual send button)
- * @param {string} windowsStart Optional — send a specific week; default = latest archive
+ * Weekly job or manual button: build HTML with buildBriefingHtml (beauty-news-template.gs)
+ * and send via Outlook to the provided recipients (or all from Supabase if none provided).
+ * @param {boolean} force      Skip dedup when true (manual send button)
+ * @param {string}  windowsStart  Send a specific week; default = latest archive
+ * @param {string[]} explicitRecipients  Pass from UI when calling manually; falls back to Supabase list
  */
-function sendWeeklyBeautyNewsEmail(force, windowsStart) {
+function sendWeeklyBeautyNewsEmail(force, windowsStart, explicitRecipients) {
   try {
     var archive = windowsStart
       ? _fetchArchiveRowByWindowsStart(windowsStart)
@@ -78,14 +85,18 @@ function sendWeeklyBeautyNewsEmail(force, windowsStart) {
       return { ok: true, skipped: true, windowsStart: ws, reason: 'already sent for this week' };
     }
 
-    var recipients = _fetchRecipientEmailsFromSupabase();
-    if (!recipients.length) return { ok: false, error: 'email_recipients가 비어 있습니다' };
+    // Use recipients passed from UI; fall back to Supabase list for scheduled trigger
+    var recipients = (Array.isArray(explicitRecipients) && explicitRecipients.length)
+      ? explicitRecipients
+      : _fetchRecipientEmailsFromSupabase();
+    if (!recipients.length) return { ok: false, error: '수신자가 없습니다' };
 
-    var data = _archiveRowToBriefingData(archive);
-    var endIso = archive.windows_end || archive.windows_start;
+    var data    = _archiveRowToBriefingData(archive);
+    var endIso  = archive.windows_end || archive.windows_start;
     var subject = '[MiMuse] 주간 뷰티 뉴스 · ' + _formatBriefingSubjectDate(endIso);
+    // Always use the GAS template (beauty-news-template.gs → buildBriefingHtml)
     var htmlBody = buildBriefingHtml(data);
-    var result = sendBeautyNewsEmail(recipients, htmlBody, subject);
+    var result   = sendBeautyNewsEmail(recipients, htmlBody, subject);
 
     if (result.ok) props.setProperty('BEAUTY_NEWS_LAST_SENT_WINDOWS_START', ws);
     return Object.assign({ windowsStart: ws, recipientCount: recipients.length }, result);
@@ -95,25 +106,53 @@ function sendWeeklyBeautyNewsEmail(force, windowsStart) {
   }
 }
 
-/** Run once in GAS editor to install Mon 09:00 KST weekly trigger. */
-function setupWeeklyBeautyNewsEmailTrigger() {
+/**
+ * Run once in GAS editor to install all Monday triggers:
+ *   ~08:50 KST — importBeautyNewsFromSheet (1st fetch)
+ *   ~08:55 KST — importBeautyNewsFromSheet (retry/update)
+ *   ~09:00 KST — sendWeeklyBeautyNewsEmail
+ */
+function setupAllMondayTriggers() {
+  var HANDLERS = ['importBeautyNewsFromSheet', 'sendWeeklyBeautyNewsEmail'];
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'sendWeeklyBeautyNewsEmail') ScriptApp.deleteTrigger(t);
+    if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
   });
+
+  // 8:50am — first import
+  ScriptApp.newTrigger('importBeautyNewsFromSheet')
+    .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(8).nearMinute(50).inTimezone('Asia/Seoul').create();
+
+  // 8:55am — second import (ensure latest data)
+  ScriptApp.newTrigger('importBeautyNewsFromSheet')
+    .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(8).nearMinute(55).inTimezone('Asia/Seoul').create();
+
+  // 9:00am — send email
   ScriptApp.newTrigger('sendWeeklyBeautyNewsEmail')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(9)
-    .nearMinute(0)
-    .inTimezone('Asia/Seoul')
-    .create();
-  return { ok: true, schedule: 'Every Monday 09:00 Asia/Seoul', handler: 'sendWeeklyBeautyNewsEmail' };
+    .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(9).nearMinute(0).inTimezone('Asia/Seoul').create();
+
+  return {
+    ok: true,
+    triggers: [
+      'importBeautyNewsFromSheet @ ~08:50 Asia/Seoul (Monday)',
+      'importBeautyNewsFromSheet @ ~08:55 Asia/Seoul (Monday)',
+      'sendWeeklyBeautyNewsEmail @ ~09:00 Asia/Seoul (Monday)',
+    ],
+  };
+}
+
+/** Legacy alias — kept for backward compatibility */
+function setupWeeklyBeautyNewsEmailTrigger() {
+  return setupAllMondayTriggers();
 }
 
 function removeWeeklyBeautyNewsEmailTrigger() {
   var removed = 0;
+  var HANDLERS = ['importBeautyNewsFromSheet', 'sendWeeklyBeautyNewsEmail'];
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'sendWeeklyBeautyNewsEmail') {
+    if (HANDLERS.indexOf(t.getHandlerFunction()) !== -1) {
       ScriptApp.deleteTrigger(t);
       removed++;
     }
@@ -133,12 +172,205 @@ function _saveArchive(data) {
       keywords:      data.keywords     || [],
     }, 'windows_start');
     if (!result.ok) {
-      Logger.log('_saveArchive HTTP ' + result.status + ': ' + (result.text || '').slice(0, 200));
-      return;
+      var err = 'HTTP ' + result.status + ': ' + (result.text || '').slice(0, 200);
+      Logger.log('_saveArchive ' + err);
+      return { ok: false, error: err };
     }
     Logger.log('_saveArchive: saved ' + data.windowsStart);
+    return { ok: true, windowsStart: data.windowsStart };
   } catch (e) {
     Logger.log('_saveArchive: ' + e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+// ── Google Sheet → Supabase (Claude output) ───────────────────
+function _beautyNewsSheetId() {
+  return scriptProp('BEAUTY_NEWS_SHEET_ID') || BEAUTY_NEWS_SHEET_ID_DEFAULT;
+}
+
+function _normalizeIsoDate(val) {
+  if (val === null || val === undefined || val === '') return '';
+  if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
+    return Utilities.formatDate(val, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  var s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return _parseSheetDate(val);
+}
+
+function _parseSheetDate(val) {
+  if (val === null || val === undefined || val === '') return '';
+  if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
+    return Utilities.formatDate(val, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  if (typeof val === 'number' && val > 30000) {
+    var serial = new Date(Math.round((val - 25569) * 86400 * 1000));
+    if (!isNaN(serial.getTime())) {
+      return Utilities.formatDate(serial, 'Asia/Seoul', 'yyyy-MM-dd');
+    }
+  }
+  var s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  var parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  return '';
+}
+
+function _sheetDateToTime(val) {
+  var iso = _parseSheetDate(val);
+  if (iso) return new Date(iso + 'T00:00:00').getTime();
+  if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
+    return val.getTime();
+  }
+  var parsed = new Date(String(val || ''));
+  return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
+
+/** Prefer date embedded in report_title (e.g. "… 2026년 06월 17일"), then window dates, then created_at. */
+function _parseReportTitleDate(title) {
+  var t = String(title || '');
+  var kor = t.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if (kor) {
+    return kor[1] + '-' + ('0' + kor[2]).slice(-2) + '-' + ('0' + kor[3]).slice(-2);
+  }
+  var iso = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  return '';
+}
+
+function _beautyNewsRowSortKey(row) {
+  return _parseReportTitleDate(row.report_title)
+    || _normalizeIsoDate(row.windows_end)
+    || _normalizeIsoDate(row.windows_start)
+    || _parseSheetDate(row.created_at)
+    || '';
+}
+
+function _parseJsonCell(val, label) {
+  if (val === null || val === undefined || val === '') return [];
+  if (typeof val === 'object') return val;
+  var s = String(val).trim();
+  if (!s) return [];
+  try {
+    return JSON.parse(s);
+  } catch (e) {
+    throw new Error((label || 'JSON') + ' parse error: ' + e.message);
+  }
+}
+
+function _readBeautyNewsSheetRows() {
+  var ss = SpreadsheetApp.openById(_beautyNewsSheetId());
+  var sheet = ss.getSheets()[0];
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  var headers = values[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+  function col(name) { return headers.indexOf(name); }
+
+  var idx = {
+    id:            col('id'),
+    created_at:    col('created_at'),
+    report_title:  col('report_title'),
+    windows_start: col('windows_start'),
+    windows_end:   col('windows_end'),
+    categories:    col('categories'),
+    keywords:      col('keywords'),
+  };
+  if (idx.windows_start === -1) {
+    throw new Error('Sheet header missing windows_start (expected: id, created_at, report_title, windows_start, windows_end, categories, keywords)');
+  }
+
+  var rows = [];
+  for (var r = 1; r < values.length; r++) {
+    var line = values[r];
+    function cell(i) { return i === -1 ? '' : line[i]; }
+
+    var reportTitle = String(cell(idx.report_title) || '').trim();
+    var windowsStart = _normalizeIsoDate(cell(idx.windows_start));
+    if (!windowsStart && !reportTitle) continue;
+
+    var windowsEnd = _normalizeIsoDate(cell(idx.windows_end)) || windowsStart;
+    rows.push({
+      id:           String(cell(idx.id) || '').trim(),
+      created_at:   cell(idx.created_at),
+      report_title: reportTitle,
+      windows_start: windowsStart,
+      windows_end:   windowsEnd,
+      categories:   _parseJsonCell(cell(idx.categories), 'categories'),
+      keywords:     _parseJsonCell(cell(idx.keywords), 'keywords'),
+    });
+  }
+  return rows;
+}
+
+function _pickLatestBeautyNewsSheetRow(rows) {
+  var best = null;
+  var bestKey = '';
+  var bestCreated = 0;
+
+  rows.forEach(function(row) {
+    var key = _beautyNewsRowSortKey(row);
+    if (!key) return;
+    var createdTs = _sheetDateToTime(row.created_at);
+    if (!best || key > bestKey || (key === bestKey && createdTs > bestCreated)) {
+      best = row;
+      bestKey = key;
+      bestCreated = createdTs;
+    }
+  });
+  return best ? { row: best, sortKey: bestKey } : null;
+}
+
+/**
+ * Reads the latest row from the beauty news Google Sheet and upserts to Supabase.
+ * Latest = report_title date first, else windows_end/start, else created_at; tie-break by created_at.
+ */
+function importBeautyNewsFromSheet() {
+  try {
+    var rows = _readBeautyNewsSheetRows();
+    if (!rows.length) return { ok: false, error: '시트에 데이터 행이 없습니다' };
+
+    var picked = _pickLatestBeautyNewsSheetRow(rows);
+    if (!picked) return { ok: false, error: '유효한 아카이브 행을 찾지 못했습니다' };
+
+    var latest = picked.row;
+    if (!latest.windows_start) {
+      return { ok: false, error: '최신 행에 windows_start가 없습니다', reportTitle: latest.report_title };
+    }
+
+    var data = {
+      windowsStart: latest.windows_start,
+      windowsEnd:   latest.windows_end || latest.windows_start,
+      reportTitle:  latest.report_title,
+      categories:   latest.categories || [],
+      keywords:     latest.keywords || [],
+    };
+
+    var saved = _saveArchive(data);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        error: saved.error || 'Supabase 저장 실패',
+        windowsStart: data.windowsStart,
+        reportTitle: data.reportTitle,
+      };
+    }
+
+    return {
+      ok: true,
+      imported: 1,
+      windowsStarts: [data.windowsStart],
+      reportTitle: data.reportTitle,
+      sortKey: picked.sortKey,
+      sheetRowId: latest.id,
+      createdAt: _parseSheetDate(latest.created_at),
+    };
+  } catch (e) {
+    Logger.log('importBeautyNewsFromSheet: ' + e.toString());
+    return { ok: false, error: e.toString() };
   }
 }
 
@@ -245,11 +477,13 @@ function importBeautyNewsFromGmailDrafts() {
 function routeBeautyNews(action, p, body) {
   switch (action) {
     case 'sendBeautyNewsEmail':         return sendBeautyNewsEmail((body || {}).recipients, (body || {}).htmlBody, (body || {}).subject);
+    case 'importBeautyNewsFromSheet':   return importBeautyNewsFromSheet();
     case 'importBeautyNewsGmailDrafts': return importBeautyNewsFromGmailDrafts();
     case 'sendWeeklyBeautyNewsEmail':
       return sendWeeklyBeautyNewsEmail(
         (body || {}).force === true,
         (body || {}).windowsStart || (body || {}).windows_start || '',
+        (body || {}).recipients || null,
       );
     default:                            return null;
   }

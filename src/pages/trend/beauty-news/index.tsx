@@ -206,6 +206,11 @@ function fmtKorFull(dateStr: string): string {
   return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
 }
 
+function fmtTodayKor(): string {
+  const d = new Date()
+  return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
+}
+
 function reportArticleCount(report: ReportData): number {
   return (report.categories ?? []).reduce((sum, cat) => sum + (cat.items?.length ?? 0), 0)
 }
@@ -224,8 +229,8 @@ export default function BeautyNews() {
   const [archiveGroups, setArchiveGroups] = useState<Record<string, ArchiveGroup>>({})
   const [archiveOrder, setArchiveOrder] = useState<string[]>([])
   const [archiveListLoading, setArchiveListLoading] = useState(true)
-  const [gmailImporting, setGmailImporting] = useState(false)
-  const [gmailImportStatus, setGmailImportStatus] = useState('')
+  const [sheetImporting, setSheetImporting] = useState(false)
+  const [sheetImportStatus, setSheetImportStatus] = useState('')
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
 
   const [recipients, setRecipients] = useState<Recipient[]>([])
@@ -376,38 +381,40 @@ export default function BeautyNews() {
     setArchiveReportLoading(false)
   }
 
-  async function importGmailDrafts() {
-    setGmailImporting(true)
-    setGmailImportStatus('')
+  async function importFromSheet() {
+    setSheetImporting(true)
+    setSheetImportStatus('')
     try {
-      const result = await gasPost<{ ok?: boolean; imported?: number; errors?: string[]; windowsStarts?: string[] }>({
-        action: 'importBeautyNewsGmailDrafts',
+      const result = await gasPost<{
+        ok?: boolean
+        imported?: number
+        error?: string
+        reportTitle?: string
+        sortKey?: string
+      }>({
+        action: 'importBeautyNewsFromSheet',
       })
-      if (!result.ok && !result.imported) throw new Error(result.errors?.join('; ') || '가져오기 실패')
-      const n = result.imported ?? 0
-      setGmailImportStatus(n > 0 ? `${n}건 아카이브 저장 완료` : '가져올 Gmail 초안 없음 ([MiMuse Archive] 제목 확인)')
-      if (result.errors?.length) setGmailImportStatus(prev => `${prev} · ${result.errors!.length}건 오류`)
+      if (!result.ok && !result.imported) throw new Error(result.error || '가져오기 실패')
+      const title = result.reportTitle ? ` · ${result.reportTitle}` : ''
+      setSheetImportStatus(
+        (result.imported ?? 0) > 0
+          ? `시트 최신 브리핑 저장 완료${title}`
+          : '시트에서 가져올 데이터 없음',
+      )
       await loadLatestReport()
       await refreshArchiveList()
     } catch (e: unknown) {
-      setGmailImportStatus('오류: ' + ((e as Error).message || '알 수 없음'))
+      setSheetImportStatus('오류: ' + ((e as Error).message || '알 수 없음'))
     } finally {
-      setGmailImporting(false)
+      setSheetImporting(false)
     }
   }
 
-  async function deleteArchive(windowsStart: string) {
-    try {
-      const { error } = await supabase
-        .from('beauty_news_archives')
-        .delete()
-        .eq('windows_start', windowsStart)
-      if (error) throw error
-      if (selectedKey === windowsStart) { setArchiveReport(null); setSelectedKey('') }
-      await refreshArchiveList()
-    } catch (e: unknown) {
-      alert('삭제 실패: ' + (e as Error).message)
-    }
+  async function viewThisWeekNews() {
+    await importFromSheet()
+    setTimeout(() => {
+      document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
+    }, 150)
   }
 
   async function sendBriefingEmail(report: ReportData | null) {
@@ -422,6 +429,9 @@ export default function BeautyNews() {
     setEmailSending(true)
     setEmailStatus('')
     try {
+      const rcptList = recipients
+        .filter(r => selectedRcpt.has(r.email))
+        .map(r => r.email)
       const result = await gasPost<{
         ok?: boolean
         skipped?: boolean
@@ -433,6 +443,7 @@ export default function BeautyNews() {
         action: 'sendWeeklyBeautyNewsEmail',
         force: true,
         windowsStart: report.windowsStart,
+        recipients: rcptList,
       })
       if (result.skipped) {
         setEmailStatus('이미 발송된 주차입니다 — force 발송은 GAS에서 처리됨')
@@ -502,20 +513,6 @@ export default function BeautyNews() {
         <span className="bn-archive-title">📁 주간 아카이브</span>
         <span className="bn-archive-hint">최대 12주</span>
       </div>
-      <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button
-          type="button"
-          className="bn-action-btn"
-          disabled={gmailImporting}
-          onClick={() => { void importGmailDrafts() }}
-          style={{ fontSize: 12, padding: '8px 12px' }}
-        >
-          {gmailImporting ? 'Gmail 초안 가져오는 중…' : 'Gmail 초안 → 아카이브'}
-        </button>
-        {gmailImportStatus && (
-          <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.4 }}>{gmailImportStatus}</div>
-        )}
-      </div>
       <div className="bn-archive-list">
         {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
         {!archiveListLoading && archiveOrder.length === 0 && (
@@ -547,7 +544,6 @@ export default function BeautyNews() {
                     className={`bn-archive-item${isSelected ? ' selected' : ''}`}
                     onClick={() => loadArchive(a.windows_start)}>
                     <div className="bn-archive-item-date">{rangeLabel}</div>
-                    <button type="button" className="bn-archive-del" onClick={e => { e.stopPropagation(); showConfirm('이 아카이브를 삭제하시겠습니까?', () => { void deleteArchive(a.windows_start) }) }}>×</button>
                   </div>
                 )
               })}
@@ -568,11 +564,7 @@ export default function BeautyNews() {
         {latestLoading && <div className="bn-date-card-loading"><Spinner sm /> 불러오는 중...</div>}
         {!latestLoading && latestReport && (
           <>
-            <div className="bn-date-card-range">
-              {latestReport.windowsStart && latestReport.windowsEnd
-                ? fmtKorFull(latestReport.windowsStart) + ' – ' + fmtKorFull(latestReport.windowsEnd)
-                : latestReport.windowsEnd ? fmtKorFull(latestReport.windowsEnd) : ''}
-            </div>
+            <div className="bn-date-card-range">{fmtTodayKor()}</div>
             <div className="bn-date-card-meta">
               <span className="bn-date-card-meta-label">이번 주 뷰티 뉴스</span>
               <span className="bn-date-card-meta-value">{reportArticleCount(latestReport)}건</span>
@@ -590,10 +582,13 @@ export default function BeautyNews() {
           <div className="bn-date-card-empty">저장된 리포트가 없습니다.</div>
         )}
       </div>
+      {sheetImportStatus && (
+        <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.4, padding: '0 16px 8px' }}>{sheetImportStatus}</div>
+      )}
       <button type="button" className="bn-action-btn"
-        disabled={!latestReport}
-        onClick={() => document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })}>
-        이번 주 뉴스 보기 ↓
+        disabled={sheetImporting}
+        onClick={() => { void viewThisWeekNews() }}>
+        {sheetImporting ? '시트에서 가져오는 중…' : '이번 주 뉴스 보기 ↓'}
       </button>
     </div>
   )
@@ -708,7 +703,7 @@ export default function BeautyNews() {
           {/* Full-width report */}
           <div className="bn-report-card" id="news-report">
             <div className="bn-report-header">
-              <span className="bn-report-title">AI 뉴스 요약 리포트</span>
+              <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
             </div>
             <div className="bn-report-body">
               {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
@@ -755,16 +750,16 @@ function ReportBody({ data }: { data: ReportData }) {
   const ws    = data.windowsStart ? fmtKorFull(data.windowsStart) : ''
   const we    = data.windowsEnd   ? fmtKorFull(data.windowsEnd)   : ''
   const range = ws + (we ? ' – ' + we : '')
-  const title = data.reportTitle || ('이번 주 뷰티 브리핑 — ' + range)
   const keywords = data.keywords || []
 
   return (
     <div>
-      <div className="bn-briefing-title">
-        {title}
-        {data.fromArchive && <span className="bn-cache-badge" style={{ background: '#e8f5e9', color: '#2e7d32' }}>📁 아카이브</span>}
-      </div>
-      {range && <div style={{ fontSize: 12, color: 'var(--teal-dk)', marginBottom: 16 }}>📅 {range}</div>}
+      {range && (
+        <div style={{ fontSize: 12, color: 'var(--teal-dk)', marginBottom: 16 }}>
+          📅 {range}
+          {data.fromArchive && <span className="bn-cache-badge" style={{ background: '#e8f5e9', color: '#2e7d32', marginLeft: 8 }}>📁 아카이브</span>}
+        </div>
+      )}
       {(data.categories || []).map((cat, ci) => {
         const items = cat.items ?? []
         const count = cat.count != null ? cat.count : items.length
@@ -782,8 +777,12 @@ function ReportBody({ data }: { data: ReportData }) {
                     ? <a className="bn-article-link" href={item.link} target="_blank" rel="noopener">{item.title}</a>
                     : <span className="bn-article-link">{item.title}</span>
                   }
-                  {item.source && <span className="bn-source">{item.source}{item.pubDate ? ' · ' + item.pubDate : ''}</span>}
                 </div>
+                {(item.source || item.pubDate) && (
+                  <div className="bn-source">
+                    {[item.source, item.pubDate].filter(Boolean).join(' · ')}
+                  </div>
+                )}
                 <div className="bn-article-summary">{item.summary}</div>
               </div>
             ))}

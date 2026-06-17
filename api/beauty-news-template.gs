@@ -1,5 +1,6 @@
 // ============================================================
-//  Beauty News — HTML Email Builder
+//  Beauty News — HTML Email Builder (GAS)
+//  Style mirrors buildEmailHtml() in src/pages/trend/beauty-news/index.tsx
 //
 //  buildBriefingHtml(data) → HTML string
 //
@@ -7,116 +8,119 @@
 //    windowsStart  — "YYYY-MM-DD"
 //    windowsEnd    — "YYYY-MM-DD"
 //    reportTitle   — string
-//    categories    — [{ name, articles: [{ title, source, date, summary, url }] }]
+//    categories    — [{ emoji, name, count, items/articles/stories: [{ title, link/url, source, pubDate/date, summary }] }]
 //    keywords      — [{ tag, explanation }]
 // ============================================================
 
 function buildBriefingHtml(data) {
-  var start  = _formatKrDate(data.windowsStart || '');
-  var end    = _formatKrDate(data.windowsEnd   || '');
-  var title  = data.reportTitle || '주간 뷰티 브리핑';
-  var cats   = data.categories  || [];
-  var kws    = data.keywords    || [];
+  var ws    = _formatKrDate(data.windowsStart || '');
+  var we    = _formatKrDate(data.windowsEnd   || '');
+  var range = ws + (we ? ' – ' + we : '');
+  var title = data.reportTitle || ('이번 주 뷰티 브리핑 — ' + range);
+  var cats  = data.categories  || [];
+  var kws   = data.keywords    || [];
 
-  var html = '';
+  var h = '<html><body style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#222">';
 
-  // ── Wrapper ──────────────────────────────────────────────────
-  html += '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-        + '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        + '</head><body style="margin:0;padding:0;background:#f4f6f8;font-family:\'Apple SD Gothic Neo\',\'Malgun Gothic\',Arial,sans-serif;">';
+  h += '<h1 style="font-size:20px;border-bottom:2px solid #f5c518;padding-bottom:8px">'
+     + '🌟 MiMuse [NEW-TEMPLATE] ' + _esc(title) + '</h1>';
 
-  html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;padding:32px 16px;">'
-        + '<tr><td align="center">'
-        + '<table width="620" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;width:100%;">';
-
-  // ── Header ───────────────────────────────────────────────────
-  html += '<tr><td style="background:#0f766e;border-radius:12px 12px 0 0;padding:32px 36px;">'
-        + '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
-        + '<td><div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#99f6e4;text-transform:uppercase;margin-bottom:6px;">MiMuse Beauty Intelligence</div>'
-        + '<div style="font-size:22px;font-weight:800;color:#ffffff;line-height:1.3;">' + _esc(title) + '</div>'
-        + '<div style="font-size:13px;color:#ccfbf1;margin-top:8px;">' + start + ' – ' + end + '</div>'
-        + '</td></tr></table></td></tr>';
-
-  // ── Body card ────────────────────────────────────────────────
-  html += '<tr><td style="background:#ffffff;border-radius:0 0 12px 12px;padding:32px 36px;">';
+  if (range) {
+    h += '<p style="font-size:12px;color:#888;margin-top:4px">📅 ' + range + '</p>';
+  }
 
   // ── Categories ───────────────────────────────────────────────
-  if (cats.length > 0) {
-    for (var c = 0; c < cats.length; c++) {
-      var cat      = cats[c];
-      // support: articles (template shape), items (old webhook), stories (new webhook)
-      var articles = cat.articles || cat.stories || cat.items || [];
-      if (articles.length === 0) continue;
+  for (var c = 0; c < cats.length; c++) {
+    var cat      = cats[c];
+    var articles = _getCatArticles(cat);
+    if (articles.length === 0) continue;
 
-      // Category header
-      html += '<div style="margin-bottom:20px;">'
-            + '<div style="display:inline-block;background:#f0fdfa;color:#0f766e;font-size:11px;font-weight:700;'
-            + 'letter-spacing:1px;text-transform:uppercase;padding:4px 12px;border-radius:20px;margin-bottom:14px;">'
-            + _esc(cat.name || '') + '</div>';
+    var count = (cat.count != null) ? cat.count : articles.length;
 
-      for (var a = 0; a < articles.length; a++) {
-        var art        = articles[a];
-        var artTitle   = art.title    || art.headline || '';
-        var articleUrl = art.url      || art.link     || '';
-        var artDate    = art.pubDate  || art.date     || '';
-        var titleHtml  = articleUrl
-          ? '<a href="' + _esc(articleUrl) + '" style="color:#0f766e;text-decoration:none;font-size:14px;font-weight:700;line-height:1.4;">' + _esc(artTitle) + '</a>'
-          : '<span style="color:#111827;font-size:14px;font-weight:700;line-height:1.4;">' + _esc(artTitle) + '</span>';
+    h += '<h2 style="font-size:16px;margin-top:28px">'
+       + _esc(cat.emoji || '') + ' ' + _esc(cat.name || '') + '</h2>';
+    h += '<p style="font-size:12px;color:#888;margin:4px 0 10px">'
+       + '이번 주 트렌드 시그널이 감지된 뉴스는 총 '
+       + '<strong style="color:#1a73e8">' + count + '</strong>건입니다.</p>';
 
-        html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:12px;">'
-              + '<tr><td style="padding:14px 16px;background:#f9fafb;border-radius:8px;border-left:3px solid #0f766e;">'
-              + '<div style="margin-bottom:6px;">' + titleHtml + '</div>'
-              + '<div style="font-size:11px;color:#6b7280;margin-bottom:8px;">'
-              + _esc(art.source || '') + (artDate ? ' · ' + _esc(artDate) : '')
-              + '</div>'
-              + '<div style="font-size:13px;color:#374151;line-height:1.7;">' + _esc(art.summary || '') + '</div>'
-              + '</td></tr></table>';
+    for (var a = 0; a < articles.length; a++) {
+      var art      = articles[a];
+      var artTitle = art.title   || art.headline || '';
+      var artUrl   = art.url     || art.link     || '';
+      var artDate  = art.pubDate || art.date      || '';
+
+      h += '<div style="background:#f9f9f9;border-left:3px solid #f5c518;padding:12px;margin-bottom:12px;border-radius:4px">';
+      h += '<div style="font-weight:600;font-size:14px">';
+      if (artUrl) {
+        h += '<a href="' + _esc(artUrl) + '" style="color:#222;text-decoration:none">' + _esc(artTitle) + '</a>';
+      } else {
+        h += _esc(artTitle);
+      }
+      h += '</div>';
+
+      if (art.source) {
+        h += '<div style="font-size:11px;color:#888;margin-bottom:6px">'
+           + _esc(art.source) + (artDate ? ' · ' + _esc(artDate) : '')
+           + '</div>';
       }
 
-      html += '</div>';
+      h += '<div style="font-size:13px;line-height:1.6">' + _esc(art.summary || '') + '</div>';
 
-      // Divider between categories
-      if (c < cats.length - 1) {
-        html += '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />';
+      if (artUrl) {
+        h += '<a href="' + _esc(artUrl) + '" style="font-size:11px;color:#1a73e8" target="_blank">'
+           + '원문 보기</a>';
       }
+
+      h += '</div>';
     }
   }
 
   // ── Keywords ─────────────────────────────────────────────────
   if (kws.length > 0) {
-    html += '<hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />';
-    html += '<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">이번 주 키워드</div>';
-    html += '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td>';
-
+    h += '<div style="background:#fff3cd;border-radius:6px;padding:16px;margin-top:24px">';
+    h += '<h3 style="margin-top:0;font-size:15px">✨ 이번 주 트렌드 키워드</h3>';
     for (var k = 0; k < kws.length; k++) {
       var kw = kws[k];
-      html += '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">'
-            + '<tr><td style="padding:10px 14px;background:#f0fdfa;border-radius:8px;">'
-            + '<span style="font-size:13px;font-weight:700;color:#0f766e;">' + _esc(kw.tag || '') + '</span>'
-            + '<span style="font-size:12px;color:#374151;margin-left:10px;">' + _esc(kw.explanation || '') + '</span>'
-            + '</td></tr></table>';
+      h += '<div style="margin-bottom:12px">'
+         + '<strong style="font-size:13px">' + _esc(kw.tag || '') + '</strong><br>'
+         + '<span style="font-size:13px;line-height:1.6">' + _esc(kw.explanation || '') + '</span>'
+         + '</div>';
     }
-
-    html += '</td></tr></table>';
+    h += '</div>';
   }
 
-  // ── Footer ───────────────────────────────────────────────────
-  html += '<hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />';
-  html += '<div style="text-align:center;font-size:11px;color:#9ca3af;line-height:1.8;">'
-        + 'MiMuse Beauty Intelligence · 본 메일은 발송 전용입니다<br>'
-        + '수신을 원하지 않으시면 담당자에게 문의해 주세요.'
-        + '</div>';
+  // ── Footer button ─────────────────────────────────────────────
+  var dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/beauty-news';
+  h += '<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">';
+  h += '<a href="' + dashUrl + '" target="_blank"'
+     + ' style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;'
+     + 'font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">'
+     + '📊 대시보드 뷰티뉴스 바로가기</a>';
+  h += '</div>';
 
-  // Close body card
-  html += '</td></tr>';
-
-  // Close wrapper tables
-  html += '</table></td></tr></table></body></html>';
-
-  return html;
+  h += '</body></html>';
+  return h;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+
+/**
+ * Find the articles array inside a category object.
+ * Tries named keys first, then falls back to scanning all properties
+ * for the first non-empty array — handles any key Claude might use.
+ */
+function _getCatArticles(cat) {
+  if (!cat || typeof cat !== 'object') return [];
+  var KEYS = ['articles', 'items', 'stories', 'news', 'content', 'data', 'list'];
+  for (var k = 0; k < KEYS.length; k++) {
+    if (Array.isArray(cat[KEYS[k]]) && cat[KEYS[k]].length > 0) return cat[KEYS[k]];
+  }
+  var props = Object.keys(cat);
+  for (var i = 0; i < props.length; i++) {
+    if (Array.isArray(cat[props[i]]) && cat[props[i]].length > 0) return cat[props[i]];
+  }
+  return [];
+}
 
 function _esc(str) {
   return String(str)

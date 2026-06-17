@@ -1,0 +1,9 @@
+{
+  "name": "gmail-oauth-setup",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "googleapis": "^173.0.0",
+    "open": "^11.0.0"
+  }
+}
