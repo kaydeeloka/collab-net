@@ -7,6 +7,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
+import { StatCard, StatCards } from '@/components/ui'
 import { getEmsStatusColor, isEmsDelivered, isEmsException } from '@/lib/ems-tracking-status'
 
 const GOOGLE_FORM_URL = ''
@@ -647,97 +648,49 @@ export default function Confirmed() {
 
       {!loading && (
         <>
-          <div className="cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr)) minmax(320px, 1.75fr)' }}>
-            <div className="card">
-              <div className="card-label">총 확정 인플루언서</div>
-              <div className="card-value">
-                {targetPct}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}>%</span>
-              </div>
-              <div className="card-sub">{total} / {INFLUENCER_TARGET}명</div>
-              <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${targetPct}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
-              </div>
-              <div style={{ fontSize: 11, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 0', lineHeight: 1.8 }}>
-                {([
-                  { key: 'tiktok',    label: 'TikTok',    count: platformCounts.tiktok,    color: '#111' },
-                  { key: 'instagram', label: 'Instagram', count: platformCounts.instagram, color: '#dc2743' },
-                  { key: 'magazine',  label: 'Magazine',  count: platformCounts.magazine,  color: '#6366f1' },
-                ] as const).map((p, i) => (
-                  <span key={p.key}>
-                    {i > 0 && <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>}
-                    <span style={{ color: p.color, fontWeight: 700 }}>{p.label}</span>
-                    <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{p.count}</strong>
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="card highlight">
-              <div className="card-label">콘텐츠 업로드</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{uploaded}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>완료</div>
-                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(uploaded / total * 100) : 0}% 완료율</div>
-                </div>
-                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{noUpload}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>미업로드</div>
-                </div>
-              </div>
-            </div>
-            <div className="card highlight">
-              <div className="card-label">배송</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>배송 완료</div>
-                  <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
-                </div>
-                <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                    <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
-                    <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>배송 오류</div>
-                </div>
-              </div>
-            </div>
-            <div className="card highlight">
-              <div className="card-label">브랜드 횟수</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', alignItems: 'start', width: '100%' }}>
-                {BRANDS.map((brand, i) => {
-                  const count = brandCounts[brand] ?? 0
-                  return (
-                    <div
-                      key={brand}
-                      style={{
-                        textAlign: 'center',
-                        minWidth: 0,
-                        borderLeft: i > 0 ? '1px solid var(--gray-2)' : undefined,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-                        <span style={{ fontSize: 36, fontWeight: 800, color: BRAND_COLORS[brand], letterSpacing: '-1px' }}>{count}</span>
-                        <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>회</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: BRAND_COLORS[brand], fontWeight: 600 }}>{brand}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+          <StatCards columns="repeat(3, minmax(0, 1fr)) minmax(320px, 1.75fr)">
+            <StatCard
+              label="총 확정 인플루언서"
+              variant="progress"
+              value={targetPct}
+              unit="%"
+              sub={`${total} / ${INFLUENCER_TARGET}명`}
+              progress={targetPct}
+              tags={[
+                { label: 'TikTok',    count: platformCounts.tiktok,    color: '#111' },
+                { label: 'Instagram', count: platformCounts.instagram, color: '#dc2743' },
+                { label: 'Magazine',  count: platformCounts.magazine,  color: '#6366f1' },
+              ]}
+            />
+            <StatCard
+              highlight
+              label="콘텐츠 업로드"
+              variant="split"
+              columns={[
+                { value: uploaded, unit: '명', valueColor: '#14532d', label: '완료', labelColor: '#16a34a', sub: `${total ? Math.round(uploaded / total * 100) : 0}% 완료율` },
+                { value: noUpload, unit: '명', valueColor: '#991b1b', label: '미업로드', labelColor: '#dc2626' },
+              ]}
+            />
+            <StatCard
+              highlight
+              label="배송"
+              variant="split"
+              columns={[
+                { value: delivered, unit: '명', valueColor: '#14532d', label: '배송 완료', labelColor: '#16a34a', sub: `${total ? Math.round(delivered / total * 100) : 0}% 완료율` },
+                { value: shippingErrors, unit: '명', valueColor: '#991b1b', label: '배송 오류', labelColor: '#dc2626' },
+              ]}
+            />
+            <StatCard
+              highlight
+              label="브랜드 횟수"
+              variant="grid"
+              columns={BRANDS.map(brand => ({
+                value: brandCounts[brand] ?? 0,
+                label: brand,
+                color: BRAND_COLORS[brand],
+              }))}
+            />
+          </StatCards>
 
           <div className="ems-toolbar" style={{ marginTop: 16 }}>
             <div className="section-title section-title--inline">확정 인플루언서 목록</div>

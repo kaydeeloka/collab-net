@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
-import { PageTabs } from '@/components/ui'
+import { PageTabs, StatCard, StatCards } from '@/components/ui'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
@@ -567,6 +567,8 @@ export default function Monitoring() {
     }, {} as Record<string, number>),
     lastRun: rows.find(r => r.updated)?.updated || '',
   }
+  const mimuseReviewCount = stats.brandCounts.mimuse ?? 0
+  const brandReviewCount  = BRANDS.filter(b => b !== 'mimuse').reduce((s, b) => s + (stats.brandCounts[b] ?? 0), 0)
 
   const filteredRows = rows.filter(r => {
     if (brandFilter !== 'all' && (r.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false
@@ -647,28 +649,27 @@ export default function Monitoring() {
         }}>{scrapeMsg}</div>
       )}
       {/* Stats */}
-      <div className="cards">
-        <div className="card">
-          <div className="card-label">모니터링 인플루언서</div>
-          <div className="card-value">{stats.totalInfluencers}</div>
-        </div>
-        <div className="card highlight">
-          <div className="card-label">리뷰 감지됨</div>
-          <div className="card-value" style={{ color: 'var(--blue-dk)' }}>{stats.totalReviews}</div>
-        </div>
-        <div className="card">
-          <div className="card-label">총 조회수</div>
-          <div className="card-value">{fmtNum(stats.totalViews)}</div>
-        </div>
-        <div className="card">
-          <div className="card-label">총 좋아요수</div>
-          <div className="card-value">{fmtNum(stats.totalLikes)}</div>
-        </div>
-        <div className="card">
-          <div className="card-label">총 댓글수</div>
-          <div className="card-value">{fmtNum(stats.totalComments)}</div>
-        </div>
-      </div>
+      <StatCards>
+        <StatCard label="모니터링 인플루언서" value={stats.totalInfluencers} />
+        <StatCard
+          highlight
+          label="리뷰 업로드"
+          value={stats.totalReviews}
+          valueColor="var(--blue-dk)"
+          sub={(
+            <>
+              <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>브랜드 리뷰</span>
+              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{brandReviewCount}</strong>
+              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
+              <span style={{ color: BRAND_COLORS.mimuse, fontWeight: 700 }}>MiMuse 리뷰</span>
+              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{mimuseReviewCount}</strong>
+            </>
+          )}
+        />
+        <StatCard label="총 조회수" value={fmtNum(stats.totalViews)} />
+        <StatCard label="총 좋아요수" value={fmtNum(stats.totalLikes)} />
+        <StatCard label="총 댓글수" value={fmtNum(stats.totalComments)} />
+      </StatCards>
 
       {/* Keywords + brand counts */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>

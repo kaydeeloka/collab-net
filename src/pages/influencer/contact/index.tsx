@@ -20,7 +20,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar } from '@/components/StickyBar'
-import { Button } from '@/components/ui'
+import { Button, StatCard, StatCards } from '@/components/ui'
 import {
   coerceContactCount,
   contactCountStyle,
@@ -449,6 +449,9 @@ export default function Outreach() {
     return { tier: t, count: all.length, sent }
   })
 
+  const sentPct = influencers.length > 0 ? Math.round(sentCount / influencers.length * 100) : 0
+  const replyPct  = sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0
+
   const thBase: React.CSSProperties = {
     padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700,
     color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px',
@@ -485,67 +488,56 @@ export default function Outreach() {
       {/* ── Stats ── */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>전체 타겟 리스트</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{influencers.length}</span>
-              <span style={{ fontSize: 14, color: 'var(--gray-5)' }}>명</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
-              {tierBreakdown.map((t, i) => {
-                const color = TIER_COLOR[t.tier]
-                return (
-                  <span key={t.tier}>
-                    {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
-                    <span style={{ color }}>{t.tier.replace('순위', '')}순위 <strong>{t.sent}/{t.count}</strong></span>
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>발송 성과율</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{sentCount}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {influencers.length} 발송됨</span>
-            </div>
-            <div style={{ height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
-              <div style={{ height: '100%', width: `${influencers.length > 0 ? Math.min(sentCount / influencers.length * 100, 100) : 0}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{influencers.length > 0 ? Math.round(sentCount / influencers.length * 100) : 0}% 완료</div>
-          </div>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--yellow-md)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>답장 수신 통계</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#d97706', letterSpacing: '-1px' }}>{repliedCount}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명 답장</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
-              {sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0}% 회신율
-            </div>
-          </div>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid #bbf7d0', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>확정 / 협의</div>
-            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', marginBottom: 8 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{confirmedDbCount}</span>
-                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                </div>
-                <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>확정</div>
-              </div>
-              <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-1px' }}>{negotiateCount}</span>
-                  <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-                </div>
-                <div style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>협의 중</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCards className="stat-cards--tall" columns="2fr 1fr 1fr 1fr" style={{ marginBottom: 28 }}>
+          <StatCard
+            variant="metric"
+            align="left"
+            label="전체 타겟 리스트"
+            value={influencers.length}
+            unit="명"
+            footer={(
+              <>
+                {tierBreakdown.map((t, i) => {
+                  const color = TIER_COLOR[t.tier]
+                  return (
+                    <span key={t.tier}>
+                      {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
+                      <span style={{ color }}>{t.tier.replace('순위', '')}순위 <strong>{t.sent}/{t.count}</strong></span>
+                    </span>
+                  )
+                })}
+              </>
+            )}
+          />
+          <StatCard
+            variant="metric"
+            align="left"
+            label="발송 성과율"
+            value={sentCount}
+            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {influencers.length} 발송됨</span>}
+            progress={influencers.length > 0 ? Math.min(sentCount / influencers.length * 100, 100) : 0}
+            footer={`${sentPct}% 완료`}
+          />
+          <StatCard
+            highlight
+            variant="metric"
+            align="left"
+            label="답장 수신 통계"
+            value={repliedCount}
+            unit="명 답장"
+            valueColor="#d97706"
+            footer={`${replyPct}% 회신율`}
+          />
+          <StatCard
+            highlight
+            label="확정 / 협의"
+            variant="split"
+            columns={[
+              { value: confirmedDbCount, unit: '명', valueColor: '#14532d', label: '확정', labelColor: '#16a34a' },
+              { value: negotiateCount, unit: '명', valueColor: '#1e3a5f', label: '협의 중', labelColor: '#2563eb' },
+            ]}
+          />
+        </StatCards>
       )}
 
       {/* ── Filter bar ── */}

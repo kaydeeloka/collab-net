@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -16,6 +16,7 @@ import {
   ModalFooter,
   PageToolbar,
 } from '@/components/ui'
+import type { BrandConfirmedContext } from '../index'
 import { archiveDetailPath } from '../archive/slug'
 import type { ConfirmedBrand as ArchiveBrandRef } from '../archive/shared'
 
@@ -79,6 +80,7 @@ function archiveLinkFor(brand: ConfirmedBrand, allRows: ConfirmedBrand[]) {
 export default function BrandConfirmedManagement() {
   const { selectedPhaseId } = usePhase()
   const { showToast, showConfirm } = useToast()
+  const { refreshStats } = useOutletContext<BrandConfirmedContext>()
 
   const [rows,    setRows]    = useState<ConfirmedBrand[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,6 +115,7 @@ export default function BrandConfirmedManagement() {
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as ConfirmedBrand[])
     setLoading(false)
+    await refreshStats()
   }
 
   async function addBrand() {
@@ -177,13 +180,17 @@ export default function BrandConfirmedManagement() {
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.filter(r => r.id !== id))
     setShowView(false)
+    await refreshStats()
   }
 
   async function toggleReceived(id: string, current: boolean) {
     const next = !current
     const { error } = await supabase.from('confirmed_brands').update({ received: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
-    else setRows(prev => prev.map(r => r.id === id ? { ...r, received: next } : r))
+    else {
+      setRows(prev => prev.map(r => r.id === id ? { ...r, received: next } : r))
+      await refreshStats()
+    }
   }
 
   function updateNote(id: string, value: string) {
@@ -204,8 +211,6 @@ export default function BrandConfirmedManagement() {
   })
   const pg = paginate(filtered, page)
 
-  const receivedCount = rows.filter(r => r.received).length
-  const pendingCount  = rows.length - receivedCount
   const viewArchivePath = viewRow ? archiveLinkFor(viewRow, rows) : null
 
   const modalForm = (form: Form, setForm: (f: Form) => void) => (
@@ -235,23 +240,6 @@ export default function BrandConfirmedManagement() {
 
   return (
     <div>
-      {/* Stats */}
-      <div className="cards" style={{ marginBottom: 20 }}>
-        <div className="card highlight">
-          <div className="card-label">총 확정 브랜드</div>
-          <div className="card-value" style={{ color: 'var(--teal-dk)' }}>{rows.length}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 개</span></div>
-        </div>
-        <div className="card">
-          <div className="card-label">제품 받음</div>
-          <div className="card-value" style={{ color: 'var(--green)' }}>{receivedCount}</div>
-          <div className="card-sub">{rows.length ? Math.round(receivedCount / rows.length * 100) : 0}% 수령</div>
-        </div>
-        <div className="card">
-          <div className="card-label">미수령</div>
-          <div className="card-value" style={{ color: '#d97706' }}>{pendingCount}</div>
-        </div>
-      </div>
-
       <PageToolbar
         search={{
           value: search,

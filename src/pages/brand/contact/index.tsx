@@ -16,7 +16,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar } from '@/components/StickyBar'
-import { Button } from '@/components/ui'
+import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact-count'
 
 import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
@@ -303,6 +303,9 @@ export default function BrandContact() {
   const sentCount    = rows.filter(r => r.send_count > 0).length
   const repliedCount = rows.filter(r => ['reply', 'positive', 'negative', 'accept'].includes(r.status)).length
 
+  const sentPct   = rows.length > 0 ? Math.round(sentCount / rows.length * 100) : 0
+  const replyPct  = sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0
+
   const thBase: React.CSSProperties = {
     padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700,
     color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px',
@@ -339,45 +342,47 @@ export default function BrandContact() {
       {/* Stats */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>전체 컨택 리스트</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{rows.length}</span>
-              <span style={{ fontSize: 14, color: 'var(--gray-5)' }}>건</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>
-              {TYPES.map((t, i) => {
-                const count = rows.filter(r => t === '일반' ? r.source === 'general' : r.source === 'personal').length
-                return (
-                  <span key={t}>
-                    {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
-                    <span style={{ color: TYPE_COLOR[t] }}>{t} <strong>{count}</strong></span>
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--gray-2)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>발송 성과율</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--gray-8)', letterSpacing: '-1px' }}>{sentCount}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {rows.length} 발송됨</span>
-            </div>
-            <div style={{ height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
-              <div style={{ height: '100%', width: `${rows.length > 0 ? Math.min(sentCount / rows.length * 100, 100) : 0}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{rows.length > 0 ? Math.round(sentCount / rows.length * 100) : 0}% 완료</div>
-          </div>
-          <div style={{ background: 'var(--gray-0)', borderRadius: 14, border: '1px solid var(--yellow-md)', padding: '20px 24px', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 8 }}>답장 수신 통계</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#d97706', letterSpacing: '-1px' }}>{repliedCount}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건 답장</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)' }}>{sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0}% 회신율</div>
-          </div>
-        </div>
+        <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 28 }}>
+          <StatCard
+            variant="metric"
+            align="left"
+            label="전체 컨택 리스트"
+            value={rows.length}
+            unit="건"
+            footer={(
+              <>
+                {TYPES.map((t, i) => {
+                  const count = rows.filter(r => t === '일반' ? r.source === 'general' : r.source === 'personal').length
+                  return (
+                    <span key={t}>
+                      {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
+                      <span style={{ color: TYPE_COLOR[t] }}>{t} <strong>{count}</strong></span>
+                    </span>
+                  )
+                })}
+              </>
+            )}
+          />
+          <StatCard
+            variant="metric"
+            align="left"
+            label="발송 성과율"
+            value={sentCount}
+            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {rows.length} 발송됨</span>}
+            progress={rows.length > 0 ? Math.min(sentCount / rows.length * 100, 100) : 0}
+            footer={`${sentPct}% 완료`}
+          />
+          <StatCard
+            highlight
+            variant="metric"
+            align="left"
+            label="답장 수신 통계"
+            value={repliedCount}
+            unit="건 답장"
+            valueColor="#d97706"
+            footer={`${replyPct}% 회신율`}
+          />
+        </StatCards>
       )}
 
       {/* Filter bar */}

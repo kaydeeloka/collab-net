@@ -5,7 +5,7 @@ import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/l
 import { isEmsDelivered, isEmsInTransit } from '@/lib/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
-import { PageTabs } from '@/components/ui'
+import { PageTabs, StatCard, StatCards } from '@/components/ui'
 
 export const INFLUENCER_TARGET = 50
 
@@ -94,80 +94,46 @@ async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
 
 function EmsStatsCards({ stats }: { stats: EmsStats }) {
   const { total, totalParcels, primaryParcels, reshipParcels, delivered, inTransit, shippingErrors, reshipNeeded, reshipCompleted } = stats
+  const pct = (n: number) => (total ? Math.round(n / total * 100) : 0)
+
   return (
-    <div className="cards ems-stats-cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-      <div className="card">
-        <div className="card-label">전체 배송</div>
-        <div style={{ width: '100%' }}>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-1px' }}>{totalParcels}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
-            </div>
-            <div className="card-sub" style={{ marginTop: 0 }}>
-              <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>원배송</span>
-              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{primaryParcels}건</strong>
-              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
-              <span style={{ color: '#dc2626', fontWeight: 700 }}>재발송/오류</span>
-              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{reshipParcels}건</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="card highlight">
-        <div className="card-label">배송</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>배송 완료</div>
-            <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
-          </div>
-          <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#1e40af', letterSpacing: '-1px' }}>{inTransit}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600, marginBottom: 4 }}>배송 중</div>
-            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
-          </div>
-          <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재발송</div>
-            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
-          </div>
-        </div>
-      </div>
-      <div className="card highlight">
-        <div className="card-label">재배송</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{reshipNeeded}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재배송 필요</div>
-            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
-          </div>
-          <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
-              <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{reshipCompleted}</span>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>재배송 완료</div>
-            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <StatCards className="ems-stats-cards" columns="repeat(3, minmax(0, 1fr))">
+      <StatCard
+        label="전체 배송"
+        variant="metric"
+        align="left"
+        value={totalParcels}
+        unit="건"
+        footer={(
+          <>
+            <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>원배송</span>
+            <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{primaryParcels}건</strong>
+            <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
+            <span style={{ color: '#dc2626', fontWeight: 700 }}>재발송/오류</span>
+            <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{reshipParcels}건</strong>
+          </>
+        )}
+      />
+      <StatCard
+        highlight
+        label="배송"
+        variant="split"
+        columns={[
+          { value: delivered, unit: '명', valueColor: '#14532d', label: '배송 완료', labelColor: '#16a34a', sub: `${pct(delivered)}% 완료율` },
+          { value: inTransit, unit: '명', valueColor: '#1e40af', label: '배송 중', labelColor: 'var(--blue-dk)', hideSub: true },
+          { value: shippingErrors, unit: '명', valueColor: '#991b1b', label: '재발송', labelColor: '#dc2626', hideSub: true },
+        ]}
+      />
+      <StatCard
+        highlight
+        label="재배송"
+        variant="split"
+        columns={[
+          { value: reshipNeeded, unit: '건', valueColor: '#991b1b', label: '재배송 필요', labelColor: '#dc2626', hideSub: true },
+          { value: reshipCompleted, unit: '건', valueColor: '#14532d', label: '재배송 완료', labelColor: '#16a34a', hideSub: true },
+        ]}
+      />
+    </StatCards>
   )
 }
 

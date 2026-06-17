@@ -9,6 +9,7 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageTabs } from '@/components/ui'
+import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
 type ListupTab = 'search' | 'database'
 
@@ -205,14 +206,6 @@ function normalizeFilterConds(conds: FilterCond[]): FilterCond[] {
 
 function hasDedupFilter(conds: FilterCond[]) {
   return conds.some(fc => isDedupCond(fc) && fc.enabled !== false)
-}
-
-const TIER_COLOR: Record<string, string> = {
-  '1순위': '#6366f1',
-  '2순위': '#10b981',
-  '3순위': '#3b82f6',
-  '4순위': '#f59e0b',
-  '5순위': '#ec4899',
 }
 
 export default function Listup() {
@@ -882,38 +875,7 @@ export default function Listup() {
         </div>
       </div>
 
-      {dashStats && (
-        <div className="cards" style={{ marginBottom: 16 }}>
-          <div className="card">
-            <div className="card-label">총 인플루언서</div>
-            <div className="card-value">{dashStats.total}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
-            <div style={{ fontSize: 11, marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: '4px 0' }}>
-              {dashStats.tiers.map((t, i) => (
-                <span key={t.rank}>
-                  {i > 0 && <span style={{ margin: '0 5px', color: 'var(--gray-3)' }}>·</span>}
-                  <span style={{ color: TIER_COLOR[t.rank] ?? 'var(--gray-5)', fontWeight: 600 }}>{t.rank}</span>
-                  <strong style={{ color: 'var(--gray-7)', marginLeft: 3 }}>{t.total}</strong>
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="card highlight">
-            <div className="card-label">컨택 예정</div>
-            <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
-              {dashStats.sent}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {dashStats.total}</span>
-            </div>
-          </div>
-          <div className="card" style={{ borderLeft: '3px solid var(--teal-dk)', minWidth: 160 }}>
-            <div className="card-label">{phaseLabel} 확정 인원</div>
-            <div className="card-value" style={{ color: 'var(--teal-dk)' }}>
-              {dashStats.confirmed}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--gray-5)' }}> / 50</span>
-            </div>
-            <div style={{ marginTop: 6, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.min(dashStats.confirmed / 50 * 100, 100)}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
-            </div>
-          </div>
-        </div>
-      )}
+      {dashStats && <SearchStatsCards dashStats={dashStats} phaseLabel={phaseLabel} />}
 
       <PageTabs
         tabs={[

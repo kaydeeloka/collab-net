@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
-import { PageTabs } from '@/components/ui'
+import { PageTabs, StatCard, StatCards } from '@/components/ui'
 
 interface Stats {
   generalCount:  number
@@ -48,28 +48,24 @@ export default function BrandDb() {
       </div>
 
       {stats && (
-        <div className="cards" style={{ marginBottom: 20 }}>
-          <div className="card">
-            <div className="card-label">총 일반 브랜드</div>
-            <div className="card-value">{stats.generalCount}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
-          </div>
-          <div className="card">
-            <div className="card-label">총 퍼스널 브랜드</div>
-            <div className="card-value">{stats.personalCount}<span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> 명</span></div>
-          </div>
-          <div className="card highlight">
-            <div className="card-label">컨택 예정</div>
-            <div className="card-value" style={{ color: 'var(--yellow-text)' }}>
-              {stats.contactedCount}
-              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-5)' }}> / {stats.generalCount + stats.personalCount}</span>
-            </div>
-            <div className="card-sub">
-              {stats.generalCount + stats.personalCount
-                ? Math.round(stats.contactedCount / (stats.generalCount + stats.personalCount) * 100)
-                : 0}% 완료율
-            </div>
-          </div>
-        </div>
+        <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 20 }}>
+          <StatCard variant="metric" align="left" label="총 일반 브랜드" value={stats.generalCount} unit="명" />
+          <StatCard variant="metric" align="left" label="총 퍼스널 브랜드" value={stats.personalCount} unit="명" />
+          <StatCard
+            highlight
+            variant="metric"
+            align="left"
+            label="컨택 예정"
+            value={stats.contactedCount}
+            valueColor="var(--yellow-text)"
+            valueSuffix={(
+              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>
+                {' '}/ {stats.generalCount + stats.personalCount}
+              </span>
+            )}
+            footer={`${stats.generalCount + stats.personalCount ? Math.round(stats.contactedCount / (stats.generalCount + stats.personalCount) * 100) : 0}% 완료율`}
+          />
+        </StatCards>
       )}
 
       <PageTabs
