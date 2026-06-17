@@ -15,7 +15,6 @@ export interface ReplySyncCandidate {
   lastReplyAt?: string | null
 }
 
-const REPLY_STATUSES = new Set(['reply', 'positive', 'negative', 'negotiate'])
 const AWAITING_REPLY = new Set(['yes', 'noreply', ''])
 
 export async function checkOutlookConnected() {
@@ -56,7 +55,19 @@ export function shouldAutoMarkReply(currentStatus: string) {
 }
 
 export function replyTimestamp(reply: DetectedReply) {
-  return reply.receivedAt || (reply.date ? `${reply.date}T12:00:00.000Z` : new Date().toISOString())
+  if (reply.receivedAt) {
+    const ms = new Date(reply.receivedAt).getTime()
+    if (!Number.isNaN(ms)) return new Date(ms).toISOString()
+  }
+  if (reply.date) return `${reply.date}T12:00:00.000Z`
+  return new Date().toISOString()
+}
+
+/** Normalize DB/API timestamps to ISO for reliable comparisons in GAS. */
+export function toIsoTimestamp(value: string | null | undefined): string | undefined {
+  if (!value) return undefined
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString()
 }
 
 function ts(iso: string | null | undefined) {
@@ -64,7 +75,7 @@ function ts(iso: string | null | undefined) {
   return new Date(iso).getTime()
 }
 
-/** True when reply is newer than last send and not already recorded. */
+/** True when reply is newer than last send and not already recorded on the influencer row. */
 export function isNewReply(
   candidate: { last_contact_at?: string | null; last_reply_at?: string | null },
   reply: DetectedReply,

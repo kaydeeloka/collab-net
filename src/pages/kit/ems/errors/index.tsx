@@ -8,7 +8,7 @@ import {
   updateEmsReship,
   type EmsErrorRow,
 } from '@/lib/ems-errors'
-import { applyEmsPlaceholders, loadEmsTemplates } from '@/lib/ems-templates'
+import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/ems-templates'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
@@ -88,9 +88,13 @@ export default function EmsErrors() {
   const [savingId, setSavingId]   = useState<string | null>(null)
   const [tableEditMode, setTableEditMode] = useState(false)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [templates, setTemplates] = useState<EmsTemplate[]>([])
   const [bulkTplIdx, setBulkTplIdx] = useState(0)
   const [bulkSending, setBulkSending] = useState(false)
-  const templates = loadEmsTemplates()
+
+  useEffect(() => {
+    loadEmsTemplates().then(setTemplates).catch(() => showToast('템플릿을 불러오지 못했습니다', 'error'))
+  }, [showToast])
 
   useEffect(() => {
     if (pathname.startsWith('/kit/ems/errors') && !phaseLoading) loadErrors()
@@ -229,7 +233,7 @@ export default function EmsErrors() {
                         const res = await gasPost<{ ok?: boolean; error?: string }>({
                           action: 'sendOutreachEmail',
                           to: row.email,
-                          subject: applyEmsPlaceholders(tpl.subject, row),
+                          subject: applyEmsPlaceholders(tpl.title, row),
                           body: applyEmsPlaceholders(tpl.body, row),
                         })
                         if (res.error || res.ok === false) throw new Error(res.error || '발송 실패')

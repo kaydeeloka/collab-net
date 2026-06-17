@@ -972,6 +972,23 @@ DROP POLICY IF EXISTS "brand_archive_storage_all" ON storage.objects;
 CREATE POLICY "brand_archive_storage_all" ON storage.objects
   FOR ALL USING (bucket_id = 'brand-archive') WITH CHECK (bucket_id = 'brand-archive');
 
+-- ============================================================
+--  outreach_messages — dedupe Outlook sync (see outreach_messages_dedup.sql)
+-- ============================================================
+
+ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS outlook_message_id TEXT;
+ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS template_name TEXT;
+ALTER TABLE outreach_messages ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL;
+
+-- ============================================================
+--  email_templates — influencer / brand / ems email templates
+--  Run supabase/email_templates_schema.sql for DDL + default seed
+-- ============================================================
+
+ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+ALTER TABLE email_templates ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+UPDATE email_templates SET name = title WHERE name = '' AND title <> '';
+
 -- influencers — track imports from a previous phase (contact page)
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_influencers_source_phase ON influencers(source_phase_id);

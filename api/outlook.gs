@@ -178,6 +178,12 @@ function sendOutlookEmail(body) {
 }
 
 // ── Sync replies from Outlook inbox ─────────────────────────
+function _toMs(v) {
+  if (!v) return NaN;
+  var t = new Date(v).getTime();
+  return isNaN(t) ? NaN : t;
+}
+
 // Latest inbound message per email (filter + orderby — reliable newest-first).
 function _fetchLatestFromSender(token, email) {
   const safeEmail = (email || '').replace(/'/g, "''");
@@ -225,8 +231,14 @@ function syncOutlookReplies(items) {
       const entry = _fetchLatestFromSender(token, key);
       if (!entry || !entry.receivedAt) continue;
 
-      if (item.since && entry.receivedAt <= item.since) continue;
-      if (item.lastReplyAt && entry.receivedAt <= item.lastReplyAt) continue;
+      var recvMs = _toMs(entry.receivedAt);
+      if (isNaN(recvMs)) continue;
+
+      var sinceMs = _toMs(item.since);
+      if (!isNaN(sinceMs) && recvMs <= sinceMs) continue;
+
+      var lastMs = _toMs(item.lastReplyAt);
+      if (!isNaN(lastMs) && recvMs <= lastMs) continue;
 
       replies.push({
         email: item.email,

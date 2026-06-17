@@ -125,6 +125,8 @@ CREATE TABLE outreach_messages (
   direction       TEXT        NOT NULL,  -- 'outbound' | 'inbound'
   subject         TEXT,
   body            TEXT        NOT NULL,
+  template_name   TEXT,                  -- email_templates.name at send time
+  template_id     UUID,                  -- email_templates.id (FK added in supabase_alter.sql)
   sent_at         TIMESTAMPTZ DEFAULT now()
 );
 

@@ -9,6 +9,7 @@ import {
   markRepliesReadInOutlook,
   replyTimestamp,
   shouldAutoMarkReply,
+  toIsoTimestamp,
 } from '@/lib/reply-sync'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
@@ -19,15 +20,7 @@ import { TableActionBar } from '@/components/StickyBar'
 import { Button } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact-count'
 
-// ── Templates (shared with /brand/template page via localStorage) ─────────────
-const BRAND_TPL_KEY = 'mm_brand_email_templates'
-const DEFAULT_TEMPLATES = [
-  { id: 'brand_temp_01', name: '협업 제안 (첫 컨택)', subject: '[MiMuse] {{브랜드명}} 담당자님, 미뮤즈 협업 제안드립니다', body: '안녕하세요 {{담당자}}님,\n\n프리미엄 뷰티 브랜드 MiMuse(미뮤즈) 글로벌 커뮤니케이션 팀입니다.\n\n{{브랜드명}}의 제품과 미뮤즈가 함께 시너지를 낼 수 있을 것이라 생각하여 협업을 제안드립니다.\n\n자세한 내용은 아래와 같으며, 검토 후 회신 주시면 감사하겠습니다.\n\n미뮤즈 드림.' },
-  { id: 'brand_temp_02', name: '협업 리마인더', subject: '[MiMuse] {{브랜드명}} 담당자님, 이전 협업 제안 관련 재문의', body: '안녕하세요 {{담당자}}님, MiMuse 글로벌 팀입니다.\n\n이전에 발송드린 협업 제안 메일 관련하여 재문의 드립니다.\n\n{{브랜드명}}과의 협업에 여전히 큰 기대를 가지고 있으며, 편하실 때 회신 주시면 감사하겠습니다.\n\n감사합니다.' },
-]
-function loadTemplates() {
-  try { const v = localStorage.getItem(BRAND_TPL_KEY); return v ? JSON.parse(v) : DEFAULT_TEMPLATES } catch { return DEFAULT_TEMPLATES }
-}
+import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
 
 const DUMMY: Record<string, { value: string; color: string }> = {
   '{{브랜드명}}':  { value: 'AmorePacific',      color: '#a07800' },
@@ -122,16 +115,22 @@ export default function BrandContact() {
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
-  const [templates,       setTemplates]       = useState<any[]>(loadTemplates)
+  const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
 
-  // Reload templates when window regains focus (user may have edited in /brand/template)
+  const reloadTemplates = useCallback(() => {
+    fetchEmailTemplates('brand')
+      .then(setTemplates)
+      .catch(() => showToast('템플릿을 불러오지 못했습니다', 'error'))
+  }, [showToast])
+
   useEffect(() => {
-    const handler = () => setTemplates(loadTemplates())
+    reloadTemplates()
+    const handler = () => { reloadTemplates() }
     window.addEventListener('focus', handler)
     return () => window.removeEventListener('focus', handler)
-  }, [])
+  }, [reloadTemplates])
 
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -244,7 +243,7 @@ export default function BrandContact() {
 
       const syncItems = candidates.map(r => ({
         email: r.email!,
-        lastReplyAt: r.last_reply_at,
+        lastReplyAt: toIsoTimestamp(r.last_reply_at),
       }))
       const replies = await fetchOutlookReplies(syncItems)
 
@@ -431,7 +430,7 @@ export default function BrandContact() {
                     for (const key of Array.from(checkedIds)) {
                       const row = filtered.find(r => rowKey(r) === key)
                       if (!row || !row.email) continue
-                      await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.subject, row), body: applyPlaceholders(tpl.body, row) })
+                      await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.title, row), body: applyPlaceholders(tpl.body, row) })
                       await updateField(row, { send_count: row.send_count + 1, status: 'yes' })
                     }
                     setBulkSending(false); setCheckedIds(new Set())
@@ -605,7 +604,7 @@ export default function BrandContact() {
             <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '14px 18px', border: '1px solid var(--gray-2)' }}>
               <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>보내는 사람 · MiMuse Team</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
-                {renderWithDummy(templates[bulkTplIdx].subject)}
+                {renderWithDummy(templates[bulkTplIdx].title)}
               </div>
               <div style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
                 {renderWithDummy(templates[bulkTplIdx].body)}

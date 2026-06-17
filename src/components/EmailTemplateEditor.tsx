@@ -1,0 +1,635 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Mail } from 'lucide-react'
+import Spinner from '@/components/Spinner'
+import { useToast } from '@/contexts/ToastContext'
+import {
+  fetchEmailTemplates,
+  saveEmailTemplate,
+  createEmailTemplate,
+  deleteEmailTemplate,
+  type EmailTemplate,
+  type EmailTemplateDomain,
+} from '@/lib/email-templates'
+import { getEmailTemplateUiConfig } from '@/lib/email-template-ui-config'
+
+function renderWithDummy(
+  text: string,
+  dummyValues: Record<string, { value: string; color: string }>,
+): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+  let key = 0
+  while (remaining.length > 0) {
+    let earliest = -1
+    let earliestTag = ''
+    for (const tag of Object.keys(dummyValues)) {
+      const idx = remaining.indexOf(tag)
+      if (idx !== -1 && (earliest === -1 || idx < earliest)) {
+        earliest = idx
+        earliestTag = tag
+      }
+    }
+    if (earliest === -1) {
+      parts.push(remaining)
+      break
+    }
+    if (earliest > 0) parts.push(remaining.slice(0, earliest))
+    const d = dummyValues[earliestTag]
+    parts.push(
+      <span
+        key={key++}
+        style={{
+          background: d.color + '18',
+          color: d.color,
+          fontWeight: 700,
+          borderRadius: 4,
+          padding: '0 3px',
+          fontSize: '0.95em',
+        }}
+      >
+        {d.value}
+      </span>,
+    )
+    remaining = remaining.slice(earliest + earliestTag.length)
+  }
+  return parts
+}
+
+function insertAtCursor(
+  el: HTMLInputElement | HTMLTextAreaElement | null,
+  current: string,
+  placeholder: string,
+  setValue: (next: string) => void,
+) {
+  if (!el) {
+    setValue(current + placeholder)
+    return
+  }
+  const start = el.selectionStart ?? current.length
+  const end = el.selectionEnd ?? current.length
+  const next = current.slice(0, start) + placeholder + current.slice(end)
+  setValue(next)
+  requestAnimationFrame(() => {
+    el.selectionStart = el.selectionEnd = start + placeholder.length
+    el.focus()
+  })
+}
+
+interface EmailTemplateEditorProps {
+  domain: EmailTemplateDomain
+}
+
+export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps) {
+  const config = getEmailTemplateUiConfig(domain)
+  const { showToast } = useToast()
+  const [templates, setTemplates] = useState<EmailTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState(config.defaultCategory)
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
+
+  const titleWarnAt = config.titleMaxLength - 5
+  const titleMax = config.titleMaxLength
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const rows = await fetchEmailTemplates(domain)
+      setTemplates(rows)
+      setSelectedIdx(i => Math.min(i, Math.max(0, rows.length - 1)))
+    } catch {
+      showToast('템플릿을 불러오지 못했습니다', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [domain, showToast])
+
+  useEffect(() => { reload() }, [reload])
+
+  useEffect(() => {
+    const t = templates[selectedIdx]
+    if (t) {
+      setName(t.name)
+      setCategory(t.category || config.defaultCategory)
+      setTitle(t.title)
+      setBody(t.body)
+    }
+  }, [selectedIdx, templates, config.defaultCategory])
+
+  async function save() {
+    const t = templates[selectedIdx]
+    if (!t) return
+    setSaving(true)
+    try {
+      const updated = await saveEmailTemplate({ ...t, name, category, title, body })
+      setTemplates(prev => prev.map(row => (row.id === updated.id ? updated : row)))
+      showToast('저장되었습니다', 'success')
+    } catch {
+      showToast('저장에 실패했습니다', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function createNew() {
+    setSaving(true)
+    try {
+      const created = await createEmailTemplate(domain, {
+        name: '새 템플릿',
+        category: '기타',
+        title: '',
+        body: '',
+      })
+      setTemplates(prev => [...prev, created])
+      setSelectedIdx(templates.length)
+      showToast('템플릿이 추가되었습니다', 'success')
+    } catch {
+      showToast('템플릿 추가에 실패했습니다', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteTpl() {
+    const t = templates[selectedIdx]
+    if (!t || templates.length <= 1) return
+    setSaving(true)
+    try {
+      await deleteEmailTemplate(t.id)
+      const next = templates.filter(row => row.id !== t.id)
+      setTemplates(next)
+      setSelectedIdx(0)
+      showToast('삭제되었습니다', 'success')
+    } catch {
+      showToast('삭제에 실패했습니다', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function toggleCat(cat: string) {
+    setCollapsedCats(prev => {
+      const next = new Set(prev)
+      if (prev.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
+  }
+
+  const categoryStyle = config.categoryColors[category] ?? config.categoryColors['기타']
+
+  if (loading) {
+    return (
+      <div className="page page--fill" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <Spinner />
+        <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>템플릿 불러오는 중...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="page page--fill">
+      <div className="page-banner">
+        <span className="page-banner-deco">
+          {config.bannerDeco === 'mail-icon' ? <Mail size={28} /> : '✉️'}
+        </span>
+        <div>
+          <div className="page-banner-title">{config.bannerTitle}</div>
+          <div className="page-banner-desc">{config.bannerDesc}</div>
+        </div>
+        <div className="page-banner-actions">
+          <button
+            type="button"
+            className="page-banner-btn page-banner-btn--secondary"
+            onClick={createNew}
+            disabled={saving}
+          >
+            + 새 템플릿
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
+        <div
+          style={{
+            background: 'var(--gray-0)',
+            borderRadius: 'var(--radius)',
+            boxShadow: 'var(--shadow)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--gray-2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--gray-5)',
+                textTransform: 'uppercase',
+                letterSpacing: '.5px',
+              }}
+            >
+              템플릿 목록
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>{templates.length}개</span>
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {config.categories.map(cat => {
+              const catTemplates = templates
+                .map((t, i) => ({ t, i }))
+                .filter(({ t }) => (t.category || '기타') === cat)
+              if (catTemplates.length === 0) return null
+              const c = config.categoryColors[cat] ?? config.categoryColors['기타']
+              const collapsed = collapsedCats.has(cat)
+              return (
+                <div key={cat}>
+                  <div
+                    onClick={() => toggleCat(cat)}
+                    style={{
+                      padding: '10px 18px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.8px',
+                      color: c.color,
+                      background: c.bg,
+                      borderBottom: '1px solid var(--gray-2)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <span>
+                      {cat}{' '}
+                      <span style={{ fontWeight: 400, opacity: 0.7 }}>({catTemplates.length})</span>
+                    </span>
+                    <span style={{ fontSize: 10 }}>{collapsed ? '▸' : '▾'}</span>
+                  </div>
+                  {!collapsed &&
+                    catTemplates.map(({ t, i }) => (
+                      <div
+                        key={t.id}
+                        onClick={() => setSelectedIdx(i)}
+                        style={{
+                          padding: '14px 18px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid var(--gray-2)',
+                          background: selectedIdx === i ? 'var(--blue-lt)' : '#fff',
+                          borderLeft: selectedIdx === i ? `3px solid ${c.color}` : '3px solid transparent',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'var(--gray-8)',
+                            marginBottom: 3,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {t.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--gray-4)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {t.title || '(제목 없음)'}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid var(--gray-2)' }}>
+            <button
+              type="button"
+              onClick={createNew}
+              disabled={saving}
+              style={{
+                width: '100%',
+                padding: '7px',
+                background: 'var(--gray-1)',
+                border: '1px dashed var(--gray-3)',
+                borderRadius: 8,
+                fontSize: 12,
+                color: 'var(--gray-6)',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              + 새 템플릿
+            </button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: 'var(--gray-0)',
+            borderRadius: 'var(--radius)',
+            boxShadow: 'var(--shadow)',
+            padding: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>템플릿 편집</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={deleteTpl}
+                disabled={templates.length <= 1 || saving}
+                style={{
+                  padding: '6px 14px',
+                  background: '#fff0f0',
+                  color: '#c00',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                삭제
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                style={{
+                  padding: '6px 16px',
+                  background: 'var(--teal-dk)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {saving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
+            <div>
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--gray-5)',
+                  display: 'block',
+                  marginBottom: 4,
+                }}
+              >
+                템플릿명
+              </label>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value.slice(0, 30))}
+                maxLength={30}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: `1px solid ${name.length >= 27 ? '#f59e0b' : 'var(--gray-3)'}`,
+                  borderRadius: 8,
+                  fontSize: 13,
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <div
+                style={{
+                  fontSize: 10,
+                  color: name.length >= 27 ? '#d97706' : 'var(--gray-4)',
+                  textAlign: 'right',
+                  marginTop: 3,
+                }}
+              >
+                {name.length}/30
+              </div>
+            </div>
+            <div>
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--gray-5)',
+                  display: 'block',
+                  marginBottom: 4,
+                }}
+              >
+                카테고리
+              </label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                style={{
+                  padding: '8px 10px',
+                  border: `1px solid ${categoryStyle.color}55`,
+                  borderRadius: 8,
+                  fontSize: 12,
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  background: categoryStyle.bg,
+                  color: categoryStyle.color,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {config.categories.map(c => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 4,
+              }}
+            >
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 제목</label>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {config.titlePlaceholders.map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => insertAtCursor(titleRef.current, title, p, setTitle)}
+                    style={{
+                      fontSize: 10,
+                      padding: '2px 8px',
+                      background: 'var(--gray-1)',
+                      border: '1px solid var(--gray-3)',
+                      borderRadius: 5,
+                      cursor: 'pointer',
+                      color: 'var(--gray-7)',
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={e => setTitle(e.target.value.slice(0, titleMax))}
+              maxLength={titleMax}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: `1px solid ${title.length >= titleWarnAt ? '#f59e0b' : 'var(--gray-3)'}`,
+                borderRadius: 8,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div
+              style={{
+                fontSize: 10,
+                color: title.length >= titleWarnAt ? '#d97706' : 'var(--gray-4)',
+                textAlign: 'right',
+                marginTop: 3,
+              }}
+            >
+              {title.length}/{titleMax}
+            </div>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 4,
+              }}
+            >
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 본문</label>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {config.bodyPlaceholders.map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => insertAtCursor(bodyRef.current, body, p, setBody)}
+                    style={{
+                      fontSize: 10,
+                      padding: '2px 8px',
+                      background: 'var(--gray-1)',
+                      border: '1px solid var(--gray-3)',
+                      borderRadius: 5,
+                      cursor: 'pointer',
+                      color: 'var(--gray-7)',
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <textarea
+              ref={bodyRef}
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              rows={14}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid var(--gray-3)',
+                borderRadius: 8,
+                fontSize: 13,
+                fontFamily: 'inherit',
+                outline: 'none',
+                resize: 'vertical',
+                lineHeight: 1.7,
+              }}
+            />
+          </div>
+
+          {(title || body) && (
+            <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--gray-5)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.5px',
+                  marginBottom: 10,
+                }}
+              >
+                미리보기
+              </div>
+              <div
+                style={{
+                  background: 'var(--gray-1)',
+                  borderRadius: 10,
+                  padding: '14px 18px',
+                  border: '1px solid var(--gray-2)',
+                }}
+              >
+                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>
+                  {config.previewSender}
+                </div>
+                {title && (
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
+                    {renderWithDummy(title, config.dummyValues)}
+                  </div>
+                )}
+                {body && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--gray-7)',
+                      lineHeight: 1.9,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {renderWithDummy(body, config.dummyValues)}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6 }}>
+                치환 구문은 발송 시 자동 적용됩니다
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

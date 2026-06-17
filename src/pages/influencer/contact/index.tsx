@@ -10,7 +10,9 @@ import {
   markRepliesReadInOutlook,
   replyTimestamp,
   shouldAutoMarkReply,
+  toIsoTimestamp,
 } from '@/lib/reply-sync'
+import { logOutboundOutreach } from '@/lib/outreach-log'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
@@ -27,6 +29,7 @@ import {
   nextContactCountAfterSend,
   formatShortContactDate,
 } from '@/lib/contact-count'
+import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
@@ -76,27 +79,6 @@ interface Influencer {
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
-const DEFAULT_TEMPLATES = [
-  {
-    id: 'temp_01',
-    name: '[선물증정] 신제품 론칭 패키지 기프트 제안',
-    subject: '[MiMuse] {{이름}}님, 미뮤즈 가을 시즌 신제품 VIP 기프트 증정 제안',
-    body: `안녕하세요 {{이름}}님!\n프리미엄 뷰티 브랜드 MiMuse(미뮤즈) 글로벌 커뮤니케이션 팀입니다.\n\n평소 {{이름}}님의 TikTok 채널({{핸들}})을 통해 전달하시는 세련된 감성과 독창적인 리뷰 스타일에 깊은 인상을 받았습니다.\n\n이번 론칭하는 수분 세럼 패키지를 맞이하여 기프팅 선물을 전달드리고자 메일 드립니다.\n\n배송을 위해 성함, 연락처, 배송 정보를 회신 주시면 조속히 발송하겠습니다.\n\nMiMuse 드림.`,
-  },
-  {
-    id: 'temp_02',
-    name: '[리마인더] 1차 기프트 제안 리마인더',
-    subject: '[MiMuse] {{이름}}님, 이전 기프트 패키지 증정 관련 재문의',
-    body: `안녕하세요 {{이름}}님, MiMuse 글로벌 팀입니다.\n\n이전 메일을 통해 전달해 드렸던 신제품 선물 기프팅 제안에 대해 재문의 드립니다.\n\n{{이름}}님 채널({{핸들}})이 저희 제품과 잘 어울릴 것 같아 특별히 연락드립니다.\n\n배송 정보를 회신 주시면 즉시 절차를 진행하겠습니다.\n감사합니다.`,
-  },
-]
-
-function loadTemplates() {
-  try { const v = localStorage.getItem('mm_email_templates'); return v ? JSON.parse(v) : DEFAULT_TEMPLATES } catch { return DEFAULT_TEMPLATES }
-}
-function saveTemplates(t: typeof DEFAULT_TEMPLATES) {
-  localStorage.setItem('mm_email_templates', JSON.stringify(t))
-}
 
 const DUMMY_VALUES: Record<string, { value: string; color: string }> = {
   '{{이름}}':   { value: 'MiMuse Creator',    color: '#a07800' },
@@ -134,8 +116,8 @@ function applyPlaceholders(text: string, inf: Influencer | null) {
 }
 
 const PAGE_SIZE = 25
-function bulkSendConfirmMessage(count: number, tpl: { name: string; subject: string }) {
-  return `${count}명에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.subject || '(제목 없음)'}`
+function bulkSendConfirmMessage(count: number, tpl: { name: string; title: string }) {
+  return `${count}명에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.title || '(제목 없음)'}`
 }
 function paginate<T>(items: T[], page: number) {
   const total = items.length
@@ -241,7 +223,7 @@ export default function Outreach() {
   const [bulkSending,     setBulkSending]     = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
-  const [templates,       setTemplates]       = useState(loadTemplates)
+  const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
 
   // ── Memo inline edits ──
   const [memoEdits, setMemoEdits] = useState<Record<string, string>>({})
@@ -276,6 +258,12 @@ export default function Outreach() {
   useEffect(() => { loadInfluencers() }, [loadInfluencers])
 
   useEffect(() => {
+    fetchEmailTemplates('influencer')
+      .then(setTemplates)
+      .catch(() => showToast('템플릿을 불러오지 못했습니다', 'error'))
+  }, [showToast])
+
+  useEffect(() => {
     if (!showRoundFilter && !showStatusFilter) return
     const handler = (e: MouseEvent) => {
       if (roundFilterRef.current && !roundFilterRef.current.contains(e.target as Node)) setShowRoundFilter(false)
@@ -306,8 +294,8 @@ export default function Outreach() {
 
       const syncItems = candidates.map(r => ({
         email: r.email!,
-        since: r.last_contact_at,
-        lastReplyAt: r.last_reply_at,
+        since: toIsoTimestamp(r.last_contact_at),
+        lastReplyAt: toIsoTimestamp(r.last_reply_at),
       }))
       const replies = await fetchOutlookReplies(syncItems)
 
@@ -319,7 +307,6 @@ export default function Outreach() {
         const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
         if (!inf || !isNewReply(inf, reply)) continue
 
-        newReplies++
         const replyAt = replyTimestamp(reply)
         const patch: Partial<Influencer> = {
           last_reply_at: replyAt,
@@ -334,14 +321,7 @@ export default function Outreach() {
         const { error } = await supabase.from('influencers').update(patch).eq('id', inf.id)
         if (error) { showToast(error.message, 'error'); continue }
 
-        await supabase.from('outreach_messages').insert({
-          influencer_id: inf.id,
-          direction: 'inbound',
-          subject: '회신 (Outlook 자동 감지)',
-          body: reply.body,
-          sent_at: replyAt,
-        })
-
+        newReplies++
         if (reply.messageId) messageIds.push(reply.messageId)
       }
 
@@ -421,6 +401,27 @@ export default function Outreach() {
       else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
     }
   }, [showToast, influencers, selectedPhaseId])
+
+  const sendOutreachToInfluencer = useCallback(async (
+    inf: Influencer,
+    tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>,
+  ) => {
+    if (!inf.email) return
+    const subject = applyPlaceholders(tpl.title, inf)
+    const body = applyPlaceholders(tpl.body, inf)
+    const sentAt = new Date().toISOString()
+    await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject, body })
+    await logOutboundOutreach({
+      influencer_id: inf.id,
+      subject,
+      body,
+      template_name: tpl.name,
+      template_id: tpl.id,
+      sent_at: sentAt,
+    })
+    const nextCount = nextContactCountAfterSend(inf.contact_count)
+    await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
+  }, [updateField])
 
   const updateMemo = useCallback((id: string, value: string) => {
     setMemoEdits(prev => ({ ...prev, [id]: value }))
@@ -600,9 +601,7 @@ export default function Outreach() {
                     for (const id of ids) {
                       const inf = filtered.find(r => r.id === id)
                       if (!inf || !inf.email) continue
-                      await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl.subject, inf), body: applyPlaceholders(tpl.body, inf) })
-                      const nextCount = nextContactCountAfterSend(inf.contact_count)
-                      await updateField(id, { contact_count: nextCount, status: 'yes', last_contact_at: new Date().toISOString() })
+                      await sendOutreachToInfluencer(inf, tpl)
                     }
                     setBulkSending(false); setCheckedIds(new Set())
                     showToast(`${ids.length}명에게 발송 완료`, 'success')
@@ -842,7 +841,7 @@ export default function Outreach() {
                     받는 사람 · <span style={{ color: DUMMY_VALUES['{{이름}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이름}}'].value}</span>
                     {' <'}<span style={{ color: DUMMY_VALUES['{{이메일}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이메일}}'].value}</span>{'>'}
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{renderWithDummy(tpl?.subject || '(제목 없음)')}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{renderWithDummy(tpl?.title || '(제목 없음)')}</div>
                 </div>
                 <div style={{ padding: '24px 20px', fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
                   {tpl?.body ? renderWithDummy(tpl.body) : <span style={{ color: 'var(--gray-4)' }}>본문 없음</span>}
@@ -864,9 +863,7 @@ export default function Outreach() {
                         for (const id of ids) {
                           const inf = filtered.find(r => r.id === id)
                           if (!inf || !inf.email) continue
-                          await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject: applyPlaceholders(tpl2.subject, inf), body: applyPlaceholders(tpl2.body, inf) })
-                          const nextCount = nextContactCountAfterSend(inf.contact_count)
-                          await updateField(id, { contact_count: nextCount, last_contact_at: new Date().toISOString() })
+                          await sendOutreachToInfluencer(inf, tpl2)
                         }
                         setBulkSending(false); setCheckedIds(new Set())
                         showToast(`${ids.length}명에게 발송 완료`, 'success')
