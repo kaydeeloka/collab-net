@@ -1,78 +1,144 @@
 // ============================================================
-//  Beauty News — Webhook Receiver + Email Sender
+//  Beauty News — Gmail draft import + weekly email
 //
-//  Analysis runs externally (Claude AI → Cloudflare → POST here).
-//  GAS stores to Supabase and sends email on request.
+//  Archive flow: Claude Cowork → Gmail draft → importBeautyNewsFromGmailDrafts()
+//                 → Supabase beauty_news_archives (draft deleted after import)
 //
 //  Script Properties required:
 //    SENDER_EMAIL         — Outlook from address (optional)
 //    SUPABASE_PROJECT_URL — e.g. https://xxxx.supabase.co
 //    SUPABASE_KEY         — anon or service role key
+//
+//  Weekly send (once per archive):
+//    Run setupWeeklyBeautyNewsEmailTrigger() once in GAS editor → Mon 09:00 KST
+//    Recipients: all rows in Supabase email_recipients (same list as UI)
+//    Dedup: Script Property BEAUTY_NEWS_LAST_SENT_WINDOWS_START
 // ============================================================
 
-function _prop(key) {
-  return PropertiesService.getScriptProperties().getProperty(key);
+function _fetchLatestArchiveRow() {
+  var rows = supabaseGet(
+    '/rest/v1/beauty_news_archives'
+      + '?select=windows_start,windows_end,report_title,categories,keywords'
+      + '&order=windows_end.desc.nullslast,windows_start.desc'
+      + '&limit=1',
+  );
+  return (Array.isArray(rows) && rows[0]) ? rows[0] : null;
 }
+
+/** All emails in email_recipients — same source as the dashboard list. */
+function _fetchRecipientEmailsFromSupabase() {
+  var rows = supabaseGet('/rest/v1/email_recipients?select=email&order=email');
+  if (!Array.isArray(rows)) return [];
+  return rows.map(function(r) { return String(r.email || '').trim(); }).filter(Boolean);
+}
+
+function _formatBriefingSubjectDate(iso) {
+  if (!iso || iso.length < 10) return '';
+  var p = iso.slice(0, 10).split('-');
+  if (p.length !== 3) return iso;
+  return parseInt(p[1], 10) + '월 ' + parseInt(p[2], 10) + '일';
+}
+
+function _archiveRowToBriefingData(row) {
+  return {
+    windowsStart: row.windows_start || '',
+    windowsEnd:   row.windows_end   || '',
+    reportTitle:  row.report_title  || '',
+    categories:   row.categories    || [],
+    keywords:     row.keywords      || [],
+  };
+}
+
+function _fetchArchiveRowByWindowsStart(windowsStart) {
+  if (!windowsStart) return null;
+  var rows = supabaseGet(
+    '/rest/v1/beauty_news_archives'
+      + '?select=windows_start,windows_end,report_title,categories,keywords'
+      + '&windows_start=eq.' + encodeURIComponent(windowsStart)
+      + '&limit=1',
+  );
+  return (Array.isArray(rows) && rows[0]) ? rows[0] : null;
+}
+
+/**
+ * Weekly job or manual button: send archive to all UI recipients.
+ * @param {boolean} force Skip dedup when true (manual send button)
+ * @param {string} windowsStart Optional — send a specific week; default = latest archive
+ */
+function sendWeeklyBeautyNewsEmail(force, windowsStart) {
+  try {
+    var archive = windowsStart
+      ? _fetchArchiveRowByWindowsStart(windowsStart)
+      : _fetchLatestArchiveRow();
+    if (!archive) return { ok: false, error: '저장된 아카이브가 없습니다' };
+
+    var ws = String(archive.windows_start || '');
+    var props = PropertiesService.getScriptProperties();
+    if (!force && props.getProperty('BEAUTY_NEWS_LAST_SENT_WINDOWS_START') === ws) {
+      return { ok: true, skipped: true, windowsStart: ws, reason: 'already sent for this week' };
+    }
+
+    var recipients = _fetchRecipientEmailsFromSupabase();
+    if (!recipients.length) return { ok: false, error: 'email_recipients가 비어 있습니다' };
+
+    var data = _archiveRowToBriefingData(archive);
+    var endIso = archive.windows_end || archive.windows_start;
+    var subject = '[MiMuse] 주간 뷰티 뉴스 · ' + _formatBriefingSubjectDate(endIso);
+    var htmlBody = buildBriefingHtml(data);
+    var result = sendBeautyNewsEmail(recipients, htmlBody, subject);
+
+    if (result.ok) props.setProperty('BEAUTY_NEWS_LAST_SENT_WINDOWS_START', ws);
+    return Object.assign({ windowsStart: ws, recipientCount: recipients.length }, result);
+  } catch (e) {
+    Logger.log('sendWeeklyBeautyNewsEmail: ' + e.toString());
+    return { ok: false, error: e.toString() };
+  }
+}
+
+/** Run once in GAS editor to install Mon 09:00 KST weekly trigger. */
+function setupWeeklyBeautyNewsEmailTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'sendWeeklyBeautyNewsEmail') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendWeeklyBeautyNewsEmail')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(9)
+    .nearMinute(0)
+    .inTimezone('Asia/Seoul')
+    .create();
+  return { ok: true, schedule: 'Every Monday 09:00 Asia/Seoul', handler: 'sendWeeklyBeautyNewsEmail' };
+}
+
+function removeWeeklyBeautyNewsEmailTrigger() {
+  var removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'sendWeeklyBeautyNewsEmail') {
+      ScriptApp.deleteTrigger(t);
+      removed++;
+    }
+  });
+  return { ok: true, removed: removed };
+}
+
 
 // ── Archive → Supabase ────────────────────────────────────────
 function _saveArchive(data) {
   try {
-    const url = _prop('SUPABASE_PROJECT_URL');
-    const key = _prop('SUPABASE_KEY');
-    if (!url || !key) { Logger.log('_saveArchive: SUPABASE_PROJECT_URL or SUPABASE_KEY missing'); return; }
-
-    const res = UrlFetchApp.fetch(url + '/rest/v1/beauty_news_archives?on_conflict=windows_start', {
-      method:      'post',
-      contentType: 'application/json',
-      headers: {
-        'apikey':        key,
-        'Authorization': 'Bearer ' + key,
-        'Prefer':        'resolution=merge-duplicates',
-      },
-      payload: JSON.stringify({
-        windows_start: data.windowsStart || '',
-        windows_end:   data.windowsEnd   || '',
-        report_title:  data.reportTitle  || '',
-        categories:    data.categories   || [],
-        keywords:      data.keywords     || [],
-      }),
-      muteHttpExceptions: true,
-    });
-    const code = res.getResponseCode();
-    if (code < 200 || code >= 300) Logger.log('_saveArchive HTTP ' + code + ': ' + res.getContentText().slice(0, 200));
-    else Logger.log('_saveArchive: saved ' + data.windowsStart);
-  } catch(e) { Logger.log('_saveArchive: ' + e.message); }
-}
-
-// ── Webhook receiver (Cloudflare → Claude AI flow) ────────────
-// Expected payload fields:
-//   secret, windowsStart (YYYY-MM-DD), windowsEnd (YYYY-MM-DD),
-//   reportTitle, categories (array), keywords (array of {tag, explanation})
-function receiveWebhookBriefing(body) {
-  try {
-    if ((body.secret || '') !== 'mimuse-wh-2026') return { ok: false, error: 'invalid secret' };
-
-    const data = {
-      windowsStart: body.windowsStart || body.windows_start || '',
-      windowsEnd:   body.windowsEnd   || body.windows_end   || '',
-      reportTitle:  body.reportTitle  || '',
-      categories:   body.categories   || [],
-      keywords:     body.keywords     || [],
-    };
-
-    _saveArchive(data);
-
-    if (body.autoEmail) {
-      const recipients = getRecipients();
-      const subject    = body.subject || ('[MiMuse] 주간 뷰티 브리핑 · ' + data.windowsEnd);
-      const htmlBody   = body.htmlBody || buildBriefingHtml(data);
-      sendBeautyNewsEmail(recipients, htmlBody, subject);
+    var result = supabaseUpsert('beauty_news_archives', {
+      windows_start: data.windowsStart || '',
+      windows_end:   data.windowsEnd   || '',
+      report_title:  data.reportTitle  || '',
+      categories:    data.categories   || [],
+      keywords:      data.keywords     || [],
+    }, 'windows_start');
+    if (!result.ok) {
+      Logger.log('_saveArchive HTTP ' + result.status + ': ' + (result.text || '').slice(0, 200));
+      return;
     }
-
-    return { ok: true, saved: data.windowsStart };
-  } catch(e) {
-    Logger.log('receiveWebhookBriefing: ' + e.toString());
-    return { ok: false, error: e.toString() };
+    Logger.log('_saveArchive: saved ' + data.windowsStart);
+  } catch (e) {
+    Logger.log('_saveArchive: ' + e.message);
   }
 }
 
@@ -80,7 +146,7 @@ function receiveWebhookBriefing(body) {
 function sendBeautyNewsEmail(recipients, htmlBody, subject) {
   try {
     const token       = getOutlookAccessToken();
-    const senderEmail = _prop('SENDER_EMAIL') || '';
+    const senderEmail = scriptProp('SENDER_EMAIL') || '';
     var sent = 0, errors = [];
     for (var i = 0; i < recipients.length; i++) {
       var addr = recipients[i].trim();
@@ -111,18 +177,80 @@ function sendBeautyNewsEmail(recipients, htmlBody, subject) {
   } catch(e) { return { ok: false, error: e.toString() }; }
 }
 
-// ── Fallback: read recipients from Script Property ────────────
-// Only used when autoEmail:true from webhook. Website reads from Supabase directly.
-function getRecipients() {
-  var raw = _prop('RECIPIENT_EMAILS') || '';
-  return raw.split(',').map(function(e) { return e.trim(); }).filter(Boolean);
+// ── Gmail draft → Supabase (Claude Cowork output) ─────────────
+// Cowork creates a Gmail draft with subject "[MiMuse Archive] …" and JSON between:
+//   MIMUSE_ARCHIVE_JSON … END_MIMUSE_ARCHIVE_JSON
+// Run importBeautyNewsFromGmailDrafts() manually, on a time trigger, or via dashboard button.
+var GMAIL_ARCHIVE_SUBJECT_PREFIX = '[MiMuse Archive]';
+var GMAIL_ARCHIVE_JSON_START     = 'MIMUSE_ARCHIVE_JSON';
+var GMAIL_ARCHIVE_JSON_END       = 'END_MIMUSE_ARCHIVE_JSON';
+
+function _extractArchiveJsonFromText(text) {
+  var body = String(text || '');
+  var s = body.indexOf(GMAIL_ARCHIVE_JSON_START);
+  var e = body.indexOf(GMAIL_ARCHIVE_JSON_END);
+  if (s !== -1 && e !== -1 && e > s) {
+    return body.slice(s + GMAIL_ARCHIVE_JSON_START.length, e).trim();
+  }
+  var start = body.indexOf('{');
+  var end   = body.lastIndexOf('}');
+  if (start !== -1 && end > start) return body.slice(start, end + 1);
+  return '';
+}
+
+function _parseArchivePayload(raw) {
+  var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  return {
+    windowsStart: parsed.windows_start || parsed.windowsStart || '',
+    windowsEnd:   parsed.windows_end   || parsed.windowsEnd   || '',
+    reportTitle:  parsed.report_title  || parsed.reportTitle  || '',
+    categories:   parsed.categories   || [],
+    keywords:     parsed.keywords     || [],
+  };
+}
+
+function importBeautyNewsFromGmailDrafts() {
+  var drafts = GmailApp.getDrafts();
+  var imported = 0;
+  var errors = [];
+  var ids = [];
+
+  drafts.forEach(function(draft) {
+    try {
+      var msg = draft.getMessage();
+      var subj = msg.getSubject() || '';
+      if (subj.indexOf(GMAIL_ARCHIVE_SUBJECT_PREFIX) !== 0) return;
+
+      var plain = msg.getPlainBody() || '';
+      var jsonStr = _extractArchiveJsonFromText(plain);
+      if (!jsonStr) jsonStr = _extractArchiveJsonFromText(msg.getBody());
+      if (!jsonStr) throw new Error('JSON block not found');
+
+      var data = _parseArchivePayload(jsonStr);
+      if (!data.windowsStart) throw new Error('windows_start missing');
+
+      _saveArchive(data);
+      draft.deleteDraft();
+      imported++;
+      ids.push(data.windowsStart);
+    } catch (err) {
+      errors.push(((draft.getMessage().getSubject()) || 'draft') + ': ' + err.message);
+    }
+  });
+
+  return { ok: errors.length === 0 || imported > 0, imported: imported, windowsStarts: ids, errors: errors };
 }
 
 // ── Route handler ─────────────────────────────────────────────
 function routeBeautyNews(action, p, body) {
   switch (action) {
-    case 'receiveWebhook':      return receiveWebhookBriefing(body || {});
-    case 'sendBeautyNewsEmail': return sendBeautyNewsEmail((body || {}).recipients, (body || {}).htmlBody, (body || {}).subject);
-    default:                    return null;
+    case 'sendBeautyNewsEmail':         return sendBeautyNewsEmail((body || {}).recipients, (body || {}).htmlBody, (body || {}).subject);
+    case 'importBeautyNewsGmailDrafts': return importBeautyNewsFromGmailDrafts();
+    case 'sendWeeklyBeautyNewsEmail':
+      return sendWeeklyBeautyNewsEmail(
+        (body || {}).force === true,
+        (body || {}).windowsStart || (body || {}).windows_start || '',
+      );
+    default:                            return null;
   }
 }

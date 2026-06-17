@@ -19,7 +19,6 @@ import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
-import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import { TableActionBar } from '@/components/StickyBar'
 import { Button } from '@/components/ui'
 import {
@@ -197,9 +196,8 @@ function ContactCountEditor({ count, onChange }: { count: number; onChange: (n: 
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Outreach() {
-  const { showToast }     = useToast()
+  const { showToast, showConfirm } = useToast()
   const { selectedPhaseId, phases } = usePhase()
-  const confirmToast      = useConfirmToast()
   const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
 
   // ── Data ──
@@ -595,7 +593,7 @@ export default function Outreach() {
                 onClick={() => {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
-                  confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
+                  showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
                     setBulkSending(true)
                     const ids = Array.from(checkedIds)
                     for (const id of ids) {
@@ -605,7 +603,7 @@ export default function Outreach() {
                     }
                     setBulkSending(false); setCheckedIds(new Set())
                     showToast(`${ids.length}명에게 발송 완료`, 'success')
-                  })
+                  }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
                 {bulkSending ? '발송 중...' : '일괄 발송'}
@@ -857,7 +855,7 @@ export default function Outreach() {
                       setShowBulkPreview(false)
                       const tpl2 = templates[bulkTplIdx]
                       if (!tpl2) return
-                      confirmToast.show(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
+                      showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
                         setBulkSending(true)
                         const ids = Array.from(checkedIds)
                         for (const id of ids) {
@@ -867,7 +865,7 @@ export default function Outreach() {
                         }
                         setBulkSending(false); setCheckedIds(new Set())
                         showToast(`${ids.length}명에게 발송 완료`, 'success')
-                      })
+                      }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                     }}
                     style={{ padding: '6px 14px', background: checkedIds.size === 0 ? 'var(--gray-3)' : 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
                     {checkedIds.size > 0 ? `${checkedIds.size}명 일괄 발송` : '일괄 발송'}
@@ -878,8 +876,6 @@ export default function Outreach() {
           </div>
         )
       })()}
-
-      <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} confirmLabel="발송" confirmColor="var(--blue-dk)" />
     </div>
   )
 }

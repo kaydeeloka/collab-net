@@ -42,7 +42,7 @@ const EMPTY_FORM = {
 type Form = typeof EMPTY_FORM
 
 export default function BrandDbGeneral() {
-  const { showToast } = useToast()
+  const { showToast, showConfirm } = useToast()
   const { selectedPhaseId } = usePhase()
   const navigate = useNavigate()
 
@@ -474,7 +474,7 @@ export default function BrandDbGeneral() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-            <button onClick={() => deleteRow(viewRow.id)}
+            <button onClick={() => showConfirm('이 브랜드를 삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
               style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               삭제
             </button>

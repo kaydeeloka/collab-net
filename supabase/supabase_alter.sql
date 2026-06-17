@@ -74,7 +74,7 @@ ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS registered_date   DATE;       
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS application_number TEXT;        -- 접수번호
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS email_sent        BOOLEAN DEFAULT false;
 ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS error_reason      TEXT;   -- 오류 사유 (배송 오류 관리)
-ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS error_status      TEXT;   -- 처리 상태: 처리 대기 | 처리 중 | 확인 중 | 재발송 예정 | 재발송 완료
+ALTER TABLE ems_tracking ADD COLUMN IF NOT EXISTS registered_17track TEXT;  -- 'Y' when registered on 17track
 -- Remove old columns not in schema
 ALTER TABLE ems_tracking DROP COLUMN IF EXISTS product;
 ALTER TABLE ems_tracking DROP COLUMN IF EXISTS application_date;

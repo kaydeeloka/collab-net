@@ -7,16 +7,9 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
+import { getEmsStatusColor, isEmsDelivered, isEmsException } from '@/lib/ems-tracking-status'
 
 const GOOGLE_FORM_URL = ''
-
-const EMS_STATUS_COLORS: Record<string, string> = {
-  '접수완료'   : '#6366f1',
-  'Preparing'  : '#94a3b8',
-  'In Transit' : '#6a95a5',
-  'Delivered'  : '#27ae60',
-  'Exception'  : '#e74c3c',
-}
 
 type UploadStatus     = 'Pending' | 'Yes' | 'No' | 'all'
 type ReviewLinkFilter = 'all' | 'has' | 'none'
@@ -232,7 +225,7 @@ function EmsShippingCell({
     return <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>—</span>
   }
 
-  const badgeColor = EMS_STATUS_COLORS[emsStatus || ''] || '#94a3b8'
+  const badgeColor = getEmsStatusColor(emsStatus)
   return (
     <div>
       {hasAddress && (
@@ -294,7 +287,7 @@ function emptyPlatform(): InfluencerPlatform {
 
 export default function Confirmed() {
   const { viewPhaseId } = usePhase()
-  const { showToast }       = useToast()
+  const { showToast, showConfirm } = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedRow[]>([])
   const [brandCounts, setBrandCounts] = useState(emptyBrandCounts())
@@ -544,8 +537,8 @@ export default function Confirmed() {
     instagram: rows.filter(r => rowHasPlatform(r, 'instagram')).length,
     magazine:  rows.filter(r => rowHasPlatform(r, 'magazine')).length,
   }
-  const delivered      = rows.filter(r => r.ems_status === 'Delivered').length
-  const shippingErrors = rows.filter(r => r.ems_status === 'Exception').length
+  const delivered      = rows.filter(r => isEmsDelivered(r.ems_status)).length
+  const shippingErrors = rows.filter(r => isEmsException(r.ems_status)).length
 
   function cycleUpload(id: string, current: string) {
     const next = current === 'Pending' ? 'Yes' : current === 'Yes' ? 'No' : 'Pending'
@@ -1047,7 +1040,7 @@ export default function Confirmed() {
                     <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>배송 상태</div>
                     <div>
                       {r.ems_status
-                        ? <span style={{ background: EMS_STATUS_COLORS[r.ems_status] || '#94a3b8', color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.ems_status}</span>
+                        ? <span style={{ background: getEmsStatusColor(r.ems_status), color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.ems_status}</span>
                         : <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>—</span>}
                     </div>
                   </div>
@@ -1094,8 +1087,13 @@ export default function Confirmed() {
                   placeholder="https://..."
                   style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12 }} />
               </div>
-              <button type="button" onClick={() => setEditPlatforms(prev => prev.filter((_, idx) => idx !== i))}
+              <button
+                type="button"
                 disabled={editPlatforms.length <= 1}
+                onClick={() => showConfirm(
+                  `${a.platform || '플랫폼'} 항목을 삭제하시겠습니까?`,
+                  () => setEditPlatforms(prev => prev.filter((_, idx) => idx !== i)),
+                )}
                 style={{ fontSize: 11, padding: '6px 8px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: editPlatforms.length <= 1 ? 'not-allowed' : 'pointer' }}>
                 삭제
               </button>

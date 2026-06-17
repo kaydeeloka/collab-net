@@ -4,6 +4,13 @@
 //  Integrations: Apify, Microsoft Outlook Graph
 // ============================================================
 
+// Script Properties helper (shared across feature files)
+function scriptProp(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+// Supabase REST helpers → api/supabase.gs
+
 // Feature routers — each file owns its own routeXxx(action, p, body)
 const FEATURE_ROUTERS = [
   routeTcmListup,
@@ -11,6 +18,7 @@ const FEATURE_ROUTERS = [
   routeMonitoring,
   routeTrend,
   routeBeautyNews,
+  routeEms,
 ];
 
 function _dispatch(action, p, body) {
@@ -29,6 +37,13 @@ function doGet(e) {
   let result;
   try {
     result = _dispatch(action, p, null);
+    if (result === null && action === 'test') {
+      result = { ok: true, sent: sendBeautyNewsEmail(
+        _fetchRecipientEmailsFromSupabase(),
+        '<p>WebFetch 테스트 이메일입니다. 이게 도착하면 GET 방식 연결 성공!</p>',
+        '[테스트] WebFetch 연결 확인'
+      ) };
+    }
     if (result === null) result = { ok: true, api: 'MiMuse GAS API v1' };
   } catch (err) {
     result = { error: err.toString() };
@@ -59,22 +74,5 @@ function doPost(e) {
 
   return ContentService
     .createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  const action = e.parameter.action;
-
-  if (action === 'test') {
-    const result = sendBeautyNewsEmail(
-      getRecipients(),
-      '<p>WebFetch 테스트 이메일입니다. 이게 도착하면 GET 방식 연결 성공!</p>',
-      '[테스트] WebFetch 연결 확인'
-    );
-    return ContentService.createTextOutput(JSON.stringify({ ok: true, sent: result }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'Unknown action' }))
     .setMimeType(ContentService.MimeType.JSON);
 }

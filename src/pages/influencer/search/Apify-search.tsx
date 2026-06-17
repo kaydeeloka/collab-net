@@ -1,11 +1,13 @@
+
+//You can ignore this page is it's not use
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
-import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import Pagination from '@/components/Pagination'
 import { PageTabs } from '@/components/ui'
 
@@ -162,7 +164,7 @@ export default function Listup() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
-  const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
+  const { showConfirm } = useToast()
 
   // Config state (loaded from Supabase app_config)
   const [tiers, setTiers] = useState<Tier[]>(DEFAULT_TIERS)
@@ -426,7 +428,6 @@ export default function Listup() {
   }
 
   async function deleteInfluencer(id: string) {
-    if (!confirm('이 크리에이터를 삭제하시겠습니까?')) return
     const { error } = await supabase.from('influencers').delete().eq('id', id)
     if (error) { alert('오류: ' + error.message); return }
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
@@ -795,7 +796,7 @@ export default function Listup() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화하시겠습니까?')) { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveConfig('tiers', DEFAULT_TIERS); setTierEditMode(false) } }}>↺</button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('기본값으로 초기화하시겠습니까?', () => { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveConfig('tiers', DEFAULT_TIERS); setTierEditMode(false) })}>↺</button>
                   </div>
                 </div>
                 <div className="table-wrap">
@@ -860,7 +861,7 @@ export default function Listup() {
                         </div>
                         <div style={{ display: 'flex', gap: 5 }}>
                           <button className="cfg-btn" onClick={() => setEdit(!editMode)}>{editMode ? '완료' : '편집'}</button>
-                          <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('기본값으로 초기화?')) { setKws([...defaults]); saveConfig(cfgKey, defaults); setEdit(false) } }}>↺</button>
+                          <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('기본값으로 초기화?', () => { setKws([...defaults]); saveConfig(cfgKey, defaults); setEdit(false) })}>↺</button>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1037,7 +1038,6 @@ export default function Listup() {
         )}
       </div>
 
-      <ConfirmToast state={confirmState} onHide={hideConfirm} />
     </div>
   )
 }

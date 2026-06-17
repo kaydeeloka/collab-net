@@ -67,7 +67,7 @@ const EMPTY_FORM: Form = {
 }
 
 export default function BrandDbPersonal() {
-  const { showToast } = useToast()
+  const { showToast, showConfirm } = useToast()
   const { selectedPhaseId } = usePhase()
   const navigate = useNavigate()
 
@@ -507,7 +507,7 @@ export default function BrandDbPersonal() {
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-            <button onClick={() => { if (window.confirm('삭제하시겠습니까?')) deleteRow(viewRow.id) }}
+            <button onClick={() => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
               style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>삭제</button>
             <button onClick={() => { setShowView(false); openEdit(viewRow) }}
               style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>수정</button>

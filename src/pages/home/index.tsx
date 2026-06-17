@@ -4,6 +4,7 @@ import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide
 import { supabase } from '@/lib/supabase'
 import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '@/lib/beauty-news'
 import { fetchReshipmentMap } from '@/lib/ems-errors'
+import { isEmsDelivered, isEmsException, isEmsInTransit } from '@/lib/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
@@ -110,9 +111,9 @@ export default function Dashboard() {
           reship_id: reshipMap.get(ci.id)?.id ?? null,
         }
       })
-      const delivered = rows.filter(r => r.status === 'Delivered').length
-      const inTransit = rows.filter(r => r.status === 'In Transit' || r.status === 'Preparing').length
-      const exception = rows.filter(r => r.status === 'Exception' || r.reship_id).length
+      const delivered = rows.filter(r => isEmsDelivered(r.status)).length
+      const inTransit = rows.filter(r => isEmsInTransit(r.status)).length
+      const exception = rows.filter(r => isEmsException(r.status) || r.reship_id).length
       setStatsEms(
         `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${delivered}</div><div class="fstat-lbl">배송 완료</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${inTransit}</div><div class="fstat-lbl">배송 중</div></div>` +

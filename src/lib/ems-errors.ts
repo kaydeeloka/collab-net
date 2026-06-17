@@ -61,7 +61,7 @@ export function countReshipCompleted(rows: Pick<EmsErrorRow, 'status'>[]): numbe
   return rows.filter(r => r.status === '재발송 완료').length
 }
 
-export type ReshipmentRef = { id: string; status: string }
+export type ReshipmentRef = { id: string; status: string; ems_number: string | null }
 
 async function fetchConfirmedIdsForPhase(phaseId: string): Promise<string[]> {
   const { data, error } = await supabase
@@ -81,13 +81,17 @@ export async function fetchReshipmentMap(phaseId?: string | null): Promise<Map<s
 
   const { data, error } = await supabase
     .from('ems_reshipments')
-    .select('id, status, confirmed_influencer_id')
+    .select('id, status, ems_number, confirmed_influencer_id')
     .in('confirmed_influencer_id', confirmedIds)
 
   if (error) throw error
 
   return new Map(
-    (data || []).map(r => [r.confirmed_influencer_id, { id: r.id, status: r.status }]),
+    (data || []).map(r => [r.confirmed_influencer_id, {
+      id: r.id,
+      status: r.status,
+      ems_number: r.ems_number ?? null,
+    }]),
   )
 }
 

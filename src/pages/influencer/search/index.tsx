@@ -6,7 +6,6 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
-import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageTabs } from '@/components/ui'
@@ -221,11 +220,10 @@ export default function Listup() {
   const phaseLabel = phases.find(p => p.id === viewPhaseId)?.name ?? '1차'
   const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
   const otherPhases = phases.filter(p => p.id !== viewPhaseId)
-  const { showToast } = useToast()
+  const { showToast, showConfirm } = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const activeTab: ListupTab = pathname.endsWith('/db') ? 'database' : 'search'
-  const { state: confirmState, show: showConfirm, hide: hideConfirm } = useConfirmToast()
 
   // Config state (loaded from Supabase)
   const [configLoading, setConfigLoading] = useState(true)
@@ -616,10 +614,13 @@ export default function Listup() {
   }
 
   async function deleteInfluencer(id: string) {
-    if (!confirm('이 크리에이터를 삭제하시겠습니까?')) return
     const { error } = await supabase.from('influencers').delete().eq('id', id)
     if (error) { alert('오류: ' + error.message); return }
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
+  }
+
+  function requestDeleteInfluencer(id: string) {
+    showConfirm('이 크리에이터를 삭제하시겠습니까?', () => { void deleteInfluencer(id) })
   }
 
   async function markContact(id: string) {
@@ -1010,7 +1011,7 @@ export default function Listup() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => { if (confirm('DB 기본값으로 초기화하시겠습니까?')) resetTiersFromDb() }}>↺</button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('DB 기본값으로 초기화하시겠습니까?', () => resetTiersFromDb())}>↺</button>
                   </div>
                 </div>
                 {configLoading ? (
@@ -1084,14 +1085,13 @@ export default function Listup() {
                         </div>
                         <div style={{ display: 'flex', gap: 5 }}>
                           <button className="cfg-btn" onClick={() => cat.setEdit(!cat.edit)}>{cat.edit ? '완료' : '편집'}</button>
-                          <button className="cfg-btn cfg-btn--ghost" onClick={() => {
-                            if (!confirm('처음 불러온 값으로 초기화?')) return
+                          <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('처음 불러온 값으로 초기화?', () => {
                             const kws = [...cat.initialRef.current]
                             cat.setKws(kws)
                             saveConfig(cat.cfgKey, kws)
                             if (selectedKeyword && !kws.includes(selectedKeyword)) setSelectedKeyword(null)
                             cat.setEdit(false)
-                          }}>↺</button>
+                          })}>↺</button>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1260,8 +1260,6 @@ export default function Listup() {
           </div>
         )}
       </div>
-
-      <ConfirmToast state={confirmState} onHide={hideConfirm} />
 
       <Modal open={showImportModal} onClose={() => !importing && setShowImportModal(false)} title="이전 차수 불러오기">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 320 }}>

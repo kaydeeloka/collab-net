@@ -78,7 +78,7 @@ function archiveLinkFor(brand: ConfirmedBrand, allRows: ConfirmedBrand[]) {
 
 export default function BrandConfirmedManagement() {
   const { selectedPhaseId } = usePhase()
-  const { showToast }     = useToast()
+  const { showToast, showConfirm } = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedBrand[]>([])
   const [loading, setLoading] = useState(true)
@@ -386,7 +386,7 @@ export default function BrandConfirmedManagement() {
           footer={
             <ModalFooter
               split
-              danger={{ label: '삭제', onClick: () => { if (window.confirm('삭제하시겠습니까?')) deleteRow(viewRow.id) } }}
+              danger={{ label: '삭제', onClick: () => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) }) }}
               confirm={{ label: '✎ 편집', onClick: () => { setShowView(false); openEdit(viewRow) } }}
             />
           }

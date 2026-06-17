@@ -1,37 +1,34 @@
 // ============================================================
 //  Tab: 인플루언서 모니터링
 //  All data lives in Supabase — no Google Sheets dependency.
+//  Keywords: monitoring_keywords table (same source as dashboard)
 // ============================================================
 
-const DEFAULT_BRAND_KEYWORDS = {
-  mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
-  brands: ['aesthein', 'joodoc', 'nesh', 'varuza'],
-};
-
-// ── Supabase helpers ──────────────────────────────────────────
-
-function _getSupabaseCredentials() {
-  const props = PropertiesService.getScriptProperties();
-  return {
-    url: props.getProperty('SUPABASE_PROJECT_URL'),
-    key: props.getProperty('SUPABASE_KEY'),
-  };
+function _emptyMonitoringKeywords() {
+  return { mimuse: [], brands: [] };
 }
 
-function _sbHeaders(key) {
-  return { apikey: key, Authorization: 'Bearer ' + key };
+function _keywordsFromRows(rows) {
+  var result = _emptyMonitoringKeywords();
+  if (!Array.isArray(rows)) return result;
+  rows.forEach(function(row) {
+    if (row.brand && Array.isArray(row.keywords)) {
+      result[row.brand] = row.keywords;
+    }
+  });
+  return result;
 }
 
-// ── Read monitoring data from Supabase ────────────────────────
+// ── Read monitoring data from Supabase (helpers: supabase.gs) ──
 
 function getMonitoringData() {
-  const { url, key } = _getSupabaseCredentials();
+  const { url, key } = supabaseConfig();
   if (!url || !key) return _emptyMonitoring('SUPABASE_PROJECT_URL / SUPABASE_KEY가 Script Properties에 설정되지 않았습니다.');
 
   try {
     const res = UrlFetchApp.fetch(
       url + '/rest/v1/monitoring?select=date,brand,review_link,views,likes,comments,keywords,updated&order=date.desc',
-      { headers: _sbHeaders(key), muteHttpExceptions: true }
+      { headers: supabaseHeaders(), muteHttpExceptions: true }
     );
     const rows = JSON.parse(res.getContentText());
     if (!Array.isArray(rows)) return _emptyMonitoring('Supabase 오류: ' + res.getContentText());
@@ -70,52 +67,35 @@ function getMonitoringData() {
 // ── Keywords ─────────────────────────────────────────────────
 
 function getMonitoringKeywords() {
-  // Read from Supabase — source of truth updated by the React dashboard
-  const { url, key } = _getSupabaseCredentials();
-  if (url && key) {
-    try {
-      const res  = UrlFetchApp.fetch(
-        url + '/rest/v1/monitoring_keywords?select=brand,keywords&brand=in.(mimuse,brands)',
-        { headers: _sbHeaders(key), muteHttpExceptions: true }
-      );
-      const data = JSON.parse(res.getContentText());
-      if (Array.isArray(data) && data.length > 0) {
-        const result = Object.assign({}, DEFAULT_BRAND_KEYWORDS);
-        data.forEach(function(row) {
-          if (row.brand && Array.isArray(row.keywords) && row.keywords.length > 0) {
-            result[row.brand] = row.keywords;
-          }
-        });
-        Logger.log('키워드 Supabase 로드: mimuse=' + (result.mimuse || []).length + '개, brands=' + (result.brands || []).length + '개');
-        return result;
-      }
-    } catch (e) {
-      Logger.log('getMonitoringKeywords Supabase 오류: ' + e);
-    }
+  try {
+    var rows = supabaseGet('/rest/v1/monitoring_keywords?select=brand,keywords&order=brand');
+    var result = _keywordsFromRows(rows);
+    Logger.log('키워드 Supabase 로드: ' + Object.keys(result).join(', '));
+    return result;
+  } catch (e) {
+    Logger.log('getMonitoringKeywords Supabase 오류: ' + e);
+    return _emptyMonitoringKeywords();
   }
-
-  // Script Properties fallback
-  const props  = PropertiesService.getScriptProperties();
-  const stored = props.getProperty('MONITORING_BRAND_KEYWORDS');
-  if (stored) return JSON.parse(stored);
-  const oldStored = props.getProperty('MONITORING_KEYWORDS');
-  if (oldStored) return Object.assign({}, DEFAULT_BRAND_KEYWORDS, { mimuse: JSON.parse(oldStored) });
-  return DEFAULT_BRAND_KEYWORDS;
 }
 
 function resetMonitoringKeywords() {
-  PropertiesService.getScriptProperties().deleteProperty('MONITORING_BRAND_KEYWORDS');
-  PropertiesService.getScriptProperties().deleteProperty('MONITORING_KEYWORDS');
-  return { ok: true, keywords: DEFAULT_BRAND_KEYWORDS };
+  return { ok: true, keywords: getMonitoringKeywords() };
 }
 
 function saveMonitoringKeywords(brandKeywords) {
-  const toSave = Array.isArray(brandKeywords)
-    ? Object.assign({}, DEFAULT_BRAND_KEYWORDS, { mimuse: brandKeywords })
-    : brandKeywords;
-  PropertiesService.getScriptProperties()
-    .setProperty('MONITORING_BRAND_KEYWORDS', JSON.stringify(toSave));
-  return { ok: true };
+  if (!brandKeywords || typeof brandKeywords !== 'object') {
+    return { ok: false, error: 'keywords object required' };
+  }
+  var payloads = [];
+  Object.keys(brandKeywords).forEach(function(brand) {
+    var kws = brandKeywords[brand];
+    if (Array.isArray(kws)) payloads.push({ brand: brand, keywords: kws });
+  });
+  if (!payloads.length) return { ok: false, error: 'no keywords to save' };
+
+  var res = supabaseUpsert('monitoring_keywords', payloads, 'brand');
+  if (!res.ok) return { ok: false, error: 'Supabase upsert failed: HTTP ' + res.status };
+  return { ok: true, keywords: getMonitoringKeywords() };
 }
 
 function _getAllKeywordsFlat() {
@@ -133,7 +113,7 @@ const MON_VIDEOS_PER   = 50;
 // Read TikTok handles from Supabase influencer_platform table.
 function _getTikTokInfluencers(limit) {
   limit = limit || MON_SCRAPE_LIMIT;
-  const { url, key } = _getSupabaseCredentials();
+  const { url, key } = supabaseConfig();
   if (!url || !key) {
     Logger.log('SUPABASE_PROJECT_URL / SUPABASE_KEY not set');
     return [];
@@ -142,7 +122,7 @@ function _getTikTokInfluencers(limit) {
   try {
     const res  = UrlFetchApp.fetch(
       url + '/rest/v1/influencer_platform?select=handle,platform&platform=eq.TikTok&limit=' + limit,
-      { headers: _sbHeaders(key), muteHttpExceptions: true }
+      { headers: supabaseHeaders(), muteHttpExceptions: true }
     );
     const data = JSON.parse(res.getContentText());
     if (!Array.isArray(data)) { Logger.log('Supabase influencer_platform 오류: ' + res.getContentText()); return []; }
@@ -299,7 +279,7 @@ function _writeMonitoringResults(token, datasetId) {
 
     Logger.log('기간 내 영상: ' + items.length + '개 | 키워드 매칭: ' + Object.keys(videosByHandle).length + '개 핸들');
 
-    const { url, key } = _getSupabaseCredentials();
+    const { url, key } = supabaseConfig();
     if (!url || !key) {
       _clearRunProps();
       return { error: 'SUPABASE_PROJECT_URL / SUPABASE_KEY가 설정되지 않아 결과를 저장할 수 없습니다.' };
@@ -326,7 +306,7 @@ function _writeMonitoringResults(token, datasetId) {
 function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate) {
   const mapRes = UrlFetchApp.fetch(
     sbUrl + '/rest/v1/influencer_platform?select=id,handle,platform',
-    { headers: _sbHeaders(sbKey), muteHttpExceptions: true }
+    { headers: supabaseHeaders(), muteHttpExceptions: true }
   );
   const mapData = JSON.parse(mapRes.getContentText());
   if (!Array.isArray(mapData)) {
@@ -370,7 +350,7 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
         sbUrl + '/rest/v1/monitoring',
         {
           method : 'POST',
-          headers: Object.assign({}, _sbHeaders(sbKey), {
+          headers: Object.assign({}, supabaseHeaders(), {
             'Content-Type': 'application/json',
             Prefer        : 'resolution=merge-duplicates',
           }),
@@ -495,7 +475,7 @@ function testKeywordMatching() {
 
 // ── Debug ─────────────────────────────────────────────────────
 function debugMonitoringSetup() {
-  const { url, key } = _getSupabaseCredentials();
+  const { url, key } = supabaseConfig();
   Logger.log('SUPABASE_PROJECT_URL: ' + (url ? '설정됨' : '없음'));
   Logger.log('SUPABASE_KEY:         ' + (key ? '설정됨' : '없음'));
   Logger.log('APIFY_TOKEN:          ' + (PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN') ? '설정됨' : '없음'));

@@ -51,6 +51,24 @@ export function buildPhaseDbOptions(data: {
   return opts
 }
 
+const KST = 'Asia/Seoul'
+
+/** Full datetime in Korea Standard Time (e.g. 2026. 6. 17. 15:45) */
+export function formatKstDateTime(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString('ko-KR', {
+    timeZone: KST,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
 export function useKrClock() {
   function getKrTime() {
     const now = new Date()

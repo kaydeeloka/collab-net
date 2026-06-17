@@ -1,12 +1,19 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ListFilter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-// import { gasPost } from '@/lib/api' // detail modal disabled
+import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems-errors'
+import {
+  EMS_STATUS_FILTER_OPTIONS,
+  EMS_STATUS_OPTIONS,
+  getEmsStatusColor,
+  MANUAL_RECEIVED_STATUS,
+  emsStatusSelectWidth,
+} from '@/lib/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from './layout'
 
@@ -30,35 +37,26 @@ interface EmsRow {
   application_number:  string | null  // 접수번호
   email_sent:          boolean
   status:              string | null
+  registered_17track:  string | null
   reship_id:           string | null
   reship_status:       string | null
   last_update:         string | null
 }
 
-// interface TrackingEvent {
-//   date: string; time: string; status: string; location: string; remark: string
-// }
-
-// interface TrackingDetail {
-//   ok: boolean; error?: string; pending?: boolean
-//   carrier?: string; statusLabel?: string; statusColor?: string
-//   lastTime?: string; history?: TrackingEvent[]
-// }
-
-const STATUS_OPTIONS = ['접수완료', 'Preparing', 'In Transit', 'Delivered', 'Exception']
-
-const STATUS_COLORS: Record<string, string> = {
-  '접수완료'   : '#6366f1',
-  'Preparing'  : '#94a3b8',
-  'In Transit' : '#6a95a5',
-  'Delivered'  : '#27ae60',
-  'Exception'  : '#e74c3c',
+interface TrackingEvent {
+  date: string; time: string; status: string; location: string; remark: string
 }
 
-const STATUS_FILTER_OPTIONS = [
-  { value: 'all', label: '전체' },
-  ...STATUS_OPTIONS.map(status => ({ value: status, label: status })),
-]
+interface TrackingDetail {
+  ok: boolean; error?: string; pending?: boolean
+  carrier?: string; statusLabel?: string; statusColor?: string
+  lastTime?: string; history?: TrackingEvent[]
+}
+
+interface SyncAllResult {
+  ok: boolean; error?: string
+  updated?: number; skipped?: number; failed?: number; errors?: string[]
+}
 
 const RESHIP_FILTER_OPTIONS = [
   { value: 'all', label: '전체' },
@@ -73,6 +71,7 @@ export default function Ems() {
   const [rows,    setRows]    = useState<EmsRow[]>([])
   const [loading, setLoading] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [syncAllLoading, setSyncAllLoading] = useState(false)
   const [searchQuery,      setSearchQuery]      = useState('')
   const [filterStatus,     setFilterStatus]     = useState('all')
   const [filterReship,     setFilterReship]     = useState('all')
@@ -83,11 +82,10 @@ export default function Ems() {
   const [page, setPage] = useState(1)
   const EMS_PAGE_SIZE = 25
 
-  // Detail Modal — disabled (17track lookup popup)
-  // const [showDetailModal,  setShowDetailModal]  = useState(false)
-  // const [detailData,       setDetailData]       = useState<TrackingDetail | null>(null)
-  // const [detailLoading,    setDetailLoading]    = useState(false)
-  // const [detailNum,        setDetailNum]        = useState('')
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [detailData,      setDetailData]      = useState<TrackingDetail | null>(null)
+  const [detailLoading,   setDetailLoading]   = useState(false)
+  const [detailNum,       setDetailNum]       = useState('')
 
   // View Modal
   const [showViewModal, setShowViewModal] = useState(false)
@@ -99,13 +97,15 @@ export default function Ems() {
   const [trackingNotes,     setTrackingNotes]     = useState('')
   const [trackingSaving,    setTrackingSaving]    = useState(false)
   const [reshipSaving,      setReshipSaving]      = useState<string | null>(null)
+  const [statusSaving,      setStatusSaving]      = useState<string | null>(null)
   const [trackingForm, setTrackingForm] = useState({
     confirmed_influencer_id: '',
     tracking_id:       null as string | null,
+    originalEmsNum:    '',
     emsNum:            '',
     registeredDate:    '',
     applicationNumber: '',
-    status:            '접수완료',
+    status:            MANUAL_RECEIVED_STATUS,
   })
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export default function Ems() {
             influencers!inner(handle, display_name),
             ems_tracking(
               id, ems_number, registered_date, application_number,
-              email_sent, status, last_update
+              email_sent, status, last_update, registered_17track
             )
           `)
           .eq('phase_id', viewPhaseId)
@@ -180,6 +180,7 @@ export default function Ems() {
           application_number: ems.application_number  || null,
           email_sent:         ems.email_sent          ?? false,
           status:             ems.status            || null,
+          registered_17track: ems.registered_17track || null,
           reship_id:          reship?.id             || null,
           reship_status:      reship?.status         || null,
           last_update:        ems.last_update        || null,
@@ -194,19 +195,38 @@ export default function Ems() {
     setLoading(false)
   }
 
-  // async function openDetail(emsNum: string) {
-  //   setDetailNum(emsNum)
-  //   setDetailData(null)
-  //   setShowDetailModal(true)
-  //   setDetailLoading(true)
-  //   try {
-  //     const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
-  //     setDetailData(res)
-  //   } catch (e: unknown) {
-  //     setDetailData({ ok: false, error: (e as Error).message })
-  //   }
-  //   setDetailLoading(false)
-  // }
+  async function openDetail(emsNum: string) {
+    setDetailNum(emsNum)
+    setDetailData(null)
+    setShowDetailModal(true)
+    setDetailLoading(true)
+    try {
+      const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
+      setDetailData(res)
+    } catch (e: unknown) {
+      setDetailData({ ok: false, error: (e as Error).message })
+    }
+    setDetailLoading(false)
+  }
+
+  async function syncAllFrom17Track() {
+    if (!viewPhaseId) return
+    setSyncAllLoading(true)
+    try {
+      const res = await gasPost<SyncAllResult>({
+        action: 'syncAllEmsTracking',
+        phaseId: viewPhaseId,
+      })
+      if (!res.ok) throw new Error(res.error || '동기화 실패')
+      const msg = `동기화 완료 · 업데이트 ${res.updated ?? 0}, 건너뜀 ${res.skipped ?? 0}, 실패 ${res.failed ?? 0}`
+      showToast(msg, (res.failed ?? 0) > 0 ? 'info' : 'success')
+      if (res.errors?.length) showToast(res.errors.slice(0, 3).join('\n'), 'error')
+      await Promise.all([loadEms({ silent: true }), refreshStats()])
+    } catch (e: unknown) {
+      showToast((e as Error).message, 'error')
+    }
+    setSyncAllLoading(false)
+  }
 
   function openViewModal(row: EmsRow) {
     setViewRow(row)
@@ -217,10 +237,11 @@ export default function Ems() {
     setTrackingForm({
       confirmed_influencer_id: row.confirmed_influencer_id,
       tracking_id:       row.tracking_id,
+      originalEmsNum:    row.ems_number         || '',
       emsNum:            row.ems_number         || '',
       registeredDate:    row.registered_date    || '',
       applicationNumber: row.application_number || '',
-      status:            row.status             || '접수완료',
+      status:            row.status             || MANUAL_RECEIVED_STATUS,
     })
     setTrackingName(row.display_name || row.handle)
     setTrackingNotes(row.notes || '')
@@ -268,16 +289,66 @@ export default function Ems() {
     setReshipSaving(null)
   }
 
+  function statusOptionsForRow(status: string | null) {
+    if (!status || (EMS_STATUS_OPTIONS as readonly string[]).includes(status)) {
+      return EMS_STATUS_OPTIONS
+    }
+    return [status, ...EMS_STATUS_OPTIONS]
+  }
+
+  async function changeEmsStatus(row: EmsRow, newStatus: string, e: React.SyntheticEvent) {
+    e.stopPropagation()
+    if (newStatus === (row.status || '')) return
+    setStatusSaving(row.confirmed_influencer_id)
+    try {
+      if (row.tracking_id) {
+        const { error } = await supabase
+          .from('ems_tracking')
+          .update({ status: newStatus })
+          .eq('id', row.tracking_id)
+        if (error) throw error
+        setRows(prev => prev.map(r => r.confirmed_influencer_id === row.confirmed_influencer_id
+          ? { ...r, status: newStatus }
+          : r))
+        if (viewRow?.confirmed_influencer_id === row.confirmed_influencer_id) {
+          setViewRow(prev => prev ? { ...prev, status: newStatus } : prev)
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('ems_tracking')
+          .insert({
+            confirmed_influencer_id: row.confirmed_influencer_id,
+            status: newStatus,
+          })
+          .select('id')
+          .single()
+        if (error) throw error
+        setRows(prev => prev.map(r => r.confirmed_influencer_id === row.confirmed_influencer_id
+          ? { ...r, tracking_id: data.id, status: newStatus }
+          : r))
+        if (viewRow?.confirmed_influencer_id === row.confirmed_influencer_id) {
+          setViewRow(prev => prev ? { ...prev, tracking_id: data.id, status: newStatus } : prev)
+        }
+      }
+      await refreshStats()
+    } catch (err: unknown) {
+      showToast((err as Error).message, 'error')
+    }
+    setStatusSaving(null)
+  }
+
   async function submitTrackingForm() {
     setTrackingSaving(true)
     try {
-      const payload = {
+      const emsChanged = trackingForm.emsNum.trim().toUpperCase() !== trackingForm.originalEmsNum.trim().toUpperCase()
+      const payload: Record<string, unknown> = {
         confirmed_influencer_id: trackingForm.confirmed_influencer_id,
         ems_number:         trackingForm.emsNum            || null,
         registered_date:    trackingForm.registeredDate    || null,
         application_number: trackingForm.applicationNumber || null,
         status:             trackingForm.status,
       }
+      if (emsChanged) payload.registered_17track = null
 
       let err: unknown
       if (trackingForm.tracking_id) {
@@ -342,7 +413,6 @@ export default function Ems() {
         <>
           <div className="ems-toolbar">
             <div className="section-title section-title--inline">MiMuse 배송 &amp; 클라이언트 통합 대장</div>
-            <span className="ems-sync-msg">{syncMsg}</span>
           </div>
 
           <div className="filters" style={{ marginBottom: 16, marginTop: 16 }}>
@@ -353,6 +423,16 @@ export default function Ems() {
               onChange={e => setSearchQuery(e.target.value)}
               style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
             />
+            <span className="ems-sync-msg" style={{ marginLeft: 'auto' }}>{syncMsg}</span>
+            <button
+              type="button"
+              className="modal-btn-confirm"
+              onClick={syncAllFrom17Track}
+              disabled={syncAllLoading || !viewPhaseId}
+              style={{ padding: '6px 14px', fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              {syncAllLoading ? '17track 동기화 중...' : '17track 동기화'}
+            </button>
           </div>
 
           <div className="table-wrap">
@@ -373,7 +453,7 @@ export default function Ems() {
                       </button>
                       {showStatusFilter && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                          {STATUS_FILTER_OPTIONS.map(o => (
+                          {EMS_STATUS_FILTER_OPTIONS.map(o => (
                             <button key={o.value} onClick={() => { setFilterStatus(o.value); setShowStatusFilter(false) }}
                               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: filterStatus === o.value ? 700 : 500, background: filterStatus === o.value ? '#d1fae5' : 'transparent', color: filterStatus === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                               {o.label}
@@ -418,7 +498,7 @@ export default function Ems() {
                   )
                   : pagedRows.map((row, i) => {
                           const i_abs      = startIdx + i
-                          const badgeColor = STATUS_COLORS[row.status || ''] || '#94a3b8'
+                          const rowStatus  = row.status || MANUAL_RECEIVED_STATUS
                           const addrLines  = [
                             [row.address_line_1, row.address_line_2].filter(Boolean).join(' '),
                             [row.city, ((row.state || '') + ' ' + (row.zip || '')).trim()].filter(Boolean).join(', '),
@@ -454,7 +534,10 @@ export default function Ems() {
                               <td onClick={e => e.stopPropagation()}>
                                 {row.ems_number ? (
                                   <div>
-                                    <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)' }}>{row.ems_number}</span>
+                                    <span
+                                      onClick={() => openDetail(row.ems_number!)}
+                                      style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline' }}
+                                    >{row.ems_number}</span>
                                     <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
                                       <a href={`https://t.17track.net/en#nums=${encodeURIComponent(row.ems_number)}`} target="_blank"
                                         style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
@@ -468,10 +551,21 @@ export default function Ems() {
                               </td>
 
                               {/* 상태 */}
-                              <td>
-                                {row.status
-                                  ? <span style={{ background: badgeColor, color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{row.status}</span>
-                                  : <span style={{ color: '#aaa', fontSize: 11 }}>—</span>}
+                              <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                                <select
+                                  className="ems-status-select"
+                                  value={rowStatus}
+                                  disabled={statusSaving === row.confirmed_influencer_id}
+                                  onChange={e => changeEmsStatus(row, e.target.value, e)}
+                                  style={{
+                                    width: emsStatusSelectWidth(rowStatus),
+                                    backgroundColor: getEmsStatusColor(rowStatus),
+                                  }}
+                                >
+                                  {statusOptionsForRow(row.status).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
                               </td>
 
                               {/* 배송 주소 */}
@@ -534,7 +628,7 @@ export default function Ems() {
         title={viewRow ? `배송 정보 · ${viewRow.display_name || viewRow.handle}` : ''}
         titleStyle={{ paddingLeft: 48 }}>
         {viewRow && (() => {
-          const badgeColor = STATUS_COLORS[viewRow.status || ''] || '#94a3b8'
+          const badgeColor = getEmsStatusColor(viewRow.status)
           const addrLines  = [
             [viewRow.address_line_1, viewRow.address_line_2].filter(Boolean).join(' '),
             [viewRow.city, ((viewRow.state || '') + ' ' + (viewRow.zip || '')).trim()].filter(Boolean).join(', '),
@@ -562,7 +656,10 @@ export default function Ems() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>등기번호</div>
                   {viewRow.ems_number ? (
                     <div>
-                      <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)', marginBottom: 6 }}>{viewRow.ems_number}</div>
+                      <span
+                        onClick={() => openDetail(viewRow.ems_number!)}
+                        style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline', display: 'inline-block', marginBottom: 6 }}
+                      >{viewRow.ems_number}</span>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <a href={`https://t.17track.net/en#nums=${encodeURIComponent(viewRow.ems_number)}`} target="_blank"
                           style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
@@ -652,7 +749,7 @@ export default function Ems() {
             <select value={trackingForm.status}
               onChange={e => setTrackingForm(p => ({ ...p, status: e.target.value }))}
               style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', background: '#fff' }}>
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              {EMS_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
@@ -661,7 +758,7 @@ export default function Ems() {
             <input placeholder="우체국 접수번호" value={trackingForm.applicationNumber}
               onChange={e => {
                 const val = e.target.value
-                setTrackingForm(p => ({ ...p, applicationNumber: val, status: val.trim() ? '접수완료' : p.status }))
+                setTrackingForm(p => ({ ...p, applicationNumber: val, status: val.trim() ? MANUAL_RECEIVED_STATUS : p.status }))
               }}
               style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'monospace' }} />
           </div>
@@ -683,8 +780,7 @@ export default function Ems() {
         </div>
       </Modal>
 
-      {/* Tracking Detail Modal — disabled (use ↗ 17track / ↗ 우체국 links instead) */}
-      {/* <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={detailNum}>
+      <Modal open={showDetailModal} onClose={() => setShowDetailModal(false)} title={detailNum}>
         {detailLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '24px 0' }}>
             <Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>조회 중...</span>
@@ -746,7 +842,7 @@ export default function Ems() {
             </div>
           )
         })()}
-      </Modal> */}
+      </Modal>
     </>
   )
 }

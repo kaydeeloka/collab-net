@@ -5,6 +5,7 @@ interface ConfirmState {
   onConfirm: () => void
 }
 
+/** @deprecated Prefer `useToast().showConfirm` from ToastContext */
 export function useConfirmToast() {
   const [state, setState] = useState<ConfirmState | null>(null)
 
@@ -30,7 +31,7 @@ export default function ConfirmToast({ state, onHide, confirmLabel = '삭제', c
   return (
     <div style={{
       position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 9999, pointerEvents: 'auto',
+      zIndex: 20000, pointerEvents: 'auto',
       background: '#1e293b', color: '#fff', borderRadius: 12, padding: '12px 18px',
       fontSize: 13, fontWeight: 500, boxShadow: '0 6px 24px rgba(0,0,0,.25)',
       display: 'flex', alignItems: 'center', gap: 12,

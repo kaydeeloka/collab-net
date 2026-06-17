@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { gasPost } from '@/lib/api'
 import { normalizeKeywords } from '@/lib/beauty-news'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
 
@@ -210,6 +211,7 @@ function reportArticleCount(report: ReportData): number {
 }
 
 export default function BeautyNews() {
+  const { showConfirm } = useToast()
   const [activeTab, setActiveTab] = useState<'news' | 'archive'>('news')
 
   const [latestReport, setLatestReport] = useState<ReportData | null>(null)
@@ -222,6 +224,8 @@ export default function BeautyNews() {
   const [archiveGroups, setArchiveGroups] = useState<Record<string, ArchiveGroup>>({})
   const [archiveOrder, setArchiveOrder] = useState<string[]>([])
   const [archiveListLoading, setArchiveListLoading] = useState(true)
+  const [gmailImporting, setGmailImporting] = useState(false)
+  const [gmailImportStatus, setGmailImportStatus] = useState('')
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
 
   const [recipients, setRecipients] = useState<Recipient[]>([])
@@ -307,7 +311,6 @@ export default function BeautyNews() {
   }
 
   async function deleteRecipient(email: string) {
-    if (!confirm(email + ' 을(를) 삭제하시겠습니까?')) return
     const { error } = await supabase.from('email_recipients').delete().eq('email', email)
     if (!error) {
       setSelectedRcpt(prev => { const next = new Set(prev); next.delete(email); return next })
@@ -373,8 +376,27 @@ export default function BeautyNews() {
     setArchiveReportLoading(false)
   }
 
+  async function importGmailDrafts() {
+    setGmailImporting(true)
+    setGmailImportStatus('')
+    try {
+      const result = await gasPost<{ ok?: boolean; imported?: number; errors?: string[]; windowsStarts?: string[] }>({
+        action: 'importBeautyNewsGmailDrafts',
+      })
+      if (!result.ok && !result.imported) throw new Error(result.errors?.join('; ') || '가져오기 실패')
+      const n = result.imported ?? 0
+      setGmailImportStatus(n > 0 ? `${n}건 아카이브 저장 완료` : '가져올 Gmail 초안 없음 ([MiMuse Archive] 제목 확인)')
+      if (result.errors?.length) setGmailImportStatus(prev => `${prev} · ${result.errors!.length}건 오류`)
+      await loadLatestReport()
+      await refreshArchiveList()
+    } catch (e: unknown) {
+      setGmailImportStatus('오류: ' + ((e as Error).message || '알 수 없음'))
+    } finally {
+      setGmailImporting(false)
+    }
+  }
+
   async function deleteArchive(windowsStart: string) {
-    if (!confirm('이 아카이브를 삭제하시겠습니까?')) return
     try {
       const { error } = await supabase
         .from('beauty_news_archives')
@@ -388,22 +410,41 @@ export default function BeautyNews() {
     }
   }
 
-  async function sendNewsEmail(report: ReportData) {
-    const rcpts = [...selectedRcpt].filter(Boolean)
-    if (!rcpts.length) { alert('수신자를 선택하세요.'); return }
+  async function sendBriefingEmail(report: ReportData | null) {
+    if (!report?.windowsStart) {
+      setEmailStatus('오류: 발송할 브리핑이 없습니다')
+      return
+    }
+    if (recipients.length === 0) {
+      setEmailStatus('오류: 수신자를 먼저 추가하세요')
+      return
+    }
     setEmailSending(true)
     setEmailStatus('')
     try {
-      const dateLabel = report.windowsEnd ? fmtKor(report.windowsEnd) : (report.windowsStart ? fmtKor(report.windowsStart) : '')
-      const subject   = '[MiMuse] 주간 뷰티 뉴스 · ' + dateLabel
-      const htmlBody  = buildEmailHtml(report)
-      const result: { ok: boolean; sent?: number; error?: string } = await gasPost({ action: 'sendBeautyNewsEmail', recipients: rcpts, htmlBody, subject })
+      const result = await gasPost<{
+        ok?: boolean
+        skipped?: boolean
+        sent?: number
+        recipientCount?: number
+        error?: string
+        reason?: string
+      }>({
+        action: 'sendWeeklyBeautyNewsEmail',
+        force: true,
+        windowsStart: report.windowsStart,
+      })
+      if (result.skipped) {
+        setEmailStatus('이미 발송된 주차입니다 — force 발송은 GAS에서 처리됨')
+        return
+      }
       if (!result.ok) throw new Error(result.error || '발송 실패')
-      setEmailStatus('완료 — ' + result.sent + '명에게 발송 완료')
+      setEmailStatus('완료 — ' + (result.sent ?? result.recipientCount ?? recipients.length) + '명에게 발송 완료')
     } catch (e: unknown) {
-      setEmailStatus('오류: ' + (e as Error).message)
+      setEmailStatus('오류: ' + ((e as Error).message || '알 수 없음'))
+    } finally {
+      setEmailSending(false)
     }
-    setEmailSending(false)
   }
 
   async function loadTrends() {
@@ -461,6 +502,20 @@ export default function BeautyNews() {
         <span className="bn-archive-title">📁 주간 아카이브</span>
         <span className="bn-archive-hint">최대 12주</span>
       </div>
+      <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button
+          type="button"
+          className="bn-action-btn"
+          disabled={gmailImporting}
+          onClick={() => { void importGmailDrafts() }}
+          style={{ fontSize: 12, padding: '8px 12px' }}
+        >
+          {gmailImporting ? 'Gmail 초안 가져오는 중…' : 'Gmail 초안 → 아카이브'}
+        </button>
+        {gmailImportStatus && (
+          <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.4 }}>{gmailImportStatus}</div>
+        )}
+      </div>
       <div className="bn-archive-list">
         {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
         {!archiveListLoading && archiveOrder.length === 0 && (
@@ -492,7 +547,7 @@ export default function BeautyNews() {
                     className={`bn-archive-item${isSelected ? ' selected' : ''}`}
                     onClick={() => loadArchive(a.windows_start)}>
                     <div className="bn-archive-item-date">{rangeLabel}</div>
-                    <button type="button" className="bn-archive-del" onClick={e => { e.stopPropagation(); deleteArchive(a.windows_start) }}>×</button>
+                    <button type="button" className="bn-archive-del" onClick={e => { e.stopPropagation(); showConfirm('이 아카이브를 삭제하시겠습니까?', () => { void deleteArchive(a.windows_start) }) }}>×</button>
                   </div>
                 )
               })}
@@ -595,7 +650,7 @@ export default function BeautyNews() {
                   </label>
                   <div className="bn-rcpt-actions">
                     <button className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
-                    <button className="bn-archive-del" onClick={() => deleteRecipient(r.email)} title="삭제">×</button>
+                    <button className="bn-archive-del" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">×</button>
                   </div>
                 </div>
               )}
@@ -608,9 +663,17 @@ export default function BeautyNews() {
         </div>
       </div>
 
-      <button type="button" className="bn-action-btn" onClick={() => report && sendNewsEmail(report)} disabled={emailSending || !report || selectedRcpt.size === 0}>
-        {emailSending ? '발송 중...' : '지금 즉시 전체 발송'}
+      <button
+        type="button"
+        className="bn-action-btn"
+        onClick={() => { void sendBriefingEmail(report) }}
+        disabled={emailSending || !report || recipients.length === 0}
+      >
+        {emailSending ? '발송 중...' : '브리핑 이메일 발송'}
       </button>
+      <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 8, lineHeight: 1.5 }}>
+        수신자 목록 전원에게 발송 · 자동 발송: 매주 월요일 09:00 (KST)
+      </div>
     </div>
   )
 

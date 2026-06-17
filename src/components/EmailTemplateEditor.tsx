@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Mail } from 'lucide-react'
 import Spinner from '@/components/Spinner'
+import Modal from '@/components/Modal'
+import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import { useToast } from '@/contexts/ToastContext'
 import {
   fetchEmailTemplates,
@@ -11,6 +13,7 @@ import {
   type EmailTemplateDomain,
 } from '@/lib/email-templates'
 import { getEmailTemplateUiConfig } from '@/lib/email-template-ui-config'
+import { formatKstDateTime } from '@/lib/utils'
 
 function renderWithDummy(
   text: string,
@@ -82,6 +85,7 @@ interface EmailTemplateEditorProps {
 export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps) {
   const config = getEmailTemplateUiConfig(domain)
   const { showToast } = useToast()
+  const confirmToast = useConfirmToast()
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -91,6 +95,8 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const [isEditing, setIsEditing] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -122,6 +128,61 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
     }
   }, [selectedIdx, templates, config.defaultCategory])
 
+  function selectTemplate(i: number) {
+    setSelectedIdx(i)
+    setIsEditing(false)
+    setShowPreviewModal(false)
+  }
+
+  function openEditMode() {
+    setIsEditing(true)
+    setShowPreviewModal(false)
+  }
+
+  function previewCategoryStyle(cat: string) {
+    return config.categoryColors[cat] ?? config.categoryColors['기타']
+  }
+
+  function renderEmailPreview(previewTitle: string, previewBody: string) {
+    return (
+      <div
+        style={{
+          background: 'var(--gray-1)',
+          borderRadius: 10,
+          padding: '14px 18px',
+          border: '1px solid var(--gray-2)',
+        }}
+      >
+        <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>
+          {config.previewSender}
+        </div>
+        {previewTitle ? (
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
+            {renderWithDummy(previewTitle, config.dummyValues)}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 10, fontStyle: 'italic' }}>
+            (제목 없음)
+          </div>
+        )}
+        {previewBody ? (
+          <div
+            style={{
+              fontSize: 13,
+              color: 'var(--gray-7)',
+              lineHeight: 1.9,
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {renderWithDummy(previewBody, config.dummyValues)}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--gray-4)', fontStyle: 'italic' }}>본문 없음</div>
+        )}
+      </div>
+    )
+  }
+
   async function save() {
     const t = templates[selectedIdx]
     if (!t) return
@@ -130,6 +191,8 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
       const updated = await saveEmailTemplate({ ...t, name, category, title, body })
       setTemplates(prev => prev.map(row => (row.id === updated.id ? updated : row)))
       showToast('저장되었습니다', 'success')
+      setIsEditing(false)
+      setShowPreviewModal(false)
     } catch {
       showToast('저장에 실패했습니다', 'error')
     } finally {
@@ -148,6 +211,8 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
       })
       setTemplates(prev => [...prev, created])
       setSelectedIdx(templates.length)
+      setIsEditing(true)
+      setShowPreviewModal(false)
       showToast('템플릿이 추가되었습니다', 'success')
     } catch {
       showToast('템플릿 추가에 실패했습니다', 'error')
@@ -165,12 +230,19 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
       const next = templates.filter(row => row.id !== t.id)
       setTemplates(next)
       setSelectedIdx(0)
+      setIsEditing(false)
       showToast('삭제되었습니다', 'success')
     } catch {
       showToast('삭제에 실패했습니다', 'error')
     } finally {
       setSaving(false)
     }
+  }
+
+  function requestDeleteTpl() {
+    const t = templates[selectedIdx]
+    if (!t || templates.length <= 1) return
+    confirmToast.show(`"${name || t.name}" 템플릿을 삭제하시겠습니까?`, () => { void deleteTpl() })
   }
 
   function toggleCat(cat: string) {
@@ -183,6 +255,8 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
   }
 
   const categoryStyle = config.categoryColors[category] ?? config.categoryColors['기타']
+  const selectedTemplate = templates[selectedIdx]
+  const updatedAtLabel = formatKstDateTime(selectedTemplate?.updated_at)
 
   if (loading) {
     return (
@@ -215,7 +289,7 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20, alignItems: 'start' }}>
         <div
           style={{
             background: 'var(--gray-0)',
@@ -285,7 +359,7 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
                     catTemplates.map(({ t, i }) => (
                       <div
                         key={t.id}
-                        onClick={() => setSelectedIdx(i)}
+                        onClick={() => selectTemplate(i)}
                         style={{
                           padding: '14px 18px',
                           cursor: 'pointer',
@@ -355,14 +429,90 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
+            minHeight: 480,
           }}
         >
+          {!isEditing ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
+                    미리보기
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 8 }}>
+                    {name || '(이름 없음)'}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '3px 10px',
+                        borderRadius: 20,
+                        background: previewCategoryStyle(category).bg,
+                        color: previewCategoryStyle(category).color,
+                        border: `1px solid ${previewCategoryStyle(category).color}44`,
+                      }}
+                    >
+                      {category}
+                    </span>
+                    {updatedAtLabel && (
+                      <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>
+                        마지막 수정 · {updatedAtLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openEditMode}
+                  style={{
+                    padding: '6px 16px',
+                    background: 'var(--teal-dk)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  편집
+                </button>
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {renderEmailPreview(title, body)}
+                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 8 }}>
+                  치환 구문은 발송 시 자동 적용됩니다
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>템플릿 편집</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={deleteTpl}
+                onClick={() => setShowPreviewModal(true)}
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--gray-1)',
+                  color: 'var(--gray-7)',
+                  border: '1px solid var(--gray-3)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                미리보기
+              </button>
+              <button
+                type="button"
+                onClick={requestDeleteTpl}
                 disabled={templates.length <= 1 || saving}
                 style={{
                   padding: '6px 14px',
@@ -579,57 +729,24 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
               }}
             />
           </div>
-
-          {(title || body) && (
-            <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 16 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--gray-5)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.5px',
-                  marginBottom: 10,
-                }}
-              >
-                미리보기
-              </div>
-              <div
-                style={{
-                  background: 'var(--gray-1)',
-                  borderRadius: 10,
-                  padding: '14px 18px',
-                  border: '1px solid var(--gray-2)',
-                }}
-              >
-                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>
-                  {config.previewSender}
-                </div>
-                {title && (
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
-                    {renderWithDummy(title, config.dummyValues)}
-                  </div>
-                )}
-                {body && (
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: 'var(--gray-7)',
-                      lineHeight: 1.9,
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {renderWithDummy(body, config.dummyValues)}
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6 }}>
-                치환 구문은 발송 시 자동 적용됩니다
-              </div>
-            </div>
+            </>
           )}
         </div>
       </div>
+
+      <Modal
+        open={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        title="미리보기"
+        size="lg"
+      >
+        {renderEmailPreview(title, body)}
+        <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 12 }}>
+          치환 구문은 발송 시 자동 적용됩니다
+        </div>
+      </Modal>
+
+      <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} />
     </div>
   )
 }

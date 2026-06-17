@@ -1,10 +1,9 @@
 // ============================================================
-//  DEPRECATED — EMS now managed in Supabase (dashboard).
-//  Kept for reference; no longer registered in Code.gs routers.
-//  17-track.gs — legacy EMS sheet management + 17track API
+//  17-track.gs — 17track API + Supabase ems_tracking sync
 //
 //  Script Properties required:
 //    TRACK17_API_KEY  — 17track API key (Settings → API)
+//    SUPABASE_PROJECT_URL, SUPABASE_KEY — shared with Code.gs
 // ============================================================
 
 // ── 17track API v2.4 ─────────────────────────────────────────
@@ -25,32 +24,39 @@ const TRACK17_STATUS = {
 
 
 function _17trackKey() {
-  return PropertiesService.getScriptProperties().getProperty('TRACK17_API_KEY') || '';
+  return scriptProp('TRACK17_API_KEY') || '';
 }
 
 function _17trackHeaders() {
   return { '17token': _17trackKey(), 'Content-Type': 'application/json' };
 }
 
-// ── DISABLED: auto-registration eats 17track credits — register manually at 17track.com
-// function register17Track(numbers) {
-//   var key = _17trackKey();
-//   if (!key) return { ok: false, error: 'TRACK17_API_KEY가 설정되지 않았습니다.' };
-//   if (!numbers || numbers.length === 0) return { ok: false, error: '운송장 번호가 없습니다.' };
-//   var payload = numbers.map(function(n) { return { number: n }; });
-//   try {
-//     var res  = UrlFetchApp.fetch(TRACK17_BASE + '/register', {
-//       method: 'post', headers: _17trackHeaders(),
-//       payload: JSON.stringify(payload), muteHttpExceptions: true,
-//     });
-//     var data = JSON.parse(res.getContentText());
-//     return { ok: data.code === 0, accepted: (data.data && data.data.accepted) || [], rejected: (data.data && data.data.rejected) || [] };
-//   } catch (e) {
-//     return { ok: false, error: e.toString() };
-//   }
-// }
 function register17Track(numbers) {
-  return { ok: false, error: 'Registration disabled. Please register inside 17track manually.' };
+  var key = _17trackKey();
+  if (!key) return { ok: false, error: 'TRACK17_API_KEY가 설정되지 않았습니다.' };
+  if (!numbers || numbers.length === 0) return { ok: false, error: '운송장 번호가 없습니다.' };
+  var payload = numbers.map(function(n) { return { number: String(n).trim() }; }).filter(function(x) { return x.number; });
+  if (!payload.length) return { ok: false, error: '운송장 번호가 없습니다.' };
+  try {
+    var res = UrlFetchApp.fetch(TRACK17_BASE + '/register', {
+      method: 'post', headers: _17trackHeaders(),
+      payload: JSON.stringify(payload), muteHttpExceptions: true,
+    });
+    var data = JSON.parse(res.getContentText());
+    return {
+      ok: data.code === 0,
+      accepted: (data.data && data.data.accepted) || [],
+      rejected: (data.data && data.data.rejected) || [],
+      error: data.code === 0 ? undefined : ('17track register: ' + data.code),
+    };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
+function _isRegistered17Track(val) {
+  var v = (val || '').toString().trim().toUpperCase();
+  return v === 'Y' || v === 'YES';
 }
 
 // Returns true if the tracking number's row has 'Y' in column D (index 3)
@@ -99,10 +105,7 @@ function get17TrackInfo(number) {
     var accepted = data.data && data.data.accepted;
     var rejected = (data.data && data.data.rejected) || [];
     if (!accepted || accepted.length === 0) {
-      return { ok: false, error: 'Please register inside 17track first.' };
-      // if (_isColDMarkedY(number)) return { ok: false, error: 'The number is not yet registered inside 17track' };
-      // register17Track([number]);
-      // return { ok: false, pending: true, error: '운송장을 17track에 등록했습니다. 잠시 후 다시 조회해 주세요.\n\n[raw] ' + rawText.slice(0, 400) };
+      return { ok: false, error: 'Please register inside 17track first.', notRegistered: true };
     }
 
     // ── v2.4 response: all data is under item.track_info ────
@@ -157,7 +160,138 @@ function get17TrackInfo(number) {
   }
 }
 
-// ── Sheet helpers ─────────────────────────────────────────────
+// ── Supabase ems_tracking sync ────────────────────────────────
+
+var TRACK17_TO_EMS_STATUS = {
+  'Not Found': null,
+  'Info Received': 'Preparing',
+  'In Transit': 'In Transit',
+  'Out for Delivery': 'In Transit',
+  'Available for Pickup': 'In Transit',
+  'Delivered': 'Delivered',
+  'Delivery Failure': 'Exception',
+  'Exception': 'Exception',
+  'Expired': 'Exception',
+};
+
+var EMS_SYNC_SKIP_STATUSES = ['Delivered'];
+
+function _map17TrackToEmsStatus(label) {
+  if (!label) return null;
+  if (Object.prototype.hasOwnProperty.call(TRACK17_TO_EMS_STATUS, label)) {
+    return TRACK17_TO_EMS_STATUS[label];
+  }
+  return label;
+}
+
+function _nowKstStamp() {
+  return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+}
+
+function _fetchEmsTrackingRow(trackingId) {
+  var rows = supabaseGet(
+    '/rest/v1/ems_tracking?id=eq.' + encodeURIComponent(trackingId)
+    + '&select=id,ems_number,status,registered_17track,last_update&limit=1',
+  );
+  return (Array.isArray(rows) && rows[0]) ? rows[0] : null;
+}
+
+function _ensure17TrackRegistered(number, registeredFlag) {
+  if (_isRegistered17Track(registeredFlag)) return { ok: true, already: true };
+  var reg = register17Track([number]);
+  var accepted = reg.accepted || [];
+  if (!reg.ok && !accepted.length) {
+    return { ok: false, error: reg.error || '17track 등록 실패' };
+  }
+  return { ok: true, registered: true };
+}
+
+function syncOneEmsTrackingFrom17Track(trackingId) {
+  if (!trackingId) return { ok: false, error: 'trackingId가 필요합니다.' };
+  try {
+    var row = _fetchEmsTrackingRow(trackingId);
+    if (!row) return { ok: false, error: '배송 정보를 찾을 수 없습니다.' };
+    var number = (row.ems_number || '').toString().trim();
+    if (!number) return { ok: false, error: '등기번호가 없습니다.' };
+
+    var reg = _ensure17TrackRegistered(number, row.registered_17track);
+    if (!reg.ok) return reg;
+
+    var info = get17TrackInfo(number);
+    if (!info.ok && info.notRegistered && !reg.already) {
+      Utilities.sleep(800);
+      info = get17TrackInfo(number);
+    }
+
+    if (info.pending) {
+      supabasePatch('ems_tracking', 'id=eq.' + encodeURIComponent(trackingId), {
+        registered_17track: 'Y',
+        last_update: _nowKstStamp(),
+      });
+      return { ok: false, pending: true, error: info.error || '17track 조회 대기 중입니다. 잠시 후 다시 시도하세요.' };
+    }
+    if (!info.ok) {
+      if (reg.registered || reg.already) {
+        supabasePatch('ems_tracking', 'id=eq.' + encodeURIComponent(trackingId), { registered_17track: 'Y' });
+      }
+      return info;
+    }
+
+    var mapped = _map17TrackToEmsStatus(info.statusLabel);
+    var patch = {
+      registered_17track: 'Y',
+      last_update: info.lastTime || _nowKstStamp(),
+    };
+    if (mapped) patch.status = mapped;
+
+    var res = supabasePatch('ems_tracking', 'id=eq.' + encodeURIComponent(trackingId), patch);
+    if (!res.ok) return { ok: false, error: 'Supabase 업데이트 실패: HTTP ' + res.status };
+
+    return {
+      ok: true,
+      trackingId: trackingId,
+      status: patch.status || row.status,
+      statusLabel: info.statusLabel,
+      lastTime: patch.last_update,
+      historyCount: (info.history || []).length,
+    };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
+function syncAllEmsTrackingFrom17Track(phaseId) {
+  if (!phaseId) return { ok: false, error: 'phaseId가 필요합니다.' };
+  try {
+    var confirmed = supabaseGet(
+      '/rest/v1/confirmed_influencers?phase_id=eq.' + encodeURIComponent(phaseId)
+      + '&select=id,ems_tracking(id,ems_number,status,registered_17track)',
+    );
+    if (!Array.isArray(confirmed)) return { ok: false, error: 'confirmed_influencers 조회 실패' };
+
+    var updated = 0, skipped = 0, failed = 0, errors = [];
+    confirmed.forEach(function(ci) {
+      var ems = (ci.ems_tracking || [])[0];
+      if (!ems || !ems.id || !(ems.ems_number || '').trim()) { skipped++; return; }
+      if (EMS_SYNC_SKIP_STATUSES.indexOf(ems.status || '') >= 0) { skipped++; return; }
+
+      var result = syncOneEmsTrackingFrom17Track(ems.id);
+      if (result.ok) updated++;
+      else if (result.pending) skipped++;
+      else {
+        failed++;
+        errors.push((ems.ems_number || ems.id) + ': ' + (result.error || 'failed'));
+      }
+      Utilities.sleep(500);
+    });
+
+    return { ok: true, updated: updated, skipped: skipped, failed: failed, errors: errors.slice(0, 10) };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
+// ── Sheet helpers (legacy — not routed) ───────────────────────
 function _getEmsSheet() {
   const ss     = SpreadsheetApp.openById(getActiveOutreachId());
   const byName = [SHEET_DELIVERY_TRACK, '배송 추적', 'EMS Tracking', 'EMS 트래킹', 'EMS'];
@@ -435,24 +569,15 @@ function debug17TrackRaw(number) {
   } catch (e) { return { ok: false, error: e.toString() }; }
 }
 
-// ── Single route — all EMS + 17track actions ──────────────────
+// ── Route handler — Supabase EMS + 17track ────────────────────
 function routeEms(action, p, body) {
   var b = body || {};
   switch (action) {
-    case 'getEmsData':          return getEmsData();
-    case 'getClientData':       return getClientData();
-    case 'addClient':           return addClient(b);
-    case 'deleteClient':        return deleteClient(b.rowId);
-    case 'toggleEmailSent':     return toggleEmailSent(b.rowId);
-    case 'updateTracking':
-    case 'updateClientInfo':    return updateTracking(b);
-    case 'syncOneTracking':     return syncOneTracking(b.number, b.sheetRow);
-    case 'syncAllTracking':     return syncAllTracking();
-    case 'addAndSyncTracking':  return syncOneTracking(b.number, b.sheetRow);
-    case 'get17TrackInfo':      return get17TrackInfo(b.number || (p && p.number));
-    // case 'register17Track':     return register17Track(b.numbers || []);
-    case 'register17Track':     return { ok: false, error: 'Registration disabled. Please register inside 17track manually.' };
-    case 'debug17TrackRaw':     return debug17TrackRaw(b.number || (p && p.number));
-    default: return null;
+    case 'get17TrackInfo':        return get17TrackInfo(b.number || (p && p.number));
+    case 'register17Track':       return register17Track(b.numbers || (b.number ? [b.number] : []));
+    case 'syncOneEmsTracking':    return syncOneEmsTrackingFrom17Track(b.trackingId || b.tracking_id);
+    case 'syncAllEmsTracking':    return syncAllEmsTrackingFrom17Track(b.phaseId || b.phase_id);
+    case 'debug17TrackRaw':       return debug17TrackRaw(b.number || (p && p.number));
+    default:                      return null;
   }
 }

@@ -11,6 +11,8 @@ export interface EmailTemplate {
   category: string
   sort_order: number
   is_default: boolean
+  created_at: string
+  updated_at: string
 }
 
 type EmailTemplateRow = {
@@ -23,6 +25,8 @@ type EmailTemplateRow = {
   sort_order: number
   is_default: boolean
   is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 const LOCAL_STORAGE_KEYS: Record<EmailTemplateDomain, string> = {
@@ -31,7 +35,7 @@ const LOCAL_STORAGE_KEYS: Record<EmailTemplateDomain, string> = {
   ems: 'mm_ems_templates',
 }
 
-export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateDomain, Omit<EmailTemplate, 'id'>[]> = {
+export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateDomain, Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>[]> = {
   influencer: [
     {
       domain: 'influencer',
@@ -113,6 +117,8 @@ function fromRow(row: EmailTemplateRow): EmailTemplate {
     category: row.category,
     sort_order: row.sort_order,
     is_default: row.is_default,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   }
 }
 
@@ -129,6 +135,7 @@ function readLegacyLocal(domain: EmailTemplateDomain): EmailTemplate[] | null {
       category?: string
     }>
     if (!Array.isArray(parsed) || parsed.length === 0) return null
+    const now = new Date().toISOString()
     return parsed.map((t, i) => ({
       id: t.id || crypto.randomUUID(),
       domain,
@@ -138,6 +145,8 @@ function readLegacyLocal(domain: EmailTemplateDomain): EmailTemplate[] | null {
       category: t.category || '기타',
       sort_order: i + 1,
       is_default: false,
+      created_at: now,
+      updated_at: now,
     }))
   } catch {
     return null

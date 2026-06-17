@@ -8,12 +8,12 @@ import {
   updateEmsReship,
   type EmsErrorRow,
 } from '@/lib/ems-errors'
+import { EMS_STATUS_OPTIONS, getEmsStatusColor } from '@/lib/ems-tracking-status'
 import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/ems-templates'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
 import Spinner from '@/components/Spinner'
-import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import { TableActionBar } from '@/components/StickyBar'
 import { Button } from '@/components/ui'
 
@@ -29,21 +29,11 @@ function toDateInputValue(v: string): string {
   return ''
 }
 
-const CARRIER_STATUS_COLORS: Record<string, string> = {
-  '접수완료'   : '#6366f1',
-  'Preparing'  : '#94a3b8',
-  'In Transit' : '#6a95a5',
-  'Delivered'  : '#27ae60',
-  'Exception'  : '#e74c3c',
-}
-
-const CARRIER_STATUS_OPTIONS = ['접수완료', 'Preparing', 'In Transit', 'Delivered', 'Exception']
-
 function TrackingCell({ emsNumber, carrierStatus }: { emsNumber: string; carrierStatus: string }) {
   const num = displayVal(emsNumber)
   if (num === '—') return <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
 
-  const badgeColor = CARRIER_STATUS_COLORS[carrierStatus] || '#94a3b8'
+  const badgeColor = getEmsStatusColor(carrierStatus)
   return (
     <div>
       <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-7)' }}>{num}</span>
@@ -78,8 +68,7 @@ function TrackingCell({ emsNumber, carrierStatus }: { emsNumber: string; carrier
 }
 
 export default function EmsErrors() {
-  const { showToast } = useToast()
-  const confirmToast = useConfirmToast()
+  const { showToast, showConfirm } = useToast()
   const { refreshStats, reshipVersion } = useEmsLayout()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const { pathname } = useLocation()
@@ -222,7 +211,7 @@ export default function EmsErrors() {
                 onClick={() => {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
-                  confirmToast.show(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
+                  showConfirm(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
                     setBulkSending(true)
                     let sent = 0
                     let failed = 0
@@ -249,7 +238,7 @@ export default function EmsErrors() {
                     setCheckedIds(new Set())
                     if (sent > 0) showToast(`${sent}명 일괄 발송 완료${failed > 0 ? ` (${failed}건 실패)` : ''}`, 'success')
                     else if (failed === 0) showToast('이메일이 있는 선택 항목이 없습니다', 'error')
-                  })
+                  }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
                 {bulkSending ? '발송 중...' : '일괄 발송'}
@@ -355,13 +344,13 @@ export default function EmsErrors() {
                             onChange={e => changeCarrierStatus(r, e.target.value)}
                             style={{
                               display: 'block', width: '100%',
-                              background: CARRIER_STATUS_COLORS[r.carrierStatus] || '#94a3b8',
+                              background: getEmsStatusColor(r.carrierStatus),
                               color: '#fff',
                               padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                               border: '1px solid var(--gray-3)', cursor: 'pointer',
                             }}
                           >
-                            {CARRIER_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                            {EMS_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
                       </div>
@@ -441,7 +430,6 @@ export default function EmsErrors() {
         </table>
       </div>
       )}
-      <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} />
     </div>
   )
 }

@@ -35,7 +35,7 @@ export default function BrandArchiveDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const { selectedPhaseId } = usePhase()
-  const { showToast } = useToast()
+  const { showToast, showConfirm } = useToast()
 
   const [brands, setBrands] = useState<ConfirmedBrand[]>([])
   const [loading, setLoading] = useState(true)
@@ -441,7 +441,7 @@ export default function BrandArchiveDetail() {
                           <Download size={14} />
                         </button>
                         <button type="button" className="cfg-btn cfg-btn--ghost" title="삭제" onClick={() => {
-                          if (confirm(`"${asset.file_name}" 삭제할까요?`)) deleteAsset(asset)
+                          showConfirm(`"${asset.file_name}" 삭제할까요?`, () => { void deleteAsset(asset) })
                         }}>
                           <Trash2 size={14} />
                         </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { gasGet, gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
 
@@ -318,6 +319,7 @@ function buildTiktokEmailHtml(data: TiktokReport): string {
 }
 
 export default function TiktokTrend() {
+  const { showConfirm } = useToast()
   const [activeTab, setActiveTab] = useState<'week' | 'archive'>('week')
 
   const [recipients, setRecipients]       = useState<Recipient[]>([])
@@ -399,7 +401,6 @@ export default function TiktokTrend() {
   }
 
   async function deleteRecipient(email: string) {
-    if (!confirm(email + ' 을(를) 삭제하시겠습니까?')) return
     const { error } = await supabase.from('email_recipients').delete().eq('email', email)
     if (!error) {
       setSelectedRcpt(prev => { const next = new Set(prev); next.delete(email); return next })
@@ -535,7 +536,7 @@ export default function TiktokTrend() {
                   </label>
                   <div className="bn-rcpt-actions">
                     <button type="button" className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
-                    <button type="button" className="bn-archive-del" onClick={() => deleteRecipient(r.email)} title="삭제">×</button>
+                    <button type="button" className="bn-archive-del" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">×</button>
                   </div>
                 </div>
               )}

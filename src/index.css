@@ -986,6 +986,40 @@ td {
 ───────────────────────────────────── */
 .ems-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .ems-sync-msg { font-size: 12px; color: var(--teal-dk); }
+
+/* Match influencer stat card row height (3 equal columns — width unchanged) */
+.ems-stats-cards {
+  align-items: stretch;
+}
+.ems-stats-cards .card {
+  min-height: 172px;
+  box-sizing: border-box;
+}
+
+.ems-status-select {
+  display: inline-block;
+  min-width: 0;
+  padding: 5px 18px 5px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  border: 1px solid var(--gray-3);
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-size: 10px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  field-sizing: content;
+}
+
+.ems-status-select:disabled {
+  cursor: wait;
+  opacity: 0.85;
+}
 .ems-filter-btn {
   padding: 6px 14px; border: 1.5px solid var(--surface-md);
   border-radius: var(--r-pill); font-size: 12px; font-weight: 600;

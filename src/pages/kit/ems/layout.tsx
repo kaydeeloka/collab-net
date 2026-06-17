@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems-errors'
+import { isEmsDelivered, isEmsInTransit } from '@/lib/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
@@ -9,11 +10,13 @@ import { PageTabs } from '@/components/ui'
 export const INFLUENCER_TARGET = 50
 
 export interface EmsStats {
-  total:          number
-  targetPct:      number
-  delivered:      number
-  inTransit:      number
-  shippingErrors: number
+  total:            number
+  totalParcels:     number
+  primaryParcels:   number
+  reshipParcels:    number
+  delivered:        number
+  inTransit:        number
+  shippingErrors:   number
   reshipNeeded:     number
   reshipCompleted:  number
   errorTotal:       number
@@ -35,9 +38,12 @@ const TABS = [
 ] as const
 
 async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
-  if (!phaseId) {
-    return { total: 0, targetPct: 0, delivered: 0, inTransit: 0, shippingErrors: 0, reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0 }
+  const empty: EmsStats = {
+    total: 0, totalParcels: 0, primaryParcels: 0, reshipParcels: 0,
+    delivered: 0, inTransit: 0, shippingErrors: 0,
+    reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0,
   }
+  if (!phaseId) return empty
 
   const [{ data, error }, reshipMap] = await Promise.all([
     supabase
@@ -45,7 +51,7 @@ async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
       .select(`
         id,
         influencers!inner(handle, display_name),
-        ems_tracking(status)
+        ems_tracking(status, ems_number, application_number)
       `)
       .eq('phase_id', phaseId),
     fetchReshipmentMap(phaseId),
@@ -57,46 +63,61 @@ async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
     const ems    = (ci.ems_tracking || [])[0] || {}
     const reship = reshipMap.get(ci.id)
     return {
-      status:        ems.status      || null,
-      reship_id:     reship?.id      || null,
-      reship_status: reship?.status  || null,
+      status:             ems.status             || null,
+      ems_number:         ems.ems_number         || null,
+      application_number: ems.application_number || null,
+      reship_id:          reship?.id             || null,
+      reship_status:      reship?.status         || null,
     }
   })
 
-  const total          = rows.length
-  const targetPct      = Math.min(Math.round(total / INFLUENCER_TARGET * 100), 100)
-  const delivered      = rows.filter(r => r.status === 'Delivered').length
-  const inTransit      = rows.filter(r => r.status === 'In Transit' || r.status === 'Preparing').length
-  const shippingErrors = rows.filter(r => r.reship_id).length
-  const errorRows      = rows.filter(r => r.reship_status).map(r => ({ status: r.reship_status! }))
-  const reshipNeeded   = countReshipNeeded(errorRows)
-  const reshipCompleted = countReshipCompleted(errorRows)
-  const errorTotal     = errorRows.length
+  const total            = rows.length
+  const primaryParcels   = rows.filter(r =>
+    !!(r.ems_number || '').trim() || !!(r.application_number || '').trim(),
+  ).length
+  const reshipParcels    = rows.filter(r => r.reship_id).length
+  const totalParcels     = primaryParcels + reshipParcels
+  const delivered        = rows.filter(r => isEmsDelivered(r.status)).length
+  const inTransit        = rows.filter(r => isEmsInTransit(r.status)).length
+  const shippingErrors   = reshipParcels
+  const errorRows        = rows.filter(r => r.reship_status).map(r => ({ status: r.reship_status! }))
+  const reshipNeeded     = countReshipNeeded(errorRows)
+  const reshipCompleted  = countReshipCompleted(errorRows)
+  const errorTotal       = errorRows.length
 
-  return { total, targetPct, delivered, inTransit, shippingErrors, reshipNeeded, reshipCompleted, errorTotal }
+  return {
+    total, totalParcels, primaryParcels, reshipParcels,
+    delivered, inTransit, shippingErrors,
+    reshipNeeded, reshipCompleted, errorTotal,
+  }
 }
 
 function EmsStatsCards({ stats }: { stats: EmsStats }) {
-  const { total, targetPct, delivered, inTransit, shippingErrors, reshipNeeded, reshipCompleted } = stats
+  const { total, totalParcels, primaryParcels, reshipParcels, delivered, inTransit, shippingErrors, reshipNeeded, reshipCompleted } = stats
   return (
-    <div className="cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-      <div className="card highlight">
-        <div className="card-label">총 관리 대상</div>
-        <div style={{ textAlign: 'left', paddingTop: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'flex-start' }}>
-            <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-1px' }}>{total}</span>
-            <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
-          </div>
-          <div className="card-sub" style={{ marginTop: 0 }}>{total} / {INFLUENCER_TARGET}명 · {targetPct}%</div>
-          <div style={{ marginTop: 8, height: 4, background: 'var(--gray-2)', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${targetPct}%`, background: 'var(--teal-dk)', borderRadius: 99, transition: 'width .4s' }} />
+    <div className="cards ems-stats-cards" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+      <div className="card">
+        <div className="card-label">전체 배송</div>
+        <div style={{ width: '100%' }}>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-1px' }}>{totalParcels}</span>
+              <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
+            </div>
+            <div className="card-sub" style={{ marginTop: 0 }}>
+              <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>원배송</span>
+              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{primaryParcels}건</strong>
+              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
+              <span style={{ color: '#dc2626', fontWeight: 700 }}>재발송/오류</span>
+              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{reshipParcels}건</strong>
+            </div>
           </div>
         </div>
       </div>
       <div className="card highlight">
         <div className="card-label">배송</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-          <div style={{ textAlign: 'center', paddingTop: 4 }}>
+          <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{delivered}</span>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
@@ -105,40 +126,44 @@ function EmsStatsCards({ stats }: { stats: EmsStats }) {
             <div className="card-sub" style={{ marginTop: 0 }}>{total ? Math.round(delivered / total * 100) : 0}% 완료율</div>
           </div>
           <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center', paddingTop: 4 }}>
+          <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 800, color: '#1e40af', letterSpacing: '-1px' }}>{inTransit}</span>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>배송 중</div>
+            <div style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600, marginBottom: 4 }}>배송 중</div>
+            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
           </div>
           <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center', paddingTop: 4 }}>
+          <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{shippingErrors}</span>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>명</span>
             </div>
-            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>재발송</div>
+            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재발송</div>
+            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
           </div>
         </div>
       </div>
       <div className="card highlight">
         <div className="card-label">재배송</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'start', width: '100%' }}>
-          <div style={{ textAlign: 'center', paddingTop: 4 }}>
+          <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 800, color: '#991b1b', letterSpacing: '-1px' }}>{reshipNeeded}</span>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
             </div>
-            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>재배송 필요</div>
+            <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>재배송 필요</div>
+            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
           </div>
           <div style={{ width: 1, height: 48, background: 'var(--gray-2)', marginTop: 4 }} />
-          <div style={{ textAlign: 'center', paddingTop: 4 }}>
+          <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6, justifyContent: 'center' }}>
               <span style={{ fontSize: 36, fontWeight: 800, color: '#14532d', letterSpacing: '-1px' }}>{reshipCompleted}</span>
               <span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>건</span>
             </div>
-            <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>재배송 완료</div>
+            <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, marginBottom: 4 }}>재배송 완료</div>
+            <div className="card-sub" style={{ marginTop: 0, visibility: 'hidden' }}>0% 완료율</div>
           </div>
         </div>
       </div>
@@ -160,7 +185,7 @@ export default function EmsLayout() {
     try {
       setStats(await fetchEmsStats(viewPhaseId))
     } catch {
-      setStats({ total: 0, targetPct: 0, delivered: 0, inTransit: 0, shippingErrors: 0, reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0 })
+      setStats({ total: 0, totalParcels: 0, primaryParcels: 0, reshipParcels: 0, delivered: 0, inTransit: 0, shippingErrors: 0, reshipNeeded: 0, reshipCompleted: 0, errorTotal: 0 })
     }
     setLoading(false)
   }, [viewPhaseId])

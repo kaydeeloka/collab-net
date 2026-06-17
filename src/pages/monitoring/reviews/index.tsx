@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
@@ -96,6 +97,7 @@ function brandBadge(brand: string | null) {
 }
 
 export default function Monitoring() {
+  const { showConfirm } = useToast()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,           setRows]           = useState<MonRow[]>([])
   const [confirmedCount, setConfirmedCount] = useState(0)
@@ -109,7 +111,6 @@ export default function Monitoring() {
   const [newMimuseKw,   setNewMimuseKw]  = useState('')
   const [newBrandsKw,   setNewBrandsKw]  = useState('')
   const [kwSaving,      setKwSaving]     = useState(false)
-  const [pendingDelete, setPendingDelete] = useState<{ brand: string; kw: string } | null>(null)
 
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeMsg,     setScrapeMsg]     = useState('')
@@ -746,22 +747,6 @@ export default function Monitoring() {
         onChange={setActiveTab}
       />
 
-      {/* Delete keyword toast */}
-      {pendingDelete && (
-        <div style={{
-          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--gray-8, #1f2937)', color: '#fff', borderRadius: 10,
-          padding: '12px 18px', display: 'flex', gap: 12, alignItems: 'center',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.35)', zIndex: 1000, fontSize: 12, whiteSpace: 'nowrap',
-        }}>
-          <span>"{pendingDelete.kw}" 키워드를 삭제할까요?</span>
-          <button onClick={() => { removeKeyword(pendingDelete.brand, pendingDelete.kw); setPendingDelete(null) }}
-            style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>삭제</button>
-          <button onClick={() => setPendingDelete(null)}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 11 }}>취소</button>
-        </div>
-      )}
-
       {/* Review list tab */}
       {activeTab === 'list' && (() => {
         const uploadedRows   = rows.filter(r => r.review_link?.startsWith('http'))
@@ -1112,7 +1097,7 @@ export default function Monitoring() {
                 border: `1px solid ${BRAND_COLORS.mimuse}44`,
               }}>
                 {kw}
-                <button onClick={() => setPendingDelete({ brand: 'mimuse', kw })}
+                <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword('mimuse', kw))}
                   style={{ background: 'none', border: 'none', color: BRAND_COLORS.mimuse, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
               </span>
             ))}
@@ -1138,7 +1123,7 @@ export default function Monitoring() {
                   background: c + '18', color: c, border: `1px solid ${c}44`,
                 }}>
                   {kw}
-                  <button onClick={() => setPendingDelete({ brand: 'brands', kw })}
+                  <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword('brands', kw))}
                     style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
                 </span>
               )

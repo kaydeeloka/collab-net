@@ -14,7 +14,7 @@ import Confirmed   from './pages/influencer/confirmed'
 import Ems         from './pages/kit/ems'
 import EmsLayout   from './pages/kit/ems/layout'
 import EmsErrors   from './pages/kit/ems/errors'
-import EmsEmail    from './pages/kit/ems-email'
+import EmsTemplate from './pages/kit/ems-template'
 import Monitoring  from './pages/monitoring/reviews'
 
 // TREND
@@ -101,7 +101,8 @@ export default function App() {
                   <Route index element={<Ems />} />
                   <Route path="errors" element={<EmsErrors />} />
                 </Route>
-                <Route path="/kit/ems-email" element={<EmsEmail />} />
+                <Route path="/kit/ems-template" element={<EmsTemplate />} />
+                <Route path="/kit/ems-email" element={<Navigate to="/kit/ems-template" replace />} />
                 <Route path="/kit/ems-error" element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems/check"   element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems-data"                        element={<EmsData />} />

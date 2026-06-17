@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react'
+import ConfirmToast from '@/components/ConfirmToast'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -8,16 +9,36 @@ interface ToastItem {
   type: ToastType
 }
 
-interface ToastCtx {
-  showToast: (msg: string, type?: ToastType) => void
+interface ConfirmState {
+  message: string
+  onConfirm: () => void
+  confirmLabel?: string
+  confirmColor?: string
 }
 
-const ToastContext = createContext<ToastCtx>({ showToast: () => {} })
+export interface ShowConfirmOptions {
+  confirmLabel?: string
+  confirmColor?: string
+}
+
+interface ToastCtx {
+  showToast: (msg: string, type?: ToastType) => void
+  showConfirm: (message: string, onConfirm: () => void, options?: ShowConfirmOptions) => void
+  hideConfirm: () => void
+}
+
+const ToastContext = createContext<ToastCtx>({
+  showToast: () => {},
+  showConfirm: () => {},
+  hideConfirm: () => {},
+})
 
 let nextId = 0
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const showToast = useCallback((msg: string, type: ToastType = 'success') => {
     const id = ++nextId
@@ -25,8 +46,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
   }, [])
 
+  const hideConfirm = useCallback(() => {
+    if (confirmTimerRef.current) {
+      clearTimeout(confirmTimerRef.current)
+      confirmTimerRef.current = null
+    }
+    setConfirm(null)
+  }, [])
+
+  const showConfirm = useCallback((message: string, onConfirm: () => void, options?: ShowConfirmOptions) => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    setConfirm({
+      message,
+      onConfirm,
+      confirmLabel: options?.confirmLabel,
+      confirmColor: options?.confirmColor,
+    })
+    confirmTimerRef.current = setTimeout(() => {
+      setConfirm(null)
+      confirmTimerRef.current = null
+    }, 10000)
+  }, [])
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, showConfirm, hideConfirm }}>
       {children}
       <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
         {toasts.map(t => {
@@ -45,6 +88,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           )
         })}
       </div>
+      <ConfirmToast
+        state={confirm}
+        onHide={hideConfirm}
+        confirmLabel={confirm?.confirmLabel}
+        confirmColor={confirm?.confirmColor}
+      />
     </ToastContext.Provider>
   )
 }

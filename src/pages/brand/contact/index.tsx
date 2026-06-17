@@ -15,7 +15,6 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
-import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import { TableActionBar } from '@/components/StickyBar'
 import { Button } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact-count'
@@ -98,8 +97,7 @@ function paginate<T>(items: T[], page: number) {
 }
 
 export default function BrandContact() {
-  const { showToast } = useToast()
-  const confirmToast  = useConfirmToast()
+  const { showToast, showConfirm } = useToast()
 
   const [rows,    setRows]    = useState<BrandRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -425,7 +423,7 @@ export default function BrandContact() {
                 onClick={() => {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
-                  confirmToast.show(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
+                  showConfirm(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
                     setBulkSending(true)
                     for (const key of Array.from(checkedIds)) {
                       const row = filtered.find(r => rowKey(r) === key)
@@ -435,7 +433,7 @@ export default function BrandContact() {
                     }
                     setBulkSending(false); setCheckedIds(new Set())
                     showToast('일괄 발송 완료', 'success')
-                  })
+                  }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
                 {bulkSending ? '발송 중...' : '일괄 발송'}
@@ -615,7 +613,6 @@ export default function BrandContact() {
         </div>
       )}
 
-      <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} confirmLabel="발송" confirmColor="var(--blue-dk)" />
     </div>
   )
 }
