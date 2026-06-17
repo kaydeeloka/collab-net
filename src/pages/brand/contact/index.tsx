@@ -12,6 +12,7 @@ import {
   toIsoTimestamp,
 } from '@/lib/reply-sync'
 import { supabase } from '@/lib/supabase'
+import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
@@ -98,6 +99,7 @@ function paginate<T>(items: T[], page: number) {
 
 export default function BrandContact() {
   const { showToast, showConfirm } = useToast()
+  const { selectedPhaseId } = usePhase()
 
   const [rows,    setRows]    = useState<BrandRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -133,22 +135,16 @@ export default function BrandContact() {
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-  useEffect(() => { load() }, [])
-
-  useEffect(() => {
-    if (!showStatusFilter) return
-    const handler = (e: MouseEvent) => {
-      if (statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) setShowStatusFilter(false)
+  const load = useCallback(async () => {
+    if (!selectedPhaseId) {
+      setRows([])
+      setLoading(false)
+      return
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showStatusFilter])
-
-  async function load() {
     setLoading(true)
     const [{ data: gen, error: genErr }, { data: per, error: perErr }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).order('last_reply_at', { ascending: false, nullsFirst: false }),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).order('last_reply_at', { ascending: false, nullsFirst: false }),
+      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
+      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
     ])
     if (genErr) { showToast('일반 DB 오류: ' + genErr.message, 'error'); setLoading(false); return }
     if (perErr) { showToast('퍼스널 DB 오류: ' + perErr.message, 'error'); setLoading(false); return }
@@ -172,7 +168,23 @@ export default function BrandContact() {
     }))
     setRows([...generalRows, ...personalRows])
     setLoading(false)
-  }
+  }, [selectedPhaseId, showToast])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    setPage(1)
+    setCheckedIds(new Set())
+  }, [selectedPhaseId])
+
+  useEffect(() => {
+    if (!showStatusFilter) return
+    const handler = (e: MouseEvent) => {
+      if (statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) setShowStatusFilter(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showStatusFilter])
 
   const updateField = useCallback(async (row: BrandRow, patch: Partial<BrandRow>) => {
     const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
@@ -281,7 +293,7 @@ export default function BrandContact() {
     } finally {
       setSyncingReplies(false)
     }
-  }, [rows, showToast, updateField])
+  }, [rows, showToast, updateField, load])
 
   const updateNote = useCallback((row: BrandRow, value: string) => {
     const key = row.id + row.source
