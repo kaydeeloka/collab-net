@@ -1,3 +1,4 @@
+import { Copy, ExternalLink } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
@@ -85,6 +86,32 @@ function ViewField({ label, children, span }: { label: string; children: ReactNo
   )
 }
 
+function ReviewLinkBox({ link, onCopy }: { link: string; onCopy: () => void }) {
+  return (
+    <div className="review-link-box">
+      <div className="review-link-box__url">{link}</div>
+      <div className="review-link-box__actions">
+        <button type="button" className="review-link-box__icon-btn" onClick={onCopy} aria-label="링크 복사" title="복사">
+          <Copy size={15} />
+        </button>
+        <a href={link} target="_blank" rel="noopener" className="review-link-box__btn">
+          <ExternalLink size={13} />
+          열기
+        </a>
+      </div>
+    </div>
+  )
+}
+
+function ModalStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="mon-review-modal__stat">
+      <div className="mon-review-modal__stat-label">{label}</div>
+      <div className="mon-review-modal__stat-value">{value}</div>
+    </div>
+  )
+}
+
 function modalTitle(r: MonRow): string {
   return r.display_name || `@${(r.handle || '').replace(/^@/, '')}`
 }
@@ -128,7 +155,7 @@ function brandBadge(brand: string | null) {
 }
 
 export default function Monitoring() {
-  const { showConfirm } = useToast()
+  const { showConfirm, showToast } = useToast()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,           setRows]           = useState<MonRow[]>([])
   const [confirmedCount, setConfirmedCount] = useState(0)
@@ -456,7 +483,12 @@ export default function Monitoring() {
     return parts.join(' · ')
   }
 
-  const editingReviewIndex = modalRow ? modalGroupRows.findIndex(r => r.id === modalRow.id) : -1
+  function copyReviewLink(link: string) {
+    void navigator.clipboard.writeText(link).then(
+      () => showToast('링크가 복사되었습니다', 'success'),
+      () => showToast('복사에 실패했습니다', 'error'),
+    )
+  }
 
   function cancelEditing() {
     setModalEditing(false)
@@ -1246,12 +1278,29 @@ export default function Monitoring() {
       <Modal
         open={!!modalRow}
         onClose={closeModal}
+        size="lg"
         title={modalRow ? `${modalEditing ? '리뷰 데이터 편집' : '리뷰 정보'} · ${modalTitle(modalRow)}` : ''}
       >
         {modalRow && (
-          <>
+          <div className="mon-review-modal">
+            <div className="mon-review-modal__hero">
+              <InfluencerAvatar url={modalRow.avatar_url} label={modalRow.display_name || modalRow.handle} size={56} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  {modalRow.platform && <PlatformBadge platform={modalRow.platform} />}
+                  {modalRow.brand && brandBadge(modalRow.brand)}
+                </div>
+                {modalRow.display_name && (
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gray-8)' }}>{modalRow.display_name}</div>
+                )}
+                {modalRow.handle && (
+                  <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 2 }}>@{modalRow.handle.replace(/^@/, '')}</div>
+                )}
+              </div>
+            </div>
+
             {modalGroupRows.length > 1 && (
-              <div style={{ marginBottom: 16 }}>
+              <div className="mon-review-modal__selector">
                 <label className="modal-label" style={{ marginTop: 0 }}>리뷰 선택</label>
                 <select className="modal-input" value={modalRow.id}
                   onChange={e => {
@@ -1271,35 +1320,15 @@ export default function Monitoring() {
 
             {!modalEditing ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
-                  <InfluencerAvatar url={modalRow.avatar_url} label={modalRow.display_name || modalRow.handle} size={52} />
-                  <div>
-                    {modalRow.display_name && (
-                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>{modalRow.display_name}</div>
-                    )}
-                    {modalRow.handle && (
-                      <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 2 }}>@{modalRow.handle.replace(/^@/, '')}</div>
-                    )}
-                  </div>
+                <div className="mon-review-modal__grid">
+                  <ViewField label="업로드일">{fmtDate(modalRow.date)}</ViewField>
+                  <ViewField label="미디어">{modalRow.media || '—'}</ViewField>
+                  <ViewField label="콘텐츠">{modalRow.content || '—'}</ViewField>
+                  <ViewField label="모니터링 실행일">{modalRow.updated ? fmtDate(modalRow.updated) : '—'}</ViewField>
                 </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-                <ViewField label="업로드일">{fmtDate(modalRow.date)}</ViewField>
-                <ViewField label="브랜드">
-                  {modalRow.brand
-                    ? <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: (BRAND_COLORS[(modalRow.brand || '').toLowerCase() as Brand] || 'var(--gray-4)') + '18', color: BRAND_COLORS[(modalRow.brand || '').toLowerCase() as Brand] || 'var(--gray-6)' }}>{modalRow.brand}</span>
-                    : '—'}
-                </ViewField>
-                <ViewField label="미디어">{modalRow.media || '—'}</ViewField>
-                <ViewField label="콘텐츠">{modalRow.content || '—'}</ViewField>
-                <ViewField label="리뷰 링크" span>
-                  {modalRow.review_link?.startsWith('http')
-                    ? <a href={modalRow.review_link} target="_blank" rel="noopener" className="video-link">↗ 보기</a>
-                    : '—'}
-                </ViewField>
-                <ViewField label="조회수">{modalRow.views ? fmtNum(modalRow.views) : '—'}</ViewField>
-                <ViewField label="좋아요 수">{modalRow.likes ? fmtNum(modalRow.likes) : '—'}</ViewField>
-                <ViewField label="댓글 수">{modalRow.comments ? fmtNum(modalRow.comments) : '—'}</ViewField>
-                <ViewField label="감지된 키워드" span>
+
+                <div className="mon-review-modal__section">
+                  <div className="mon-review-modal__section-label">감지된 키워드</div>
                   {modalRow.keywords
                     ? (
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -1314,10 +1343,21 @@ export default function Monitoring() {
                         })}
                       </div>
                     )
-                    : '—'}
-                </ViewField>
-                <ViewField label="모니터링 실행일">{modalRow.updated ? fmtDate(modalRow.updated) : '—'}</ViewField>
-              </div>
+                    : <span style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</span>}
+                </div>
+
+                <div className="mon-review-modal__section">
+                  <div className="mon-review-modal__section-label">리뷰 링크</div>
+                  {modalRow.review_link?.startsWith('http')
+                    ? <ReviewLinkBox link={modalRow.review_link} onCopy={() => copyReviewLink(modalRow.review_link!)} />
+                    : <span style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</span>}
+                </div>
+
+                <div className="mon-review-modal__stats">
+                  <ModalStat label="조회수" value={modalRow.views ? fmtNum(modalRow.views) : '—'} />
+                  <ModalStat label="좋아요 수" value={modalRow.likes ? fmtNum(modalRow.likes) : '—'} />
+                  <ModalStat label="댓글 수" value={modalRow.comments ? fmtNum(modalRow.comments) : '—'} />
+                </div>
               </>
             ) : editForm && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
@@ -1388,7 +1428,7 @@ export default function Monitoring() {
                 </>
               )}
             </div>
-          </>
+          </div>
         )}
       </Modal>
     </div>

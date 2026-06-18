@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import ConfirmToast from '@/components/ConfirmToast'
 
 export type ToastType = 'success' | 'error' | 'info'
@@ -71,23 +72,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast, showConfirm, hideConfirm }}>
       {children}
-      <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
-        {toasts.map(t => {
-          const bg = t.type === 'success' ? '#d1fae5' : t.type === 'error' ? '#fee2e2' : '#e0e7ff'
-          const col = t.type === 'success' ? '#065f46' : t.type === 'error' ? '#991b1b' : '#1e40af'
-          const icon = t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'
-          return (
-            <div key={t.id} style={{
-              background: bg, color: col, borderRadius: 10, padding: '12px 18px',
-              fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
-              display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto',
-            }}>
-              <span style={{ fontSize: 16 }}>{icon}</span>
-              <span>{t.msg}</span>
-            </div>
-          )
-        })}
-      </div>
+      {createPortal(
+        <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 15000, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+          {toasts.map(t => {
+            const bg = t.type === 'success' ? '#d1fae5' : t.type === 'error' ? '#fee2e2' : '#e0e7ff'
+            const col = t.type === 'success' ? '#065f46' : t.type === 'error' ? '#991b1b' : '#1e40af'
+            const icon = t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'
+            return (
+              <div key={t.id} style={{
+                background: bg, color: col, borderRadius: 10, padding: '12px 18px',
+                fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
+                display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto',
+              }}>
+                <span style={{ fontSize: 16 }}>{icon}</span>
+                <span>{t.msg}</span>
+              </div>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
       <ConfirmToast
         state={confirm}
         onHide={hideConfirm}

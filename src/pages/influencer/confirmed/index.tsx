@@ -297,13 +297,23 @@ function formatShippingAddress(row: Pick<ConfirmedRow, 'address_line_1' | 'addre
   ].filter(Boolean).join(', ')
 }
 
-function SeqBadge({ seq }: { seq: number }) {
+function SeqBadge({ seq, size = 'sm' }: { seq: number; size?: 'sm' | 'md' }) {
+  const md = size === 'md'
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      minWidth: 28, height: 22, padding: '0 8px', borderRadius: 999,
-      background: 'var(--blue-lt)', color: 'var(--blue-dk)',
-      fontSize: 11, fontWeight: 800, flexShrink: 0,
+      minWidth: md ? 26 : 28,
+      height: md ? 26 : 22,
+      padding: md ? '0 7px' : '0 8px',
+      borderRadius: md ? 7 : 999,
+      background: md ? 'var(--table-head-bg)' : 'var(--blue-lt)',
+      color: md ? '#fff' : 'var(--blue-dk)',
+      border: md ? '1px solid var(--table-head-border)' : undefined,
+      fontSize: md ? 13 : 11,
+      fontWeight: 800,
+      flexShrink: 0,
+      lineHeight: 1,
+      fontVariantNumeric: 'tabular-nums',
     }}>
       {seq}
     </span>
@@ -948,8 +958,13 @@ export default function Confirmed() {
           <Modal
             open={showView}
             onClose={() => setShowView(false)}
-            title={vDisplayName || (vHandle ? `@${vHandle}` : '') || '인플루언서'}
-            titlePrefix={r.seq != null ? <SeqBadge seq={r.seq} /> : undefined}
+            title={`인플루언서 정보 · ${vDisplayName || (vHandle ? `@${vHandle}` : '') || '인플루언서'}`}
+            titlePrefix={r.seq != null ? (
+              <span className="modal-title-prefix">
+                <SeqBadge seq={r.seq} size="md" />
+                <span className="modal-title-sep" aria-hidden="true">·</span>
+              </span>
+            ) : undefined}
             size="lg"
           >
             <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
