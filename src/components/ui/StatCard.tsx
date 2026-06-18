@@ -56,6 +56,8 @@ export interface StatCardMetricProps extends StatCardBase {
   valueColor?: string
   valueSuffix?: ReactNode
   align?: 'left' | 'center'
+  caption?: ReactNode
+  captionColor?: string
   sub?: ReactNode
   progress?: number
   progressColor?: string
@@ -122,13 +124,36 @@ function StatCardProgressBar({ pct, color = 'var(--teal-dk)' }: { pct: number; c
   )
 }
 
+function MetricCaption({ children, color, marginBottom = 4, hidden = false }: {
+  children?: ReactNode
+  color?: string
+  marginBottom?: number
+  hidden?: boolean
+}) {
+  return (
+    <div
+      aria-hidden={hidden || undefined}
+      style={{
+        fontSize: 11,
+        ...(color ? { color } : {}),
+        fontWeight: 600,
+        marginBottom,
+        lineHeight: 1.2,
+        visibility: hidden ? 'hidden' : undefined,
+      }}
+    >
+      {children ?? '\u00a0'}
+    </div>
+  )
+}
+
 function SplitColumnCell({ col }: { col: StatCardSplitColumn }) {
   const labelColor = col.labelColor ?? col.valueColor ?? 'var(--gray-5)'
   const showSub = col.sub !== undefined || col.hideSub
   return (
     <div style={{ textAlign: 'center' }}>
       <MetricNumber value={col.value} unit={col.unit} color={col.valueColor} />
-      <div style={{ fontSize: 11, color: labelColor, fontWeight: 600, marginBottom: showSub ? 4 : 0 }}>{col.label}</div>
+      <MetricCaption color={labelColor} marginBottom={showSub ? 4 : 0}>{col.label}</MetricCaption>
       {showSub && (
         <div className="card-sub" style={{ marginTop: 0, visibility: col.hideSub ? 'hidden' : undefined }}>
           {col.sub ?? '0% 완료율'}
@@ -183,7 +208,12 @@ export default function StatCard(props: StatCardProps) {
           {props.columns.map((col, i) => (
             <div
               key={col.label}
-              style={{ textAlign: 'center', minWidth: 0, borderLeft: i > 0 ? '1px solid var(--gray-2)' : undefined }}
+              style={{
+                textAlign: 'center',
+                minWidth: 0,
+                padding: '0 14px',
+                borderLeft: i > 0 ? '1px solid var(--gray-2)' : undefined,
+              }}
             >
               <MetricNumber value={col.value} unit={col.unit ?? '회'} color={col.color} />
               <div style={{ fontSize: 11, color: col.color, fontWeight: 600 }}>{col.label}</div>
@@ -197,17 +227,25 @@ export default function StatCard(props: StatCardProps) {
 
   if (props.variant === 'metric') {
     const align = props.align ?? 'center'
-    const { progress, progressColor, footer, valueSuffix, sub } = props
+    const { progress, progressColor, footer, valueSuffix, sub, caption, captionColor } = props
+    const anchorFooter = progress != null || footer != null
+    const inlineSub = sub != null && !anchorFooter
     return (
       <div className={cardClass(highlight, className)} style={shellStyle(style)}>
         <div className="card-label">{label}</div>
         <div style={{ ...CARD_BODY, width: '100%', textAlign: align }}>
           <MetricNumber value={props.value} unit={props.unit} color={props.valueColor} align={align} suffix={valueSuffix} />
-          <div style={CARD_FOOTER}>
-            {sub && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
-            {progress != null && <StatCardProgressBar pct={progress} color={progressColor} />}
-            {footer && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: progress != null ? 6 : sub ? 0 : 0 }}>{footer}</div>}
-          </div>
+          {caption != null && (
+            <MetricCaption color={captionColor} marginBottom={inlineSub ? 4 : 0}>{caption}</MetricCaption>
+          )}
+          {inlineSub && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
+          {anchorFooter && (
+            <div style={CARD_FOOTER}>
+              {sub && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
+              {progress != null && <StatCardProgressBar pct={progress} color={progressColor} />}
+              {footer && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: progress != null ? 6 : sub ? 0 : 0 }}>{footer}</div>}
+            </div>
+          )}
         </div>
       </div>
     )
@@ -235,19 +273,30 @@ export default function StatCard(props: StatCardProps) {
 
   // simple (default)
   const { value, unit, valueColor, sub, tags, progress, progressColor } = props
+  const anchorFooter = (tags && tags.length > 0) || progress != null
+  const inlineSub = sub != null && !anchorFooter
   return (
     <div className={cardClass(highlight, className)} style={shellStyle(style)}>
       <div className="card-label">{label}</div>
       <div style={CARD_BODY}>
-        <div className="card-value" style={valueColor ? { color: valueColor } : undefined}>
+        <div
+          className="card-value"
+          style={{
+            ...(valueColor ? { color: valueColor } : undefined),
+            ...(inlineSub ? { marginBottom: 6 } : undefined),
+          }}
+        >
           {value}
           {unit && <span style={UNIT_STYLE}> {unit}</span>}
         </div>
-        <div style={CARD_FOOTER}>
-          {sub != null && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
-          {tags && tags.length > 0 && <StatCardTags tags={tags} style={{ marginTop: sub != null ? 6 : 0 }} />}
-          {progress != null && <StatCardProgressBar pct={progress} color={progressColor} />}
-        </div>
+        {inlineSub && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
+        {(anchorFooter || !inlineSub) && (
+          <div style={CARD_FOOTER}>
+            {sub != null && anchorFooter && <div className="card-sub" style={{ marginTop: 0 }}>{sub}</div>}
+            {tags && tags.length > 0 && <StatCardTags tags={tags} style={{ marginTop: sub != null ? 6 : 0 }} />}
+            {progress != null && <StatCardProgressBar pct={progress} color={progressColor} />}
+          </div>
+        )}
       </div>
     </div>
   )

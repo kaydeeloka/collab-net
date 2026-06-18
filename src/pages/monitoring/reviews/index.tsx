@@ -554,6 +554,18 @@ export default function Monitoring() {
 
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
 
+  const uploadGroupMap = new Map<string, MonRow[]>()
+  rows.forEach(r => {
+    const key = r.confirmed_influencer_id || r.influencer_platform_id || r.id
+    const list = uploadGroupMap.get(key) || []
+    list.push(r)
+    uploadGroupMap.set(key, list)
+  })
+  const uploadGroups = Array.from(uploadGroupMap.values())
+  const uploadedInfluencers = uploadGroups.filter(g => g.some(r => r.review_link?.startsWith('http'))).length
+  const noUploadInfluencers = uploadGroups.filter(g => !g.some(r => r.review_link?.startsWith('http'))).length
+  const uploadTotal = confirmedCount || uploadGroups.length
+
   const stats: MonStats = {
     totalInfluencers: confirmedCount || new Set(rows.map(r => r.confirmed_influencer_id).filter(Boolean)).size,
     totalReviews:     reviewRows.length,
@@ -569,6 +581,9 @@ export default function Monitoring() {
   }
   const mimuseReviewCount = stats.brandCounts.mimuse ?? 0
   const brandReviewCount  = BRANDS.filter(b => b !== 'mimuse').reduce((s, b) => s + (stats.brandCounts[b] ?? 0), 0)
+  const photoCount = reviewRows.filter(r => (r.media || '').toLowerCase() === 'photo').length
+  const videoCount = reviewRows.filter(r => (r.media || '').toLowerCase() === 'video').length
+  const mediaTotal   = photoCount + videoCount
 
   const filteredRows = rows.filter(r => {
     if (brandFilter !== 'all' && (r.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false
@@ -649,14 +664,38 @@ export default function Monitoring() {
         }}>{scrapeMsg}</div>
       )}
       {/* Stats */}
-      <StatCards>
-        <StatCard label="모니터링 인플루언서" value={stats.totalInfluencers} />
+      <StatCards columns="minmax(0, 1fr) minmax(0, 0.78fr) minmax(0, 0.8fr) minmax(0, 1.15fr)">
+        <StatCard
+          highlight
+          label="모니터링 인플루언서"
+          variant="split"
+          columns={[
+            {
+              value: uploadedInfluencers,
+              unit: '명',
+              valueColor: '#14532d',
+              label: '완료',
+              labelColor: '#16a34a',
+              sub: `${uploadTotal ? Math.round(uploadedInfluencers / uploadTotal * 100) : 0}% 완료율`,
+            },
+            {
+              value: noUploadInfluencers,
+              unit: '명',
+              valueColor: '#991b1b',
+              label: '미업로드',
+              labelColor: '#dc2626',
+            },
+          ]}
+        />
         <StatCard
           highlight
           label="리뷰 업로드"
+          variant="metric"
+          align="left"
+          style={{ padding: '22px 16px' }}
           value={stats.totalReviews}
           valueColor="var(--blue-dk)"
-          sub={(
+          caption={(
             <>
               <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>브랜드 리뷰</span>
               <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{brandReviewCount}</strong>
@@ -666,9 +705,36 @@ export default function Monitoring() {
             </>
           )}
         />
-        <StatCard label="총 조회수" value={fmtNum(stats.totalViews)} />
-        <StatCard label="총 좋아요수" value={fmtNum(stats.totalLikes)} />
-        <StatCard label="총 댓글수" value={fmtNum(stats.totalComments)} />
+        <StatCard
+          label="미디어"
+          variant="split"
+          style={{ padding: '22px 16px' }}
+          columns={[
+            {
+              value: photoCount,
+              unit: '건',
+              valueColor: '#14532d',
+              label: 'photo',
+              labelColor: '#16a34a',
+            },
+            {
+              value: videoCount,
+              unit: '건',
+              valueColor: '#1e40af',
+              label: 'video',
+              labelColor: '#2563eb',
+            },
+          ]}
+        />
+        <StatCard
+          label="리뷰 성과"
+          variant="split"
+          columns={[
+            { value: fmtNum(stats.totalViews),    label: '조회수', valueColor: 'var(--ink)',    labelColor: 'var(--ink)' },
+            { value: fmtNum(stats.totalLikes),    label: '좋아요', valueColor: '#dc2626',     labelColor: '#dc2626' },
+            { value: fmtNum(stats.totalComments), label: '댓글',   valueColor: 'var(--teal-dk)', labelColor: 'var(--teal-dk)' },
+          ]}
+        />
       </StatCards>
 
       {/* Keywords + brand counts */}
