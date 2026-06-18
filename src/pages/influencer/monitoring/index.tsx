@@ -12,7 +12,7 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
-import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBucket } from '@/lib/content-platforms'
+import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/content-platforms'
 
 const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
 const MONITORING_LIST_PATH = '/influencer/monitoring-list'
@@ -34,9 +34,8 @@ const MEDIA_OPTIONS   = ['photo', 'video']
 const CONTENT_OPTIONS = ['review video', 'unboxing', 'other']
 
 function PlatformBadge({ platform }: { platform: string }) {
-  const bucket = platformBucket(platform)
-  const label = PLATFORM_DISPLAY[bucket].label
-  return <span className={platformBadgeClass(platform)}>{label}</span>
+  const { label, style } = platformBadgeStyle(platform)
+  return <span className={platformBadgeClass(platform)} style={style}>{label}</span>
 }
 
 interface MonRow {

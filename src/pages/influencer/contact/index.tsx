@@ -2,9 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
 import { gasPost } from '@/lib/api'
 import {
-  backfillAcceptedToConfirmed,
   removeInfluencerOnUnaccept,
   syncInfluencerOnAccept,
+  syncMissingAcceptedToConfirmed,
 } from '@/lib/confirm-influencer'
 import {
   checkOutlookConnected,
@@ -247,16 +247,13 @@ export default function Outreach() {
       contact_count: coerceContactCount(r.contact_count),
     }))
     setInfluencers(mapped as unknown as Influencer[])
+    setLoading(false)
 
+    // Silent background repair — toast only when user sets status → accept (updateField)
     const accepted = (mapped as Influencer[]).filter(r => r.status === 'accept')
     if (accepted.length) {
-      const { synced, failed, deduped, errors } = await backfillAcceptedToConfirmed(viewPhaseId, accepted)
-      if (deduped > 0) showToast(`확정 목록 중복 ${deduped}건 정리됨`, 'success')
-      if (synced > 0) showToast(`${synced}명 확정 목록에 반영됨`, 'success')
-      if (failed > 0) showToast(`확정 등록 실패 ${failed}건: ${errors[0]}`, 'error')
+      void syncMissingAcceptedToConfirmed(viewPhaseId, accepted)
     }
-
-    setLoading(false)
   }, [viewPhaseId, showToast])
 
   useEffect(() => { loadInfluencers() }, [loadInfluencers])
@@ -364,13 +361,14 @@ export default function Outreach() {
     if (error) { showToast(error.message, 'error'); return }
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
 
-    // sync to confirmed_influencers when status is accept
+    // sync to confirmed_influencers when status becomes accept (primary path)
     if (patch.status === 'accept' && inf && viewPhaseId) {
-      const result = await syncInfluencerOnAccept(inf, viewPhaseId)
+      const merged = { ...inf, ...finalPatch }
+      const result = await syncInfluencerOnAccept(merged, viewPhaseId)
       if (!result.ok) {
         showToast('확정 등록 실패: ' + result.error, 'error')
       } else {
-        showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
+        showToast(`${merged.display_name || merged.handle} 확정 등록 완료 — 확정 인플루언서 페이지에서 확인하세요`, 'success')
       }
     }
 

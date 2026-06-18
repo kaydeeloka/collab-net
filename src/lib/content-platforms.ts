@@ -14,6 +14,9 @@ export type PlatformBucket = 'tiktok' | 'instagram' | 'magazine'
 
 export const PLATFORM_BUCKETS: PlatformBucket[] = ['tiktok', 'instagram', 'magazine']
 
+/** Periwinkle — matches 확정 인플루언서 Magazine pill */
+export const MAGAZINE_BADGE_COLOR = '#5B6EE1'
+
 export const PLATFORM_DISPLAY: Record<PlatformBucket, {
   label: string
   statColor: string
@@ -22,7 +25,7 @@ export const PLATFORM_DISPLAY: Record<PlatformBucket, {
 }> = {
   tiktok:    { label: 'TikTok',    statColor: '#111',    badgeBg: '#111',    badgeColor: '#fff' },
   instagram: { label: 'Instagram', statColor: '#dc2743', badgeBg: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', badgeColor: '#fff' },
-  magazine:  { label: 'Magazine',  statColor: '#6366f1', badgeBg: '#6366f1', badgeColor: '#fff' },
+  magazine:  { label: 'Magazine',  statColor: MAGAZINE_BADGE_COLOR, badgeBg: MAGAZINE_BADGE_COLOR, badgeColor: '#fff' },
 }
 
 export function platformBucket(platform: string): PlatformBucket {

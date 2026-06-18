@@ -360,7 +360,7 @@ export async function renumberConfirmedSeqInPhase(
   return { renumbered: true }
 }
 
-/** Dedupe confirmed rows and platform rows in a phase. */
+/** Dedupe confirmed rows and platform rows in a phase (client-side, many round-trips). */
 export async function dedupeConfirmedPhaseData(
   phaseId: string,
 ): Promise<{ confirmedRemoved: number; platformsRemoved: number; seqRenumbered: boolean; error?: string }> {
@@ -394,6 +394,99 @@ export async function dedupeConfirmedPhaseData(
     platformsRemoved: platforms.removed,
     seqRenumbered: renumber.renumbered,
   }
+}
+
+export type DedupePhaseResult = {
+  confirmedRemoved: number
+  platformsRemoved: number
+  seqRenumbered: boolean
+  error?: string
+}
+
+/** Server-side dedupe via Supabase RPC (single round-trip). */
+export async function dedupeConfirmedPhaseViaDb(phaseId: string): Promise<DedupePhaseResult> {
+  if (!phaseId) return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false }
+
+  const { data, error } = await supabase.rpc('dedupe_confirmed_phase', { p_phase_id: phaseId })
+  if (error) {
+    return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false, error: error.message }
+  }
+
+  const row = (data ?? {}) as {
+    confirmed_removed?: number
+    platforms_removed?: number
+    seq_renumbered?: boolean
+  }
+
+  return {
+    confirmedRemoved: row.confirmed_removed ?? 0,
+    platformsRemoved: row.platforms_removed ?? 0,
+    seqRenumbered: row.seq_renumbered ?? false,
+  }
+}
+
+/**
+ * Fast path: link accept-status influencers missing from confirmed_influencers.
+ * No dedupe/renumber — safe to run silently in background after page load.
+ */
+export async function syncMissingAcceptedToConfirmed(
+  phaseId: string,
+  accepted: InfluencerConfirmSource[],
+): Promise<{ synced: number; failed: number; errors: string[] }> {
+  if (!phaseId || !accepted.length) return { synced: 0, failed: 0, errors: [] }
+
+  const { data: rows, error } = await supabase
+    .from('confirmed_influencers')
+    .select('influencer_id, email, influencers(handle), influencer_platform(handle)')
+    .eq('phase_id', phaseId)
+
+  if (error) return { synced: 0, failed: accepted.length, errors: [error.message] }
+
+  const linkedIds = new Set(
+    (rows ?? []).map(r => r.influencer_id).filter((id): id is string => !!id),
+  )
+  const linkedHandles = new Set<string>()
+  const linkedEmails = new Set<string>()
+  for (const row of rows ?? []) {
+    const inf = row.influencers as { handle?: string | null } | null
+    const h = normalizeHandle(inf?.handle)
+    if (h) linkedHandles.add(h)
+    for (const p of (row.influencer_platform as { handle?: string | null }[] | null) ?? []) {
+      const ph = normalizeHandle(p.handle)
+      if (ph) linkedHandles.add(ph)
+    }
+    const email = row.email?.trim().toLowerCase()
+    if (email) linkedEmails.add(email)
+  }
+
+  let synced = 0
+  let failed = 0
+  const errors: string[] = []
+
+  for (const inf of accepted) {
+    const handle = normalizeHandle(inf.handle)
+    const email = inf.email?.trim().toLowerCase()
+    if (
+      linkedIds.has(inf.id)
+      || (handle && linkedHandles.has(handle))
+      || (email && linkedEmails.has(email))
+    ) {
+      continue
+    }
+
+    const result = await syncInfluencerOnAccept(inf, phaseId)
+    if (result.ok && result.created) {
+      synced++
+      linkedIds.add(inf.id)
+      if (handle) linkedHandles.add(handle)
+      if (email) linkedEmails.add(email)
+    } else if (!result.ok) {
+      failed++
+      errors.push(`${inf.display_name || inf.handle}: ${result.error}`)
+    }
+  }
+
+  return { synced, failed, errors }
 }
 
 /** Sync influencers already marked accept; dedupes first, then links missing rows. */

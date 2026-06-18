@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { dedupeConfirmedPhaseData, uniquePlatformAccounts } from '@/lib/confirm-influencer'
+import { dedupeConfirmedPhaseViaDb, uniquePlatformAccounts } from '@/lib/confirm-influencer'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { formatKstSyncLabel } from '@/lib/kst-time'
-import { PLATFORM_OPTIONS, defaultProfileUrl, platformBadgeClass, platformBadgeStyle } from '@/lib/content-platforms'
+import { PLATFORM_DISPLAY, PLATFORM_OPTIONS, defaultProfileUrl, platformBadgeClass, platformBadgeStyle } from '@/lib/content-platforms'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -169,8 +169,8 @@ function fmtFollowers(n: number | null): string {
 
 function PlatformBadge({ platform }: { platform: string | null }) {
   if (!platform) return <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
-  const { label } = platformBadgeStyle(platform)
-  return <span className={platformBadgeClass(platform)}>{label}</span>
+  const { label, style } = platformBadgeStyle(platform)
+  return <span className={platformBadgeClass(platform)} style={style}>{label}</span>
 }
 
 function ReviewLinksCell({ links }: { links: MonitoringReview[] }) {
@@ -375,20 +375,7 @@ export default function Confirmed() {
 
   useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
 
-  async function load() {
-    setLoading(true)
-    if (viewPhaseId) {
-      const { confirmedRemoved, platformsRemoved, error: dedupeErr } =
-        await dedupeConfirmedPhaseData(viewPhaseId)
-      if (dedupeErr) showToast(dedupeErr, 'error')
-      else if (confirmedRemoved > 0 || platformsRemoved > 0) {
-        const parts = [
-          confirmedRemoved > 0 ? `확정 ${confirmedRemoved}건` : '',
-          platformsRemoved > 0 ? `플랫폼 ${platformsRemoved}건` : '',
-        ].filter(Boolean)
-        showToast(`중복 ${parts.join(', ')} 정리됨`, 'success')
-      }
-    }
+  async function fetchConfirmedRows() {
     const { data, error } = await supabase
       .from('confirmed_influencers')
       .select(`
@@ -404,38 +391,41 @@ export default function Confirmed() {
       .eq('phase_id', viewPhaseId ?? '')
       .order('seq', { ascending: true, nullsFirst: false })
 
-    if (error) { showToast(error.message, 'error'); setLoading(false); return }
+    if (error) {
+      showToast(error.message, 'error')
+      return null
+    }
 
     const mapped: ConfirmedRow[] = (data ?? []).map((r: any) => {
       const ems = (r.ems_tracking || [])[0] || {}
       return {
-      id:             r.id,
-      seq:            r.seq ?? null,
-      email:          r.email,
-      upload_status:  r.upload_status ?? 'Pending',
-      repost:         r.repost,
-      review_links:   extractReviewLinks(r.influencer_platform ?? [], r.review_link),
-      notes:          r.notes,
-      form_submitted: r.form_submitted,
-      phone:          r.phone,
-      address_line_1: r.address_line_1,
-      address_line_2: r.address_line_2,
-      city:           r.city,
-      state:          r.state,
-      zip:            r.zip,
-      country:        r.country,
-      handle:         r.influencers?.handle       ?? null,
-      display_name:   r.influencers?.display_name ?? null,
-      ems_number:     ems.ems_number ?? null,
-      ems_status:     ems.status     ?? null,
-      influencer_platform: uniquePlatformAccounts((r.influencer_platform ?? []).map((p: any) => ({
-        id:          p.id,
-        platform:    p.platform,
-        handle:      p.handle   ?? '',
-        followers:   p.followers ?? 0,
-        profile_url: p.profile_url ?? '',
-      }))),
-      influencers: r.influencers ?? null,
+        id:             r.id,
+        seq:            r.seq ?? null,
+        email:          r.email,
+        upload_status:  r.upload_status ?? 'Pending',
+        repost:         r.repost,
+        review_links:   extractReviewLinks(r.influencer_platform ?? [], r.review_link),
+        notes:          r.notes,
+        form_submitted: r.form_submitted,
+        phone:          r.phone,
+        address_line_1: r.address_line_1,
+        address_line_2: r.address_line_2,
+        city:           r.city,
+        state:          r.state,
+        zip:            r.zip,
+        country:        r.country,
+        handle:         r.influencers?.handle       ?? null,
+        display_name:   r.influencers?.display_name ?? null,
+        ems_number:     ems.ems_number ?? null,
+        ems_status:     ems.status     ?? null,
+        influencer_platform: uniquePlatformAccounts((r.influencer_platform ?? []).map((p: any) => ({
+          id:          p.id,
+          platform:    p.platform,
+          handle:      p.handle   ?? '',
+          followers:   p.followers ?? 0,
+          profile_url: p.profile_url ?? '',
+        }))),
+        influencers: r.influencers ?? null,
       }
     })
 
@@ -472,10 +462,47 @@ export default function Confirmed() {
       }
     }
 
-    setRows(mapped)
-    setBrandCounts(computeBrandCounts(data ?? []))
+    return { mapped, raw: data ?? [] }
+  }
+
+  async function load() {
+    setLoading(true)
+    const result = await fetchConfirmedRows()
+    if (!result) {
+      setLoading(false)
+      return
+    }
+
+    setRows(result.mapped)
+    setBrandCounts(computeBrandCounts(result.raw))
     setSyncMsg(formatKstSyncLabel())
     setLoading(false)
+
+    if (!viewPhaseId) return
+
+    // Background dedupe in Supabase (single RPC) — refresh only if something changed
+    void dedupeConfirmedPhaseViaDb(viewPhaseId).then(async dedupe => {
+      if (dedupe.error) {
+        showToast(dedupe.error, 'error')
+        return
+      }
+      if (dedupe.confirmedRemoved === 0 && dedupe.platformsRemoved === 0 && !dedupe.seqRenumbered) return
+
+      if (dedupe.confirmedRemoved > 0 || dedupe.platformsRemoved > 0) {
+        const parts = [
+          dedupe.confirmedRemoved > 0 ? `확정 ${dedupe.confirmedRemoved}건` : '',
+          dedupe.platformsRemoved > 0 ? `플랫폼 ${dedupe.platformsRemoved}건` : '',
+        ].filter(Boolean)
+        showToast(`중복 ${parts.join(', ')} 정리됨`, 'success')
+      }
+
+      const refreshed = await fetchConfirmedRows()
+      if (refreshed) {
+        setRows(refreshed.mapped)
+        setBrandCounts(computeBrandCounts(refreshed.raw))
+        setSyncMsg(formatKstSyncLabel())
+      }
+    })
   }
 
   async function updateField(id: string, field: string, value: string) {
@@ -720,7 +747,7 @@ export default function Confirmed() {
               tags={[
                 { label: 'TikTok',    count: platformCounts.tiktok,    color: '#111' },
                 { label: 'Instagram', count: platformCounts.instagram, color: '#dc2743' },
-                { label: 'Magazine',  count: platformCounts.magazine,  color: '#6366f1' },
+                { label: 'Magazine',  count: platformCounts.magazine,  color: PLATFORM_DISPLAY.magazine.statColor },
               ]}
             />
             <StatCard

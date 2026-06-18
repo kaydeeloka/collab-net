@@ -103,7 +103,7 @@ export default function Ems() {
     emsNum:            '',
     registeredDate:    '',
     applicationNumber: '',
-    status:            MANUAL_RECEIVED_STATUS,
+    status:            '',
   })
 
   useEffect(() => {
@@ -225,7 +225,7 @@ export default function Ems() {
       emsNum:            row.ems_number         || '',
       registeredDate:    row.registered_date    || '',
       applicationNumber: row.application_number || '',
-      status:            row.status             || MANUAL_RECEIVED_STATUS,
+      status:            row.status             || '',
     })
     setTrackingName(row.display_name || row.handle)
     setTrackingNotes(row.notes || '')
@@ -282,7 +282,7 @@ export default function Ems() {
 
   async function changeEmsStatus(row: EmsRow, newStatus: string, e: React.SyntheticEvent) {
     e.stopPropagation()
-    if (newStatus === (row.status || '')) return
+    if (!newStatus || newStatus === (row.status || '')) return
     setStatusSaving(row.confirmed_influencer_id)
     try {
       if (row.tracking_id) {
@@ -465,7 +465,7 @@ export default function Ems() {
                   )
                   : pagedRows.map((row, i) => {
                           const i_abs      = startIdx + i
-                          const rowStatus  = row.status || MANUAL_RECEIVED_STATUS
+                          const rowStatus  = row.status ?? ''
                           const addrLines  = [
                             [row.address_line_1, row.address_line_2].filter(Boolean).join(' '),
                             [row.city, ((row.state || '') + ' ' + (row.zip || '')).trim()].filter(Boolean).join(', '),
@@ -525,10 +525,13 @@ export default function Ems() {
                                   disabled={statusSaving === row.confirmed_influencer_id}
                                   onChange={e => changeEmsStatus(row, e.target.value, e)}
                                   style={{
-                                    width: emsStatusSelectWidth(rowStatus),
-                                    backgroundColor: getEmsStatusColor(rowStatus),
+                                    width: rowStatus ? emsStatusSelectWidth(rowStatus) : '3rem',
+                                    backgroundColor: rowStatus ? getEmsStatusColor(rowStatus) : 'var(--gray-1)',
+                                    color: rowStatus ? '#fff' : 'var(--gray-4)',
+                                    border: rowStatus ? undefined : '1px solid var(--gray-3)',
                                   }}
                                 >
+                                  {!rowStatus && <option value="">—</option>}
                                   {statusOptionsForRow(row.status).map(s => (
                                     <option key={s} value={s}>{s}</option>
                                   ))}
@@ -607,7 +610,7 @@ export default function Ems() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 48, marginBottom: 8, flexWrap: 'wrap' }}>
                 {viewRow.status
                   ? <span style={{ background: badgeColor, color: '#fff', padding: '4px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{viewRow.status}</span>
-                  : <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>상태 미입력</span>}
+                  : <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>—</span>}
                 {viewRow.last_update && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>마지막 업데이트: {viewRow.last_update}</span>}
               </div>
 
@@ -716,6 +719,7 @@ export default function Ems() {
             <select value={trackingForm.status}
               onChange={e => setTrackingForm(p => ({ ...p, status: e.target.value }))}
               style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', background: '#fff' }}>
+              {!trackingForm.status && <option value="">—</option>}
               {EMS_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>

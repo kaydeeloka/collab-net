@@ -763,7 +763,7 @@ td {
 }
 .platform-tiktok { background: #010101; color: #fff; }
 .platform-instagram { background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888); color: #fff; }
-.platform-magazine { background: #6366f1; color: #fff; }
+.platform-magazine { background: #5B6EE1; color: #fff; }
 .mention-badge {
   display: inline-block; padding: 3px 10px;
   border-radius: var(--r-pill); font-size: 12px; font-weight: 700;
