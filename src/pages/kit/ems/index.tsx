@@ -367,11 +367,11 @@ export default function Ems() {
 
   const thBase: React.CSSProperties = {
     position: 'sticky', top: 0, zIndex: 1,
-    background: '#f0f5f8',
+    background: 'var(--table-head-bg)',
     padding: '13px 18px',
     textAlign: 'left', fontSize: 11, fontWeight: 700,
-    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
-    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+    color: 'var(--table-head-fg)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--table-head-border)', whiteSpace: 'nowrap',
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / EMS_PAGE_SIZE))
@@ -436,7 +436,6 @@ export default function Ems() {
                       onChange={setFilterStatus}
                       open={openFilter === 'status'}
                       onOpenChange={open => setOpenFilter(open ? 'status' : null)}
-                      tone="light"
                     />
                   </th>
                   <th style={thBase}>배송 주소</th>
@@ -449,7 +448,6 @@ export default function Ems() {
                       onChange={setFilterReship}
                       open={openFilter === 'reship'}
                       onOpenChange={open => setOpenFilter(open ? 'reship' : null)}
-                      tone="light"
                       align="right"
                     />
                   </th>

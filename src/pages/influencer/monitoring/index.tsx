@@ -1,3 +1,4 @@
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Copy, ExternalLink } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +12,10 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
-import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBucket } from '@/lib/content-platforms'
+import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBucket } from '@/lib/content-platforms'
+
+const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
+const MONITORING_LIST_PATH = '/influencer/monitoring-list'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
@@ -30,11 +34,9 @@ const MEDIA_OPTIONS   = ['photo', 'video']
 const CONTENT_OPTIONS = ['review video', 'unboxing', 'other']
 
 function PlatformBadge({ platform }: { platform: string }) {
-  const { label, style } = platformBadgeStyle(platform)
   const bucket = platformBucket(platform)
-  if (bucket === 'tiktok') return <span className="platform-badge platform-tiktok">{label}</span>
-  if (bucket === 'instagram') return <span className="platform-badge platform-instagram">{label}</span>
-  return <span className="platform-badge" style={style}>{label}</span>
+  const label = PLATFORM_DISPLAY[bucket].label
+  return <span className={platformBadgeClass(platform)}>{label}</span>
 }
 
 interface MonRow {
@@ -86,17 +88,17 @@ function ViewField({ label, children, span }: { label: string; children: ReactNo
   )
 }
 
-function ReviewLinkBox({ link, onCopy }: { link: string; onCopy: () => void }) {
+function ReviewLinkBox({ link, onCopy, compact }: { link: string; onCopy: () => void; compact?: boolean }) {
   return (
-    <div className="review-link-box">
+    <div className={`review-link-box${compact ? ' review-link-box--compact' : ''}`}>
       <div className="review-link-box__url">{link}</div>
       <div className="review-link-box__actions">
         <button type="button" className="review-link-box__icon-btn" onClick={onCopy} aria-label="링크 복사" title="복사">
-          <Copy size={15} />
+          <Copy size={compact ? 14 : 15} />
         </button>
         <a href={link} target="_blank" rel="noopener" className="review-link-box__btn">
           <ExternalLink size={13} />
-          열기
+          보기
         </a>
       </div>
     </div>
@@ -157,6 +159,13 @@ function brandBadge(brand: string | null) {
 export default function Monitoring() {
   const { showConfirm, showToast } = useToast()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const activeTab: 'upload' | 'list' = location.pathname === MONITORING_LIST_PATH ? 'list' : 'upload'
+
+  function setActiveTab(tab: 'upload' | 'list') {
+    navigate(tab === 'list' ? MONITORING_LIST_PATH : MONITORING_UPLOAD_PATH)
+  }
   const [rows,           setRows]           = useState<MonRow[]>([])
   const [confirmedCount, setConfirmedCount] = useState(0)
   const [loading,        setLoading]        = useState(true)
@@ -187,7 +196,6 @@ export default function Monitoring() {
     review_link: string; views: number; likes: number; comments: number
   } | null>(null)
   const [editSaving,     setEditSaving]     = useState(false)
-  const [activeTab,      setActiveTab]      = useState<'upload' | 'list'>('upload')
   const [uploadPage,     setUploadPage]     = useState(1)
   const [listPage,       setListPage]       = useState(1)
   const MON_PAGE_SIZE = 25
@@ -196,11 +204,14 @@ export default function Monitoring() {
   const [uploadFilter,     setUploadFilter]     = useState('all')
   const [platformFilter,   setPlatformFilter]   = useState('all')
   const [brandFilter,      setBrandFilter]      = useState('all')
+  const [listPlatformFilter, setListPlatformFilter] = useState('all')
+  const [listBrandFilter,    setListBrandFilter]    = useState('all')
   const [statusFilter,     setStatusFilter]     = useState('all')
   const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | null>(null)
+  const [openListFilter,   setOpenListFilter]   = useState<'platform' | 'brand' | null>(null)
 
   useEffect(() => { setUploadPage(1) }, [searchQuery, uploadFilter, platformFilter, brandFilter, statusFilter])
-  useEffect(() => { setListPage(1) }, [activeTab])
+  useEffect(() => { setListPage(1) }, [activeTab, listPlatformFilter, listBrandFilter])
 
   useEffect(() => {
     if (phaseLoading) return
@@ -877,28 +888,56 @@ export default function Monitoring() {
 
       {/* Review list tab */}
       {activeTab === 'list' && (() => {
-        const uploadedRows   = rows.filter(r => r.review_link?.startsWith('http'))
+        const allUploadedRows = rows.filter(r => r.review_link?.startsWith('http'))
+        const uploadedRows    = allUploadedRows.filter(r => {
+          if (listPlatformFilter !== 'all' && platformBucket(r.platform) !== listPlatformFilter) return false
+          if (listBrandFilter !== 'all' && (r.brand || '').toLowerCase() !== listBrandFilter.toLowerCase()) return false
+          return true
+        })
         const listTotalPages = Math.max(1, Math.ceil(uploadedRows.length / MON_PAGE_SIZE))
         const listSafePage   = Math.min(listPage, listTotalPages)
         const listStartIdx   = (listSafePage - 1) * MON_PAGE_SIZE
         const pagedListRows  = uploadedRows.slice(listStartIdx, listStartIdx + MON_PAGE_SIZE)
+        const listEmptyMsg   = allUploadedRows.length === 0
+          ? '업로드된 리뷰가 없습니다'
+          : uploadedRows.length === 0
+            ? '필터 결과가 없습니다.'
+            : ''
         return (
           <>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 36, textAlign: 'center' }}>no.</th>
-                  <th>플랫폼</th>
-                  <th>인플루언서명</th>
-                  <th>업로드일</th>
-                  <th>리뷰 링크</th>
-                  <th>상태</th>
+                  <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
+                  <th style={thBase}>
+                    <HeaderFilterMenu
+                      label="플랫폼"
+                      value={listPlatformFilter}
+                      options={PLATFORM_FILTER_OPTIONS}
+                      onChange={setListPlatformFilter}
+                      open={openListFilter === 'platform'}
+                      onOpenChange={open => setOpenListFilter(open ? 'platform' : null)}
+                    />
+                  </th>
+                  <th style={thBase}>인플루언서명</th>
+                  <th style={thBase}>업로드일</th>
+                  <th style={{ ...thBase, minWidth: 300 }}>리뷰 링크</th>
+                  <th style={thBase}>
+                    <HeaderFilterMenu
+                      label="brand"
+                      value={listBrandFilter}
+                      options={BRAND_FILTER_OPTIONS}
+                      onChange={setListBrandFilter}
+                      open={openListFilter === 'brand'}
+                      onOpenChange={open => setOpenListFilter(open ? 'brand' : null)}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {uploadedRows.length === 0
-                  ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>업로드된 리뷰가 없습니다</td></tr>
+                  ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
                       const link     = r.review_link || ''
@@ -927,8 +966,10 @@ export default function Monitoring() {
                             </div>
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
-                          <td><a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a></td>
-                          <td><span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>완료</span></td>
+                          <td style={{ whiteSpace: 'normal', verticalAlign: 'middle' }}>
+                            <ReviewLinkBox link={link} onCopy={() => copyReviewLink(link)} compact />
+                          </td>
+                          <td>{brandBadge(r.brand)}</td>
                         </tr>
                       )
                     })}

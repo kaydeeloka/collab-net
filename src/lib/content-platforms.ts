@@ -32,6 +32,11 @@ export function platformBucket(platform: string): PlatformBucket {
   return 'tiktok'
 }
 
+export function platformBadgeClass(platform: string | null): string {
+  if (!platform) return 'platform-badge'
+  return `platform-badge platform-${platformBucket(platform)}`
+}
+
 export function platformBadgeStyle(platform: string | null): { label: string; style: CSSProperties } {
   if (!platform) return { label: '—', style: { color: 'var(--gray-4)', fontSize: 11 } }
   const bucket = platformBucket(platform)
@@ -41,7 +46,7 @@ export function platformBadgeStyle(platform: string | null): { label: string; st
     style: {
       display: 'inline-block',
       padding: '2px 8px',
-      borderRadius: 5,
+      borderRadius: 9999,
       fontSize: 10,
       fontWeight: 700,
       letterSpacing: '.2px',

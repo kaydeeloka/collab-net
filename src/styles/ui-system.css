@@ -593,3 +593,23 @@
   background: var(--surface-md);
   border-color: var(--teal);
 }
+
+.review-link-box--compact {
+  padding: 8px 10px;
+  gap: 8px;
+}
+
+.review-link-box--compact .review-link-box__url {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.review-link-box--compact .review-link-box__icon-btn {
+  width: 28px;
+  height: 28px;
+}
+
+.review-link-box--compact .review-link-box__btn {
+  padding: 5px 12px;
+  font-size: 11px;
+}

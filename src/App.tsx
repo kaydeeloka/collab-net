@@ -70,6 +70,7 @@ export default function App() {
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
                 <Route path="/influencer/monitoring"                  element={<InfluencerMonitoring />} />
+                <Route path="/influencer/monitoring-list"           element={<InfluencerMonitoring />} />
                 <Route path="/influencer/monitoring-report"         element={<InfluencerMonitoringReport />} />
 
                 {/* ── BRAND ── */}
