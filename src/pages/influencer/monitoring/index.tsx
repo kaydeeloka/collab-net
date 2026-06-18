@@ -166,12 +166,13 @@ export default function Monitoring() {
   const MON_PAGE_SIZE = 25
 
   const [searchQuery,      setSearchQuery]      = useState('')
-  const [accountFilter,    setAccountFilter]    = useState('all')
+  const [uploadFilter,     setUploadFilter]     = useState('all')
+  const [platformFilter,   setPlatformFilter]   = useState('all')
   const [brandFilter,      setBrandFilter]      = useState('all')
   const [statusFilter,     setStatusFilter]     = useState('all')
-  const [openFilter,       setOpenFilter]       = useState<'account' | 'brand' | 'status' | null>(null)
+  const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | null>(null)
 
-  useEffect(() => { setUploadPage(1) }, [searchQuery, accountFilter, brandFilter, statusFilter])
+  useEffect(() => { setUploadPage(1) }, [searchQuery, uploadFilter, platformFilter, brandFilter, statusFilter])
   useEffect(() => { setListPage(1) }, [activeTab])
 
   useEffect(() => {
@@ -627,10 +628,15 @@ export default function Monitoring() {
     borderBottom: '2px solid var(--table-head-border)', whiteSpace: 'nowrap',
   }
 
-  const ACCOUNT_FILTER_OPTIONS = [
+  const UPLOAD_FILTER_OPTIONS = [
     { value: 'all',          label: '전체' },
     { value: 'uploaded',     label: '완료' },
     { value: 'not_uploaded', label: '미업로드' },
+  ] as const
+
+  const PLATFORM_FILTER_OPTIONS = [
+    { value: 'all', label: '전체' },
+    ...PLATFORM_BUCKETS.map(key => ({ value: key, label: PLATFORM_DISPLAY[key].label })),
   ]
 
   const BRAND_FILTER_OPTIONS = [
@@ -908,8 +914,22 @@ export default function Monitoring() {
       {/* Upload tab */}
       {activeTab === 'upload' && <>
         <div className="filters" style={{ marginBottom: 16 }}>
+          <div className="filter-segment" role="group" aria-label="업로드 필터">
+            <span className="filter-segment-label">업로드</span>
+            {UPLOAD_FILTER_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                data-value={opt.value}
+                className={`filter-segment-btn${uploadFilter === opt.value ? ' active' : ''}`}
+                onClick={() => setUploadFilter(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 280 }} />
+            onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 320 }} />
         </div>
 
         {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
@@ -924,10 +944,15 @@ export default function Monitoring() {
           })
           const groups = Array.from(groupMap.values())
             .filter(g => {
-              if (accountFilter === 'all') return true
-              const anyLink = g.rows.some(r => r.review_link?.startsWith('http'))
-              if (accountFilter === 'uploaded') return anyLink
-              if (accountFilter === 'not_uploaded') return !anyLink
+              if (uploadFilter !== 'all') {
+                const anyLink = g.rows.some(r => r.review_link?.startsWith('http'))
+                if (uploadFilter === 'uploaded' && !anyLink) return false
+                if (uploadFilter === 'not_uploaded' && anyLink) return false
+              }
+              if (platformFilter !== 'all') {
+                const bucket = platformBucket(g.rows[0]?.platform || '')
+                if (bucket !== platformFilter) return false
+              }
               return true
             })
             .sort((a, b) => {
@@ -957,11 +982,11 @@ export default function Monitoring() {
                     <th style={thBase}>
                       <HeaderFilterMenu
                         label="account"
-                        value={accountFilter}
-                        options={ACCOUNT_FILTER_OPTIONS}
-                        onChange={setAccountFilter}
-                        open={openFilter === 'account'}
-                        onOpenChange={open => setOpenFilter(open ? 'account' : null)}
+                        value={platformFilter}
+                        options={PLATFORM_FILTER_OPTIONS}
+                        onChange={setPlatformFilter}
+                        open={openFilter === 'platform'}
+                        onOpenChange={open => setOpenFilter(open ? 'platform' : null)}
                       />
                     </th>
                     <th style={thBase}>date</th>
