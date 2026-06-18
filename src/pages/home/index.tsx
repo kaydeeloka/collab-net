@@ -338,7 +338,7 @@ export default function Dashboard() {
             stats: statsEms, color: '#10b981', go: '배송 현황 보기',
           },
           {
-            to: '/monitoring/reviews', icon: <BarChart2 size={20} />,
+            to: '/influencer/monitoring', icon: <BarChart2 size={20} />,
             title: '인플루언서 모니터링', desc: '콘텐츠 성과 · MiMuse 언급 분석',
             stats: statsMonitoring, color: '#f97316', go: '모니터링 보기',
           },

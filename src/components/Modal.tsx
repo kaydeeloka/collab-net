@@ -7,6 +7,8 @@ interface Props {
   open: boolean
   onClose: () => void
   title: string
+  titlePrefix?: ReactNode
+  titleSuffix?: ReactNode
   titleColor?: string
   titleStyle?: CSSProperties
   size?: ModalSize
@@ -24,6 +26,8 @@ export default function Modal({
   open,
   onClose,
   title,
+  titlePrefix,
+  titleSuffix,
   titleColor,
   titleStyle,
   size = 'md',
@@ -48,9 +52,18 @@ export default function Modal({
           <div
             id="modal-title"
             className="modal-title"
-            style={{ ...(titleColor ? { color: titleColor } : {}), ...titleStyle }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+              ...(titleColor ? { color: titleColor } : {}),
+              ...titleStyle,
+            }}
           >
-            {title}
+            <span>{titlePrefix}</span>
+            <span>{title}</span>
+            {titleSuffix}
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">
             ✕

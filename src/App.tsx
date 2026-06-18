@@ -15,8 +15,6 @@ import Ems         from './pages/kit/ems'
 import EmsLayout   from './pages/kit/ems/layout'
 import EmsErrors   from './pages/kit/ems/errors'
 import EmsTemplate from './pages/kit/ems-template'
-import Monitoring  from './pages/monitoring/reviews'
-
 // TREND
 import TiktokTrend from './pages/trend/tiktok'
 
@@ -24,7 +22,7 @@ import TiktokTrend from './pages/trend/tiktok'
 import InfluencerTemplate from './pages/influencer/template'
 // INFLUENCER — confirmed
 import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
-import ConfirmedMonitoringLink from './pages/influencer/confirmed/monitoring'
+import InfluencerMonitoring from './pages/influencer/monitoring'
 
 // BRAND — db
 import BrandDb         from './pages/brand/db'
@@ -45,11 +43,6 @@ import EmsData    from './pages/kit/ems-data'
 import ArchiveDesign        from './pages/archive/design'
 import ArchiveOverallReport from './pages/archive/overall-report'
 import ArchiveBrandReport   from './pages/archive/brand-report'
-
-// MONITORING — content
-import ReviewContent   from './pages/monitoring/content'
-import ContentFollowup from './pages/monitoring/content/followup'
-import ContentReport   from './pages/monitoring/content/report'
 
 export default function App() {
   return (
@@ -77,7 +70,7 @@ export default function App() {
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
                 <Route path="/influencer/confirmed/shipping"        element={<ConfirmedShipping />} />
-                <Route path="/influencer/confirmed/monitoring"      element={<ConfirmedMonitoringLink />} />
+                <Route path="/influencer/monitoring"                  element={<InfluencerMonitoring />} />
 
                 {/* ── BRAND ── */}
                 <Route path="/brand/db" element={<BrandDb />}>
@@ -107,15 +100,6 @@ export default function App() {
                 <Route path="/kit/ems/check"   element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems-data"                        element={<EmsData />} />
                 <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
-
-                {/* ── MONITORING ── */}
-                <Route path="/monitoring/reviews"                   element={<Monitoring />} />
-                <Route path="/monitoring/content"                   element={<ReviewContent />} />
-                <Route path="/monitoring/content/followup"          element={<ContentFollowup />} />
-                <Route path="/monitoring/content/report"            element={<ContentReport />} />
-                <Route path="/monitoring/reports"       element={<Navigate to="/archive/overall-report" replace />} />
-                <Route path="/monitoring/reports/brand" element={<Navigate to="/archive/brand-report" replace />} />
-                <Route path="/monitoring/reports/all"   element={<Navigate to="/archive/overall-report" replace />} />
 
                 {/* ── ARCHIVE ── */}
                 <Route path="/archive/design"          element={<ArchiveDesign />} />

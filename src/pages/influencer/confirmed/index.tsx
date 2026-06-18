@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ListFilter } from 'lucide-react'
+import { ListFilter, Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { dedupeConfirmedPhaseData, uniquePlatformAccounts } from '@/lib/confirm-influencer'
 import { formatKstSyncLabel } from '@/lib/kst-time'
@@ -40,6 +40,7 @@ interface InfluencerRef {
   display_name: string | null
   followers:    number | null
   profile_url:  string | null
+  avatar_url:   string | null
 }
 
 interface ConfirmedRow {
@@ -251,21 +252,86 @@ function EmsShippingCell({
   )
 }
 
-function ViewField({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
+function InfluencerAvatar({ url, label, size = 56 }: { url?: string | null; label?: string | null; size?: number }) {
+  const fallback = (label || '?').replace(/^@/, '').slice(0, 1).toUpperCase() || '?'
   return (
-    <div style={span ? { gridColumn: '1 / -1' } : undefined}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 500 }}>{children}</div>
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+      background: 'var(--gray-2)', border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,.08)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.38), fontWeight: 700, color: 'var(--gray-5)',
+    }}>
+      {url
+        ? <img src={url} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : fallback}
     </div>
   )
 }
 
-function ViewInfoBox({ title, children }: { title: string; children: React.ReactNode }) {
+function ReportCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>{children}</div>
+    <div style={{ background: '#fff', borderRadius: 12, padding: '16px 18px', border: '1px solid var(--gray-2)', height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ color: 'var(--gray-6)', display: 'flex' }}>{icon}</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-8)' }}>{title}</span>
+      </div>
+      {children}
     </div>
+  )
+}
+
+function ReportStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-8)' }}>{value}</div>
+    </div>
+  )
+}
+
+function formatShippingAddress(row: Pick<ConfirmedRow, 'address_line_1' | 'address_line_2' | 'city' | 'state' | 'zip' | 'country'>): string {
+  return [
+    row.address_line_1,
+    row.address_line_2,
+    row.city,
+    row.state && row.zip ? `${row.state} ${row.zip}` : (row.state || row.zip),
+    row.country,
+  ].filter(Boolean).join(', ')
+}
+
+function SeqBadge({ seq }: { seq: number }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: 28, height: 22, padding: '0 8px', borderRadius: 999,
+      background: 'var(--blue-lt)', color: 'var(--blue-dk)',
+      fontSize: 11, fontWeight: 800, flexShrink: 0,
+    }}>
+      {seq}
+    </span>
+  )
+}
+
+function reviewStatusLabel(status: 'Yes' | 'No' | 'Pending'): string {
+  if (status === 'Yes') return '리뷰 업로드 완료'
+  return '리뷰 미업로드'
+}
+
+function reviewStatusBadgeStyle(status: 'Yes' | 'No' | 'Pending') {
+  if (status === 'Yes') return { bg: '#d1fae5', color: '#065f46', label: '완료' }
+  if (status === 'No') return { bg: '#fee2e2', color: '#991b1b', label: '미업로드' }
+  return { bg: '#fef3c7', color: '#d97706', label: '대기중' }
+}
+
+function ReviewStatusBadge({ status }: { status: 'Yes' | 'No' | 'Pending' }) {
+  const s = reviewStatusBadgeStyle(status)
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20,
+      background: s.bg, color: s.color, flexShrink: 0, whiteSpace: 'nowrap',
+    }}>
+      리뷰 {s.label}
+    </span>
   )
 }
 
@@ -353,7 +419,7 @@ export default function Confirmed() {
           id, platform, handle, followers, profile_url,
           monitoring(id, review_link, brand, date, content)
         ),
-        influencers(platform, handle, display_name, followers, profile_url),
+        influencers(platform, handle, display_name, followers, profile_url, avatar_url),
         ems_tracking(id, ems_number, status)
       `)
       .eq('phase_id', viewPhaseId ?? '')
@@ -638,7 +704,7 @@ export default function Confirmed() {
           <div className="page-banner-desc">아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요.</div>
         </div>
         <div className="page-banner-actions">
-          <Link to="/monitoring/reviews" className="page-banner-btn"
+          <Link to="/influencer/monitoring" className="page-banner-btn"
             style={{ textDecoration: 'none', background: 'var(--teal-dk)', color: '#fff', border: '1px solid var(--teal-dk)' }}>
             리뷰 모니터링으로 이동
           </Link>
@@ -809,30 +875,33 @@ export default function Confirmed() {
                       const firstP      = platforms_[0]
                       const handle      = firstP?.handle || inf?.handle || r.handle || ''
                       const displayName = inf?.display_name || r.display_name || ''
-                      const profileUrl  = firstP?.profile_url || inf?.profile_url || ''
+                      const avatarUrl   = inf?.avatar_url ?? null
                       const hasReview    = r.review_links.length > 0
                       const uploadStatus = effectiveUploadStatus(r)
                       return (
                         <tr key={r.id} onClick={() => { setViewRow(r); setShowView(true) }} style={{ cursor: 'pointer' }}>
                           <td style={seqTd}>{r.seq ?? '—'}</td>
                           <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>
-                                {displayName || handle || '—'}
-                              </span>
-                              {r.email && (
-                                <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--blue-dk)', wordBreak: 'break-all', textDecoration: 'none' }}>
-                                  {r.email}
-                                </a>
-                              )}
-                              {r.phone && (
-                                <span style={{ fontSize: 11, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>{r.phone}</span>
-                              )}
-                              {platforms_.length > 0 && (
-                                <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
-                                  <PlatformAccountsCell accounts={platforms_} />
-                                </div>
-                              )}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                              <InfluencerAvatar url={avatarUrl} label={displayName || handle} size={36} />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>
+                                  {displayName || handle || '—'}
+                                </span>
+                                {r.email && (
+                                  <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--blue-dk)', wordBreak: 'break-all', textDecoration: 'none' }}>
+                                    {r.email}
+                                  </a>
+                                )}
+                                {r.phone && (
+                                  <span style={{ fontSize: 11, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>{r.phone}</span>
+                                )}
+                                {platforms_.length > 0 && (
+                                  <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                                    <PlatformAccountsCell accounts={platforms_} />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -906,118 +975,140 @@ export default function Confirmed() {
       {viewRow && (() => {
         const r            = viewRow
         const inf          = r.influencers
+        const primaryP     = r.influencer_platform[0]
         const vDisplayName = inf?.display_name || r.display_name || ''
-        const vHandle      = r.influencer_platform[0]?.handle || inf?.handle || r.handle || ''
+        const vHandle      = (primaryP?.handle || inf?.handle || r.handle || '').replace(/^@/, '')
+        const vAvatar      = inf?.avatar_url ?? null
         const uploadStatus = effectiveUploadStatus(r)
-        const uploadStyle  = uploadStatus === 'Yes'
-          ? { bg: '#d1fae5', color: '#065f46', label: '완료' }
-          : uploadStatus === 'No'
-          ? { bg: '#fee2e2', color: '#991b1b', label: '미업로드' }
-          : { bg: '#fef3c7', color: '#d97706', label: '대기중' }
-        const addrParts = [r.address_line_1, r.address_line_2, r.city, [r.state, r.zip].filter(Boolean).join(' '), r.country].filter(Boolean) as string[]
+        const shippingAddress = formatShippingAddress(r)
+        const platformAccounts = r.influencer_platform.length
+          ? r.influencer_platform
+          : inf?.platform || inf?.handle
+            ? [{ id: null, platform: inf.platform || 'TikTok', handle: inf.handle || '', followers: inf.followers ?? 0, profile_url: inf.profile_url || '' }]
+            : []
+
         return (
-          <Modal open={showView} onClose={() => setShowView(false)} title={vDisplayName || vHandle || '인플루언서 정보'}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                {(vDisplayName || vHandle || '?')[0].toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--gray-8)', marginBottom: 4 }}>{vDisplayName || vHandle || '—'}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {r.influencer_platform.length
-                    ? r.influencer_platform.map((p, idx) => (
-                      <div key={p.id ?? idx} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <PlatformBadge platform={p.platform} />
-                        {p.handle && (
-                          <a href={p.profile_url || '#'} target="_blank" rel="noopener"
-                            style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 600 }}>
-                            @{p.handle}
-                          </a>
-                        )}
-                        <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{fmtFollowers(p.followers)} followers</span>
-                      </div>
-                    ))
-                    : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <PlatformBadge platform={inf?.platform ?? null} />
-                        {inf?.handle && <a href={inf.profile_url || '#'} target="_blank" rel="noopener" style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none', fontWeight: 600 }}>@{inf.handle}</a>}
-                        {inf?.followers && <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{fmtFollowers(inf.followers)} followers</span>}
-                      </div>
-                    )}
+          <Modal
+            open={showView}
+            onClose={() => setShowView(false)}
+            title={vDisplayName || (vHandle ? `@${vHandle}` : '') || '인플루언서'}
+            titlePrefix={r.seq != null ? <SeqBadge seq={r.seq} /> : undefined}
+            size="lg"
+          >
+            <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
+                <InfluencerAvatar url={vAvatar} label={vDisplayName || vHandle} size={64} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--gray-8)', marginBottom: 6 }}>
+                    {vDisplayName || (vHandle ? `@${vHandle}` : '') || '—'}
+                  </div>
+                  <PlatformAccountsCell accounts={platformAccounts} />
                 </div>
+                <ReviewStatusBadge status={uploadStatus} />
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: uploadStyle.bg, color: uploadStyle.color, flexShrink: 0 }}>
-                리뷰 {uploadStyle.label}
-              </span>
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 16 }}>
-              <ViewField label="No.">{r.seq ?? '—'}</ViewField>
-              <ViewField label="리뷰 업로드">{uploadStyle.label}</ViewField>
-              <ViewField label="E-mail">
-                {r.email ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none' }}>{r.email}</a> : '—'}
-              </ViewField>
-              <ViewField label="Phone">{r.phone || '—'}</ViewField>
-              <ViewField label="구글폼 제출">{r.form_submitted ? '✓ 제출 완료' : '—'}</ViewField>
-              <ViewField label="Repost">{r.repost || '—'}</ViewField>
-              <ViewField label={`리뷰 링크${r.review_links.length > 0 ? ` (${r.review_links.length})` : ''}`} span>
-                {r.review_links.length
-                  ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {r.review_links.map((l, i) => (
-                        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <a href={l.review_link} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13 }}>
-                            ↗ {reviewLinkLabel(l, i)}
-                          </a>
-                          {l.platform && <PlatformBadge platform={l.platform} />}
-                          {l.brand && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.brand}</span>}
-                          {l.date && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.date}</span>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <ReportCard icon={<User size={18} />} title="연락처 정보">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                      {r.email
+                        ? <a href={`mailto:${r.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{r.email}</a>
+                        : '—'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                      {r.phone || '—'}
+                    </div>
+                  </div>
+                </ReportCard>
+
+                <ReportCard icon={<MapPin size={18} />} title="배송 정보">
+                  <div style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.65, wordBreak: 'break-word' }}>
+                    {shippingAddress || '—'}
+                  </div>
+                  {(r.ems_number || r.ems_status) && (
+                    <div style={{ marginTop: 10 }}>
+                      {r.ems_number && (
+                        <div style={{ fontSize: 12, color: 'var(--gray-6)', marginBottom: r.ems_status ? 6 : 0 }}>
+                          운송장:{' '}
+                          <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--gray-8)', wordBreak: 'break-all' }}>
+                            {r.ems_number}
+                          </span>
                         </div>
-                      ))}
+                      )}
+                      {r.ems_status && (
+                        <span style={{
+                          background: getEmsStatusColor(r.ems_status),
+                          color: '#fff',
+                          padding: '2px 10px',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {r.ems_status}
+                        </span>
+                      )}
                     </div>
-                  )
-                  : '—'}
-              </ViewField>
-              <ViewField label="비고" span>
-                {r.notes?.trim() ? r.notes : '—'}
-              </ViewField>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '12px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>배송 주소</div>
-                <div style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>
-                  {addrParts.length
-                    ? addrParts.map((line, i) => <div key={i}>{line}</div>)
-                    : '—'}
-                </div>
+                  )}
+                </ReportCard>
               </div>
 
-              <ViewInfoBox title="등기번호 / 배송 상태">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>등기번호</div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>
-                      {r.ems_number
-                        ? <span style={{ fontFamily: 'monospace', color: 'var(--gray-8)', fontWeight: 600, wordBreak: 'break-all' }}>{r.ems_number}</span>
-                        : <span style={{ color: 'var(--gray-5)' }}>—</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>배송 상태</div>
-                    <div>
-                      {r.ems_status
-                        ? <span style={{ background: getEmsStatusColor(r.ems_status), color: '#fff', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{r.ems_status}</span>
-                        : <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>—</span>}
-                    </div>
-                  </div>
+              <ReportCard icon={<TrendingUp size={18} />} title="활동 상태 및 리뷰 현황">
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 0.45fr) minmax(0, 1.75fr)',
+                  gap: 16,
+                  padding: '4px 0',
+                }}>
+                  <ReportStat label="리뷰 상태" value={reviewStatusLabel(uploadStatus)} />
+                  <ReportStat label="구글폼 제출" value={r.form_submitted ? '제출 완료' : '—'} />
+                  <ReportStat label="리포스트" value={r.repost || '0'} />
+                  <ReportStat
+                    label="리뷰 링크"
+                    value={r.review_links.length
+                      ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {r.review_links.map((l, i) => (
+                            <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <a href={l.review_link} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 12, fontWeight: 600 }}>
+                                ↗ {reviewLinkLabel(l, i)}
+                              </a>
+                              {l.platform && <PlatformBadge platform={l.platform} />}
+                              {l.date && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{l.date}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                      : '—'}
+                  />
                 </div>
-              </ViewInfoBox>
-            </div>
+              </ReportCard>
 
-            <div className="modal-actions" style={{ marginTop: 20 }}>
-              <button className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
-              <button className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(r) }}>✎ 편집</button>
+              <div style={{ marginTop: 14 }}>
+                <ReportCard icon={<Info size={18} />} title="관리자 비고">
+                  <div style={{
+                    minHeight: 72,
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--gray-2)',
+                    background: '#fff',
+                    fontSize: 13,
+                    color: r.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}>
+                    {r.notes?.trim() || '—'}
+                  </div>
+                </ReportCard>
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: 20, paddingBottom: 4 }}>
+                <button className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
+                <button className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(r) }}>✎ 편집</button>
+              </div>
             </div>
           </Modal>
         )
@@ -1080,7 +1171,7 @@ export default function Confirmed() {
         <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>리뷰 링크</div>
           <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
-            리뷰 링크는 <Link to="/monitoring/reviews" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>리뷰 모니터링</Link> 페이지에서 관리합니다.
+            리뷰 링크는 <Link to="/influencer/monitoring" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>리뷰 모니터링</Link> 페이지에서 관리합니다.
           </div>
         </div>
 

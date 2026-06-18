@@ -52,9 +52,9 @@ const GROUPS: SideGroup[] = [
     ],
   },
   {
-    label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/monitoring/reviews', prefix: '/monitoring',
+    label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/influencer/monitoring', prefix: '/influencer/monitoring',
     children: [
-      { to: '/monitoring/reviews', label: '리뷰 모니터링' },
+      { to: '/influencer/monitoring', label: '리뷰 모니터링' },
     ],
   },
   {
@@ -69,10 +69,9 @@ const GROUPS: SideGroup[] = [
 
 function getActiveGroup(pathname: string) {
   if (pathname === '/' || pathname.startsWith('/home/')) return 'HOME'
-  for (const g of GROUPS) {
-    if (g.prefix !== '/' && pathname.startsWith(g.prefix)) return g.label
-  }
-  return null
+  const matches = GROUPS.filter(g => g.prefix !== '/' && pathname.startsWith(g.prefix))
+  if (matches.length === 0) return null
+  return matches.sort((a, b) => b.prefix.length - a.prefix.length)[0].label
 }
 
 export default function Layout() {
