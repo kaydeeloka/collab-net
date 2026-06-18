@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ListFilter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -9,6 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
+import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBucket } from '@/lib/content-platforms'
 
@@ -169,26 +169,10 @@ export default function Monitoring() {
   const [accountFilter,    setAccountFilter]    = useState('all')
   const [brandFilter,      setBrandFilter]      = useState('all')
   const [statusFilter,     setStatusFilter]     = useState('all')
-  const [showAccountFilter, setShowAccountFilter] = useState(false)
-  const [showBrandFilter,    setShowBrandFilter]    = useState(false)
-  const [showStatusFilter,   setShowStatusFilter]   = useState(false)
-  const accountFilterRef = useRef<HTMLDivElement>(null)
-  const brandFilterRef    = useRef<HTMLDivElement>(null)
-  const statusFilterRef   = useRef<HTMLDivElement>(null)
+  const [openFilter,       setOpenFilter]       = useState<'account' | 'brand' | 'status' | null>(null)
 
   useEffect(() => { setUploadPage(1) }, [searchQuery, accountFilter, brandFilter, statusFilter])
   useEffect(() => { setListPage(1) }, [activeTab])
-
-  useEffect(() => {
-    if (!showAccountFilter && !showBrandFilter && !showStatusFilter) return
-    const handler = (e: MouseEvent) => {
-      if (accountFilterRef.current && !accountFilterRef.current.contains(e.target as Node)) setShowAccountFilter(false)
-      if (brandFilterRef.current    && !brandFilterRef.current.contains(e.target as Node))    setShowBrandFilter(false)
-      if (statusFilterRef.current   && !statusFilterRef.current.contains(e.target as Node))   setShowStatusFilter(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showAccountFilter, showBrandFilter, showStatusFilter])
 
   useEffect(() => {
     if (phaseLoading) return
@@ -636,11 +620,11 @@ export default function Monitoring() {
 
   const thBase: React.CSSProperties = {
     position: 'sticky', top: 0, zIndex: 1,
-    background: '#f0f5f8',
+    background: 'var(--table-head-bg)',
     padding: '13px 18px',
     textAlign: 'left', fontSize: 11, fontWeight: 700,
-    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
-    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+    color: 'var(--table-head-fg)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--table-head-border)', whiteSpace: 'nowrap',
   }
 
   const ACCOUNT_FILTER_OPTIONS = [
@@ -879,6 +863,7 @@ export default function Monitoring() {
                   ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>업로드된 리뷰가 없습니다</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
+                      const link     = r.review_link || ''
                       const profileUrl  = platformBucket(r.platform) === 'tiktok'
                         ? `https://www.tiktok.com/@${account}`
                         : platformBucket(r.platform) === 'instagram'
@@ -970,64 +955,37 @@ export default function Monitoring() {
                   <tr>
                     <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
                     <th style={thBase}>
-                      <div ref={accountFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                        <span>account</span>
-                        <button onClick={() => { setShowAccountFilter(p => !p); setShowBrandFilter(false); setShowStatusFilter(false) }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: accountFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: accountFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                          <ListFilter size={13} />
-                        </button>
-                        {showAccountFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                            {ACCOUNT_FILTER_OPTIONS.map(o => (
-                              <button key={o.value} onClick={() => { setAccountFilter(o.value); setShowAccountFilter(false) }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: accountFilter === o.value ? 700 : 500, background: accountFilter === o.value ? '#d1fae5' : 'transparent', color: accountFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                {o.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <HeaderFilterMenu
+                        label="account"
+                        value={accountFilter}
+                        options={ACCOUNT_FILTER_OPTIONS}
+                        onChange={setAccountFilter}
+                        open={openFilter === 'account'}
+                        onOpenChange={open => setOpenFilter(open ? 'account' : null)}
+                      />
                     </th>
                     <th style={thBase}>date</th>
                     <th style={thBase}>media</th>
                     <th style={thBase}>content</th>
                     <th style={thBase}>
-                      <div ref={brandFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                        <span>brand</span>
-                        <button onClick={() => { setShowBrandFilter(p => !p); setShowAccountFilter(false); setShowStatusFilter(false) }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: brandFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: brandFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                          <ListFilter size={13} />
-                        </button>
-                        {showBrandFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                            {BRAND_FILTER_OPTIONS.map(o => (
-                              <button key={o.value} onClick={() => { setBrandFilter(o.value); setShowBrandFilter(false) }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: brandFilter === o.value ? 700 : 500, background: brandFilter === o.value ? '#d1fae5' : 'transparent', color: brandFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                {o.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <HeaderFilterMenu
+                        label="brand"
+                        value={brandFilter}
+                        options={BRAND_FILTER_OPTIONS}
+                        onChange={setBrandFilter}
+                        open={openFilter === 'brand'}
+                        onOpenChange={open => setOpenFilter(open ? 'brand' : null)}
+                      />
                     </th>
                     <th style={thBase}>
-                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                        <span>review link</span>
-                        <button onClick={() => { setShowStatusFilter(p => !p); setShowAccountFilter(false); setShowBrandFilter(false) }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: statusFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: statusFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                          <ListFilter size={13} />
-                        </button>
-                        {showStatusFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                            {STATUS_FILTER_OPTIONS.map(o => (
-                              <button key={o.value} onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false) }}
-                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? '#d1fae5' : 'transparent', color: statusFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                {o.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <HeaderFilterMenu
+                        label="review link"
+                        value={statusFilter}
+                        options={STATUS_FILTER_OPTIONS}
+                        onChange={setStatusFilter}
+                        open={openFilter === 'status'}
+                        onOpenChange={open => setOpenFilter(open ? 'status' : null)}
+                      />
                     </th>
                     <th style={{ ...thBase, textAlign: 'right' }} className="num">조회수</th>
                     <th style={{ ...thBase, textAlign: 'right' }} className="num">좋아요 수</th>

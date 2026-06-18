@@ -72,14 +72,14 @@ function formatPhoneDisplay(r: EmsDataRow): string {
 }
 
 const TH: CSSProperties = {
-  background: '#1a3a6e',
-  color: '#fff',
+  background: 'var(--table-head-bg)',
+  color: 'var(--table-head-fg)',
   fontSize: 11,
   fontWeight: 700,
   padding: '10px 8px',
   textAlign: 'center',
   whiteSpace: 'nowrap',
-  borderRight: '1px solid #2a4a7e',
+  borderRight: '1px solid var(--table-head-border)',
   lineHeight: 1.35,
 }
 

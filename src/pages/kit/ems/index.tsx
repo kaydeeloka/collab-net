@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ListFilter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
+import HeaderFilterMenu, { type HeaderFilterOption } from '@/components/HeaderFilterMenu'
 import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems-errors'
 import { formatKstSyncLabel } from '@/lib/kst-time'
 import {
@@ -59,11 +59,11 @@ interface SyncAllResult {
   updated?: number; skipped?: number; failed?: number; errors?: string[]
 }
 
-const RESHIP_FILTER_OPTIONS = [
+const RESHIP_FILTER_OPTIONS: HeaderFilterOption[] = [
   { value: 'all', label: '전체' },
   { value: 'yes', label: '재발송 등록' },
   { value: 'no',  label: '재발송 없음' },
-] as const
+]
 
 export default function Ems() {
   const { showToast } = useToast()
@@ -76,10 +76,7 @@ export default function Ems() {
   const [searchQuery,      setSearchQuery]      = useState('')
   const [filterStatus,     setFilterStatus]     = useState('all')
   const [filterReship,     setFilterReship]     = useState('all')
-  const [showStatusFilter, setShowStatusFilter] = useState(false)
-  const [showReshipFilter, setShowReshipFilter] = useState(false)
-  const statusFilterRef = useRef<HTMLDivElement>(null)
-  const reshipFilterRef = useRef<HTMLDivElement>(null)
+  const [openFilter,       setOpenFilter]       = useState<'status' | 'reship' | null>(null)
   const [page, setPage] = useState(1)
   const EMS_PAGE_SIZE = 25
 
@@ -115,20 +112,6 @@ export default function Ems() {
   }, [viewPhaseId, phaseLoading])
 
   useEffect(() => { setPage(1) }, [searchQuery, filterStatus, filterReship])
-
-  useEffect(() => {
-    if (!showStatusFilter && !showReshipFilter) return
-    const handler = (e: MouseEvent) => {
-      if (showStatusFilter && statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) {
-        setShowStatusFilter(false)
-      }
-      if (showReshipFilter && reshipFilterRef.current && !reshipFilterRef.current.contains(e.target as Node)) {
-        setShowReshipFilter(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showStatusFilter, showReshipFilter])
 
   async function loadEms(opts?: { silent?: boolean }) {
     if (!viewPhaseId) {
@@ -446,44 +429,29 @@ export default function Ems() {
                   <th style={thBase}>접수번호</th>
                   <th style={thBase}>등기번호</th>
                   <th style={thBase}>
-                    <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                      <span>배송 상태</span>
-                      <button onClick={() => setShowStatusFilter(p => !p)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: filterStatus !== 'all' ? 'var(--teal-dk)' : 'transparent', color: filterStatus !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                        <ListFilter size={13} />
-                      </button>
-                      {showStatusFilter && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                          {EMS_STATUS_FILTER_OPTIONS.map(o => (
-                            <button key={o.value} onClick={() => { setFilterStatus(o.value); setShowStatusFilter(false) }}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: filterStatus === o.value ? 700 : 500, background: filterStatus === o.value ? '#d1fae5' : 'transparent', color: filterStatus === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                              {o.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <HeaderFilterMenu
+                      label="배송 상태"
+                      value={filterStatus}
+                      options={EMS_STATUS_FILTER_OPTIONS}
+                      onChange={setFilterStatus}
+                      open={openFilter === 'status'}
+                      onOpenChange={open => setOpenFilter(open ? 'status' : null)}
+                      tone="light"
+                    />
                   </th>
                   <th style={thBase}>배송 주소</th>
                   <th style={{ ...thBase, width: 110, maxWidth: 110 }}>비고</th>
                   <th style={{ ...thBase, textAlign: 'center', width: 72 }}>
-                    <div ref={reshipFilterRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative' }}>
-                      <span>재발송</span>
-                      <button type="button" onClick={() => setShowReshipFilter(p => !p)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: filterReship !== 'all' ? 'var(--teal-dk)' : 'transparent', color: filterReship !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                        <ListFilter size={13} />
-                      </button>
-                      {showReshipFilter && (
-                        <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                          {RESHIP_FILTER_OPTIONS.map(o => (
-                            <button key={o.value} type="button" onClick={() => { setFilterReship(o.value); setShowReshipFilter(false) }}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: filterReship === o.value ? 700 : 500, background: filterReship === o.value ? '#d1fae5' : 'transparent', color: filterReship === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                              {o.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <HeaderFilterMenu
+                      label="재발송"
+                      value={filterReship}
+                      options={RESHIP_FILTER_OPTIONS}
+                      onChange={setFilterReship}
+                      open={openFilter === 'reship'}
+                      onOpenChange={open => setOpenFilter(open ? 'reship' : null)}
+                      tone="light"
+                      align="right"
+                    />
                   </th>
                   <th style={thBase}>마지막 업데이트</th>
                 </tr>

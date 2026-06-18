@@ -21,7 +21,6 @@ import TiktokTrend from './pages/trend/tiktok'
 // INFLUENCER — template
 import InfluencerTemplate from './pages/influencer/template'
 // INFLUENCER — confirmed
-import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
 import InfluencerMonitoring from './pages/influencer/monitoring'
 import InfluencerMonitoringReport from './pages/influencer/monitoring-report'
 
@@ -70,7 +69,6 @@ export default function App() {
                 <Route path="/influencer/template"                  element={<InfluencerTemplate />} />
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
-                <Route path="/influencer/confirmed/shipping"        element={<ConfirmedShipping />} />
                 <Route path="/influencer/monitoring"                  element={<InfluencerMonitoring />} />
                 <Route path="/influencer/monitoring-report"         element={<InfluencerMonitoringReport />} />
 

@@ -308,8 +308,8 @@ export default function BrandDbGeneral() {
               <col style={{ width: 100 }} />
             </colgroup>
             <thead>
-              <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
-                <th style={{ padding: '10px 8px', textAlign: 'center', borderBottom: '2px solid var(--gray-2)' }}>
+              <tr className="table-head-row">
+                <th style={{ padding: '10px 8px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
                     checked={pg.pageItems.length > 0 && pg.pageItems.every(r => selected.has(r.id))}
@@ -321,7 +321,7 @@ export default function BrandDbGeneral() {
                   />
                 </th>
                 {['브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left' }}>
                     {h}
                   </th>
                 ))}

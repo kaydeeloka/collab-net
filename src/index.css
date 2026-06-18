@@ -23,6 +23,9 @@
   --blue:       #9FBAC5;
   --blue-lt:    #eaf2f6;
   --blue-dk:    #648085;
+  --table-head-bg:     #1a3a6e;
+  --table-head-fg:     #ffffff;
+  --table-head-border: #2a4a7e;
   --gray-0:     #ffffff;
   --gray-1:     #F8F6F6;
   --gray-2:     #E0DFDC;
@@ -616,11 +619,61 @@ a { text-decoration: none; }
 table { width: 100%; border-collapse: collapse; table-layout: auto; margin-bottom: 16px; }
 thead th {
   position: sticky; top: 0; z-index: 1;
-  background: #f0f5f8;
+  background: var(--table-head-bg);
   padding: 13px 18px;
   text-align: left; font-size: 11px; font-weight: 700;
-  color: var(--teal-dk); text-transform: uppercase; letter-spacing: .8px;
-  border-bottom: 2px solid var(--teal-lt); white-space: nowrap;
+  color: var(--table-head-fg); text-transform: uppercase; letter-spacing: .8px;
+  border-bottom: 2px solid var(--table-head-border); white-space: nowrap;
+  overflow: visible;
+  vertical-align: top;
+}
+.table-head-row th {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--table-head-bg);
+  color: var(--table-head-fg);
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--table-head-border);
+  white-space: nowrap;
+  overflow: visible;
+  vertical-align: top;
+}
+.table-filter-menu {
+  background: #fff;
+  border: 1px solid var(--gray-3);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  min-width: 130px;
+  width: max-content;
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  color: var(--gray-7);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+.table-filter-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--gray-7);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+.table-filter-menu button.is-active,
+.table-filter-menu button:hover {
+  background: #d1fae5;
+  color: #065f46;
+  font-weight: 700;
 }
 tbody tr { border-bottom: 1px solid var(--surface-md); transition: background .12s; }
 tbody tr:last-child { border-bottom: none; }

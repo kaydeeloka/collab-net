@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ListFilter, Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
+import { Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { dedupeConfirmedPhaseData, uniquePlatformAccounts } from '@/lib/confirm-influencer'
+import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { formatKstSyncLabel } from '@/lib/kst-time'
 import { PLATFORM_OPTIONS, defaultProfileUrl, platformBadgeStyle } from '@/lib/content-platforms'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -364,12 +365,7 @@ export default function Confirmed() {
   const [uploadFilter,     setUploadFilter]     = useState<UploadStatus>('all')
   const [reviewLinkFilter, setReviewLinkFilter] = useState<ReviewLinkFilter>('all')
   const [platformFilter,   setPlatformFilter]   = useState('all')
-  const [showUploadFilter,     setShowUploadFilter]     = useState(false)
-  const [showReviewLinkFilter, setShowReviewLinkFilter] = useState(false)
-  const [showPlatformFilter,   setShowPlatformFilter]   = useState(false)
-  const uploadFilterRef     = useRef<HTMLDivElement>(null)
-  const reviewLinkFilterRef = useRef<HTMLDivElement>(null)
-  const platformFilterRef   = useRef<HTMLDivElement>(null)
+  const [openFilter,       setOpenFilter]       = useState<'platform' | 'upload' | 'reviewLink' | null>(null)
 
   const [showView, setShowView] = useState(false)
   const [viewRow,  setViewRow]  = useState<ConfirmedRow | null>(null)
@@ -381,17 +377,6 @@ export default function Confirmed() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
-
-  useEffect(() => {
-    if (!showUploadFilter && !showReviewLinkFilter && !showPlatformFilter) return
-    const handler = (e: MouseEvent) => {
-      if (uploadFilterRef.current     && !uploadFilterRef.current.contains(e.target as Node))     setShowUploadFilter(false)
-      if (reviewLinkFilterRef.current && !reviewLinkFilterRef.current.contains(e.target as Node)) setShowReviewLinkFilter(false)
-      if (platformFilterRef.current   && !platformFilterRef.current.contains(e.target as Node))   setShowPlatformFilter(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showUploadFilter, showReviewLinkFilter, showPlatformFilter])
 
   async function load() {
     setLoading(true)
@@ -591,6 +576,7 @@ export default function Confirmed() {
   const platforms = Array.from(new Set(
     rows.flatMap(r => r.influencer_platform.map(p => p.platform)).filter(Boolean),
   )) as string[]
+  const platformFilterOptions = [{ value: 'all', label: '전체' }, ...platforms.map(p => ({ value: p, label: p }))]
 
   const filtered = rows.filter(r => {
     if (uploadFilter !== 'all' && effectiveUploadStatus(r) !== uploadFilter) return false
@@ -644,11 +630,11 @@ export default function Confirmed() {
 
   const thBase: React.CSSProperties = {
     position: 'sticky', top: 0, zIndex: 1,
-    background: '#f0f5f8',
+    background: 'var(--table-head-bg)',
     padding: '13px 18px',
     textAlign: 'left', fontSize: 11, fontWeight: 700,
-    color: 'var(--teal-dk)', textTransform: 'uppercase', letterSpacing: '.8px',
-    borderBottom: '2px solid var(--teal-lt)', whiteSpace: 'nowrap',
+    color: 'var(--table-head-fg)', textTransform: 'uppercase', letterSpacing: '.8px',
+    borderBottom: '2px solid var(--table-head-border)', whiteSpace: 'nowrap',
   }
 
   const seqTd: React.CSSProperties = {
@@ -671,6 +657,7 @@ export default function Confirmed() {
     maxWidth: 110,
     width: 110,
     overflow: 'hidden',
+    cursor: 'default',
   }
 
   const field = (label: string, key: keyof typeof EMPTY_FORM, opts?: { type?: string; placeholder?: string }) => (
@@ -795,62 +782,35 @@ export default function Confirmed() {
                     <tr>
                       <th style={{ ...thBase, textAlign: 'center', width: 48, padding: '13px 6px', whiteSpace: 'normal' }}>No.</th>
                       <th style={thBase}>
-                        <div ref={platformFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                          <span>인플루언서</span>
-                          <button onClick={() => { setShowPlatformFilter(p => !p); setShowUploadFilter(false); setShowReviewLinkFilter(false) }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: platformFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: platformFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                            <ListFilter size={13} />
-                          </button>
-                          {showPlatformFilter && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                              {[{ value: 'all', label: '전체' }, ...platforms.map(p => ({ value: p, label: p }))].map(o => (
-                                <button key={o.value} onClick={() => { setPlatformFilter(o.value); setShowPlatformFilter(false) }}
-                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: platformFilter === o.value ? 700 : 500, background: platformFilter === o.value ? '#d1fae5' : 'transparent', color: platformFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                  {o.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <HeaderFilterMenu
+                          label="인플루언서"
+                          value={platformFilter}
+                          options={platformFilterOptions}
+                          onChange={setPlatformFilter}
+                          open={openFilter === 'platform'}
+                          onOpenChange={open => setOpenFilter(open ? 'platform' : null)}
+                        />
                       </th>
                       <th style={thBase}>
-                        <div ref={uploadFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                          <span>리뷰 업로드</span>
-                          <button onClick={() => { setShowUploadFilter(p => !p); setShowReviewLinkFilter(false) }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: uploadFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: uploadFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                            <ListFilter size={13} />
-                          </button>
-                          {showUploadFilter && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                              {UPLOAD_OPTIONS.map(o => (
-                                <button key={o.value} onClick={() => { setUploadFilter(o.value as UploadStatus); setShowUploadFilter(false) }}
-                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: uploadFilter === o.value ? 700 : 500, background: uploadFilter === o.value ? '#d1fae5' : 'transparent', color: uploadFilter === o.value ? '#065f46' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                  {o.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <HeaderFilterMenu
+                          label="리뷰 업로드"
+                          value={uploadFilter}
+                          options={UPLOAD_OPTIONS}
+                          onChange={value => setUploadFilter(value as UploadStatus)}
+                          open={openFilter === 'upload'}
+                          onOpenChange={open => setOpenFilter(open ? 'upload' : null)}
+                        />
                       </th>
                       <th style={{ ...thBase, textAlign: 'center' }}>구글폼 제출</th>
                       <th style={thBase}>
-                        <div ref={reviewLinkFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                          <span>리뷰 링크</span>
-                          <button onClick={() => { setShowReviewLinkFilter(p => !p); setShowUploadFilter(false) }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: reviewLinkFilter !== 'all' ? 'var(--teal-dk)' : 'transparent', color: reviewLinkFilter !== 'all' ? '#fff' : 'var(--teal-dk)', cursor: 'pointer', padding: 0, opacity: 0.8 }}>
-                            <ListFilter size={13} />
-                          </button>
-                          {showReviewLinkFilter && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 130, marginTop: 4 }}>
-                              {REVIEW_LINK_OPTIONS.map(o => (
-                                <button key={o.value} onClick={() => { setReviewLinkFilter(o.value as ReviewLinkFilter); setShowReviewLinkFilter(false) }}
-                                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: reviewLinkFilter === o.value ? 700 : 500, background: reviewLinkFilter === o.value ? '#dbeafe' : 'transparent', color: reviewLinkFilter === o.value ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                  {o.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <HeaderFilterMenu
+                          label="리뷰 링크"
+                          value={reviewLinkFilter}
+                          options={REVIEW_LINK_OPTIONS}
+                          onChange={value => setReviewLinkFilter(value as ReviewLinkFilter)}
+                          open={openFilter === 'reviewLink'}
+                          onOpenChange={open => setOpenFilter(open ? 'reviewLink' : null)}
+                        />
                       </th>
                       <th style={thBase}>배송</th>
                       <th style={{ ...thBase, width: 110, maxWidth: 110 }}>비고</th>
@@ -886,9 +846,9 @@ export default function Confirmed() {
                                   {displayName || handle || '—'}
                                 </span>
                                 {r.email && (
-                                  <a href={`mailto:${r.email}`} onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--blue-dk)', wordBreak: 'break-all', textDecoration: 'none' }}>
+                                  <span onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--gray-6)', wordBreak: 'break-all' }}>
                                     {r.email}
-                                  </a>
+                                  </span>
                                 )}
                                 {r.phone && (
                                   <span style={{ fontSize: 11, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>{r.phone}</span>
@@ -924,10 +884,10 @@ export default function Confirmed() {
                               {r.form_submitted ? '✓' : '—'}
                             </button>
                           </td>
-                          <td onClick={e => e.stopPropagation()}>
+                          <td style={{ cursor: 'default' }} onClick={e => e.stopPropagation()}>
                             <ReviewLinksCell links={r.review_links} />
                           </td>
-                          <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'normal', overflow: 'visible', maxWidth: 'none' }}>
+                          <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'normal', overflow: 'visible', maxWidth: 'none', cursor: 'default' }}>
                             <EmsShippingCell
                               addressLine1={r.address_line_1}
                               addressLine2={r.address_line_2}
@@ -1084,13 +1044,8 @@ export default function Confirmed() {
               </ReportCard>
 
               <div style={{ marginTop: 14 }}>
-                <ReportCard icon={<Info size={18} />} title="관리자 비고">
+                <ReportCard icon={<Info size={18} />} title="비고">
                   <div style={{
-                    minHeight: 72,
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    border: '1px solid var(--gray-2)',
-                    background: '#fff',
                     fontSize: 13,
                     color: r.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
                     lineHeight: 1.6,

@@ -269,9 +269,9 @@ export default function BrandConfirmedManagement() {
               <col style={{ minWidth: 140 }} />
             </colgroup>
             <thead>
-              <tr style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--gray-1)' }}>
+              <tr className="table-head-row">
                 {['No.', '브랜드', '담당자', '직급', '휴대폰', '홈페이지', '생산원가', '제품 받음', '비고'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 7 ? 'center' : 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-6)', borderBottom: '2px solid var(--gray-2)', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 7 ? 'center' : 'left' }}>
                     {h}
                   </th>
                 ))}
