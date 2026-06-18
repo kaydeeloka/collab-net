@@ -10,6 +10,7 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBucket } from '@/lib/content-platforms'
 
 const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
 type Brand = typeof BRANDS[number]
@@ -26,6 +27,14 @@ const BRAND_COLORS: Record<Brand, string> = {
 
 const MEDIA_OPTIONS   = ['photo', 'video']
 const CONTENT_OPTIONS = ['review video', 'unboxing', 'other']
+
+function PlatformBadge({ platform }: { platform: string }) {
+  const { label, style } = platformBadgeStyle(platform)
+  const bucket = platformBucket(platform)
+  if (bucket === 'tiktok') return <span className="platform-badge platform-tiktok">{label}</span>
+  if (bucket === 'instagram') return <span className="platform-badge platform-instagram">{label}</span>
+  return <span className="platform-badge" style={style}>{label}</span>
+}
 
 interface MonRow {
   id:                      string
@@ -59,9 +68,6 @@ function isPlaceholderRow(r: MonRow): boolean {
 interface MonStats {
   totalInfluencers: number
   totalReviews:     number
-  totalViews:       number
-  totalLikes:       number
-  totalComments:    number
   brandCounts:      Record<string, number>
   lastRun:          string
 }
@@ -597,9 +603,6 @@ export default function Monitoring() {
   const stats: MonStats = {
     totalInfluencers: confirmedCount || new Set(rows.map(r => r.confirmed_influencer_id).filter(Boolean)).size,
     totalReviews:     reviewRows.length,
-    totalViews:       reviewRows.reduce((s, r) => s + r.views, 0),
-    totalLikes:       reviewRows.reduce((s, r) => s + r.likes, 0),
-    totalComments:    reviewRows.reduce((s, r) => s + r.comments, 0),
     brandCounts:      reviewRows.reduce((acc, r) => {
       const b = (r.brand || '').toLowerCase()
       if (b) acc[b] = (acc[b] || 0) + 1
@@ -609,6 +612,12 @@ export default function Monitoring() {
   }
   const mimuseReviewCount = stats.brandCounts.mimuse ?? 0
   const brandReviewCount  = BRANDS.filter(b => b !== 'mimuse').reduce((s, b) => s + (stats.brandCounts[b] ?? 0), 0)
+  const platformReviewCounts = Object.fromEntries(
+    PLATFORM_BUCKETS.map(key => [
+      key,
+      reviewRows.filter(r => platformBucket(r.platform) === key).length,
+    ]),
+  ) as Record<(typeof PLATFORM_BUCKETS)[number], number>
   const photoCount = reviewRows.filter(r => (r.media || '').toLowerCase() === 'photo').length
   const videoCount = reviewRows.filter(r => (r.media || '').toLowerCase() === 'video').length
   const mediaTotal   = photoCount + videoCount
@@ -755,13 +764,15 @@ export default function Monitoring() {
           ]}
         />
         <StatCard
-          label="리뷰 성과"
+          label="플랫폼별 리뷰"
           variant="split"
-          columns={[
-            { value: fmtNum(stats.totalViews),    label: '조회수', valueColor: 'var(--ink)',    labelColor: 'var(--ink)' },
-            { value: fmtNum(stats.totalLikes),    label: '좋아요', valueColor: '#dc2626',     labelColor: '#dc2626' },
-            { value: fmtNum(stats.totalComments), label: '댓글',   valueColor: 'var(--teal-dk)', labelColor: 'var(--teal-dk)' },
-          ]}
+          columns={PLATFORM_BUCKETS.map(key => ({
+            value: platformReviewCounts[key],
+            unit: '건',
+            label: PLATFORM_DISPLAY[key].label,
+            valueColor: PLATFORM_DISPLAY[key].statColor,
+            labelColor: PLATFORM_DISPLAY[key].statColor,
+          }))}
         />
       </StatCards>
 
@@ -868,20 +879,16 @@ export default function Monitoring() {
                   ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>업로드된 리뷰가 없습니다</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
-                      const platform = (r.platform || '').toLowerCase()
-                      const link     = r.review_link || ''
-                      const isTikTok    = platform.includes('tiktok') || link.toLowerCase().includes('tiktok.com')
-                      const isInstagram = platform.includes('instagram') || link.toLowerCase().includes('instagram.com')
-                      const profileUrl  = isTikTok ? `https://www.tiktok.com/@${account}` : isInstagram ? `https://www.instagram.com/${account}` : ''
+                      const profileUrl  = platformBucket(r.platform) === 'tiktok'
+                        ? `https://www.tiktok.com/@${account}`
+                        : platformBucket(r.platform) === 'instagram'
+                          ? `https://www.instagram.com/${account}`
+                          : ''
                       return (
                         <tr key={r.id}>
                           <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{listStartIdx + i + 1}</td>
                           <td>
-                            {isTikTok
-                              ? <span className="platform-badge platform-tiktok">TikTok</span>
-                              : isInstagram
-                                ? <span className="platform-badge platform-instagram">Instagram</span>
-                                : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>}
+                            <PlatformBadge platform={r.platform} />
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1043,11 +1050,13 @@ export default function Monitoring() {
                       const groupIdx = uploadStartIdx + gi
                       const isLastGroup = gi === pagedGroups.length - 1
                       const account  = (group.rows[0].handle || '').replace(/^@/, '')
-                      const platform = (group.rows[0].platform || '').toLowerCase()
                       const anyLink  = group.rows.some(r => r.review_link?.startsWith('http'))
-                      const isTikTok    = platform.includes('tiktok')
-                      const isInstagram = platform.includes('instagram')
-                      const profileUrl  = isTikTok ? `https://www.tiktok.com/@${account}` : isInstagram ? `https://www.instagram.com/${account}` : ''
+                      const bucket   = platformBucket(group.rows[0].platform)
+                      const profileUrl  = bucket === 'tiktok'
+                        ? `https://www.tiktok.com/@${account}`
+                        : bucket === 'instagram'
+                          ? `https://www.instagram.com/${account}`
+                          : ''
                       const groupBorderStyle = !isLastGroup ? { borderBottom: '2px solid var(--gray-2)' } : {}
 
                       return group.rows.map((r, ri) => {
@@ -1081,11 +1090,7 @@ export default function Monitoring() {
                                   />
                                   <div style={{ minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                  {isTikTok
-                                    ? <span className="platform-badge platform-tiktok">TikTok</span>
-                                    : isInstagram
-                                      ? <span className="platform-badge platform-instagram">Instagram</span>
-                                      : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>}
+                                  <PlatformBadge platform={group.rows[0].platform} />
                                   {anyLink
                                     ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>완료</span>
                                     : <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>미업로드</span>}

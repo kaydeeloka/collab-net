@@ -23,6 +23,7 @@ import InfluencerTemplate from './pages/influencer/template'
 // INFLUENCER — confirmed
 import ConfirmedShipping       from './pages/influencer/confirmed/shipping'
 import InfluencerMonitoring from './pages/influencer/monitoring'
+import InfluencerMonitoringReport from './pages/influencer/monitoring-report'
 
 // BRAND — db
 import BrandDb         from './pages/brand/db'
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
                 <Route path="/influencer/confirmed/shipping"        element={<ConfirmedShipping />} />
                 <Route path="/influencer/monitoring"                  element={<InfluencerMonitoring />} />
+                <Route path="/influencer/monitoring-report"         element={<InfluencerMonitoringReport />} />
 
                 {/* ── BRAND ── */}
                 <Route path="/brand/db" element={<BrandDb />}>

@@ -54,7 +54,8 @@ const GROUPS: SideGroup[] = [
   {
     label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/influencer/monitoring', prefix: '/influencer/monitoring',
     children: [
-      { to: '/influencer/monitoring', label: '리뷰 모니터링' },
+      { to: '/influencer/monitoring', label: '리뷰 모니터링', end: true },
+      { to: '/influencer/monitoring-report', label: '콘텐츠 성과', end: true },
     ],
   },
   {

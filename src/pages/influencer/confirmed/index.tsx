@@ -4,7 +4,7 @@ import { ListFilter, Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-
 import { supabase } from '@/lib/supabase'
 import { dedupeConfirmedPhaseData, uniquePlatformAccounts } from '@/lib/confirm-influencer'
 import { formatKstSyncLabel } from '@/lib/kst-time'
-import { PLATFORM_OPTIONS, defaultProfileUrl } from '@/lib/content-platforms'
+import { PLATFORM_OPTIONS, defaultProfileUrl, platformBadgeStyle } from '@/lib/content-platforms'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -166,25 +166,22 @@ function fmtFollowers(n: number | null): string {
   return String(n)
 }
 
-const PLATFORM_CFG: Record<string, { bg: string; color: string; label: string }> = {
-  tiktok:    { bg: '#111',                                                            color: '#fff', label: 'TikTok' },
-  instagram: { bg: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', color: '#fff', label: 'Instagram' },
-  youtube:   { bg: '#ff0000',                                                          color: '#fff', label: 'YouTube' },
-  facebook:  { bg: '#1877f2',                                                          color: '#fff', label: 'Facebook' },
-  magazine:  { bg: '#6366f1',                                                          color: '#fff', label: 'Magazine' },
-}
-
 function PlatformBadge({ platform }: { platform: string | null }) {
   if (!platform) return <span style={{ color: 'var(--gray-4)', fontSize: 11 }}>—</span>
-  const key = platform.toLowerCase()
-  const cfg = Object.entries(PLATFORM_CFG).find(([k]) => key.includes(k))?.[1]
-    ?? { bg: 'var(--gray-3)', color: 'var(--gray-6)', label: platform }
+  const { label, style } = platformBadgeStyle(platform)
   return (
     <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 5,
-      fontSize: 10, fontWeight: 700, letterSpacing: '.2px', lineHeight: '17px',
-      background: cfg.bg, color: cfg.color, whiteSpace: 'nowrap', flexShrink: 0,
-    }}>{cfg.label}</span>
+      ...style,
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: 5,
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '.2px',
+      lineHeight: '17px',
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
+    }}>{label}</span>
   )
 }
 

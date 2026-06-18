@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 export interface ContentPlatformAccount {
   platform: string
   handle: string
@@ -7,6 +9,49 @@ export interface ContentPlatformAccount {
 }
 
 export const PLATFORM_OPTIONS = ['TikTok', 'Instagram', 'YouTube', 'Blog', 'Facebook'] as const
+
+export type PlatformBucket = 'tiktok' | 'instagram' | 'magazine'
+
+export const PLATFORM_BUCKETS: PlatformBucket[] = ['tiktok', 'instagram', 'magazine']
+
+export const PLATFORM_DISPLAY: Record<PlatformBucket, {
+  label: string
+  statColor: string
+  badgeBg: string
+  badgeColor: string
+}> = {
+  tiktok:    { label: 'TikTok',    statColor: '#111',    badgeBg: '#111',    badgeColor: '#fff' },
+  instagram: { label: 'Instagram', statColor: '#dc2743', badgeBg: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', badgeColor: '#fff' },
+  magazine:  { label: 'Magazine',  statColor: '#6366f1', badgeBg: '#6366f1', badgeColor: '#fff' },
+}
+
+export function platformBucket(platform: string): PlatformBucket {
+  const p = platform.toLowerCase()
+  if (p.includes('instagram')) return 'instagram'
+  if (p.includes('magazine') || p.includes('blog')) return 'magazine'
+  return 'tiktok'
+}
+
+export function platformBadgeStyle(platform: string | null): { label: string; style: CSSProperties } {
+  if (!platform) return { label: '—', style: { color: 'var(--gray-4)', fontSize: 11 } }
+  const bucket = platformBucket(platform)
+  const cfg = PLATFORM_DISPLAY[bucket]
+  return {
+    label: cfg.label,
+    style: {
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: 5,
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '.2px',
+      lineHeight: '17px',
+      background: cfg.badgeBg,
+      color: cfg.badgeColor,
+      whiteSpace: 'nowrap',
+    },
+  }
+}
 
 export function defaultProfileUrl(platform: string, handle: string): string {
   const h = handle.replace(/^@/, '')
