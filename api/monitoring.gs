@@ -262,12 +262,7 @@ function _writeMonitoringResults(token, datasetId) {
     const videosByHandle = {};
     items.forEach(function(item) {
       if (!keywords.some(function(kw) { return itemText(item).includes(kw); })) return;
-      const meta     = item.authorMeta || {};
-      const uniqueId = (
-        meta.uniqueId || meta.name ||
-        item['authorMeta.name'] ||
-        item.uniqueId || ''
-      ).toString().toLowerCase();
+      const uniqueId = _itemUniqueId(item);
       if (!uniqueId) return;
       if (!videosByHandle[uniqueId]) videosByHandle[uniqueId] = [];
       videosByHandle[uniqueId].push(item);
@@ -300,6 +295,15 @@ function _writeMonitoringResults(token, datasetId) {
   } finally {
     _clearRunProps();
   }
+}
+
+function _itemUniqueId(item) {
+  var meta = item.authorMeta || {};
+  return (
+    meta.uniqueId || meta.name ||
+    item['authorMeta.name'] ||
+    item.uniqueId || ''
+  ).toString().toLowerCase();
 }
 
 // Write Apify results to Supabase monitoring table.

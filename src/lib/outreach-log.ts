@@ -1,3 +1,4 @@
+import { supabaseNow } from '@/lib/kst-time'
 import { supabase } from './supabase'
 
 /** Optional audit log when user clicks 발송 (outbound only). Failures are non-blocking. */
@@ -16,7 +17,7 @@ export async function logOutboundOutreach(params: {
     body: params.body,
     template_name: params.template_name ?? null,
     template_id: params.template_id ?? null,
-    sent_at: params.sent_at ?? new Date().toISOString(),
+    sent_at: params.sent_at ?? supabaseNow(),
   })
   if (error) console.warn('outreach_messages log failed:', error.message)
 }

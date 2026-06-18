@@ -1,4 +1,5 @@
 import { gasPost } from '@/lib/api'
+import { dateOnlyToIso, supabaseNow, toIsoTimestamp } from '@/lib/kst-time'
 
 export interface DetectedReply {
   email: string
@@ -59,16 +60,11 @@ export function replyTimestamp(reply: DetectedReply) {
     const ms = new Date(reply.receivedAt).getTime()
     if (!Number.isNaN(ms)) return new Date(ms).toISOString()
   }
-  if (reply.date) return `${reply.date}T12:00:00.000Z`
-  return new Date().toISOString()
+  if (reply.date) return dateOnlyToIso(reply.date)
+  return supabaseNow()
 }
 
-/** Normalize DB/API timestamps to ISO for reliable comparisons in GAS. */
-export function toIsoTimestamp(value: string | null | undefined): string | undefined {
-  if (!value) return undefined
-  const ms = new Date(value).getTime()
-  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString()
-}
+export { toIsoTimestamp }
 
 function ts(iso: string | null | undefined) {
   if (!iso) return NaN

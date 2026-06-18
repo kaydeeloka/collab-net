@@ -6,6 +6,7 @@ import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '@/lib/bea
 import { fetchReshipmentMap } from '@/lib/ems-errors'
 import { isEmsDelivered, isEmsException, isEmsInTransit } from '@/lib/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
+import { parseKstDateOnly } from '@/lib/kst-time'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
@@ -37,8 +38,8 @@ export default function Dashboard() {
   const { dbOptions, activeDbId, switchPhase } = useOutletContext<PhaseCtx>()
   const { viewPhaseId, phases } = usePhase()
   const currentPhase  = phases.find(p => p.id === (viewPhaseId ?? activeDbId))
-  const dispatchDate  = currentPhase?.kit_send_date ? new Date(currentPhase.kit_send_date + 'T00:00:00') : null
-  const deadlineDate  = currentPhase?.ended_at      ? new Date(currentPhase.ended_at.split('T')[0] + 'T00:00:00') : null
+  const dispatchDate  = currentPhase?.kit_send_date ? parseKstDateOnly(currentPhase.kit_send_date) : null
+  const deadlineDate  = currentPhase?.ended_at      ? parseKstDateOnly(currentPhase.ended_at.split('T')[0]) : null
 
   const [statsListup,    setStatsListup]    = useState(SPINNER_HTML)
   const [statsOutreach,  setStatsOutreach]  = useState(SPINNER_HTML)

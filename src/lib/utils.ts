@@ -1,3 +1,7 @@
+import { KST, formatKstDateTime } from '@/lib/kst-time'
+
+export { formatKstDateTime }
+
 export function fmtNum(n: string | number): string {
   const num = parseInt(String(n).replace(/,/g, ''))
   if (isNaN(num)) return '—'
@@ -51,36 +55,21 @@ export function buildPhaseDbOptions(data: {
   return opts
 }
 
-const KST = 'Asia/Seoul'
-
-/** Full datetime in Korea Standard Time (e.g. 2026. 6. 17. 15:45) */
-export function formatKstDateTime(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleString('ko-KR', {
-    timeZone: KST,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
-
 export function useKrClock() {
   function getKrTime() {
     const now = new Date()
+    const opts = { timeZone: KST } as const
     return {
       date: now.toLocaleDateString('ko-KR', {
+        ...opts,
         year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
       }),
       time: now.toLocaleTimeString('ko-KR', {
+        ...opts,
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       }),
-      navDate: now.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' }),
-      navTime: now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      navDate: now.toLocaleDateString('ko-KR', { ...opts, month: 'numeric', day: 'numeric', weekday: 'short' }),
+      navTime: now.toLocaleTimeString('ko-KR', { ...opts, hour: '2-digit', minute: '2-digit', hour12: false }),
     }
   }
   return getKrTime

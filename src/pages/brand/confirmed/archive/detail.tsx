@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import JSZip from 'jszip'
 import { ArrowLeft, Download, Pencil, Save, Trash2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -280,7 +281,7 @@ export default function BrandArchiveDetail() {
     memoTimer.current = setTimeout(async () => {
       const { error } = await supabase
         .from('confirmed_brand_archive_meta')
-        .upsert({ confirmed_brand_id: brandId, archive_memo: value || null, updated_at: new Date().toISOString() })
+        .upsert({ confirmed_brand_id: brandId, archive_memo: value || null, updated_at: supabaseNow() })
       if (error) showToast(error.message, 'error')
     }, 700)
   }
@@ -296,7 +297,7 @@ export default function BrandArchiveDetail() {
     try {
       const { error } = await supabase
         .from('confirmed_brand_archive_meta')
-        .upsert({ confirmed_brand_id: brandId, archive_memo: archiveMemo || null, updated_at: new Date().toISOString() })
+        .upsert({ confirmed_brand_id: brandId, archive_memo: archiveMemo || null, updated_at: supabaseNow() })
       if (error) {
         showToast(error.message, 'error')
         return

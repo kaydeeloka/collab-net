@@ -7,6 +7,7 @@ import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems-errors'
+import { formatKstSyncLabel } from '@/lib/kst-time'
 import {
   EMS_STATUS_FILTER_OPTIONS,
   EMS_STATUS_OPTIONS,
@@ -187,7 +188,7 @@ export default function Ems() {
         }
       })
       setRows(mapped)
-      setSyncMsg(`마지막 동기화: ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`)
+      setSyncMsg(formatKstSyncLabel())
     } catch (e: unknown) {
       showToast((e as Error).message, 'error')
       setSyncMsg('동기화 실패')

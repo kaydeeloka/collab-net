@@ -14,8 +14,10 @@ export function normalizePhaseId(value: unknown): string | null {
   return null
 }
 
+import { kstToday } from '@/lib/kst-time'
+
 /** Phase whose date range includes today. */
-export function getDateActivePhaseId(phases: PhaseLike[], today = new Date().toISOString().split('T')[0]): string | null {
+export function getDateActivePhaseId(phases: PhaseLike[], today = kstToday()): string | null {
   return phases.find(p => {
     if (!p.started_at || !p.ended_at) return false
     const start = p.started_at.split('T')[0]

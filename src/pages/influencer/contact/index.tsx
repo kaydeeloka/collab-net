@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
 import { gasPost } from '@/lib/api'
-import { defaultProfileUrl } from '@/lib/content-platforms'
+import {
+  backfillAcceptedToConfirmed,
+  removeInfluencerOnUnaccept,
+  syncInfluencerOnAccept,
+} from '@/lib/confirm-influencer'
 import {
   checkOutlookConnected,
   compareByRecentReply,
@@ -14,6 +18,7 @@ import {
 } from '@/lib/reply-sync'
 import { logOutboundOutreach } from '@/lib/outreach-log'
 import { supabase } from '@/lib/supabase'
+import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -197,13 +202,12 @@ function ContactCountEditor({ count, onChange }: { count: number; onChange: (n: 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Outreach() {
   const { showToast, showConfirm } = useToast()
-  const { selectedPhaseId, phases } = usePhase()
+  const { viewPhaseId, phases } = usePhase()
   const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
 
   // ── Data ──
   const [influencers,    setInfluencers]    = useState<Influencer[]>([])
   const [loading,        setLoading]        = useState(true)
-  const [confirmedDbCount, setConfirmedDbCount] = useState(0)
 
   // ── Filter / pagination ──
   const [activeTier,    setActiveTier]    = useState('전체')
@@ -229,12 +233,12 @@ export default function Outreach() {
 
   // ── Load ──
   const loadInfluencers = useCallback(async () => {
-    if (!selectedPhaseId) return
+    if (!viewPhaseId) return
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
       .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, last_reply_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
-      .eq('phase_id', selectedPhaseId)
+      .eq('phase_id', viewPhaseId)
       .order('last_reply_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -244,14 +248,16 @@ export default function Outreach() {
     }))
     setInfluencers(mapped as unknown as Influencer[])
 
-    const { count: ciCount } = await supabase
-      .from('confirmed_influencers')
-      .select('*', { count: 'exact', head: true })
-      .eq('phase_id', selectedPhaseId)
-    setConfirmedDbCount(ciCount ?? 0)
+    const accepted = (mapped as Influencer[]).filter(r => r.status === 'accept')
+    if (accepted.length) {
+      const { synced, failed, deduped, errors } = await backfillAcceptedToConfirmed(viewPhaseId, accepted)
+      if (deduped > 0) showToast(`확정 목록 중복 ${deduped}건 정리됨`, 'success')
+      if (synced > 0) showToast(`${synced}명 확정 목록에 반영됨`, 'success')
+      if (failed > 0) showToast(`확정 등록 실패 ${failed}건: ${errors[0]}`, 'error')
+    }
 
     setLoading(false)
-  }, [selectedPhaseId])
+  }, [viewPhaseId, showToast])
 
   useEffect(() => { loadInfluencers() }, [loadInfluencers])
 
@@ -351,54 +357,30 @@ export default function Outreach() {
       finalPatch.reply_count = (inf.reply_count ?? 0) + 1
     }
     if (patch.status && replyStatuses.includes(patch.status)) {
-      finalPatch.last_reply_at = new Date().toISOString()
+      finalPatch.last_reply_at = supabaseNow()
     }
 
     const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
 
-    // sync to confirmed_influencers when status becomes 'accept'
-    if (patch.status === 'accept' && inf) {
-      const { data: existing } = await supabase
-        .from('confirmed_influencers')
-        .select('id')
-        .eq('influencer_id', id)
-        .maybeSingle()
-      if (!existing) {
-        const { data: ciData, error: ciErr } = await supabase
-          .from('confirmed_influencers')
-          .insert({ influencer_id: id, phase_id: selectedPhaseId, email: inf.email, upload_status: 'Pending' })
-          .select('id')
-          .single()
-        if (ciErr) {
-          showToast('확정 등록 실패: ' + ciErr.message, 'error')
-        } else {
-          const platform   = inf.platform || 'TikTok'
-          const handle     = inf.handle   || ''
-          const { error: ipErr } = await supabase.from('influencer_platform').insert({
-            confirmed_influencer_id: ciData.id,
-            platform,
-            handle,
-            followers:   inf.followers   || 0,
-            profile_url: inf.profile_url || defaultProfileUrl(platform, handle),
-          })
-          if (ipErr) showToast('플랫폼 등록 실패: ' + ipErr.message, 'error')
-          else showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
-        }
+    // sync to confirmed_influencers when status is accept
+    if (patch.status === 'accept' && inf && viewPhaseId) {
+      const result = await syncInfluencerOnAccept(inf, viewPhaseId)
+      if (!result.ok) {
+        showToast('확정 등록 실패: ' + result.error, 'error')
+      } else {
+        showToast(`${inf.display_name || inf.handle} 확정 등록 완료`, 'success')
       }
     }
 
     // remove from confirmed_influencers when status changes away from 'accept'
     if (patch.status !== undefined && patch.status !== 'accept' && inf?.status === 'accept') {
-      const { error: delErr } = await supabase
-        .from('confirmed_influencers')
-        .delete()
-        .eq('influencer_id', id)
-      if (delErr) showToast('확정 취소 실패: ' + delErr.message, 'error')
+      const result = await removeInfluencerOnUnaccept(id)
+      if (!result.ok) showToast('확정 취소 실패: ' + result.error, 'error')
       else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
     }
-  }, [showToast, influencers, selectedPhaseId])
+  }, [showToast, influencers, viewPhaseId])
 
   const sendOutreachToInfluencer = useCallback(async (
     inf: Influencer,
@@ -407,7 +389,7 @@ export default function Outreach() {
     if (!inf.email) return
     const subject = applyPlaceholders(tpl.title, inf)
     const body = applyPlaceholders(tpl.body, inf)
-    const sentAt = new Date().toISOString()
+    const sentAt = supabaseNow()
     await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject, body })
     await logOutboundOutreach({
       influencer_id: inf.id,
@@ -442,6 +424,7 @@ export default function Outreach() {
 
   const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
   const repliedCount   = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
+  const acceptCount    = influencers.filter(r => r.status === 'accept').length
   const negotiateCount = influencers.filter(r => r.status === 'negotiate').length
   const tierBreakdown = TIERS.map(t => {
     const all  = influencers.filter(r => r.tiers?.rank === t)
@@ -533,7 +516,7 @@ export default function Outreach() {
             label="확정 / 협의"
             variant="split"
             columns={[
-              { value: confirmedDbCount, unit: '명', valueColor: '#14532d', label: '확정', labelColor: '#16a34a' },
+              { value: acceptCount, unit: '명', valueColor: '#14532d', label: '확정', labelColor: '#16a34a' },
               { value: negotiateCount, unit: '명', valueColor: '#1e3a5f', label: '협의 중', labelColor: '#2563eb' },
             ]}
           />

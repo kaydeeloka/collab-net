@@ -8,6 +8,7 @@ import {
   updateEmsReship,
   type EmsErrorRow,
 } from '@/lib/ems-errors'
+import { formatKstDate } from '@/lib/kst-time'
 import { EMS_STATUS_OPTIONS, getEmsStatusColor } from '@/lib/ems-tracking-status'
 import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/ems-templates'
 import { useToast } from '@/contexts/ToastContext'
@@ -23,10 +24,7 @@ function displayVal(v: string) {
 
 function toDateInputValue(v: string): string {
   if (!v || v === '—') return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v
-  const d = new Date(v)
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
-  return ''
+  return formatKstDate(v) ?? ''
 }
 
 function TrackingCell({ emsNumber, carrierStatus }: { emsNumber: string; carrierStatus: string }) {

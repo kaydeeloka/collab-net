@@ -259,6 +259,7 @@ function _parseAutomationLabProfile(item) {
   return {
     handle      : handle,
     displayName : String(item.displayName || ''),
+    avatarUrl   : String(item.avatarUrl || item.avatar || '').trim(),
     bio         : bio.substring(0, 500),
     email       : email,
     profileUrl  : String(item.profileUrl || ('https://www.tiktok.com/@' + handle)),
@@ -277,6 +278,7 @@ function _creatorFromProfile(p) {
   return {
     handle      : p.handle,
     displayName : p.displayName || '',
+    avatarUrl   : p.avatarUrl || '',
     email       : p.email || '',
     followers   : followers,
     following   : following,

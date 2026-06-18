@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { supabaseNow } from './kst-time'
 
 export type EmailTemplateDomain = 'influencer' | 'brand' | 'ems'
 
@@ -135,7 +136,7 @@ function readLegacyLocal(domain: EmailTemplateDomain): EmailTemplate[] | null {
       category?: string
     }>
     if (!Array.isArray(parsed) || parsed.length === 0) return null
-    const now = new Date().toISOString()
+    const now = supabaseNow()
     return parsed.map((t, i) => ({
       id: t.id || crypto.randomUUID(),
       domain,
@@ -211,7 +212,7 @@ export async function saveEmailTemplate(template: EmailTemplate): Promise<EmailT
       title: template.title,
       body: template.body,
       category: template.category,
-      updated_at: new Date().toISOString(),
+      updated_at: supabaseNow(),
     })
     .eq('id', template.id)
     .select('*')
@@ -247,7 +248,7 @@ export async function createEmailTemplate(
 export async function deleteEmailTemplate(id: string): Promise<void> {
   const { error } = await supabase
     .from('email_templates')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .update({ is_active: false, updated_at: supabaseNow() })
     .eq('id', id)
 
   if (error) throw error

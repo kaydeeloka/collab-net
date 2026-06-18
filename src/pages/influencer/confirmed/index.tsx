@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ListFilter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { dedupeConfirmedPhaseData, uniquePlatformAccounts } from '@/lib/confirm-influencer'
+import { formatKstSyncLabel } from '@/lib/kst-time'
 import { PLATFORM_OPTIONS, defaultProfileUrl } from '@/lib/content-platforms'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -330,6 +332,18 @@ export default function Confirmed() {
 
   async function load() {
     setLoading(true)
+    if (viewPhaseId) {
+      const { confirmedRemoved, platformsRemoved, error: dedupeErr } =
+        await dedupeConfirmedPhaseData(viewPhaseId)
+      if (dedupeErr) showToast(dedupeErr, 'error')
+      else if (confirmedRemoved > 0 || platformsRemoved > 0) {
+        const parts = [
+          confirmedRemoved > 0 ? `확정 ${confirmedRemoved}건` : '',
+          platformsRemoved > 0 ? `플랫폼 ${platformsRemoved}건` : '',
+        ].filter(Boolean)
+        showToast(`중복 ${parts.join(', ')} 정리됨`, 'success')
+      }
+    }
     const { data, error } = await supabase
       .from('confirmed_influencers')
       .select(`
@@ -369,13 +383,13 @@ export default function Confirmed() {
       display_name:   r.influencers?.display_name ?? null,
       ems_number:     ems.ems_number ?? null,
       ems_status:     ems.status     ?? null,
-      influencer_platform: (r.influencer_platform ?? []).map((p: any) => ({
+      influencer_platform: uniquePlatformAccounts((r.influencer_platform ?? []).map((p: any) => ({
         id:          p.id,
         platform:    p.platform,
         handle:      p.handle   ?? '',
         followers:   p.followers ?? 0,
         profile_url: p.profile_url ?? '',
-      })),
+      }))),
       influencers: r.influencers ?? null,
       }
     })
@@ -415,7 +429,7 @@ export default function Confirmed() {
 
     setRows(mapped)
     setBrandCounts(computeBrandCounts(data ?? []))
-    setSyncMsg(`마지막 동기화: ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`)
+    setSyncMsg(formatKstSyncLabel())
     setLoading(false)
   }
 

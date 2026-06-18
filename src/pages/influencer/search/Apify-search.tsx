@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { matchesKstDate, supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -101,17 +102,17 @@ interface Influencer  {
   id: string; created_at: string; phase_id: string; handle: string
   display_name: string | null; email: string | null; followers: number; following: number
   following_ratio: string | null; total_likes: number; video_count: number
-  avg_views: number; engagement_rate: number; profile_url: string | null; status: string
+  avg_views: number; engagement_rate: number; profile_url: string | null; avatar_url?: string | null; status: string
   tiers?: { rank: string; label: string; category: string } | null
 }
 interface ApifyCreator {
   handle: string; displayName: string; email: string; followers: number
   following: number; ratio: string; totalLikes: number; videoCount: number
-  avgViews: number; engRate: number; bio: string; profileUrl: string
+  avgViews: number; engRate: number; bio: string; profileUrl: string; avatarUrl?: string
 }
 
 function saveConfig(key: string, value: unknown) {
-  supabase.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() }).then()
+  supabase.from('app_config').upsert({ key, value, updated_at: supabaseNow() }).then()
 }
 
 function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
@@ -478,6 +479,7 @@ export default function Listup() {
         avg_views:        c.avgViews,
         engagement_rate:  c.engRate,
         profile_url:      c.profileUrl || null,
+        avatar_url:       c.avatarUrl || null,
         status:           '',
       }))
 
@@ -508,7 +510,7 @@ export default function Listup() {
   function getFilteredInfluencers() {
     let list = influencers
     if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
-    if (dateFrom) list = list.filter(inf => inf.created_at.substring(0, 10) === dateFrom)
+    if (dateFrom) list = list.filter(inf => matchesKstDate(inf.created_at, dateFrom))
     return [...list].sort((a, b) => (a.status ? 1 : 0) - (b.status ? 1 : 0))
   }
 

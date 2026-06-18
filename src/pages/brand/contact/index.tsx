@@ -12,6 +12,7 @@ import {
   toIsoTimestamp,
 } from '@/lib/reply-sync'
 import { supabase } from '@/lib/supabase'
+import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -198,7 +199,7 @@ export default function BrandContact() {
         patch = { ...patch, reply_count: row.reply_count + 1 }
       }
       if (REPLY_STATUSES.includes(nextStatus)) {
-        dbPatch.last_reply_at = new Date().toISOString()
+        dbPatch.last_reply_at = supabaseNow()
         patch = { ...patch, last_reply_at: dbPatch.last_reply_at as string }
       }
     }

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
+import { formatKstDate } from '@/lib/kst-time'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
@@ -34,6 +35,7 @@ interface MonRow {
   platform:                string
   handle:                  string
   display_name:            string | null  // from influencers join
+  avatar_url:              string | null
   date:                    string | null
   media:                   string | null
   content:                 string | null
@@ -65,11 +67,7 @@ interface MonStats {
 }
 
 function fmtDate(val: string | null): string {
-  if (!val) return '—'
-  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
-  const d = new Date(val)
-  if (isNaN(d.getTime())) return val
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  return formatKstDate(val) ?? (val || '—')
 }
 
 function ViewField({ label, children, span }: { label: string; children: ReactNode; span?: boolean }) {
@@ -83,6 +81,33 @@ function ViewField({ label, children, span }: { label: string; children: ReactNo
 
 function modalTitle(r: MonRow): string {
   return r.display_name || `@${(r.handle || '').replace(/^@/, '')}`
+}
+
+function InfluencerAvatar({ url, label, size = 36 }: { url?: string | null; label?: string | null; size?: number }) {
+  const fallback = (label || '?').replace(/^@/, '').slice(0, 1).toUpperCase() || '?'
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        flexShrink: 0,
+        overflow: 'hidden',
+        background: 'var(--gray-2)',
+        border: '1px solid var(--gray-3)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: Math.round(size * 0.38),
+        fontWeight: 700,
+        color: 'var(--gray-5)',
+      }}
+    >
+      {url
+        ? <img src={url} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : fallback}
+    </div>
+  )
 }
 
 function brandBadge(brand: string | null) {
@@ -181,6 +206,7 @@ export default function Monitoring() {
       platform:                ip?.platform || '',
       handle:                  ip?.handle   || '',
       display_name:            ci?.influencers?.display_name || null,
+      avatar_url:              ci?.influencers?.avatar_url || null,
       date:                    m.date,
       media:                   m.media,
       content:                 m.content,
@@ -204,6 +230,7 @@ export default function Monitoring() {
       platform:                ip?.platform || '',
       handle:                  ip?.handle || '',
       display_name:            ci.influencers?.display_name ?? null,
+      avatar_url:              ci.influencers?.avatar_url ?? null,
       date:                    null,
       media:                   null,
       content:                 null,
@@ -230,7 +257,7 @@ export default function Monitoring() {
           platform, handle,
           confirmed_influencers(
             id, seq, repost,
-            influencers(display_name)
+            influencers(display_name, avatar_url)
           )
         )
       `
@@ -240,7 +267,7 @@ export default function Monitoring() {
           .from('confirmed_influencers')
           .select(`
             id, seq, repost,
-            influencers(display_name),
+            influencers(display_name, avatar_url),
             influencer_platform(id, platform, handle)
           `)
           .eq('phase_id', viewPhaseId)
@@ -278,6 +305,7 @@ export default function Monitoring() {
             row.seq = ci.seq ?? null
             row.display_name = ci.influencers?.display_name ?? null
             row.repost = ci.repost ?? null
+            if (!row.avatar_url) row.avatar_url = ci.influencers?.avatar_url ?? null
           }
         }
         if (!ciId || !confirmedById.has(ciId)) continue
@@ -856,12 +884,17 @@ export default function Monitoring() {
                                 : <span className="platform-badge" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}>Blog</span>}
                           </td>
                           <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <InfluencerAvatar url={r.avatar_url} label={r.display_name || account} size={32} />
+                              <div>
                             {r.display_name && (
                               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)' }}>{r.display_name}</div>
                             )}
                             {profileUrl
                               ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
                               : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account || '—'}</span>}
+                              </div>
+                            </div>
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
                           <td><a href={link} target="_blank" rel="noopener" className="video-link">↗ 보기</a></td>
@@ -1040,6 +1073,13 @@ export default function Monitoring() {
                             {isFirst && (
                               <td rowSpan={group.rows.length} onClick={() => openModal(r, group.rows, false)}
                                 style={{ verticalAlign: 'middle', cursor: 'pointer', ...groupBorderStyle }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                  <InfluencerAvatar
+                                    url={group.rows[0].avatar_url}
+                                    label={group.rows[0].display_name || account}
+                                    size={40}
+                                  />
+                                  <div style={{ minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                                   {isTikTok
                                     ? <span className="platform-badge platform-tiktok">TikTok</span>
@@ -1068,6 +1108,8 @@ export default function Monitoring() {
                                       : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account}</span>}
                                   </div>
                                 )}
+                                  </div>
+                                </div>
                               </td>
                             )}
 
@@ -1240,6 +1282,18 @@ export default function Monitoring() {
             )}
 
             {!modalEditing ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
+                  <InfluencerAvatar url={modalRow.avatar_url} label={modalRow.display_name || modalRow.handle} size={52} />
+                  <div>
+                    {modalRow.display_name && (
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>{modalRow.display_name}</div>
+                    )}
+                    {modalRow.handle && (
+                      <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 2 }}>@{modalRow.handle.replace(/^@/, '')}</div>
+                    )}
+                  </div>
+                </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
                 <ViewField label="업로드일">{fmtDate(modalRow.date)}</ViewField>
                 <ViewField label="브랜드">
@@ -1276,6 +1330,7 @@ export default function Monitoring() {
                 </ViewField>
                 <ViewField label="모니터링 실행일">{modalRow.updated ? fmtDate(modalRow.updated) : '—'}</ViewField>
               </div>
+              </>
             ) : editForm && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
                 <div>

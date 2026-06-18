@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
+import { kstToday } from '@/lib/kst-time'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
@@ -171,7 +172,7 @@ function downloadEmsExcel(data: EmsDataRow[]) {
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'EMS 발송 데이터')
-  const date = new Date().toISOString().slice(0, 10)
+  const date = kstToday()
   XLSX.writeFile(wb, `EMS_발송데이터_${date}.xlsx`)
 }
 

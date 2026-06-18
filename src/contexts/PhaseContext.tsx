@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDateActivePhaseId, normalizePhaseId } from '@/lib/phase'
+import { supabaseNow } from '@/lib/kst-time'
 
 interface Phase {
   id: string
@@ -58,7 +59,7 @@ export function PhaseProvider({ children }: { children: React.ReactNode }) {
         await supabase.from('app_config').upsert({
           key: 'active_phase_id',
           value: dateActive,
-          updated_at: new Date().toISOString(),
+          updated_at: supabaseNow(),
         })
       }
 
@@ -72,7 +73,7 @@ export function PhaseProvider({ children }: { children: React.ReactNode }) {
     await supabase.from('app_config').upsert({
       key: 'active_phase_id',
       value: phaseId,
-      updated_at: new Date().toISOString(),
+      updated_at: supabaseNow(),
     })
     setSelectedPhaseId(phaseId)
     setViewPhaseId(phaseId)
