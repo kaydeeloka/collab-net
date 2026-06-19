@@ -77,7 +77,7 @@ export default function BrandDbGeneral() {
       .from('brand_general')
       .select('*')
       .eq('phase_id', selectedPhaseId)
-      .order('created_at', { ascending: false })
+      .order('brand_name', { ascending: true })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []).map(r => ({
       ...r,
@@ -189,7 +189,11 @@ export default function BrandDbGeneral() {
     return [r.brand_name, r.company, r.telephone, r.website, r.product_category, ...(r.email ?? [])]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
-  const sorted = [...filtered].sort((a, b) => (a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1))
+  const sorted = [...filtered].sort((a, b) => {
+    const byName = a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
+    if (byName !== 0) return byName
+    return a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1
+  })
   const pg = paginate(sorted, page)
 
   // Shared text field renderer (excludes email which is handled separately)

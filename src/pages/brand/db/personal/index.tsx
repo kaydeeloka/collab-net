@@ -99,7 +99,7 @@ export default function BrandDbPersonal() {
       .from('brand_personal')
       .select('*')
       .eq('phase_id', selectedPhaseId)
-      .order('created_at', { ascending: false })
+      .order('brand_name', { ascending: true })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []).map(r => ({
       ...r,
@@ -224,7 +224,13 @@ export default function BrandDbPersonal() {
     return [r.brand_name, r.contact_name, r.department, r.website, ...(r.personal_email ?? [])]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
-  const sorted = [...filtered].sort((a, b) => (a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1))
+  const sorted = [...filtered].sort((a, b) => {
+    const byName = a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
+    if (byName !== 0) return byName
+    const byContact = (a.contact_name ?? '').localeCompare(b.contact_name ?? '', 'ko', { sensitivity: 'base' })
+    if (byContact !== 0) return byContact
+    return a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1
+  })
   const pg = paginate(sorted, page)
 
   const field = (
@@ -356,18 +362,18 @@ export default function BrandDbPersonal() {
       {/* Table */}
       <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
         <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 900 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 980 }}>
             <colgroup>
               <col style={{ width: 36 }} />
-              <col style={{ width: 150 }} />
-              <col style={{ width: 110 }} />
-              <col style={{ width: 100 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: 180 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ minWidth: 130 }} />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 90 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: 68 }} />
+              <col style={{ width: 72 }} />
+              <col style={{ width: 88 }} />
             </colgroup>
             <thead>
               <tr className="table-head-row">
@@ -383,7 +389,7 @@ export default function BrandDbPersonal() {
                   />
                 </th>
                 {['브랜드명', '성명', '부서', '직급', '개인 이메일', '개인 전화번호', '홈페이지', '해외 진출', '컨택 대상'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 8 ? 'center' : 'left' }}>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: i >= 7 ? 'center' : 'left', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
                 ))}
@@ -414,10 +420,10 @@ export default function BrandDbPersonal() {
                       style={{ cursor: 'pointer', width: 14, height: 14 }}
                     />
                   </td>
-                  <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</td>
-                  <td style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.position}</td>
+                  <td title={r.brand_name} style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</td>
+                  <td title={r.contact_name ?? undefined} style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</td>
+                  <td title={r.department ?? undefined} style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
+                  <td title={r.position ?? undefined} style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.position}</td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
                     {r.personal_email?.length ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -430,11 +436,11 @@ export default function BrandDbPersonal() {
                       </div>
                     ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.personal_phone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
-                  <td style={{ padding: '0 12px' }}>
+                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.personal_phone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
+                  <td style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     {r.website
                       ? <a href={r.website.startsWith('http') ? r.website : 'https://' + r.website} target="_blank" rel="noopener"
-                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 방문</a>
+                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>↗ 방문</a>
                       : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                   </td>
                   <td style={{ padding: '0 12px', textAlign: 'center' }}>
