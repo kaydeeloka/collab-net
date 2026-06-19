@@ -1,5 +1,10 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { type ReactNode } from 'react'
+import { formatStickyBarClock } from '@/lib/kst-time'
+import { phaseNum } from '@/lib/utils'
+import { usePhase } from '@/contexts/PhaseContext'
+import { useToast } from '@/contexts/ToastContext'
 
 export interface StickyBarNavSubChild {
   label: string
@@ -22,24 +27,72 @@ export interface StickyBarGroup {
   children: StickyBarNavChild[]
 }
 
-interface PhaseOption {
-  id: string
-  label: string
-}
-
-interface Props {
+interface StickyBarProps {
   group: StickyBarGroup
   pathname: string
   openSub: string | null
   onSubEnter: (to: string) => void
   onSubLeave: () => void
-  activePhaseId: string | null
-  viewPhaseId: string | null
-  phaseList: { id: string; name: string }[]
-  activeDbId: string
-  dbOptions: PhaseOption[]
-  phaseBadge: string
-  onSwitchPhase: (id: string) => void
+}
+
+function StickyBarClock() {
+  const [clock, setClock] = useState(() => formatStickyBarClock())
+
+  useEffect(() => {
+    const tick = () => setClock(formatStickyBarClock())
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <time className="sticky-bar__clock" dateTime={new Date().toISOString()}>
+      {clock}
+    </time>
+  )
+}
+
+function StickyBarPhaseControls() {
+  const { showToast } = useToast()
+  const { activePhaseId, viewPhaseId, phases: phaseList, switchPhase } = usePhase()
+
+  const activeDbId = viewPhaseId ?? ''
+  const dbOptions = phaseList
+    .map(p => ({ id: p.id, label: p.name }))
+    .sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
+  const phaseBadge = phaseList.find(p => p.id === viewPhaseId)?.name || '—'
+
+  async function onSwitchPhase(id: string) {
+    if (!id || id === activeDbId) return
+    await switchPhase(id)
+    showToast(`「${phaseList.find(p => p.id === id)?.name}」 전환 완료`, 'success')
+  }
+
+  return (
+    <>
+      {activePhaseId && activePhaseId !== activeDbId && (
+        <span className="sticky-bar__live-badge">
+          활성 {phaseList.find(p => p.id === activePhaseId)?.name}
+        </span>
+      )}
+      <StickyBarClock />
+      {dbOptions.length > 0 ? (
+        <select
+          className="sticky-bar__phase-select"
+          value={activeDbId}
+          onChange={e => { void onSwitchPhase(e.target.value) }}
+          title="차수 전환"
+          aria-label="차수 전환"
+        >
+          {dbOptions.map(o => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+      ) : (
+        <span className="sticky-bar__phase-badge">{phaseBadge}</span>
+      )}
+    </>
+  )
 }
 
 export default function StickyBar({
@@ -48,14 +101,7 @@ export default function StickyBar({
   openSub,
   onSubEnter,
   onSubLeave,
-  activePhaseId,
-  viewPhaseId,
-  phaseList,
-  activeDbId,
-  dbOptions,
-  phaseBadge,
-  onSwitchPhase,
-}: Props) {
+}: StickyBarProps) {
   if (group.children.length === 0) return null
 
   return (
@@ -104,26 +150,7 @@ export default function StickyBar({
       </nav>
 
       <div className="sticky-bar__right">
-        {activePhaseId && activePhaseId !== activeDbId && (
-          <span className="sticky-bar__live-badge">
-            활성 {phaseList.find(p => p.id === activePhaseId)?.name}
-          </span>
-        )}
-        {dbOptions.length > 0 ? (
-          <select
-            className="sticky-bar__phase-select"
-            value={activeDbId}
-            onChange={e => onSwitchPhase(e.target.value)}
-            title="차수 전환"
-            aria-label="차수 전환"
-          >
-            {dbOptions.map(o => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="sticky-bar__phase-badge">{phaseBadge}</span>
-        )}
+        <StickyBarPhaseControls />
       </div>
     </header>
   )

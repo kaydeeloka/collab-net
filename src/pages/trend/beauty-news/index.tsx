@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Archive, Calendar, ChevronDown, ChevronRight, FileText, Mail, Newspaper,
-  Pencil, Plus, Sparkles, Trash2,
+  Archive, Calendar, Mail, Newspaper,
+  Pencil, Plus, Trash2,
 } from 'lucide-react'
 import { gasPost } from '@/lib/api'
-import { normalizeKeywords } from '@/lib/beauty-news'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
+import ArchiveList from './ArchiveList'
+import ArchiveDetail from './ArchiveDetail'
+import ArchiveSidebar from './ArchiveSidebar'
+import ReportBody from './ReportBody'
+import {
+  type ArchiveItem,
+  type ReportData,
+  archiveItemSortDate,
+  archiveMonthKey,
+  fmtKor,
+  fmtKorFull,
+  reportArticleCount,
+  reportFromRow,
+  reportTitleDisplayDate,
+  reportWindowBasis,
+} from './archive-shared'
 
 function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean }) {
   return (
@@ -16,50 +31,6 @@ function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean 
       {children}
     </span>
   )
-}
-
-interface ArchiveItem {
-  id: string
-  windows_start: string
-  windows_end?: string
-  report_title?: string
-  created_at: string
-}
-
-interface ArchiveGroup {
-  label: string
-  items: ArchiveItem[]
-}
-
-interface CategoryItem {
-  title: string
-  link?: string
-  source?: string
-  pubDate?: string
-  summary: string
-}
-
-interface Category {
-  emoji: string
-  name: string
-  count?: number
-  items: CategoryItem[]
-}
-
-interface Keyword {
-  tag: string
-  explanation: string
-}
-
-interface ReportData {
-  ok: boolean
-  reportTitle?: string
-  windowsStart?: string
-  windowsEnd?: string
-  categories?: Category[]
-  keywords?: Keyword[]
-  fromArchive?: boolean
-  error?: string
 }
 
 interface Recipient {
@@ -139,160 +110,6 @@ const BRIEFING_PREVIEW: ReportData = {
   ],
 }
 
-// Supabase beauty_news_archives.categories supports multiple shapes:
-//   old: { items: [{ title, link, source, summary }] }
-//   new: { stories: [{ headline, url, source, summary, pubDate, date }] }
-type RawArticle = {
-  title?: string
-  headline?: string
-  link?: string
-  url?: string
-  source?: string
-  pubDate?: string
-  date?: string
-  summary?: string
-}
-
-type RawCategory = {
-  emoji?: string
-  name: string
-  count?: number
-  items?: RawArticle[]
-  stories?: RawArticle[]
-  articles?: RawArticle[]
-}
-
-function parseJsonArray(raw: unknown): RawCategory[] {
-  if (Array.isArray(raw)) return raw as RawCategory[]
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed as RawCategory[] : []
-    } catch { return [] }
-  }
-  return []
-}
-
-function normalizeCategory(cat: RawCategory): Category {
-  const raw = cat.items ?? cat.stories ?? cat.articles ?? []
-  const items: CategoryItem[] = (Array.isArray(raw) ? raw : []).map(a => ({
-    title: a.title ?? a.headline ?? '',
-    link: (a.link ?? a.url) || undefined,
-    source: a.source,
-    pubDate: a.pubDate ?? a.date,
-    summary: a.summary ?? '',
-  }))
-  return {
-    emoji: cat.emoji ?? '',
-    name: cat.name,
-    count: cat.count ?? items.length,
-    items,
-  }
-}
-
-function reportFromRow(row: {
-  report_title?: string
-  windows_start: string
-  windows_end?: string
-  categories?: unknown
-  keywords?: unknown
-}, fromArchive = false): ReportData {
-  return {
-    ok: true,
-    reportTitle: row.report_title,
-    windowsStart: row.windows_start,
-    windowsEnd: row.windows_end,
-    categories: parseJsonArray(row.categories).map(normalizeCategory),
-    keywords: normalizeKeywords(row.keywords),
-    fromArchive,
-  }
-}
-
-function fmtKor(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
-}
-
-function fmtKorFull(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
-}
-
-function fmtTodayKor(): string {
-  const d = new Date()
-  return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
-}
-
-/** ISO date from report_title (e.g. "… 2026년 06월 17일"). */
-function parseReportTitleDate(title?: string | null): string | null {
-  const t = String(title ?? '')
-  const kor = t.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/)
-  if (kor) {
-    return `${kor[1]}-${String(kor[2]).padStart(2, '0')}-${String(kor[3]).padStart(2, '0')}`
-  }
-  const iso = t.match(/(\d{4})-(\d{2})-(\d{2})/)
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
-  return null
-}
-
-function reportTitleDisplayDate(report: ReportData): string {
-  const fromTitle = parseReportTitleDate(report.reportTitle)
-  if (fromTitle) return fmtKorFull(fromTitle)
-  if (report.reportTitle) {
-    const stripped = report.reportTitle.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
-    if (stripped) return stripped
-  }
-  if (report.windowsEnd) return fmtKorFull(report.windowsEnd)
-  if (report.windowsStart) return fmtKorFull(report.windowsStart)
-  return fmtTodayKor()
-}
-
-function reportWindowBasis(report: ReportData): string | null {
-  if (report.windowsStart && report.windowsEnd) {
-    return `${fmtKor(report.windowsStart)} – ${fmtKor(report.windowsEnd)} 기준`
-  }
-  if (report.windowsStart) return `${fmtKor(report.windowsStart)} 기준`
-  return null
-}
-
-function archiveItemSortDate(item: Pick<ArchiveItem, 'report_title' | 'windows_end' | 'windows_start' | 'created_at'>): string {
-  return parseReportTitleDate(item.report_title)
-    || item.windows_end
-    || item.windows_start
-    || (item.created_at ? item.created_at.slice(0, 10) : '')
-}
-
-function archiveItemMonthKey(item: Pick<ArchiveItem, 'report_title' | 'windows_start' | 'windows_end' | 'created_at'>): { mk: string; ml: string } {
-  const iso = archiveItemSortDate(item)
-  const d = new Date((iso || item.windows_start) + 'T00:00:00')
-  return {
-    mk: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
-    ml: d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월',
-  }
-}
-
-function archiveItemWindowRange(item: ArchiveItem): string | null {
-  if (item.windows_start && item.windows_end) {
-    return `${fmtKor(item.windows_start)} – ${fmtKor(item.windows_end)}`
-  }
-  if (item.windows_start) return fmtKor(item.windows_start)
-  return null
-}
-
-function archiveItemLabel(item: ArchiveItem): string {
-  const fromTitle = parseReportTitleDate(item.report_title)
-  if (fromTitle) return fmtKorFull(fromTitle)
-  if (item.report_title) {
-    const stripped = item.report_title.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
-    if (stripped) return stripped
-  }
-  return item.windows_end ? fmtKor(item.windows_start) + ' – ' + fmtKor(item.windows_end) : fmtKor(item.windows_start)
-}
-
-function reportArticleCount(report: ReportData): number {
-  return (report.categories ?? []).reduce((sum, cat) => sum + (cat.items?.length ?? 0), 0)
-}
-
 export default function BeautyNews() {
   const { showConfirm } = useToast()
   const [activeTab, setActiveTab] = useState<'news' | 'archive'>('news')
@@ -303,13 +120,13 @@ export default function BeautyNews() {
   const [archiveReport, setArchiveReport] = useState<ReportData | null>(null)
   const [archiveReportLoading, setArchiveReportLoading] = useState(false)
   const [selectedKey, setSelectedKey] = useState('')
+  const [archiveView, setArchiveView] = useState<'list' | 'detail'>('list')
+  const [archiveFilterMonth, setArchiveFilterMonth] = useState<string | null>(null)
 
-  const [archiveGroups, setArchiveGroups] = useState<Record<string, ArchiveGroup>>({})
-  const [archiveOrder, setArchiveOrder] = useState<string[]>([])
+  const [archiveItems, setArchiveItems] = useState<ArchiveItem[]>([])
   const [archiveListLoading, setArchiveListLoading] = useState(true)
   const [sheetImporting, setSheetImporting] = useState(false)
   const [sheetImportStatus, setSheetImportStatus] = useState('')
-  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
 
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [selectedRcpt, setSelectedRcpt] = useState<Set<string>>(new Set())
@@ -421,22 +238,12 @@ export default function BeautyNews() {
     try {
       const { data, error } = await supabase
         .from('beauty_news_archives')
-        .select('id, windows_start, windows_end, report_title, created_at')
+        .select('id, windows_start, windows_end, report_title, categories, keywords, created_at')
       if (error) throw error
       const sorted = [...(data || [])].sort((a, b) =>
         archiveItemSortDate(b as ArchiveItem).localeCompare(archiveItemSortDate(a as ArchiveItem)),
       ) as ArchiveItem[]
-      const groups: Record<string, ArchiveGroup> = {}
-      const order: string[] = []
-      sorted.forEach(a => {
-        const { mk, ml } = archiveItemMonthKey(a)
-        if (!groups[mk]) { groups[mk] = { label: ml, items: [] }; order.push(mk) }
-        groups[mk].items.push(a)
-      })
-      order.sort((a, b) => b.localeCompare(a))
-      setArchiveGroups(groups)
-      setArchiveOrder(order)
-      if (order.length > 0) setOpenMonths(new Set([order[0]]))
+      setArchiveItems(sorted)
     } catch {}
     finally { setArchiveListLoading(false) }
   }
@@ -444,6 +251,13 @@ export default function BeautyNews() {
   async function loadArchive(windowsStart: string) {
     setArchiveReportLoading(true)
     setSelectedKey(windowsStart)
+    setArchiveView('detail')
+    const cached = archiveItems.find(a => a.windows_start === windowsStart)
+    if (cached?.categories != null) {
+      setArchiveReport(reportFromRow(cached, true))
+      setArchiveReportLoading(false)
+      return
+    }
     try {
       const { data, error } = await supabase
         .from('beauty_news_archives')
@@ -456,6 +270,10 @@ export default function BeautyNews() {
       setArchiveReport({ ok: false, error: (e as Error).message || '오류' })
     }
     setArchiveReportLoading(false)
+  }
+
+  function backToArchiveList() {
+    setArchiveView('list')
   }
 
   async function importFromSheet() {
@@ -565,7 +383,6 @@ export default function BeautyNews() {
     if (range) h += `<p style="font-size:12px;color:#888;margin-top:4px">📅 ${range}</p>`
     for (const cat of (data.categories || [])) {
       const items = cat.items ?? []
-      if (items.length === 0) continue
       const count = cat.count != null ? cat.count : items.length
       h += `<h2 style="font-size:16px;margin-top:28px">${cat.emoji} ${cat.name}</h2>`
       h += `<p style="font-size:12px;color:#888;margin:4px 0 10px">이번 주 트렌드 시그널이 감지된 뉴스는 총 <strong style="color:#1a73e8">${count}</strong>건입니다.</p>`
@@ -595,66 +412,30 @@ export default function BeautyNews() {
     return h
   }
 
-  const archiveListPanel = (
-    <div className="bn-date-card bn-archive-panel">
-      <div className="bn-card-top">
-        <div className="bn-date-card-header bn-archive-header">
-          <CardIconWrap soft><Archive size={16} strokeWidth={2.2} /></CardIconWrap>
-          <span className="bn-date-card-label">주간 아카이브</span>
-        </div>
-      </div>
-      <div className="bn-archive-list">
-        {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
-        {!archiveListLoading && archiveOrder.length === 0 && (
-          <div className="bn-archive-empty">
-            <Archive size={28} strokeWidth={1.5} className="bn-archive-empty-icon" />
-            <span>저장된 아카이브가 없습니다.</span>
-            <span className="bn-archive-empty-sub">Claude 루틴이 실행되면 자동으로 저장됩니다.</span>
-          </div>
-        )}
-        {archiveOrder.map(mk => {
-          const g    = archiveGroups[mk]
-          const open = openMonths.has(mk)
-          return (
-            <div key={mk} className="bn-arch-group">
-              <button type="button" className={`bn-arch-month${open ? ' open' : ''}`} onClick={() => {
-                const next = new Set(openMonths)
-                open ? next.delete(mk) : next.add(mk)
-                setOpenMonths(next)
-              }}>
-                <span className="bn-arch-month-left">
-                  {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                  <Calendar size={14} strokeWidth={2.2} />
-                  <span className="bn-arch-month-label">{g.label}</span>
-                </span>
-                <span className="bn-arch-month-right">
-                  <span className="bn-arch-month-count">{g.items.length}건</span>
-                </span>
-              </button>
-              {open && (
-                <div className="bn-arch-items">
-                  {g.items.map(a => {
-                    const label = archiveItemLabel(a)
-                    const range = archiveItemWindowRange(a)
-                    const isSelected = a.windows_start === selectedKey
-                    return (
-                      <div key={a.windows_start}
-                        className={`bn-archive-item${isSelected ? ' selected' : ''}`}
-                        onClick={() => loadArchive(a.windows_start)}>
-                        <span className="bn-archive-item-icon"><FileText size={14} strokeWidth={2} /></span>
-                        <div className="bn-archive-item-body">
-                          <div className="bn-archive-item-date">{label}</div>
-                          {range && <div className="bn-archive-item-sub">{range}</div>}
-                        </div>
-                        {isSelected && <ChevronRight size={14} className="bn-archive-item-arrow" />}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+  const selectedArchiveItem = archiveItems.find(a => a.windows_start === selectedKey) ?? null
+  const filteredArchiveItems = archiveFilterMonth
+    ? archiveItems.filter(item => archiveMonthKey(item) === archiveFilterMonth)
+    : archiveItems
+
+  const archiveBrowse = (
+    <div className="bn-archive-layout">
+      <ArchiveSidebar
+        items={archiveItems}
+        loading={archiveListLoading}
+        selectedKey={selectedKey}
+        filterMonth={archiveFilterMonth}
+        visibleCount={filteredArchiveItems.length}
+        onFilterMonth={setArchiveFilterMonth}
+        onSelect={windowsStart => { void loadArchive(windowsStart) }}
+      />
+      <div className="bn-archive-main">
+        <ArchiveList
+          items={filteredArchiveItems}
+          allItems={archiveItems}
+          loading={archiveListLoading}
+          filterMonth={archiveFilterMonth}
+          onSelect={windowsStart => { void loadArchive(windowsStart) }}
+        />
       </div>
     </div>
   )
@@ -849,14 +630,11 @@ export default function BeautyNews() {
 
       {activeTab === 'news' && (
         <div>
-
-          {/* 50/50 row: date info | email panel */}
           <div className="bn-half-row">
             {briefingPanel}
             {emailPanel(latestReport)}
           </div>
 
-          {/* Full-width report */}
           <div className="bn-report-card" id="news-report">
             <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
@@ -881,90 +659,16 @@ export default function BeautyNews() {
 
       {activeTab === 'archive' && (
         <div>
-          <div className="bn-half-row">
-            {archiveListPanel}
-            {emailPanel(archiveReport?.ok ? archiveReport : null, false)}
-          </div>
+          {archiveView === 'list' && archiveBrowse}
 
-          <div className="bn-report-card">
-            <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-              <span className="bn-report-title">뷰티 뉴스 아카이브</span>
-              {archiveReport?.ok && archiveReport.windowsStart && (
-                <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
-                  {fmtKor(archiveReport.windowsStart)}{archiveReport.windowsEnd ? ' – ' + fmtKor(archiveReport.windowsEnd) : ''}
-                </span>
-              )}
-            </div>
-            <div className="bn-report-body">
-              {archiveReportLoading && <div className="bn-loading"><Spinner /><span>불러오는 중...</span></div>}
-              {!archiveReportLoading && !archiveReport && (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
-                  왼쪽 목록에서 주차를 선택하세요.
-                </div>
-              )}
-              {!archiveReportLoading && archiveReport && (
-                archiveReport.ok === false
-                  ? <div style={{ color: '#c00', padding: 16 }}>{archiveReport.error}</div>
-                  : <ReportBody data={archiveReport} />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ReportBody({ data }: { data: ReportData }) {
-  const keywords = data.keywords || []
-
-  return (
-    <div>
-
-      {(data.categories || []).map((cat, ci) => {
-        const items = cat.items ?? []
-        const count = cat.count != null ? cat.count : items.length
-        if (items.length === 0) return null
-        return (
-          <div key={ci} className="bn-cat">
-            <div className="bn-cat-title">
-              <span className="bn-cat-title-icon"><Newspaper size={15} strokeWidth={2.2} /></span>
-              {cat.name}
-            </div>
-            <div className="bn-cat-count">
-              이번 주 트렌드 시그널이 감지된 뉴스는 총 <span className="bn-cat-count-num">{count}</span>건입니다.
-            </div>
-            {items.map((item, ii) => (
-              <div key={ii} className="bn-article">
-                <div className="bn-article-header">
-                  {item.link
-                    ? <a className="bn-article-link" href={item.link} target="_blank" rel="noopener">{item.title}</a>
-                    : <span className="bn-article-link">{item.title}</span>
-                  }
-                </div>
-                {(item.source || item.pubDate) && (
-                  <div className="bn-source">
-                    {[item.source, item.pubDate].filter(Boolean).join(' · ')}
-                  </div>
-                )}
-                <div className="bn-article-summary">{item.summary}</div>
-              </div>
-            ))}
-          </div>
-        )
-      })}
-      {keywords.length > 0 && (
-        <div className="bn-keywords-section">
-          <div className="bn-keywords-title">
-            <Sparkles size={15} strokeWidth={2.2} className="bn-keywords-title-icon" />
-            트렌드 키워드
-          </div>
-          {keywords.map((kw, i) => (
-            <div key={i} className="bn-keyword-item">
-              <div className="bn-keyword-tag">{kw.tag}</div>
-              <div className="bn-keywords-body">{kw.explanation}</div>
-            </div>
-          ))}
+          {archiveView === 'detail' && (
+            <ArchiveDetail
+              item={selectedArchiveItem}
+              report={archiveReport}
+              loading={archiveReportLoading}
+              onBack={backToArchiveList}
+            />
+          )}
         </div>
       )}
     </div>

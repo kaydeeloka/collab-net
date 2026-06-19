@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { phaseNum, escHtml, useKrClock } from '@/lib/utils'
+import { phaseNum, escHtml } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
@@ -78,10 +78,8 @@ function getActiveGroup(pathname: string) {
 export default function Layout() {
   const { showToast } = useToast()
 
-  const [navClock,      setNavClock]      = useState('')
   const [openSub,       setOpenSub]       = useState<string | null>(null)
   const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const getKrTime = useKrClock()
   const { pathname } = useLocation()
   const navigate     = useNavigate()
 
@@ -198,13 +196,6 @@ export default function Layout() {
     } finally { setDeleteLoading(false) }
   }
 
-  useEffect(() => {
-    const tick = () => { const t = getKrTime(); setNavClock(t.navDate + '  ' + t.navTime) }
-    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
-  }, [])
-
-
-
   useEffect(() => { setOpenSub(null) }, [pathname])
   useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
 
@@ -278,13 +269,6 @@ export default function Layout() {
             openSub={openSub}
             onSubEnter={onSubEnter}
             onSubLeave={onSubLeave}
-            activePhaseId={activePhaseId}
-            viewPhaseId={viewPhaseId}
-            phaseList={phaseList}
-            activeDbId={activeDbId}
-            dbOptions={dbOptions}
-            phaseBadge={phaseBadge}
-            onSwitchPhase={switchPhase}
           />
         )}
 

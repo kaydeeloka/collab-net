@@ -121,3 +121,25 @@ export function dateOnlyToIso(dateStr: string): string {
 export function matchesKstDate(iso: string | null | undefined, ymd: string): boolean {
   return formatKstDate(iso) === ymd
 }
+
+/** Sticky topbar clock — e.g. `6월. 19일 (금) 20:10` */
+export function formatStickyBarClock(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KST,
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now)
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(p => p.type === type)?.value ?? ''
+
+  const month = get('month')
+  const day = get('day')
+  const weekday = now.toLocaleDateString('ko-KR', { timeZone: KST, weekday: 'short' })
+  const time = `${get('hour').padStart(2, '0')}:${get('minute').padStart(2, '0')}`
+  return `${month}월. ${day}일 (${weekday}) ${time}`
+}

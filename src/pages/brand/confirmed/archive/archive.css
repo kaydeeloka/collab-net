@@ -228,6 +228,8 @@
   border-radius: var(--r-pill);
   text-decoration: none;
   transition: color .15s, border-color .15s, background .15s;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .brand-archive-detail__back:hover {
