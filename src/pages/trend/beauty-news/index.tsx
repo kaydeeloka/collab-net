@@ -211,6 +211,64 @@ function fmtTodayKor(): string {
   return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일'
 }
 
+/** ISO date from report_title (e.g. "… 2026년 06월 17일"). */
+function parseReportTitleDate(title?: string | null): string | null {
+  const t = String(title ?? '')
+  const kor = t.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/)
+  if (kor) {
+    return `${kor[1]}-${String(kor[2]).padStart(2, '0')}-${String(kor[3]).padStart(2, '0')}`
+  }
+  const iso = t.match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+  return null
+}
+
+function reportTitleDisplayDate(report: ReportData): string {
+  const fromTitle = parseReportTitleDate(report.reportTitle)
+  if (fromTitle) return fmtKorFull(fromTitle)
+  if (report.reportTitle) {
+    const stripped = report.reportTitle.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
+    if (stripped) return stripped
+  }
+  if (report.windowsEnd) return fmtKorFull(report.windowsEnd)
+  if (report.windowsStart) return fmtKorFull(report.windowsStart)
+  return fmtTodayKor()
+}
+
+function reportWindowBasis(report: ReportData): string | null {
+  if (report.windowsStart && report.windowsEnd) {
+    return `${fmtKor(report.windowsStart)} – ${fmtKor(report.windowsEnd)} 기준`
+  }
+  if (report.windowsStart) return `${fmtKor(report.windowsStart)} 기준`
+  return null
+}
+
+function archiveItemSortDate(item: Pick<ArchiveItem, 'report_title' | 'windows_end' | 'windows_start' | 'created_at'>): string {
+  return parseReportTitleDate(item.report_title)
+    || item.windows_end
+    || item.windows_start
+    || (item.created_at ? item.created_at.slice(0, 10) : '')
+}
+
+function archiveItemMonthKey(item: Pick<ArchiveItem, 'report_title' | 'windows_start' | 'windows_end' | 'created_at'>): { mk: string; ml: string } {
+  const iso = archiveItemSortDate(item)
+  const d = new Date((iso || item.windows_start) + 'T00:00:00')
+  return {
+    mk: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
+    ml: d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월',
+  }
+}
+
+function archiveItemLabel(item: ArchiveItem): string {
+  const fromTitle = parseReportTitleDate(item.report_title)
+  if (fromTitle) return fmtKorFull(fromTitle)
+  if (item.report_title) {
+    const stripped = item.report_title.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
+    if (stripped) return stripped
+  }
+  return item.windows_end ? fmtKor(item.windows_start) + ' – ' + fmtKor(item.windows_end) : fmtKor(item.windows_start)
+}
+
 function reportArticleCount(report: ReportData): number {
   return (report.categories ?? []).reduce((sum, cat) => sum + (cat.items?.length ?? 0), 0)
 }
@@ -328,13 +386,12 @@ export default function BeautyNews() {
     try {
       const { data, error } = await supabase
         .from('beauty_news_archives')
-        .select('id, windows_start, windows_end, report_title, categories, keywords')
-        .order('windows_end', { ascending: false, nullsFirst: false })
-        .order('windows_start', { ascending: false })
-        .limit(1)
-        .single()
-      if (error || !data) return
-      setLatestReport(reportFromRow(data))
+        .select('id, windows_start, windows_end, report_title, categories, keywords, created_at')
+      if (error || !data?.length) return
+      const latest = [...data].sort((a, b) =>
+        archiveItemSortDate(b as ArchiveItem).localeCompare(archiveItemSortDate(a as ArchiveItem)),
+      )[0]
+      if (latest) setLatestReport(reportFromRow(latest))
     } catch {}
     finally { setLatestLoading(false) }
   }
@@ -345,18 +402,18 @@ export default function BeautyNews() {
       const { data, error } = await supabase
         .from('beauty_news_archives')
         .select('id, windows_start, windows_end, report_title, created_at')
-        .order('windows_end', { ascending: false, nullsFirst: false })
-        .order('windows_start', { ascending: false })
       if (error) throw error
+      const sorted = [...(data || [])].sort((a, b) =>
+        archiveItemSortDate(b as ArchiveItem).localeCompare(archiveItemSortDate(a as ArchiveItem)),
+      ) as ArchiveItem[]
       const groups: Record<string, ArchiveGroup> = {}
       const order: string[] = []
-      ;(data || []).forEach(a => {
-        const d  = new Date(a.windows_start + 'T00:00:00')
-        const mk = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
-        const ml = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월'
+      sorted.forEach(a => {
+        const { mk, ml } = archiveItemMonthKey(a)
         if (!groups[mk]) { groups[mk] = { label: ml, items: [] }; order.push(mk) }
-        groups[mk].items.push(a as ArchiveItem)
+        groups[mk].items.push(a)
       })
+      order.sort((a, b) => b.localeCompare(a))
       setArchiveGroups(groups)
       setArchiveOrder(order)
       if (order.length > 0) setOpenMonths(new Set([order[0]]))
@@ -410,11 +467,22 @@ export default function BeautyNews() {
     }
   }
 
+  function hasReportContent(report: ReportData | null): boolean {
+    if (!report) return false
+    return reportArticleCount(report) > 0 || (report.keywords?.length ?? 0) > 0
+  }
+
+  function scrollToNewsReport() {
+    document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   async function viewThisWeekNews() {
+    if (hasReportContent(latestReport)) {
+      scrollToNewsReport()
+      return
+    }
     await importFromSheet()
-    setTimeout(() => {
-      document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
-    }, 150)
+    setTimeout(scrollToNewsReport, 150)
   }
 
   async function sendBriefingEmail(report: ReportData | null) {
@@ -535,9 +603,7 @@ export default function BeautyNews() {
                 </span>
               </button>
               {open && g.items.map(a => {
-                const label = a.report_title
-                  ? a.report_title.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
-                  : (a.windows_end ? fmtKor(a.windows_start) + ' – ' + fmtKor(a.windows_end) : fmtKor(a.windows_start))
+                const label = archiveItemLabel(a)
                 const isSelected = a.windows_start === selectedKey
                 return (
                   <div key={a.windows_start}
@@ -554,51 +620,81 @@ export default function BeautyNews() {
     </div>
   )
 
+  const latestTitleDate = latestReport ? reportTitleDisplayDate(latestReport) : null
+  const latestWindowBasis = latestReport ? reportWindowBasis(latestReport) : null
+  const archiveTitleDate = archiveReport?.ok ? reportTitleDisplayDate(archiveReport) : null
+  const archiveWindowBasis = archiveReport?.ok ? reportWindowBasis(archiveReport) : null
+
   const briefingPanel = (
     <div className="bn-date-card">
-      <div className="bn-date-card-header">
-        <span className="bn-date-card-icon">📅</span>
-        <span className="bn-date-card-label">이번 주 브리핑</span>
+      <div className="bn-card-top">
+        <div className="bn-date-card-header">
+          <span className="bn-date-card-icon">📅</span>
+          <span className="bn-date-card-label">이번 주 브리핑</span>
+        </div>
       </div>
       <div className="bn-date-card-body">
         {latestLoading && <div className="bn-date-card-loading"><Spinner sm /> 불러오는 중...</div>}
         {!latestLoading && latestReport && (
           <>
-            <div className="bn-date-card-range">{fmtTodayKor()}</div>
-            <div className="bn-date-card-meta">
-              <span className="bn-date-card-meta-label">이번 주 뷰티 뉴스</span>
-              <span className="bn-date-card-meta-value">{reportArticleCount(latestReport)}건</span>
+            <div className="bn-date-card-range">
+              {latestTitleDate}
+            </div>
+            {latestWindowBasis && (
+              <div className="bn-date-card-sub">{latestWindowBasis}</div>
+            )}
+            <div className="bn-date-card-stats">
+              <div className="bn-date-card-stat">
+                <span className="bn-date-card-stat-value">{reportArticleCount(latestReport)}</span>
+                <span className="bn-date-card-stat-label">뷰티 뉴스</span>
+              </div>
+              {(latestReport.keywords?.length ?? 0) > 0 && (
+                <div className="bn-date-card-stat">
+                  <span className="bn-date-card-stat-value">{latestReport.keywords!.length}</span>
+                  <span className="bn-date-card-stat-label">트렌드 키워드</span>
+                </div>
+              )}
             </div>
             {(latestReport.keywords?.length ?? 0) > 0 && (
-              <div className="bn-date-card-keywords">
-                {(latestReport.keywords ?? []).map(kw => (
-                  <span key={kw.tag} className="bn-date-card-kw">{kw.tag}</span>
-                ))}
+              <div className="bn-date-card-kw-block">
+                <div className="bn-date-card-kw-label">키워드</div>
+                <div className="bn-date-card-keywords">
+                  {(latestReport.keywords ?? []).map(kw => (
+                    <span key={kw.tag} className="bn-date-card-kw">{kw.tag}</span>
+                  ))}
+                </div>
               </div>
             )}
           </>
         )}
         {!latestLoading && !latestReport && (
-          <div className="bn-date-card-empty">저장된 리포트가 없습니다.</div>
+          <div className="bn-date-card-empty">저장된 리포트가 없습니다.<br />아래 버튼으로 시트에서 불러오세요.</div>
         )}
       </div>
-      {sheetImportStatus && (
-        <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.4, padding: '0 16px 8px' }}>{sheetImportStatus}</div>
-      )}
-      <button type="button" className="bn-action-btn"
-        disabled={sheetImporting}
-        onClick={() => { void viewThisWeekNews() }}>
-        {sheetImporting ? '시트에서 가져오는 중…' : '이번 주 뉴스 보기 ↓'}
-      </button>
+      <div className="bn-card-footer">
+        {sheetImportStatus && (
+          <div className="bn-card-footer-status">{sheetImportStatus}</div>
+        )}
+        <button type="button" className="bn-action-btn"
+          disabled={sheetImporting}
+          onClick={() => { void viewThisWeekNews() }}>
+          {sheetImporting ? '시트에서 가져오는 중…' : hasReportContent(latestReport) ? '리포트로 이동 ↓' : '이번 주 뉴스 보기 ↓'}
+        </button>
+      </div>
     </div>
   )
 
   const emailPanel = (report: ReportData | null, autoNote = true) => (
     <div className="bn-email-panel">
-      <div className="bn-email-header">
-        <span className="bn-email-icon">@</span>
-        <span className="bn-email-title">이메일 발송</span>
-        <button className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">+</button>
+      <div className="bn-card-top">
+        <div className="bn-email-header">
+          <span className="bn-email-icon">@</span>
+          <span className="bn-email-title">이메일 발송</span>
+          {recipients.length > 0 && (
+            <span className="bn-email-count">{selectedRcpt.size}/{recipients.length}명</span>
+          )}
+          <button type="button" className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">+</button>
+        </div>
       </div>
 
       <div className="bn-panel-body">
@@ -612,6 +708,17 @@ export default function BeautyNews() {
               <button className="bn-rcpt-cancel" onClick={() => { setShowAddForm(false); setAddEmail(''); setAddName('') }}>취소</button>
             </div>
           </div>
+        )}
+
+        {recipients.length > 0 && (
+          <label className="bn-rcpt-select-all">
+            <input
+              type="checkbox"
+              checked={selectedRcpt.size === recipients.length}
+              onChange={e => setSelectedRcpt(e.target.checked ? new Set(recipients.map(r => r.email)) : new Set())}
+            />
+            전체 선택
+          </label>
         )}
 
         <div className="bn-recipients">
@@ -630,7 +737,7 @@ export default function BeautyNews() {
                 </div>
               ) : (
                 <div className="bn-rcpt-row">
-                  <label className="bn-rcpt-label" style={{ flex: 1, minWidth: 0 }}>
+                  <label className="bn-rcpt-label">
                     <input type="checkbox" checked={selectedRcpt.has(r.email)}
                       onChange={e => {
                         const next = new Set(selectedRcpt)
@@ -638,14 +745,14 @@ export default function BeautyNews() {
                         setSelectedRcpt(next)
                       }}
                     />
-                    <div style={{ minWidth: 0 }}>
+                    <div className="bn-rcpt-info">
                       {r.name && <div className="bn-rcpt-name">{r.name}</div>}
                       <div className="bn-rcpt-email">{r.email}</div>
                     </div>
                   </label>
                   <div className="bn-rcpt-actions">
-                    <button className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
-                    <button className="bn-archive-del" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">×</button>
+                    <button type="button" className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
+                    <button type="button" className="bn-archive-del" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">×</button>
                   </div>
                 </div>
               )}
@@ -653,24 +760,28 @@ export default function BeautyNews() {
           ))}
         </div>
 
-        <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
-          {emailStatus}
-        </div>
+        {emailStatus && (
+          <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>
+            {emailStatus}
+          </div>
+        )}
       </div>
 
-      <button
-        type="button"
-        className="bn-action-btn"
-        onClick={() => { void sendBriefingEmail(report) }}
-        disabled={emailSending || !report || recipients.length === 0}
-      >
-        {emailSending ? '발송 중...' : '브리핑 이메일 발송'}
-      </button>
-      {autoNote && (
-        <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 8, lineHeight: 1.5 }}>
-          수신자 목록 전원에게 발송 · 자동 발송: 매주 월요일 09:00 (KST)
-        </div>
-      )}
+      <div className="bn-card-footer">
+        <button
+          type="button"
+          className="bn-action-btn"
+          onClick={() => { void sendBriefingEmail(report) }}
+          disabled={emailSending || !report || recipients.length === 0 || selectedRcpt.size === 0}
+        >
+          {emailSending ? '발송 중...' : `브리핑 이메일 발송${selectedRcpt.size > 0 ? ` (${selectedRcpt.size}명)` : ''}`}
+        </button>
+        {autoNote && (
+          <div className="bn-card-footer-note">
+            선택한 수신자에게 발송 · 자동 발송: 매주 월요일 09:00 (KST)
+          </div>
+        )}
+      </div>
     </div>
   )
 
@@ -708,7 +819,7 @@ export default function BeautyNews() {
               <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
               {latestReport?.windowsStart && (
                 <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
-                  {fmtKorFull(latestReport.windowsStart)}{latestReport.windowsEnd ? ' – ' + fmtKorFull(latestReport.windowsEnd) : ''}
+                  {reportWindowBasis(latestReport) ?? fmtKorFull(latestReport.windowsStart)}
                 </span>
               )}
             </div>
@@ -735,9 +846,9 @@ export default function BeautyNews() {
           <div className="bn-report-card">
             <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span className="bn-report-title">뷰티 뉴스 아카이브</span>
-              {archiveReport?.ok && archiveReport.windowsStart && (
+              {archiveReport?.ok && archiveTitleDate && (
                 <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
-                  {fmtKorFull(archiveReport.windowsStart)}{archiveReport.windowsEnd ? ' – ' + fmtKorFull(archiveReport.windowsEnd) : ''}
+                  {archiveTitleDate}{archiveWindowBasis ? ` · ${archiveWindowBasis}` : ''}
                 </span>
               )}
             </div>
