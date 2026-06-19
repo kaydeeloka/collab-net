@@ -1,8 +1,9 @@
-import { type CSSProperties } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 
 export interface PageTabItem<T extends string = string> {
   id: T
   label: string
+  icon?: ReactNode
   disabled?: boolean
 }
 
@@ -35,6 +36,7 @@ export default function PageTabs<T extends string = string>({
           className={`page-tab${active === tab.id ? ' is-active' : ''}${tab.disabled ? ' is-disabled' : ''}`}
           onClick={() => { if (!tab.disabled) onChange(tab.id) }}
         >
+          {tab.icon && <span className="page-tab-icon">{tab.icon}</span>}
           {tab.label}
         </button>
       ))}

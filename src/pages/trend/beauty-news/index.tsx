@@ -1,10 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  Archive, Calendar, ChevronDown, ChevronRight, FileText, Mail, Newspaper,
+  Pencil, Plus, Sparkles, Trash2,
+} from 'lucide-react'
 import { gasPost } from '@/lib/api'
 import { normalizeKeywords } from '@/lib/beauty-news'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
+
+function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean }) {
+  return (
+    <span className={`bn-card-icon-wrap${soft ? ' bn-card-icon-wrap--soft' : ''}`}>
+      {children}
+    </span>
+  )
+}
 
 interface ArchiveItem {
   id: string
@@ -257,6 +269,14 @@ function archiveItemMonthKey(item: Pick<ArchiveItem, 'report_title' | 'windows_s
     mk: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
     ml: d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월',
   }
+}
+
+function archiveItemWindowRange(item: ArchiveItem): string | null {
+  if (item.windows_start && item.windows_end) {
+    return `${fmtKor(item.windows_start)} – ${fmtKor(item.windows_end)}`
+  }
+  if (item.windows_start) return fmtKor(item.windows_start)
+  return null
 }
 
 function archiveItemLabel(item: ArchiveItem): string {
@@ -576,15 +596,21 @@ export default function BeautyNews() {
   }
 
   const archiveListPanel = (
-    <div className="bn-archive-panel">
-      <div className="bn-archive-header">
-        <span className="bn-archive-title">📁 주간 아카이브</span>
-        <span className="bn-archive-hint">최대 12주</span>
+    <div className="bn-date-card bn-archive-panel">
+      <div className="bn-card-top">
+        <div className="bn-date-card-header bn-archive-header">
+          <CardIconWrap soft><Archive size={16} strokeWidth={2.2} /></CardIconWrap>
+          <span className="bn-date-card-label">주간 아카이브</span>
+        </div>
       </div>
       <div className="bn-archive-list">
         {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
         {!archiveListLoading && archiveOrder.length === 0 && (
-          <div className="bn-archive-empty">저장된 아카이브가 없습니다.<br />Claude 루틴이 실행되면 자동으로 저장됩니다.</div>
+          <div className="bn-archive-empty">
+            <Archive size={28} strokeWidth={1.5} className="bn-archive-empty-icon" />
+            <span>저장된 아카이브가 없습니다.</span>
+            <span className="bn-archive-empty-sub">Claude 루틴이 실행되면 자동으로 저장됩니다.</span>
+          </div>
         )}
         {archiveOrder.map(mk => {
           const g    = archiveGroups[mk]
@@ -596,23 +622,36 @@ export default function BeautyNews() {
                 open ? next.delete(mk) : next.add(mk)
                 setOpenMonths(next)
               }}>
-                <span className="bn-arch-month-label">{g.label}</span>
+                <span className="bn-arch-month-left">
+                  {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                  <Calendar size={14} strokeWidth={2.2} />
+                  <span className="bn-arch-month-label">{g.label}</span>
+                </span>
                 <span className="bn-arch-month-right">
                   <span className="bn-arch-month-count">{g.items.length}건</span>
-                  <span className="bn-arch-month-chevron">{open ? '▾' : '›'}</span>
                 </span>
               </button>
-              {open && g.items.map(a => {
-                const label = archiveItemLabel(a)
-                const isSelected = a.windows_start === selectedKey
-                return (
-                  <div key={a.windows_start}
-                    className={`bn-archive-item${isSelected ? ' selected' : ''}`}
-                    onClick={() => loadArchive(a.windows_start)}>
-                    <div className="bn-archive-item-date">{label}</div>
-                  </div>
-                )
-              })}
+              {open && (
+                <div className="bn-arch-items">
+                  {g.items.map(a => {
+                    const label = archiveItemLabel(a)
+                    const range = archiveItemWindowRange(a)
+                    const isSelected = a.windows_start === selectedKey
+                    return (
+                      <div key={a.windows_start}
+                        className={`bn-archive-item${isSelected ? ' selected' : ''}`}
+                        onClick={() => loadArchive(a.windows_start)}>
+                        <span className="bn-archive-item-icon"><FileText size={14} strokeWidth={2} /></span>
+                        <div className="bn-archive-item-body">
+                          <div className="bn-archive-item-date">{label}</div>
+                          {range && <div className="bn-archive-item-sub">{range}</div>}
+                        </div>
+                        {isSelected && <ChevronRight size={14} className="bn-archive-item-arrow" />}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )
         })}
@@ -622,14 +661,12 @@ export default function BeautyNews() {
 
   const latestTitleDate = latestReport ? reportTitleDisplayDate(latestReport) : null
   const latestWindowBasis = latestReport ? reportWindowBasis(latestReport) : null
-  const archiveTitleDate = archiveReport?.ok ? reportTitleDisplayDate(archiveReport) : null
-  const archiveWindowBasis = archiveReport?.ok ? reportWindowBasis(archiveReport) : null
 
   const briefingPanel = (
     <div className="bn-date-card">
       <div className="bn-card-top">
         <div className="bn-date-card-header">
-          <span className="bn-date-card-icon">📅</span>
+          <CardIconWrap soft><Calendar size={16} strokeWidth={2.2} /></CardIconWrap>
           <span className="bn-date-card-label">이번 주 브리핑</span>
         </div>
       </div>
@@ -688,12 +725,14 @@ export default function BeautyNews() {
     <div className="bn-email-panel">
       <div className="bn-card-top">
         <div className="bn-email-header">
-          <span className="bn-email-icon">@</span>
+          <CardIconWrap soft><Mail size={16} strokeWidth={2.2} /></CardIconWrap>
           <span className="bn-email-title">이메일 발송</span>
           {recipients.length > 0 && (
             <span className="bn-email-count">{selectedRcpt.size}/{recipients.length}명</span>
           )}
-          <button type="button" className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">+</button>
+          <button type="button" className="bn-rcpt-add-btn" onClick={() => { setShowAddForm(v => !v); setEditingEmail(null) }} title="수신자 추가">
+            <Plus size={14} strokeWidth={2.5} />
+          </button>
         </div>
       </div>
 
@@ -751,8 +790,12 @@ export default function BeautyNews() {
                     </div>
                   </label>
                   <div className="bn-rcpt-actions">
-                    <button type="button" className="bn-rcpt-edit-btn" onClick={() => startEdit(r)} title="수정">✎</button>
-                    <button type="button" className="bn-archive-del" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">×</button>
+                    <button type="button" className="bn-rcpt-icon-btn" onClick={() => startEdit(r)} title="수정">
+                      <Pencil size={13} strokeWidth={2.2} />
+                    </button>
+                    <button type="button" className="bn-rcpt-icon-btn bn-rcpt-icon-btn--danger" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">
+                      <Trash2 size={13} strokeWidth={2.2} />
+                    </button>
                   </div>
                 </div>
               )}
@@ -797,8 +840,8 @@ export default function BeautyNews() {
 
       <PageTabs
         tabs={[
-          { id: 'news', label: '이번 주 뉴스' },
-          { id: 'archive', label: '아카이브' },
+          { id: 'news', label: '이번 주 뉴스', icon: <Newspaper size={15} strokeWidth={2.2} /> },
+          { id: 'archive', label: '아카이브', icon: <Archive size={15} strokeWidth={2.2} /> },
         ]}
         active={activeTab}
         onChange={setActiveTab}
@@ -846,9 +889,9 @@ export default function BeautyNews() {
           <div className="bn-report-card">
             <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <span className="bn-report-title">뷰티 뉴스 아카이브</span>
-              {archiveReport?.ok && archiveTitleDate && (
+              {archiveReport?.ok && archiveReport.windowsStart && (
                 <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
-                  {archiveTitleDate}{archiveWindowBasis ? ` · ${archiveWindowBasis}` : ''}
+                  {fmtKor(archiveReport.windowsStart)}{archiveReport.windowsEnd ? ' – ' + fmtKor(archiveReport.windowsEnd) : ''}
                 </span>
               )}
             </div>
@@ -884,7 +927,10 @@ function ReportBody({ data }: { data: ReportData }) {
         if (items.length === 0) return null
         return (
           <div key={ci} className="bn-cat">
-            <div className="bn-cat-title">{cat.emoji} {cat.name}</div>
+            <div className="bn-cat-title">
+              <span className="bn-cat-title-icon"><Newspaper size={15} strokeWidth={2.2} /></span>
+              {cat.name}
+            </div>
             <div className="bn-cat-count">
               이번 주 트렌드 시그널이 감지된 뉴스는 총 <span className="bn-cat-count-num">{count}</span>건입니다.
             </div>
@@ -909,7 +955,10 @@ function ReportBody({ data }: { data: ReportData }) {
       })}
       {keywords.length > 0 && (
         <div className="bn-keywords-section">
-          <div className="bn-keywords-title">트렌드 키워드</div>
+          <div className="bn-keywords-title">
+            <Sparkles size={15} strokeWidth={2.2} className="bn-keywords-title-icon" />
+            트렌드 키워드
+          </div>
           {keywords.map((kw, i) => (
             <div key={i} className="bn-keyword-item">
               <div className="bn-keyword-tag">{kw.tag}</div>
