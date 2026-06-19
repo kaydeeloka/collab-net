@@ -3,6 +3,7 @@ import { type CSSProperties } from 'react'
 export interface PageTabItem<T extends string = string> {
   id: T
   label: string
+  disabled?: boolean
 }
 
 interface Props<T extends string = string> {
@@ -29,8 +30,10 @@ export default function PageTabs<T extends string = string>({
           type="button"
           role="tab"
           aria-selected={active === tab.id}
-          className={`page-tab${active === tab.id ? ' is-active' : ''}`}
-          onClick={() => onChange(tab.id)}
+          aria-disabled={tab.disabled || undefined}
+          disabled={tab.disabled}
+          className={`page-tab${active === tab.id ? ' is-active' : ''}${tab.disabled ? ' is-disabled' : ''}`}
+          onClick={() => { if (!tab.disabled) onChange(tab.id) }}
         >
           {tab.label}
         </button>

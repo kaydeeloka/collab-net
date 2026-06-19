@@ -863,6 +863,18 @@ td {
   font-weight: 700;
 }
 
+.page-tab.is-disabled,
+.page-tab:disabled {
+  color: var(--gray-3);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.page-tab.is-disabled:hover,
+.page-tab:disabled:hover {
+  color: var(--gray-3);
+}
+
 .ftab-content {
   background: var(--white);
   border: 1px solid var(--surface-md);

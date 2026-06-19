@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -17,8 +17,6 @@ import {
   PageToolbar,
 } from '@/components/ui'
 import type { BrandConfirmedContext } from '../index'
-import { archiveDetailPath } from '../archive/slug'
-import type { ConfirmedBrand as ArchiveBrandRef } from '../archive/shared'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -59,22 +57,6 @@ type Form = typeof EMPTY_FORM
 
 function formatWebsiteUrl(website: string) {
   return website.startsWith('http') ? website : `https://${website}`
-}
-
-function toArchiveBrandRef(r: ConfirmedBrand): ArchiveBrandRef {
-  return {
-    id: r.id,
-    brand_name: r.brand_name,
-    product: r.product,
-    received: r.received,
-  }
-}
-
-function archiveLinkFor(brand: ConfirmedBrand, allRows: ConfirmedBrand[]) {
-  const brands = [...allRows]
-    .sort((a, b) => a.brand_name.localeCompare(b.brand_name))
-    .map(toArchiveBrandRef)
-  return archiveDetailPath(toArchiveBrandRef(brand), brands)
 }
 
 export default function BrandConfirmedManagement() {
@@ -210,8 +192,6 @@ export default function BrandConfirmedManagement() {
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const pg = paginate(filtered, page)
-
-  const viewArchivePath = viewRow ? archiveLinkFor(viewRow, rows) : null
 
   const modalForm = (form: Form, setForm: (f: Form) => void) => (
     <div className="ui-form">
@@ -404,12 +384,8 @@ export default function BrandConfirmedManagement() {
             />
             <DetailRow
               label="자료 아카이브"
-              value={viewArchivePath ? (
-                <Link to={viewArchivePath} onClick={() => setShowView(false)} className="ui-btn ui-btn--primary ui-btn--sm">
-                  {viewRow.brand_name} 아카이브
-                </Link>
-              ) : undefined}
-              empty={!viewArchivePath}
+              value="—"
+              empty
             />
             {viewRow.notes && <DetailRow label="비고" value={viewRow.notes} />}
           </DetailList>
