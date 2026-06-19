@@ -1,5 +1,5 @@
 import { Newspaper, Sparkles } from 'lucide-react'
-import type { ReportData } from './archive-shared'
+import type { ReportData } from './archive/shared'
 
 export default function ReportBody({ data }: { data: ReportData }) {
   const keywords = data.keywords || []

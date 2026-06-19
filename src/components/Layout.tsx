@@ -21,7 +21,11 @@ const GROUPS: SideGroup[] = [
   {
     label: 'TREND', icon: <TrendingUp size={22} />, defaultTo: '/trend/beauty-news', prefix: '/trend',
     children: [
-      { to: '/trend/beauty-news',   label: '뷰티 뉴스' },
+      {
+        to: '/trend/beauty-news',
+        label: '뷰티 뉴스',
+        activeWhen: p => p === '/trend/beauty-news' || p.startsWith('/trend/beauty-news-archive'),
+      },
       { to: '/trend/tiktok', label: '틱톡 트렌드 분석' },
     ],
   },

@@ -1,29 +1,25 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Archive, Calendar, Mail, Newspaper,
+  Calendar, Mail,
   Pencil, Plus, Trash2,
 } from 'lucide-react'
 import { gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
-import { PageTabs } from '@/components/ui'
-import ArchiveList from './ArchiveList'
-import ArchiveDetail from './ArchiveDetail'
-import ArchiveSidebar from './ArchiveSidebar'
 import ReportBody from './ReportBody'
+import BeautyNewsShell from './shell'
 import {
   type ArchiveItem,
   type ReportData,
   archiveItemSortDate,
-  archiveMonthKey,
   fmtKor,
   fmtKorFull,
   reportArticleCount,
   reportFromRow,
   reportTitleDisplayDate,
   reportWindowBasis,
-} from './archive-shared'
+} from './archive/shared'
 
 function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean }) {
   return (
@@ -33,10 +29,13 @@ function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean 
   )
 }
 
-interface Recipient {
-  email: string
-  name?: string
-}
+import {
+  fetchEmailRecipients,
+  selectedRecipientEmails,
+  setAllEmailRecipientsSelected,
+  setEmailRecipientSelected,
+  type EmailRecipient,
+} from '@/lib/email-recipients'
 
 interface TrendDraft {
   date: string
@@ -112,23 +111,14 @@ const BRIEFING_PREVIEW: ReportData = {
 
 export default function BeautyNews() {
   const { showConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'news' | 'archive'>('news')
 
   const [latestReport, setLatestReport] = useState<ReportData | null>(null)
   const [latestLoading, setLatestLoading] = useState(true)
 
-  const [archiveReport, setArchiveReport] = useState<ReportData | null>(null)
-  const [archiveReportLoading, setArchiveReportLoading] = useState(false)
-  const [selectedKey, setSelectedKey] = useState('')
-  const [archiveView, setArchiveView] = useState<'list' | 'detail'>('list')
-  const [archiveFilterMonth, setArchiveFilterMonth] = useState<string | null>(null)
-
-  const [archiveItems, setArchiveItems] = useState<ArchiveItem[]>([])
-  const [archiveListLoading, setArchiveListLoading] = useState(true)
   const [sheetImporting, setSheetImporting] = useState(false)
   const [sheetImportStatus, setSheetImportStatus] = useState('')
 
-  const [recipients, setRecipients] = useState<Recipient[]>([])
+  const [recipients, setRecipients] = useState<EmailRecipient[]>([])
   const [selectedRcpt, setSelectedRcpt] = useState<Set<string>>(new Set())
   const [emailStatus, setEmailStatus] = useState('')
   const [emailSending, setEmailSending] = useState(false)
@@ -150,7 +140,6 @@ export default function BeautyNews() {
   useEffect(() => {
     loadRecipients()
     loadLatestReport()
-    refreshArchiveList()
     loadTrends()
   }, [])
 
@@ -163,14 +152,25 @@ export default function BeautyNews() {
 
   async function loadRecipients() {
     try {
-      const { data } = await supabase
-        .from('email_recipients')
-        .select('email, name')
-        .order('name')
-      const list = (data || []) as Recipient[]
+      const list = await fetchEmailRecipients()
       setRecipients(list)
-      setSelectedRcpt(new Set(list.map(r => r.email)))
+      setSelectedRcpt(selectedRecipientEmails(list))
     } catch {}
+  }
+
+  async function toggleRecipient(email: string, checked: boolean) {
+    setSelectedRcpt(prev => {
+      const next = new Set(prev)
+      checked ? next.add(email) : next.delete(email)
+      return next
+    })
+    await setEmailRecipientSelected(email, checked)
+  }
+
+  async function toggleAllRecipients(checked: boolean) {
+    setSelectedRcpt(checked ? new Set(recipients.map(r => r.email)) : new Set())
+    await setAllEmailRecipientsSelected(checked)
+    setRecipients(prev => prev.map(r => ({ ...r, selected: checked })))
   }
 
   async function addRecipient() {
@@ -183,7 +183,7 @@ export default function BeautyNews() {
     setRcptSaving(false)
   }
 
-  function startEdit(r: Recipient) {
+  function startEdit(r: EmailRecipient) {
     setEditingEmail(r.email)
     setEditName(r.name || '')
     setEditEmail(r.email)
@@ -233,49 +233,6 @@ export default function BeautyNews() {
     finally { setLatestLoading(false) }
   }
 
-  async function refreshArchiveList() {
-    setArchiveListLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('beauty_news_archives')
-        .select('id, windows_start, windows_end, report_title, categories, keywords, created_at')
-      if (error) throw error
-      const sorted = [...(data || [])].sort((a, b) =>
-        archiveItemSortDate(b as ArchiveItem).localeCompare(archiveItemSortDate(a as ArchiveItem)),
-      ) as ArchiveItem[]
-      setArchiveItems(sorted)
-    } catch {}
-    finally { setArchiveListLoading(false) }
-  }
-
-  async function loadArchive(windowsStart: string) {
-    setArchiveReportLoading(true)
-    setSelectedKey(windowsStart)
-    setArchiveView('detail')
-    const cached = archiveItems.find(a => a.windows_start === windowsStart)
-    if (cached?.categories != null) {
-      setArchiveReport(reportFromRow(cached, true))
-      setArchiveReportLoading(false)
-      return
-    }
-    try {
-      const { data, error } = await supabase
-        .from('beauty_news_archives')
-        .select('id, windows_start, windows_end, report_title, categories, keywords')
-        .eq('windows_start', windowsStart)
-        .single()
-      if (error || !data) throw new Error(error?.message || '불러오기 실패')
-      setArchiveReport(reportFromRow(data, true))
-    } catch (e: unknown) {
-      setArchiveReport({ ok: false, error: (e as Error).message || '오류' })
-    }
-    setArchiveReportLoading(false)
-  }
-
-  function backToArchiveList() {
-    setArchiveView('list')
-  }
-
   async function importFromSheet() {
     setSheetImporting(true)
     setSheetImportStatus('')
@@ -297,7 +254,6 @@ export default function BeautyNews() {
           : '시트에서 가져올 데이터 없음',
       )
       await loadLatestReport()
-      await refreshArchiveList()
     } catch (e: unknown) {
       setSheetImportStatus('오류: ' + ((e as Error).message || '알 수 없음'))
     } finally {
@@ -405,40 +361,12 @@ export default function BeautyNews() {
       }
       h += `</div>`
     }
-    const dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/beauty-news'
+    const dashUrl = 'https://mimuse-dashboard.vercel.app/trend/beauty-news'
     h += `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">`
     h += `<a href="${dashUrl}" target="_blank" style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">📊 대시보드 뷰티뉴스 바로가기</a>`
     h += `</div></body></html>`
     return h
   }
-
-  const selectedArchiveItem = archiveItems.find(a => a.windows_start === selectedKey) ?? null
-  const filteredArchiveItems = archiveFilterMonth
-    ? archiveItems.filter(item => archiveMonthKey(item) === archiveFilterMonth)
-    : archiveItems
-
-  const archiveBrowse = (
-    <div className="bn-archive-layout">
-      <ArchiveSidebar
-        items={archiveItems}
-        loading={archiveListLoading}
-        selectedKey={selectedKey}
-        filterMonth={archiveFilterMonth}
-        visibleCount={filteredArchiveItems.length}
-        onFilterMonth={setArchiveFilterMonth}
-        onSelect={windowsStart => { void loadArchive(windowsStart) }}
-      />
-      <div className="bn-archive-main">
-        <ArchiveList
-          items={filteredArchiveItems}
-          allItems={archiveItems}
-          loading={archiveListLoading}
-          filterMonth={archiveFilterMonth}
-          onSelect={windowsStart => { void loadArchive(windowsStart) }}
-        />
-      </div>
-    </div>
-  )
 
   const latestTitleDate = latestReport ? reportTitleDisplayDate(latestReport) : null
   const latestWindowBasis = latestReport ? reportWindowBasis(latestReport) : null
@@ -534,8 +462,8 @@ export default function BeautyNews() {
           <label className="bn-rcpt-select-all">
             <input
               type="checkbox"
-              checked={selectedRcpt.size === recipients.length}
-              onChange={e => setSelectedRcpt(e.target.checked ? new Set(recipients.map(r => r.email)) : new Set())}
+              checked={recipients.length > 0 && selectedRcpt.size === recipients.length}
+              onChange={e => { void toggleAllRecipients(e.target.checked) }}
             />
             전체 선택
           </label>
@@ -559,11 +487,7 @@ export default function BeautyNews() {
                 <div className="bn-rcpt-row">
                   <label className="bn-rcpt-label">
                     <input type="checkbox" checked={selectedRcpt.has(r.email)}
-                      onChange={e => {
-                        const next = new Set(selectedRcpt)
-                        e.target.checked ? next.add(r.email) : next.delete(r.email)
-                        setSelectedRcpt(next)
-                      }}
+                      onChange={e => { void toggleRecipient(r.email, e.target.checked) }}
                     />
                     <div className="bn-rcpt-info">
                       {r.name && <div className="bn-rcpt-name">{r.name}</div>}
@@ -610,67 +534,33 @@ export default function BeautyNews() {
   )
 
   return (
-    <div className="page">
-      <div className="page-banner">
-        <span className="page-banner-deco">📊</span>
-        <div>
-          <div className="page-banner-title">트렌드 분석</div>
-          <div className="page-banner-desc">뷰티 뉴스 AI 분석 및 틱톡 트렌드 리포트를 확인하세요.</div>
+    <BeautyNewsShell tab="news">
+      <div>
+        <div className="bn-half-row">
+          {briefingPanel}
+          {emailPanel(latestReport)}
+        </div>
+
+        <div className="bn-report-card" id="news-report">
+          <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+            <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
+            {latestReport?.windowsStart && (
+              <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
+                {reportWindowBasis(latestReport) ?? fmtKorFull(latestReport.windowsStart)}
+              </span>
+            )}
+          </div>
+          <div className="bn-report-body">
+            {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
+            {!latestLoading && latestReport && <ReportBody data={latestReport} />}
+            {!latestLoading && !latestReport && (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
+                저장된 리포트가 없습니다.
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      <PageTabs
-        tabs={[
-          { id: 'news', label: '이번 주 뉴스', icon: <Newspaper size={15} strokeWidth={2.2} /> },
-          { id: 'archive', label: '아카이브', icon: <Archive size={15} strokeWidth={2.2} /> },
-        ]}
-        active={activeTab}
-        onChange={setActiveTab}
-      />
-
-      {activeTab === 'news' && (
-        <div>
-          <div className="bn-half-row">
-            {briefingPanel}
-            {emailPanel(latestReport)}
-          </div>
-
-          <div className="bn-report-card" id="news-report">
-            <div className="bn-report-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-              <span className="bn-report-title">뷰티 뉴스 요약 리포트</span>
-              {latestReport?.windowsStart && (
-                <span style={{ fontSize: 12, color: 'var(--teal-dk)', fontWeight: 400 }}>
-                  {reportWindowBasis(latestReport) ?? fmtKorFull(latestReport.windowsStart)}
-                </span>
-              )}
-            </div>
-            <div className="bn-report-body">
-              {latestLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
-              {!latestLoading && latestReport && <ReportBody data={latestReport} />}
-              {!latestLoading && !latestReport && (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
-                  저장된 리포트가 없습니다.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'archive' && (
-        <div>
-          {archiveView === 'list' && archiveBrowse}
-
-          {archiveView === 'detail' && (
-            <ArchiveDetail
-              item={selectedArchiveItem}
-              report={archiveReport}
-              loading={archiveReportLoading}
-              onBack={backToArchiveList}
-            />
-          )}
-        </div>
-      )}
-    </div>
+    </BeautyNewsShell>
   )
 }

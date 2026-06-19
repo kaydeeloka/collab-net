@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { gasGet, gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
+import {
+  fetchEmailRecipients,
+  selectedRecipientEmails,
+  setEmailRecipientSelected,
+  type EmailRecipient,
+} from '@/lib/email-recipients'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
-
-interface Recipient {
-  email: string
-  name?: string
-}
 
 type Volume = 'HIGH' | 'RISING' | 'MEDIUM'
 
@@ -322,7 +323,7 @@ export default function TiktokTrend() {
   const { showConfirm } = useToast()
   const [activeTab, setActiveTab] = useState<'week' | 'archive'>('week')
 
-  const [recipients, setRecipients]       = useState<Recipient[]>([])
+  const [recipients, setRecipients]       = useState<EmailRecipient[]>([])
   const [selectedRcpt, setSelectedRcpt]   = useState<Set<string>>(new Set())
   const [emailStatus, setEmailStatus]     = useState('')
   const [emailSending, setEmailSending]   = useState(false)
@@ -353,14 +354,19 @@ export default function TiktokTrend() {
 
   async function loadRecipients() {
     try {
-      const { data } = await supabase
-        .from('email_recipients')
-        .select('email, name')
-        .order('name')
-      const list = (data || []) as Recipient[]
+      const list = await fetchEmailRecipients()
       setRecipients(list)
-      setSelectedRcpt(new Set(list.map(r => r.email)))
+      setSelectedRcpt(selectedRecipientEmails(list))
     } catch {}
+  }
+
+  async function toggleRecipient(email: string, checked: boolean) {
+    setSelectedRcpt(prev => {
+      const next = new Set(prev)
+      checked ? next.add(email) : next.delete(email)
+      return next
+    })
+    await setEmailRecipientSelected(email, checked)
   }
 
   async function addRecipient() {
@@ -373,7 +379,7 @@ export default function TiktokTrend() {
     setRcptSaving(false)
   }
 
-  function startEdit(r: Recipient) {
+  function startEdit(r: EmailRecipient) {
     setEditingEmail(r.email)
     setEditName(r.name || '')
     setEditEmail(r.email)
@@ -523,11 +529,7 @@ export default function TiktokTrend() {
                 <div className="bn-rcpt-row">
                   <label className="bn-rcpt-label" style={{ flex: 1, minWidth: 0 }}>
                     <input type="checkbox" checked={selectedRcpt.has(r.email)}
-                      onChange={e => {
-                        const next = new Set(selectedRcpt)
-                        e.target.checked ? next.add(r.email) : next.delete(r.email)
-                        setSelectedRcpt(next)
-                      }}
+                      onChange={e => { void toggleRecipient(r.email, e.target.checked) }}
                     />
                     <div style={{ minWidth: 0 }}>
                       {r.name && <div className="bn-rcpt-name">{r.name}</div>}

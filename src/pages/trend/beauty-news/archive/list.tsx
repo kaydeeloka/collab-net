@@ -7,7 +7,7 @@ import {
   ARCHIVE_MEDIA_FG,
   archiveItemCardMeta,
   archiveMonthLabel,
-} from './archive-shared'
+} from './shared'
 
 export default function ArchiveList({
   items,

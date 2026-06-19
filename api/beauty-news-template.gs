@@ -90,7 +90,7 @@ function buildBriefingHtml(data) {
   }
 
   // ── Footer button ─────────────────────────────────────────────
-  var dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/beauty-news';
+  var dashUrl = 'https://mimuse-dashboard.vercel.app/trend/beauty-news';
   h += '<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">';
   h += '<a href="' + dashUrl + '" target="_blank"'
      + ' style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;'

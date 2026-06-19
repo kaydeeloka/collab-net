@@ -259,9 +259,10 @@ CREATE INDEX idx_archives_date ON beauty_news_archives(windows_start DESC);
 --  7. Email Recipients
 -- ============================================================
 CREATE TABLE email_recipients (
-  id    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT NOT NULL,
-  name  TEXT,
+  id       UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email    TEXT NOT NULL,
+  name     TEXT,
+  selected BOOLEAN NOT NULL DEFAULT true,
   UNIQUE (email)
 );
 

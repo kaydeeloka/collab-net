@@ -14,7 +14,7 @@
 //
 //  Weekly send (once per archive):
 //    Run setupWeeklyBeautyNewsEmailTrigger() once in GAS editor → Mon 09:00 KST
-//    Recipients: all rows in Supabase email_recipients (same list as UI)
+//    Recipients: email_recipients rows where selected=true (UI checkbox ticks)
 //    Dedup: Script Property BEAUTY_NEWS_LAST_SENT_WINDOWS_START
 // ============================================================
 
@@ -32,9 +32,42 @@ function _fetchLatestArchiveRow() {
 
 /** All emails in email_recipients — same source as the dashboard list. */
 function _fetchRecipientEmailsFromSupabase() {
-  var rows = supabaseGet('/rest/v1/email_recipients?select=email&order=email');
+  return _resolveRecipients(null);
+}
+
+/**
+ * Resolve send list from Supabase email_recipients.
+ * Only rows with selected=true are eligible; explicitRecipients further filters manual sends.
+ */
+function _resolveRecipients(explicitRecipients) {
+  var rows = supabaseGet('/rest/v1/email_recipients?select=email,selected&order=email');
   if (!Array.isArray(rows)) return [];
-  return rows.map(function(r) { return String(r.email || '').trim(); }).filter(Boolean);
+
+  var selected = [];
+  var allowed = {};
+  rows.forEach(function(r) {
+    var email = String(r.email || '').trim();
+    if (!email) return;
+    allowed[email.toLowerCase()] = email;
+    if (r.selected === true) selected.push(email);
+  });
+  if (!selected.length) return [];
+
+  if (!Array.isArray(explicitRecipients) || !explicitRecipients.length) {
+    return selected;
+  }
+
+  var picked = [];
+  var seen = {};
+  explicitRecipients.forEach(function(r) {
+    var key = String(r || '').trim().toLowerCase();
+    if (!key || !allowed[key] || seen[key]) return;
+    var addr = allowed[key];
+    if (selected.indexOf(addr) === -1) return;
+    seen[key] = true;
+    picked.push(addr);
+  });
+  return picked;
 }
 
 function _formatBriefingSubjectDate(iso) {
@@ -85,21 +118,15 @@ function sendWeeklyBeautyNewsEmail(force, windowsStart, explicitRecipients) {
       return { ok: true, skipped: true, windowsStart: ws, reason: 'already sent for this week' };
     }
 
-    // Use recipients passed from UI; fall back to Supabase list for scheduled trigger
-    var recipients = (Array.isArray(explicitRecipients) && explicitRecipients.length)
-      ? explicitRecipients
-      : _fetchRecipientEmailsFromSupabase();
-    if (!recipients.length) return { ok: false, error: '수신자가 없습니다' };
-
     var data    = _archiveRowToBriefingData(archive);
     var endIso  = archive.windows_end || archive.windows_start;
     var subject = '[MiMuse] 주간 뷰티 뉴스 · ' + _formatBriefingSubjectDate(endIso);
     // Always use the GAS template (beauty-news-template.gs → buildBriefingHtml)
     var htmlBody = buildBriefingHtml(data);
-    var result   = sendBeautyNewsEmail(recipients, htmlBody, subject);
+    var result   = sendBeautyNewsEmail(explicitRecipients, htmlBody, subject);
 
     if (result.ok) props.setProperty('BEAUTY_NEWS_LAST_SENT_WINDOWS_START', ws);
-    return Object.assign({ windowsStart: ws, recipientCount: recipients.length }, result);
+    return Object.assign({ windowsStart: ws, recipientCount: result.sent || 0 }, result);
   } catch (e) {
     Logger.log('sendWeeklyBeautyNewsEmail: ' + e.toString());
     return { ok: false, error: e.toString() };
@@ -377,11 +404,14 @@ function importBeautyNewsFromSheet() {
 // ── Email via Outlook Graph API ───────────────────────────────
 function sendBeautyNewsEmail(recipients, htmlBody, subject) {
   try {
+    var resolved = _resolveRecipients(recipients);
+    if (!resolved.length) return { ok: false, error: '수신자가 없습니다' };
+
     const token       = getOutlookAccessToken();
     const senderEmail = scriptProp('SENDER_EMAIL') || '';
     var sent = 0, errors = [];
-    for (var i = 0; i < recipients.length; i++) {
-      var addr = recipients[i].trim();
+    for (var i = 0; i < resolved.length; i++) {
+      var addr = resolved[i].trim();
       if (!addr) continue;
       var payload = {
         message: {

@@ -7,7 +7,7 @@ import {
   archiveItemLabel,
   archiveMonthLabel,
   groupArchiveByMonth,
-} from './archive-shared'
+} from './shared'
 
 export default function ArchiveSidebar({
   items,

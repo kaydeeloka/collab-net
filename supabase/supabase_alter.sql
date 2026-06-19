@@ -121,6 +121,7 @@ ON CONFLICT (brand) DO NOTHING;
 -- ALTER TABLE status_messages     ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE beauty_news_archives  ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE email_recipients      ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
+ALTER TABLE email_recipients ADD COLUMN IF NOT EXISTS selected BOOLEAN NOT NULL DEFAULT true;
 -- ALTER TABLE phases                ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 -- ALTER TABLE tiers                 ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
 
