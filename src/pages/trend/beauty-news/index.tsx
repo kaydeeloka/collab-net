@@ -43,6 +43,38 @@ interface TrendDraft {
   body: string
 }
 
+function isMondayKst(): boolean {
+  const kst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+  return kst.getDay() === 1
+}
+
+const SHEET_IMPORT_USED_KEY = 'beauty_news_sheet_import_week'
+
+/** Monday date (KST) for the current week — resets the import lock each Monday. */
+function kstWeekMonday(): string {
+  const kst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+  const day = kst.getDay()
+  kst.setDate(kst.getDate() + (day === 0 ? -6 : 1 - day))
+  const y = kst.getFullYear()
+  const m = String(kst.getMonth() + 1).padStart(2, '0')
+  const d = String(kst.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function isSheetImportUsedThisWeek(): boolean {
+  try {
+    return localStorage.getItem(SHEET_IMPORT_USED_KEY) === kstWeekMonday()
+  } catch {
+    return false
+  }
+}
+
+function markSheetImportUsedThisWeek(): void {
+  try {
+    localStorage.setItem(SHEET_IMPORT_USED_KEY, kstWeekMonday())
+  } catch {}
+}
+
 const BRIEFING_PREVIEW: ReportData = {
   ok: true,
   reportTitle: '이번 주 뷰티 브리핑',
@@ -116,6 +148,7 @@ export default function BeautyNews() {
   const [latestLoading, setLatestLoading] = useState(true)
 
   const [sheetImporting, setSheetImporting] = useState(false)
+  const [sheetImportUsed, setSheetImportUsed] = useState(isSheetImportUsedThisWeek)
   const [sheetImportStatus, setSheetImportStatus] = useState('')
 
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])
@@ -136,11 +169,16 @@ export default function BeautyNews() {
   const [trendSelected, setTrendSelected] = useState(0)
   const [trendLoading, setTrendLoading] = useState(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const sheetImportUsedRef = useRef(isSheetImportUsedThisWeek())
 
   useEffect(() => {
     loadRecipients()
-    loadLatestReport()
     loadTrends()
+    void (async () => {
+      await loadLatestReport()
+      // Monday KST: pull the newest sheet column (matches GAS ~08:50 trigger)
+      if (isMondayKst() && !isSheetImportUsedThisWeek()) await importFromSheet()
+    })()
   }, [])
 
   useEffect(() => {
@@ -234,6 +272,10 @@ export default function BeautyNews() {
   }
 
   async function importFromSheet() {
+    if (sheetImportUsedRef.current) return
+    sheetImportUsedRef.current = true
+    markSheetImportUsedThisWeek()
+    setSheetImportUsed(true)
     setSheetImporting(true)
     setSheetImportStatus('')
     try {
@@ -261,22 +303,8 @@ export default function BeautyNews() {
     }
   }
 
-  function hasReportContent(report: ReportData | null): boolean {
-    if (!report) return false
-    return reportArticleCount(report) > 0 || (report.keywords?.length ?? 0) > 0
-  }
-
   function scrollToNewsReport() {
     document.getElementById('news-report')?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  async function viewThisWeekNews() {
-    if (hasReportContent(latestReport)) {
-      scrollToNewsReport()
-      return
-    }
-    await importFromSheet()
-    setTimeout(scrollToNewsReport, 150)
   }
 
   async function sendBriefingEmail(report: ReportData | null) {
@@ -377,6 +405,15 @@ export default function BeautyNews() {
         <div className="bn-date-card-header">
           <CardIconWrap soft><Calendar size={16} strokeWidth={2.2} /></CardIconWrap>
           <span className="bn-date-card-label">이번 주 브리핑</span>
+          <button
+            type="button"
+            className="bn-header-fetch-btn"
+            disabled={sheetImporting || sheetImportUsed}
+            title={sheetImportUsed && !sheetImporting ? '이미 불러왔습니다' : undefined}
+            onClick={() => { void importFromSheet() }}
+          >
+            {sheetImporting ? '불러오는 중…' : sheetImportUsed ? '불러옴' : '이번주 뉴스 불러오기'}
+          </button>
         </div>
       </div>
       <div className="bn-date-card-body">
@@ -414,7 +451,7 @@ export default function BeautyNews() {
           </>
         )}
         {!latestLoading && !latestReport && (
-          <div className="bn-date-card-empty">저장된 리포트가 없습니다.<br />아래 버튼으로 시트에서 불러오세요.</div>
+          <div className="bn-date-card-empty">저장된 리포트가 없습니다.<br />위 버튼으로 시트에서 불러오세요.</div>
         )}
       </div>
       <div className="bn-card-footer">
@@ -422,9 +459,8 @@ export default function BeautyNews() {
           <div className="bn-card-footer-status">{sheetImportStatus}</div>
         )}
         <button type="button" className="bn-action-btn"
-          disabled={sheetImporting}
-          onClick={() => { void viewThisWeekNews() }}>
-          {sheetImporting ? '시트에서 가져오는 중…' : hasReportContent(latestReport) ? '리포트로 이동 ↓' : '이번 주 뉴스 보기 ↓'}
+          onClick={scrollToNewsReport}>
+          뷰티 뉴스 보기 ↓
         </button>
       </div>
     </div>

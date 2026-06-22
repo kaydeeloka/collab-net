@@ -77,6 +77,10 @@ function _formatBriefingSubjectDate(iso) {
   return parseInt(p[1], 10) + '월 ' + parseInt(p[2], 10) + '일';
 }
 
+function _todayKstIso() {
+  return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+}
+
 function _archiveRowToBriefingData(row) {
   return {
     windowsStart: row.windows_start || '',
@@ -119,8 +123,7 @@ function sendWeeklyBeautyNewsEmail(force, windowsStart, explicitRecipients) {
     }
 
     var data    = _archiveRowToBriefingData(archive);
-    var endIso  = archive.windows_end || archive.windows_start;
-    var subject = '[MiMuse] 주간 뷰티 뉴스 · ' + _formatBriefingSubjectDate(endIso);
+    var subject = '[MiMuse] 이번 주 뷰티 뉴스 · ' + _formatBriefingSubjectDate(_todayKstIso());
     // Always use the GAS template (beauty-news-template.gs → buildBriefingHtml)
     var htmlBody = buildBriefingHtml(data);
     var result   = sendBeautyNewsEmail(explicitRecipients, htmlBody, subject);
@@ -185,6 +188,27 @@ function removeWeeklyBeautyNewsEmailTrigger() {
     }
   });
   return { ok: true, removed: removed };
+}
+
+/** Inspect installed Monday import/email triggers (dashboard or GAS editor). */
+function listBeautyNewsTriggers() {
+  var HANDLERS = ['importBeautyNewsFromSheet', 'sendWeeklyBeautyNewsEmail'];
+  var triggers = [];
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (HANDLERS.indexOf(t.getHandlerFunction()) === -1) return;
+    triggers.push({
+      handler: t.getHandlerFunction(),
+      eventType: String(t.getEventType()),
+      triggerUid: t.getUniqueId(),
+    });
+  });
+  return {
+    ok: true,
+    count: triggers.length,
+    expected: 3,
+    triggers: triggers,
+    ready: triggers.length >= 3,
+  };
 }
 
 
@@ -279,12 +303,38 @@ function _beautyNewsRowSortKey(row) {
 function _parseJsonCell(val, label) {
   if (val === null || val === undefined || val === '') return [];
   if (typeof val === 'object') return val;
-  var s = String(val).trim();
+
+  var s = String(val).trim().replace(/^\uFEFF/, '');
   if (!s) return [];
+
+  // Strip markdown code fences (Claude sometimes wraps JSON in ```json ... ```)
+  var fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) s = fence[1].trim();
+
+  function tryParse(raw) {
+    return JSON.parse(raw);
+  }
+
   try {
-    return JSON.parse(s);
-  } catch (e) {
-    throw new Error((label || 'JSON') + ' parse error: ' + e.message);
+    return tryParse(s);
+  } catch (e1) {
+    // Trailing junk after valid JSON (e.g. "true extra" or "[...] more text")
+    var arrStart = s.indexOf('[');
+    var arrEnd   = s.lastIndexOf(']');
+    if (arrStart !== -1 && arrEnd > arrStart) {
+      try { return tryParse(s.slice(arrStart, arrEnd + 1)); } catch (e2) {}
+    }
+    var objStart = s.indexOf('{');
+    var objEnd   = s.lastIndexOf('}');
+    if (objStart !== -1 && objEnd > objStart) {
+      try {
+        var parsed = tryParse(s.slice(objStart, objEnd + 1));
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e3) {}
+    }
+
+    var preview = s.length > 120 ? s.slice(0, 120) + '…' : s;
+    throw new Error((label || 'JSON') + ' parse error: ' + e1.message + ' — cell preview: ' + preview);
   }
 }
 
@@ -515,6 +565,9 @@ function routeBeautyNews(action, p, body) {
         (body || {}).windowsStart || (body || {}).windows_start || '',
         (body || {}).recipients || null,
       );
+    case 'setupBeautyNewsMondayTriggers': return setupAllMondayTriggers();
+    case 'listBeautyNewsTriggers':        return listBeautyNewsTriggers();
+    case 'removeBeautyNewsMondayTriggers': return removeWeeklyBeautyNewsEmailTrigger();
     default:                            return null;
   }
 }

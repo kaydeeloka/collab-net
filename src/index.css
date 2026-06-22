@@ -1846,6 +1846,13 @@ button.brand-archive-card.bn-archive-brand-card {
   background: #eef8f7; color: var(--teal-dk); border: 1px solid #cceee8;
 }
 .bn-date-card-label { font-size: 14px; font-weight: 700; color: var(--ink); flex: 1; min-width: 0; }
+.bn-header-fetch-btn {
+  flex-shrink: 0; padding: 6px 12px; border: 1px solid var(--teal-dk); border-radius: var(--r-pill);
+  background: var(--white); color: var(--teal-dk); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: background .15s, color .15s; font-family: inherit; white-space: nowrap;
+}
+.bn-header-fetch-btn:hover:not(:disabled) { background: var(--teal-dk); color: var(--white); }
+.bn-header-fetch-btn:disabled { opacity: .5; cursor: not-allowed; }
 .bn-archive-hint { font-size: 11px; font-weight: 600; color: var(--teal-dk); background: var(--surface); border: 1px solid var(--surface-md); padding: 3px 10px; border-radius: var(--r-pill); white-space: nowrap; }
 .bn-date-card-range { font-size: 22px; font-weight: 800; color: var(--ink); line-height: 1.3; letter-spacing: -.02em; }
 .bn-date-card-sub { font-size: 12px; color: var(--gray-5); font-weight: 500; margin-top: -4px; }
