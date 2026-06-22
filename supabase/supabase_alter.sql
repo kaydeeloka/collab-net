@@ -1000,6 +1000,12 @@ CREATE INDEX IF NOT EXISTS idx_influencers_last_reply ON influencers(last_reply_
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
 ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
 
+-- brand_general / brand_personal — track imports from a previous phase
+ALTER TABLE brand_general  ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;
+ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_brand_general_source_phase  ON brand_general(source_phase_id);
+CREATE INDEX IF NOT EXISTS idx_brand_personal_source_phase ON brand_personal(source_phase_id);
+
 -- influencers — Apify profile avatar URL (automation-lab tiktok-profile-scraper avatarUrl)
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 

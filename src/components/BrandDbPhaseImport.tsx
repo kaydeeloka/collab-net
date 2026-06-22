@@ -96,8 +96,9 @@ export default function BrandDbPhaseImport({
         .filter(r => !existingSet.has(dedupKey(r)))
         .map(r => {
           const base = {
-            phase_id:     selectedPhaseId,
-            contacted:    false,
+            phase_id:        selectedPhaseId,
+            source_phase_id: importPhaseId,
+            contacted:       false,
             status:       '',
             send_count:   0,
             reply_count:  0,

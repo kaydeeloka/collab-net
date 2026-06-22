@@ -27,6 +27,7 @@ interface BrandGeneral {
   overseas:         boolean
   contacted:        boolean
   phase_id:         string | null
+  source_phase_id:  string | null
   created_at:       string
 }
 
@@ -44,7 +45,8 @@ type Form = typeof EMPTY_FORM
 
 export default function BrandDbGeneral() {
   const { showToast, showConfirm } = useToast()
-  const { selectedPhaseId } = usePhase()
+  const { selectedPhaseId, phases } = usePhase()
+  const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
   const navigate = useNavigate()
 
   const [rows,     setRows]     = useState<BrandGeneral[]>([])
@@ -360,7 +362,19 @@ export default function BrandDbGeneral() {
                       style={{ cursor: 'pointer', width: 14, height: 14 }}
                     />
                   </td>
-                  <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{r.brand_name}</td>
+                  <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span>{r.brand_name}</span>
+                      {r.source_phase_id && (
+                        <span style={{
+                          display: 'inline-block', fontSize: 10, fontWeight: 700, width: 'fit-content',
+                          background: '#eef8f7', color: 'var(--teal-dk)', borderRadius: 6, padding: '1px 6px',
+                        }}>
+                          {phaseNameById[r.source_phase_id] ?? '이전 차수'} 이관
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
                     {r.email?.length ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

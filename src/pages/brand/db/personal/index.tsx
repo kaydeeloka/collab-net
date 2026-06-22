@@ -32,6 +32,7 @@ interface BrandPersonal {
   overseas:         boolean
   contacted:        boolean
   phase_id:         string | null
+  source_phase_id:  string | null
   created_at:       string
 }
 
@@ -69,7 +70,8 @@ const EMPTY_FORM: Form = {
 
 export default function BrandDbPersonal() {
   const { showToast, showConfirm } = useToast()
-  const { selectedPhaseId } = usePhase()
+  const { selectedPhaseId, phases } = usePhase()
+  const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
   const navigate = useNavigate()
 
   const [rows,        setRows]        = useState<BrandPersonal[]>([])
@@ -424,7 +426,19 @@ export default function BrandDbPersonal() {
                       style={{ cursor: 'pointer', width: 14, height: 14 }}
                     />
                   </td>
-                  <td title={r.brand_name} style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</td>
+                  <td title={r.brand_name} style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.brand_name}</span>
+                      {r.source_phase_id && (
+                        <span style={{
+                          display: 'inline-block', fontSize: 10, fontWeight: 700, width: 'fit-content',
+                          background: '#eef8f7', color: 'var(--teal-dk)', borderRadius: 6, padding: '1px 6px',
+                        }}>
+                          {phaseNameById[r.source_phase_id] ?? '이전 차수'} 이관
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td title={r.contact_name ?? undefined} style={{ padding: '0 12px', fontSize: 13, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</td>
                   <td title={r.department ?? undefined} style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
                   <td title={r.position ?? undefined} style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.position}</td>
