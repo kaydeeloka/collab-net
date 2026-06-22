@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
-import { gasPost } from '@/lib/api'
 import {
   checkOutlookConnected,
   compareByRecentReply,
@@ -11,6 +10,13 @@ import {
   shouldAutoMarkReply,
   toIsoTimestamp,
 } from '@/lib/reply-sync'
+import {
+  BULK_SEND_MAX,
+  bulkSendLimitMessage,
+  sendOutreachEmail,
+  tryToggleBulkPage,
+  tryToggleBulkSelection,
+} from '@/lib/outreach-email'
 import { supabase } from '@/lib/supabase'
 import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -24,10 +30,9 @@ import { formatShortContactDate } from '@/lib/contact-count'
 import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
 
 const DUMMY: Record<string, { value: string; color: string }> = {
-  '{{브랜드명}}':  { value: 'AmorePacific',      color: '#a07800' },
-  '{{담당자}}':    { value: '김민지',             color: '#0369a1' },
-  '{{이메일}}':    { value: 'brand@example.com',  color: '#b45309' },
-  '{{홈페이지}}':  { value: 'https://example.com', color: '#065f46' },
+  '{{브랜드명}}': { value: 'AmorePacific', color: '#a07800' },
+  '{{담당자}}':   { value: '김민지',        color: '#0369a1' },
+  '{{직함}}':     { value: '마케팅 팀장',    color: '#065f46' },
 }
 
 function renderWithDummy(text: string): React.ReactNode[] {
@@ -47,11 +52,11 @@ function renderWithDummy(text: string): React.ReactNode[] {
   return parts
 }
 
-function applyPlaceholders(text: string, row: { brand: string; name: string | null; email: string | null }) {
+function applyPlaceholders(text: string, row: { brand: string; name: string | null; position: string | null }) {
   return text
     .replace(/\{\{브랜드명\}\}/g, row.brand || '')
-    .replace(/\{\{담당자\}\}/g,   row.name  || '')
-    .replace(/\{\{이메일\}\}/g,   row.email || '')
+    .replace(/\{\{담당자\}\}/g,   row.name || '')
+    .replace(/\{\{직함\}\}/g,     row.position || '')
 }
 
 const TYPES = ['일반', '퍼스널']
@@ -83,13 +88,17 @@ interface BrandRow {
   website:     string | null
   phase_id:    string | null
   status:      string
-  send_count:  number
-  reply_count: number
-  last_reply_at: string | null
-  notes:       string | null
+  send_count:       number
+  reply_count:      number
+  last_contact_at:  string | null
+  last_reply_at:    string | null
+  notes:            string | null
 }
 
 const PAGE_SIZE = 25
+function bulkSendConfirmMessage(count: number, tpl: { name: string; title: string }) {
+  return `${count}건에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.title || '(제목 없음)'}`
+}
 function paginate<T>(items: T[], page: number) {
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -144,8 +153,8 @@ export default function BrandContact() {
     }
     setLoading(true)
     const [{ data: gen, error: genErr }, { data: per, error: perErr }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
+      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
+      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
     ])
     if (genErr) { showToast('일반 DB 오류: ' + genErr.message, 'error'); setLoading(false); return }
     if (perErr) { showToast('퍼스널 DB 오류: ' + perErr.message, 'error'); setLoading(false); return }
@@ -156,7 +165,8 @@ export default function BrandContact() {
       email: Array.isArray(r.email) ? r.email[0] ?? null : r.email,
       phone: r.telephone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0,
+      last_contact_at: r.last_contact_at ?? null, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
     }))
     const personalRows: BrandRow[] = (per ?? []).map((r: any) => ({
       id: r.id, source: 'personal' as const,
@@ -165,7 +175,8 @@ export default function BrandContact() {
       email: Array.isArray(r.personal_email) ? r.personal_email[0] ?? null : r.personal_email,
       phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
       status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
+      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0,
+      last_contact_at: r.last_contact_at ?? null, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
     }))
     setRows([...generalRows, ...personalRows])
     setLoading(false)
@@ -187,6 +198,27 @@ export default function BrandContact() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showStatusFilter])
 
+  const recordSendAfterEmail = useCallback(async (row: BrandRow, sentAt: string) => {
+    const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
+    const { data, error: readErr } = await supabase
+      .from(table)
+      .select('send_count')
+      .eq('id', row.id)
+      .single()
+    if (readErr) { showToast(readErr.message, 'error'); return false }
+
+    const patch: Partial<BrandRow> = {
+      send_count: (data?.send_count ?? 0) + 1,
+      status: 'yes',
+      last_contact_at: sentAt,
+    }
+    const { error } = await supabase.from(table).update(patch).eq('id', row.id)
+    if (error) { showToast(error.message, 'error'); return false }
+
+    setRows(prev => prev.map(r => r.id === row.id && r.source === row.source ? { ...r, ...patch } : r))
+    return true
+  }, [showToast])
+
   const updateField = useCallback(async (row: BrandRow, patch: Partial<BrandRow>) => {
     const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
     const dbPatch: Record<string, unknown> = {}
@@ -199,13 +231,16 @@ export default function BrandContact() {
         patch = { ...patch, reply_count: row.reply_count + 1 }
       }
       if (REPLY_STATUSES.includes(nextStatus)) {
-        dbPatch.last_reply_at = supabaseNow()
-        patch = { ...patch, last_reply_at: dbPatch.last_reply_at as string }
+        if (patch.last_reply_at === undefined) {
+          dbPatch.last_reply_at = supabaseNow()
+          patch = { ...patch, last_reply_at: dbPatch.last_reply_at as string }
+        }
       }
     }
-    if (patch.send_count  !== undefined) dbPatch.send_count  = patch.send_count
-    if (patch.reply_count !== undefined) dbPatch.reply_count = patch.reply_count
-    if (patch.last_reply_at !== undefined) dbPatch.last_reply_at = patch.last_reply_at
+    if (patch.send_count       !== undefined) dbPatch.send_count       = patch.send_count
+    if (patch.reply_count      !== undefined) dbPatch.reply_count      = patch.reply_count
+    if (patch.last_contact_at  !== undefined) dbPatch.last_contact_at  = patch.last_contact_at
+    if (patch.last_reply_at    !== undefined) dbPatch.last_reply_at    = patch.last_reply_at
     if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
     const { error } = await supabase.from(table).update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
@@ -254,6 +289,7 @@ export default function BrandContact() {
 
       const syncItems = candidates.map(r => ({
         email: r.email!,
+        since: toIsoTimestamp(r.last_contact_at),
         lastReplyAt: toIsoTimestamp(r.last_reply_at),
       }))
       const replies = await fetchOutlookReplies(syncItems)
@@ -264,19 +300,31 @@ export default function BrandContact() {
 
       for (const reply of replies) {
         const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
-        if (!row || !isNewReply({ last_reply_at: row.last_reply_at }, reply)) continue
+        if (!row || !isNewReply(row, reply)) continue
 
-        newReplies++
+        const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
+        const { data: fresh, error: readErr } = await supabase
+          .from(table)
+          .select('reply_count, status, last_contact_at, last_reply_at')
+          .eq('id', row.id)
+          .single()
+        if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
+        if (!isNewReply(fresh, reply)) continue
+
+        const replyAt = replyTimestamp(reply)
         const patch: Partial<BrandRow> = {
-          last_reply_at: replyTimestamp(reply),
-          reply_count: row.reply_count + 1,
+          last_reply_at: replyAt,
+          reply_count: (fresh.reply_count ?? 0) + 1,
         }
-        if (shouldAutoMarkReply(row.status)) {
+        if (shouldAutoMarkReply(fresh.status ?? '')) {
           patch.status = 'reply'
           statusUpdates++
         }
 
-        await updateField(row, patch)
+        const { error } = await supabase.from(table).update(patch).eq('id', row.id)
+        if (error) { showToast(error.message, 'error'); continue }
+
+        newReplies++
         if (reply.messageId) messageIds.push(reply.messageId)
       }
 
@@ -285,7 +333,7 @@ export default function BrandContact() {
       setPage(1)
       await load()
       if (newReplies === 0) {
-        showToast('새 회신 없음 (이미 반영된 회신)', 'success')
+        showToast('새 회신 없음 (이미 반영된 회신이거나 마지막 발송 이후 회신 없음)', 'success')
       } else {
         showToast(`새 회신 ${newReplies}건 반영 · 상태 ${statusUpdates}건 업데이트`, 'success')
       }
@@ -294,7 +342,7 @@ export default function BrandContact() {
     } finally {
       setSyncingReplies(false)
     }
-  }, [rows, showToast, updateField, load])
+  }, [rows, showToast, load])
 
   const updateNote = useCallback((row: BrandRow, value: string) => {
     const key = row.id + row.source
@@ -428,6 +476,7 @@ export default function BrandContact() {
 
         <TableActionBar
           selectedCount={checkedIds.size}
+          maxSelection={BULK_SEND_MAX}
           unit="건"
           actions={
             <>
@@ -441,16 +490,27 @@ export default function BrandContact() {
                 onClick={() => {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
-                  showConfirm(`${checkedIds.size}건에게 일괄 발송하시겠습니까?`, async () => {
+                  if (checkedIds.size > BULK_SEND_MAX) {
+                    showToast(bulkSendLimitMessage(), 'error')
+                    return
+                  }
+                  showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
                     setBulkSending(true)
+                    let sent = 0
                     for (const key of Array.from(checkedIds)) {
                       const row = filtered.find(r => rowKey(r) === key)
                       if (!row || !row.email) continue
-                      await gasPost({ action: 'sendOutreachEmail', to: row.email, subject: applyPlaceholders(tpl.title, row), body: applyPlaceholders(tpl.body, row) })
-                      await updateField(row, { send_count: row.send_count + 1, status: 'yes' })
+                      const sentAt = supabaseNow()
+                      await sendOutreachEmail({
+                        to: row.email,
+                        subject: applyPlaceholders(tpl.title, row),
+                        body: applyPlaceholders(tpl.body, row),
+                      })
+                      if (await recordSendAfterEmail(row, sentAt)) sent++
                     }
+                    await load()
                     setBulkSending(false); setCheckedIds(new Set())
-                    showToast('일괄 발송 완료', 'success')
+                    showToast(sent > 0 ? `일괄 발송 완료 (${sent}건)` : '일괄 발송 실패', sent > 0 ? 'success' : 'error')
                   }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
@@ -484,8 +544,9 @@ export default function BrandContact() {
                       <input type="checkbox"
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(rowKey(r)))}
                         onChange={e => setCheckedIds(prev => {
-                          const next = new Set(prev)
-                          pg.pageItems.forEach(r => e.target.checked ? next.add(rowKey(r)) : next.delete(rowKey(r)))
+                          const pageIds = pg.pageItems.map(rowKey)
+                          const { next, rejected } = tryToggleBulkPage(prev, pageIds, e.target.checked)
+                          if (rejected) showToast(bulkSendLimitMessage(), 'error')
                           return next
                         })} />
                     </th>
@@ -525,12 +586,15 @@ export default function BrandContact() {
                     const typeColor = row.source === 'general' ? TYPE_COLOR['일반'] : TYPE_COLOR['퍼스널']
                     const key = rowKey(row)
                     const noteVal = noteEdits[key] !== undefined ? noteEdits[key] : (row.notes ?? '')
+                    const contactDateLabel = formatShortContactDate(row.last_contact_at)
                     const replyDateLabel = formatShortContactDate(row.last_reply_at)
                     return (
-                      <tr key={key} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, height: 48 }}>
+                      <tr key={key} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, minHeight: 48 }}>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                           <input type="checkbox" checked={checkedIds.has(key)} onChange={e => {
-                            const next = new Set(checkedIds); e.target.checked ? next.add(key) : next.delete(key); setCheckedIds(next)
+                            const { next, rejected } = tryToggleBulkSelection(checkedIds, key, e.target.checked)
+                            if (rejected) showToast(bulkSendLimitMessage(), 'error')
+                            setCheckedIds(next)
                           }} />
                         </td>
                         <td style={{ padding: '0 12px', verticalAlign: 'middle' }}>
@@ -555,10 +619,10 @@ export default function BrandContact() {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {row.send_count > 0
                               ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {row.send_count}차 발송
+                                  {row.send_count}차 발송{contactDateLabel ? ` ${contactDateLabel}` : ''}
                                 </span>
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
-                            {row.reply_count > 0 && (
+                            {(row.reply_count ?? 0) > 0 && (
                               <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                 {row.reply_count}차 회신{replyDateLabel ? ` ${replyDateLabel}` : ''}
                               </span>

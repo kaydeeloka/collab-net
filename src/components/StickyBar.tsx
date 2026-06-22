@@ -159,22 +159,31 @@ export default function StickyBar({
 /** Bulk / filter toolbar above data tables (contact, EMS, etc.) */
 export function TableActionBar({
   selectedCount,
+  maxSelection,
   unit = '명',
   children,
   actions,
   className = '',
 }: {
   selectedCount: number
+  maxSelection?: number
   unit?: string
   children?: ReactNode
   actions?: ReactNode
   className?: string
 }) {
   const hasSelection = selectedCount > 0
+  const statusText = hasSelection
+    ? maxSelection
+      ? `${selectedCount}/${maxSelection}${unit} 선택됨`
+      : `${selectedCount}${unit} 선택됨`
+    : maxSelection
+      ? `최대 ${maxSelection}${unit} 선택 가능`
+      : '선택 없음'
   return (
     <div className={`table-action-bar${hasSelection ? ' is-active' : ''} ${className}`.trim()}>
       <span className="table-action-bar__status">
-        {hasSelection ? `${selectedCount}${unit} 선택됨` : '선택 없음'}
+        {statusText}
       </span>
       <div className="table-action-bar__divider" aria-hidden />
       <div className="table-action-bar__body">{children}</div>

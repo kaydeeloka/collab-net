@@ -71,7 +71,7 @@ function ts(iso: string | null | undefined) {
   return new Date(iso).getTime()
 }
 
-/** True when reply is newer than last send and not already recorded on the influencer row. */
+/** True when reply is newer than last send and not already recorded on the row. */
 export function isNewReply(
   candidate: { last_contact_at?: string | null; last_reply_at?: string | null },
   reply: DetectedReply,
@@ -80,7 +80,8 @@ export function isNewReply(
   if (Number.isNaN(replyMs)) return false
 
   const sendMs = ts(candidate.last_contact_at)
-  if (!Number.isNaN(sendMs) && replyMs <= sendMs) return false
+  // Allow replies in the same second as send (clock / rounding skew).
+  if (!Number.isNaN(sendMs) && replyMs < sendMs - 2000) return false
 
   const lastReplyMs = ts(candidate.last_reply_at)
   if (!Number.isNaN(lastReplyMs) && replyMs <= lastReplyMs) return false

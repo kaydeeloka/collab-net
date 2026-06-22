@@ -999,6 +999,8 @@ ALTER TABLE influencers ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_influencers_last_reply ON influencers(last_reply_at DESC NULLS LAST);
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
 ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS last_contact_at TIMESTAMPTZ;
+ALTER TABLE brand_personal ADD COLUMN IF NOT EXISTS last_contact_at TIMESTAMPTZ;
 
 -- brand_general / brand_personal — track imports from a previous phase
 ALTER TABLE brand_general  ADD COLUMN IF NOT EXISTS source_phase_id UUID REFERENCES phases(id) ON DELETE SET NULL;

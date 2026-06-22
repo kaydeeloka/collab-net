@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { gasPost } from '@/lib/api'
+import { sendOutreachEmail } from '@/lib/outreach-email'
 import {
   EMS_ERROR_STATUS_STYLE,
   ERROR_STATUS_OPTIONS,
@@ -217,8 +217,7 @@ export default function EmsErrors() {
                       const row = rows.find(r => r.id === id)
                       if (!row?.email) continue
                       try {
-                        const res = await gasPost<{ ok?: boolean; error?: string }>({
-                          action: 'sendOutreachEmail',
+                        const res = await sendOutreachEmail({
                           to: row.email,
                           subject: applyEmsPlaceholders(tpl.title, row),
                           body: applyEmsPlaceholders(tpl.body, row),

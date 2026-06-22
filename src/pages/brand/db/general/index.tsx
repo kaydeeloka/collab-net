@@ -193,9 +193,8 @@ export default function BrandDbGeneral() {
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const sorted = [...filtered].sort((a, b) => {
-    const byName = a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
-    if (byName !== 0) return byName
-    return a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1
+    if (a.contacted !== b.contacted) return a.contacted ? 1 : -1
+    return a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
   })
   const pg = paginate(sorted, page)
 

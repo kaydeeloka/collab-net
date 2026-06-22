@@ -141,16 +141,164 @@ function checkOutlookAuth() {
   return { ok: true, configured, authorized };
 }
 
+// ── Outreach body → HTML (markdown links + optional signature) ─
+var OUTREACH_SIGNATURE_PROP = 'OUTREACH_EMAIL_SIGNATURE';
+var OUTREACH_SIGNATURE_MAX_CHARS = 2500;
+var OUTREACH_EMAIL_MAX_CHARS = 80000;
+var _MD_LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+
+function _escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _sanitizeSignatureHtml(html) {
+  var s = String(html || '');
+  if (!s) return '';
+  // Outlook / Word bloat
+  s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  s = s.replace(/<!\[if[\s\S]*?endif\]>/gi, '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  s = s.replace(/<meta\b[^>]*>/gi, '');
+  s = s.replace(/<link\b[^>]*>/gi, '');
+  s = s.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<\/?(o|v|w|m|st1):[^>]*>/gi, '');
+  // Base64 images → Gmail 102KB clip
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*["']data:[^"']*["'][^>]*>/gi, '');
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*data:[^ >]+[^>]*>/gi, '');
+  // Gmail treats these as quoted / trimmed blocks
+  s = s.replace(/\sclass\s*=\s*["'][^"']*gmail[^"']*["']/gi, '');
+  s = s.replace(/\sid\s*=\s*["'](?:signature|appendonsend|divRplyFwdMsg)[^"']*["']/gi, '');
+  s = s.replace(/<blockquote\b[\s\S]*?<\/blockquote>/gi, '');
+  s = s.replace(/<hr\b[^>]*>/gi, '');
+  // Strip verbose MSO inline styles (keep tag, drop style)
+  s = s.replace(/\sstyle\s*=\s*["'][^"']{120,}["']/gi, '');
+  s = s.replace(/\s(mso-|xmlns)[^=>\s]*(?:=\s*["'][^"']*["'])?/gi, '');
+  s = s.replace(/\s{2,}/g, ' ').trim();
+  if (s.length > OUTREACH_SIGNATURE_MAX_CHARS) return '';
+  return s;
+}
+
+function _isLegacyOutreachSignature(html) {
+  if (!html || html.length > OUTREACH_SIGNATURE_MAX_CHARS) return true;
+  return html.indexOf('logo-light.png') !== -1
+    || html.indexOf('data:image') !== -1
+    || html.indexOf('<style') !== -1;
+}
+
+/** Always build fresh compact signature (logo URL + text). Never use bloated saved HTML. */
+function _getOutreachSignatureHtml() {
+  return defaultOutreachSignatureHtml();
+}
+
+function _stripEmailHtmlBloat(html) {
+  var s = String(html || '');
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*["']data:[^"']*["'][^>]*>/gi, '');
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*data:[^ >]+[^>]*>/gi, '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  return s.trim();
+}
+
+function setOutreachSignatureLogoUrl(body) {
+  var url = String((body || {}).url || '').trim();
+  if (!url) return { ok: false, error: 'logo URL이 없습니다' };
+  PropertiesService.getScriptProperties().setProperty('OUTREACH_SIGNATURE_LOGO_URL', url);
+  return { ok: true, url: url };
+}
+
+function _sanitizeOutreachHtml(html) {
+  var s = String(html || '');
+  if (!s) return '';
+  return s.replace(/<!--[\s\S]*?-->/g, '').trim();
+}
+
+function _formatOutreachBodyHtml(plainBody) {
+  var text = String(plainBody || '');
+  if (!text) return '';
+  var parts = [];
+  var last = 0;
+  var m;
+  _MD_LINK_RE.lastIndex = 0;
+  while ((m = _MD_LINK_RE.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(_escapeHtml(text.slice(last, m.index)).replace(/\n/g, '<br>'));
+    }
+    parts.push(
+      '<a href="' + _escapeHtml(m[2]) + '" style="color:#2563eb;text-decoration:underline;">'
+      + _escapeHtml(m[1]) + '</a>'
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    parts.push(_escapeHtml(text.slice(last)).replace(/\n/g, '<br>'));
+  }
+  return parts.join('');
+}
+
+function _assembleOutreachHtml(bodyPart, signaturePart) {
+  var sig = signaturePart || '';
+  var html = '<div style="font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif;font-size:14px;line-height:1.7;color:#222;">'
+    + bodyPart
+    + (sig ? '<br>' + sig : '')
+    + '</div>';
+  html = _stripEmailHtmlBloat(html);
+  if (html.length > OUTREACH_EMAIL_MAX_CHARS) {
+    html = '<div style="font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif;font-size:14px;line-height:1.7;color:#222;">'
+      + bodyPart + '<br>' + defaultOutreachSignatureHtml() + '</div>';
+    html = _stripEmailHtmlBloat(html);
+  }
+  return html;
+}
+
+function _buildOutreachHtmlBody(plainBody) {
+  return _assembleOutreachHtml(_formatOutreachBodyHtml(plainBody), _getOutreachSignatureHtml());
+}
+
+function _mergeHtmlBodyWithSignature(htmlBody) {
+  var bodyPart = String(htmlBody || '')
+    .replace(/^<div[^>]*>/i, '')
+    .replace(/<\/div>\s*$/i, '');
+  return _assembleOutreachHtml(bodyPart, _getOutreachSignatureHtml());
+}
+
+function getEmailSignature() {
+  return { ok: true, signature: defaultOutreachSignatureHtml(), isDefault: true };
+}
+
+function saveEmailSignature(body) {
+  var html = _sanitizeSignatureHtml(String((body || {}).signature || (body || {}).html || '').trim());
+  if (_isLegacyOutreachSignature(html)) html = defaultOutreachSignatureHtml();
+  PropertiesService.getScriptProperties().deleteProperty(OUTREACH_SIGNATURE_PROP);
+  return { ok: true, signature: defaultOutreachSignatureHtml() };
+}
+
+function resetEmailSignatureToDefault() {
+  var p = PropertiesService.getScriptProperties();
+  p.deleteProperty(OUTREACH_SIGNATURE_PROP);
+  var html = defaultOutreachSignatureHtml();
+  return { ok: true, signature: html };
+}
+
 // ── Send email via Graph API ─────────────────────────────────
 function sendOutlookEmail(body) {
   const email = (body.email || body.to || '').trim();
   if (!email || !body.subject) return { ok: false, error: '이메일 주소 또는 제목이 없습니다.' };
   try {
     const token = getOutlookAccessToken();
+    const htmlBody = _stripEmailHtmlBloat(
+      body.htmlBody
+        ? _mergeHtmlBodyWithSignature(body.htmlBody)
+        : _buildOutreachHtmlBody(body.body || ''),
+    );
     const payload = {
       message: {
         subject: body.subject,
-        body: { contentType: 'Text', content: body.body || '' },
+        body: { contentType: 'HTML', content: htmlBody },
         toRecipients: [{ emailAddress: { address: email } }],
       },
       saveToSentItems: true,
@@ -184,36 +332,60 @@ function _toMs(v) {
   return isNaN(t) ? NaN : t;
 }
 
-// Latest inbound message per email (filter + orderby — reliable newest-first).
+// Latest inbound message per email — inbox filter, client-side sort (Graph rejects filter+orderby).
 function _fetchLatestFromSender(token, email) {
-  const safeEmail = (email || '').replace(/'/g, "''");
+  const safeEmail = (email || '').trim().replace(/'/g, "''");
   if (!safeEmail) return null;
-  const filter = "from/emailAddress/address eq '" + safeEmail + "'";
-  const url = GRAPH_MESSAGES_URL
-    + '?$filter=' + encodeURIComponent(filter)
-    + '&$select=id,from,receivedDateTime,body,isRead'
-    + '&$orderby=receivedDateTime desc'
-    + '&$top=1';
 
-  const res = UrlFetchApp.fetch(url, {
-    headers: { 'Authorization': 'Bearer ' + token },
+  function _parseLatest(data) {
+    const msgs = (data.value || []).slice();
+    if (!msgs.length) return null;
+    msgs.sort(function(a, b) {
+      return _toMs(b.receivedDateTime) - _toMs(a.receivedDateTime);
+    });
+    return msgs[0];
+  }
+
+  function _entryFromMsg(msg) {
+    if (!msg) return null;
+    const received = msg.receivedDateTime || '';
+    const rawBody = ((msg.body || {}).content || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    return {
+      messageId: msg.id || '',
+      body: rawBody.substring(0, 1000),
+      date: received ? received.split('T')[0] : '',
+      receivedAt: received,
+      isRead: !!msg.isRead,
+    };
+  }
+
+  const select = '&$select=id,from,receivedDateTime,body,isRead';
+  const headers = { 'Authorization': 'Bearer ' + token };
+
+  // 1) Inbox + from filter (no $orderby — unsupported with this filter on many tenants)
+  var inboxUrl = GRAPH_BASE + '/me/mailFolders/inbox/messages'
+    + '?$filter=' + encodeURIComponent("from/emailAddress/address eq '" + safeEmail + "'")
+    + select
+    + '&$top=50';
+  var res = UrlFetchApp.fetch(inboxUrl, { headers: headers, muteHttpExceptions: true });
+  if (res.getResponseCode() === 200) {
+    var entry = _entryFromMsg(_parseLatest(JSON.parse(res.getContentText())));
+    if (entry) return entry;
+  }
+
+  // 2) $search fallback (case-insensitive; needs ConsistencyLevel)
+  var searchUrl = GRAPH_BASE + '/me/messages?$search=' + encodeURIComponent('"from:' + safeEmail + '"')
+    + select
+    + '&$top=50';
+  res = UrlFetchApp.fetch(searchUrl, {
+    headers: Object.assign({}, headers, { 'ConsistencyLevel': 'eventual' }),
     muteHttpExceptions: true,
   });
-  if (res.getResponseCode() !== 200) return null;
+  if (res.getResponseCode() === 200) {
+    return _entryFromMsg(_parseLatest(JSON.parse(res.getContentText())));
+  }
 
-  const data = JSON.parse(res.getContentText());
-  const msg = (data.value || [])[0];
-  if (!msg) return null;
-
-  const received = msg.receivedDateTime || '';
-  const rawBody = ((msg.body || {}).content || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-  return {
-    messageId: msg.id || '',
-    body: rawBody.substring(0, 1000),
-    date: received ? received.split('T')[0] : '',
-    receivedAt: received,
-    isRead: !!msg.isRead,
-  };
+  return null;
 }
 
 function syncOutlookReplies(items) {
@@ -235,7 +407,7 @@ function syncOutlookReplies(items) {
       if (isNaN(recvMs)) continue;
 
       var sinceMs = _toMs(item.since);
-      if (!isNaN(sinceMs) && recvMs <= sinceMs) continue;
+      if (!isNaN(sinceMs) && recvMs < sinceMs - 2000) continue;
 
       var lastMs = _toMs(item.lastReplyAt);
       if (!isNaN(lastMs) && recvMs <= lastMs) continue;
@@ -288,6 +460,10 @@ function routeOutlook(action, p, body) {
     case 'checkOutlookAuth':   return checkOutlookAuth();
     case 'sendOutlookEmail':
     case 'sendOutreachEmail':  return sendOutlookEmail(b);
+    case 'getEmailSignature':  return getEmailSignature();
+    case 'saveEmailSignature': return saveEmailSignature(b);
+    case 'resetEmailSignatureToDefault': return resetEmailSignatureToDefault();
+    case 'setOutreachSignatureLogoUrl': return setOutreachSignatureLogoUrl(b);
     case 'syncOutlookReplies': return syncOutlookReplies(b.items || []);
     case 'markOutlookMessagesRead': return markOutlookMessagesRead(b.messageIds || []);
     default: return null;

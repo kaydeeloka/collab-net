@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
-import { gasPost } from '@/lib/api'
+import {
+  BULK_SEND_MAX,
+  bulkSendLimitMessage,
+  sendOutreachEmail,
+  tryToggleBulkPage,
+  tryToggleBulkSelection,
+} from '@/lib/outreach-email'
 import {
   removeInfluencerOnUnaccept,
   syncInfluencerOnAccept,
@@ -308,13 +314,21 @@ export default function Outreach() {
         const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
         if (!inf || !isNewReply(inf, reply)) continue
 
+        const { data: fresh, error: readErr } = await supabase
+          .from('influencers')
+          .select('reply_count, status, last_contact_at, last_reply_at')
+          .eq('id', inf.id)
+          .single()
+        if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
+        if (!isNewReply(fresh, reply)) continue
+
         const replyAt = replyTimestamp(reply)
         const patch: Partial<Influencer> = {
           last_reply_at: replyAt,
-          reply_count: (inf.reply_count ?? 0) + 1,
+          reply_count: (fresh.reply_count ?? 0) + 1,
         }
 
-        if (shouldAutoMarkReply(inf.status || '')) {
+        if (shouldAutoMarkReply(fresh.status || '')) {
           patch.status = 'reply'
           statusUpdates++
         }
@@ -388,7 +402,7 @@ export default function Outreach() {
     const subject = applyPlaceholders(tpl.title, inf)
     const body = applyPlaceholders(tpl.body, inf)
     const sentAt = supabaseNow()
-    await gasPost({ action: 'sendOutreachEmail', to: inf.email, subject, body })
+    await sendOutreachEmail({ to: inf.email, subject, body })
     await logOutboundOutreach({
       influencer_id: inf.id,
       subject,
@@ -397,9 +411,15 @@ export default function Outreach() {
       template_id: tpl.id,
       sent_at: sentAt,
     })
-    const nextCount = nextContactCountAfterSend(inf.contact_count)
+    const { data: fresh, error: readErr } = await supabase
+      .from('influencers')
+      .select('contact_count')
+      .eq('id', inf.id)
+      .single()
+    if (readErr) { showToast(readErr.message, 'error'); return }
+    const nextCount = nextContactCountAfterSend(fresh?.contact_count)
     await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
-  }, [updateField])
+  }, [updateField, showToast])
 
   const updateMemo = useCallback((id: string, value: string) => {
     setMemoEdits(prev => ({ ...prev, [id]: value }))
@@ -553,6 +573,7 @@ export default function Outreach() {
 
         <TableActionBar
           selectedCount={checkedIds.size}
+          maxSelection={BULK_SEND_MAX}
           unit="명"
           actions={
             <>
@@ -566,6 +587,10 @@ export default function Outreach() {
                 onClick={() => {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
+                  if (checkedIds.size > BULK_SEND_MAX) {
+                    showToast(bulkSendLimitMessage(), 'error')
+                    return
+                  }
                   showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
                     setBulkSending(true)
                     const ids = Array.from(checkedIds)
@@ -605,8 +630,9 @@ export default function Outreach() {
                       <input type="checkbox"
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(r.id))}
                         onChange={e => setCheckedIds(prev => {
-                          const next = new Set(prev)
-                          pg.pageItems.forEach(r => e.target.checked ? next.add(r.id) : next.delete(r.id))
+                          const pageIds = pg.pageItems.map(r => r.id)
+                          const { next, rejected } = tryToggleBulkPage(prev, pageIds, e.target.checked)
+                          if (rejected) showToast(bulkSendLimitMessage(), 'error')
                           return next
                         })} />
                     </th>
@@ -713,7 +739,9 @@ export default function Outreach() {
                         {/* Checkbox */}
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                           <input type="checkbox" checked={checkedIds.has(inf.id)} onChange={e => {
-                            const next = new Set(checkedIds); e.target.checked ? next.add(inf.id) : next.delete(inf.id); setCheckedIds(next)
+                            const { next, rejected } = tryToggleBulkSelection(checkedIds, inf.id, e.target.checked)
+                            if (rejected) showToast(bulkSendLimitMessage(), 'error')
+                            setCheckedIds(next)
                           }} />
                         </td>
                         {/* 이름 + 핸들 */}
@@ -747,7 +775,7 @@ export default function Outreach() {
                         {/* 마지막 컨택 날짜 */}
                         <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {inf.last_contact_at && count > 0
+                            {count > 0
                               ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                   {count}차 발송{contactDateLabel ? ` ${contactDateLabel}` : ''}
                                 </span>
@@ -823,11 +851,15 @@ export default function Outreach() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setShowBulkPreview(false)}
                     style={{ padding: '6px 14px', background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>닫기</button>
-                  <button disabled={checkedIds.size === 0}
+                  <button disabled={checkedIds.size === 0 || checkedIds.size > BULK_SEND_MAX}
                     onClick={() => {
                       setShowBulkPreview(false)
                       const tpl2 = templates[bulkTplIdx]
                       if (!tpl2) return
+                      if (checkedIds.size > BULK_SEND_MAX) {
+                        showToast(bulkSendLimitMessage(), 'error')
+                        return
+                      }
                       showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
                         setBulkSending(true)
                         const ids = Array.from(checkedIds)

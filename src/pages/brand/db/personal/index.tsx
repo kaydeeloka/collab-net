@@ -228,11 +228,10 @@ export default function BrandDbPersonal() {
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const sorted = [...filtered].sort((a, b) => {
+    if (a.contacted !== b.contacted) return a.contacted ? 1 : -1
     const byName = a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
     if (byName !== 0) return byName
-    const byContact = (a.contact_name ?? '').localeCompare(b.contact_name ?? '', 'ko', { sensitivity: 'base' })
-    if (byContact !== 0) return byContact
-    return a.contacted === b.contacted ? 0 : a.contacted ? 1 : -1
+    return (a.contact_name ?? '').localeCompare(b.contact_name ?? '', 'ko', { sensitivity: 'base' })
   })
   const pg = paginate(sorted, page)
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Mail } from 'lucide-react'
+import { Link2, Mail } from 'lucide-react'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
 import { useToast } from '@/contexts/ToastContext'
+import { gasPost } from '@/lib/api'
 import {
   fetchEmailTemplates,
   saveEmailTemplate,
@@ -13,7 +14,13 @@ import {
   type EmailTemplateDomain,
 } from '@/lib/email-templates'
 import { getEmailTemplateUiConfig } from '@/lib/email-template-ui-config'
+import {
+  getSelectedText,
+  insertMarkdownLink,
+  renderEmailBodyPreview,
+} from '@/lib/email-body-format'
 import { formatKstDateTime } from '@/lib/utils'
+import { previewDefaultSignatureHtml } from '@/lib/email-signature-sync'
 
 function renderWithDummy(
   text: string,
@@ -97,6 +104,10 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const [isEditing, setIsEditing] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [linkLabel, setLinkLabel] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [signature, setSignature] = useState('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -117,6 +128,12 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
   }, [domain, showToast])
 
   useEffect(() => { reload() }, [reload])
+
+  useEffect(() => {
+    gasPost<{ ok?: boolean; signature?: string }>({ action: 'getEmailSignature' })
+      .then(res => setSignature(res.signature || previewDefaultSignatureHtml()))
+      .catch(() => setSignature(previewDefaultSignatureHtml()))
+  }, [])
 
   useEffect(() => {
     const t = templates[selectedIdx]
@@ -174,13 +191,39 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
               whiteSpace: 'pre-wrap',
             }}
           >
-            {renderWithDummy(previewBody, config.dummyValues)}
+            {renderEmailBodyPreview(previewBody, config.dummyValues)}
           </div>
         ) : (
           <div style={{ fontSize: 13, color: 'var(--gray-4)', fontStyle: 'italic' }}>본문 없음</div>
         )}
+        {signature && (
+          <div
+            style={{ marginTop: 16, fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.6 }}
+            dangerouslySetInnerHTML={{ __html: signature }}
+          />
+        )}
       </div>
     )
+  }
+
+  function openLinkModal() {
+    const selected = getSelectedText(bodyRef.current, body)
+    setLinkLabel(selected)
+    setLinkUrl('')
+    setShowLinkModal(true)
+  }
+
+  function confirmInsertLink() {
+    const label = linkLabel.trim()
+    const url = linkUrl.trim()
+    if (!label || !url) {
+      showToast('링크 텍스트와 URL을 모두 입력하세요', 'error')
+      return
+    }
+    insertMarkdownLink(bodyRef.current, body, label, url, setBody)
+    setShowLinkModal(false)
+    setLinkLabel('')
+    setLinkUrl('')
   }
 
   async function save() {
@@ -691,6 +734,26 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
             >
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 본문</label>
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={openLinkModal}
+                  style={{
+                    fontSize: 10,
+                    padding: '2px 8px',
+                    background: '#eff6ff',
+                    border: '1px solid #93c5fd',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    color: '#1d4ed8',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontWeight: 600,
+                  }}
+                >
+                  <Link2 size={11} />
+                  링크 삽입
+                </button>
                 {config.bodyPlaceholders.map(p => (
                   <button
                     key={p}
@@ -728,11 +791,124 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
                 lineHeight: 1.7,
               }}
             />
+            <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6, lineHeight: 1.5 }}>
+              링크 수정: <code style={{ fontSize: 10 }}>[표시 텍스트](URL)</code> 형식에서 대괄호 안 글자를 바꾸면 링크 이름이 변경됩니다.
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 서명</label>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: '4px 10px',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  border: '1px solid #93c5fd',
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  userSelect: 'none',
+                }}
+              >
+                기본 서명 적용
+              </span>
+            </div>
+            <div
+              style={{ fontSize: 13, lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: signature || previewDefaultSignatureHtml() }}
+            />
           </div>
             </>
           )}
         </div>
       </div>
+
+      <Modal
+        open={showLinkModal}
+        onClose={() => setShowLinkModal(false)}
+        title="링크 삽입"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setShowLinkModal(false)}
+              style={{
+                padding: '8px 16px',
+                background: 'var(--gray-1)',
+                border: '1px solid var(--gray-3)',
+                borderRadius: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={confirmInsertLink}
+              style={{
+                padding: '8px 16px',
+                background: 'var(--teal-dk)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              삽입
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)', display: 'block', marginBottom: 6 }}>
+              표시 텍스트
+            </label>
+            <input
+              value={linkLabel}
+              onChange={e => setLinkLabel(e.target.value)}
+              placeholder="예: 제안서 보기"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--gray-3)',
+                borderRadius: 8,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)', display: 'block', marginBottom: 6 }}>
+              URL
+            </label>
+            <input
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
+              placeholder="https://"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--gray-3)',
+                borderRadius: 8,
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmInsertLink() }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--gray-4)', lineHeight: 1.5 }}>
+            본문에 <code>[표시 텍스트](URL)</code> 형식으로 저장됩니다. 나중에 대괄호 안 글자만 수정하면 링크 이름을 바꿀 수 있습니다.
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={showPreviewModal}
