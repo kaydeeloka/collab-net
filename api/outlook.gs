@@ -490,6 +490,133 @@ function syncOutlookReplies(items) {
   }
 }
 
+var NDR_FROM_HINTS = ['mailer-daemon', 'postmaster', 'microsoftexchange', 'maildeliverysubsystem', 'msprv1'];
+
+var NDR_TEXT_HINTS = [
+  'undeliverable',
+  'delivery status notification',
+  'delivery has failed',
+  'could not be delivered',
+  'delivery failure',
+  '반송',
+  '배달할 수 없습니다',
+  '배달 못 함',
+  '배송할 수 없',
+  '550 5.1.1',
+  '550-5.1.1',
+  '5.1.1 the email account that you tried to reach does not exist',
+];
+
+function _ndrTextBlob(msg) {
+  var subject = msg.subject || '';
+  var body = ((msg.body || {}).content || '');
+  return (subject + ' ' + body).toLowerCase();
+}
+
+function _isNdrMessage(msg) {
+  var from = (((msg.from || {}).emailAddress || {}).address || '').toLowerCase();
+  for (var i = 0; i < NDR_FROM_HINTS.length; i++) {
+    if (from.indexOf(NDR_FROM_HINTS[i]) !== -1) return true;
+  }
+  var blob = _ndrTextBlob(msg);
+  for (var j = 0; j < NDR_TEXT_HINTS.length; j++) {
+    if (blob.indexOf(NDR_TEXT_HINTS[j]) !== -1) return true;
+  }
+  return false;
+}
+
+function _extractFailedRecipientEmails(content, subject) {
+  var text = (content || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ');
+  var emails = [];
+  var seen = {};
+
+  function add(email) {
+    var key = (email || '').trim().toLowerCase();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    emails.push(key);
+  }
+
+  var patterns = [
+    /받는\s*사람\s*주소\s*[:：]\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/gi,
+    /recipient(?:'s)?\s+address\s*[:：]\s*<?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>?/gi,
+    /final-recipient[^;]*;\s*rfc822;\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi,
+  ];
+
+  for (var p = 0; p < patterns.length; p++) {
+    var m;
+    var re = patterns[p];
+    while ((m = re.exec(text)) !== null) add(m[1]);
+  }
+
+  if (!emails.length) {
+    var matches = (text + ' ' + (subject || '')).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+    for (var i = 0; i < matches.length; i++) add(matches[i]);
+  }
+
+  return emails;
+}
+
+function syncOutlookDeliveryFailures(items) {
+  if (!items || !items.length) return { ok: true, failures: [] };
+  try {
+    const token = getOutlookAccessToken();
+    if (!token) return { ok: false, error: 'Outlook token missing' };
+
+    var candidateSet = {};
+    var minSinceMs = NaN;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var key = (item.email || '').trim().toLowerCase();
+      if (!key) continue;
+      candidateSet[key] = item.email;
+      var sinceMs = _toMs(item.since);
+      if (!isNaN(sinceMs) && (isNaN(minSinceMs) || sinceMs < minSinceMs)) minSinceMs = sinceMs;
+    }
+
+    var inboxUrl = GRAPH_BASE + '/me/mailFolders/inbox/messages'
+      + '?$orderby=receivedDateTime desc'
+      + '&$select=id,subject,from,receivedDateTime,body'
+      + '&$top=100';
+    var res = UrlFetchApp.fetch(inboxUrl, {
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      return { ok: false, error: 'Inbox fetch failed HTTP ' + res.getResponseCode() };
+    }
+
+    var failures = [];
+    var seen = {};
+    var msgs = JSON.parse(res.getContentText()).value || [];
+    for (var j = 0; j < msgs.length; j++) {
+      var msg = msgs[j];
+      if (!_isNdrMessage(msg)) continue;
+      var recvMs = _toMs(msg.receivedDateTime);
+      if (!isNaN(minSinceMs) && recvMs < minSinceMs - 60000) continue;
+
+      var bodyContent = ((msg.body || {}).content || '');
+      var subject = msg.subject || '';
+      var emails = _extractFailedRecipientEmails(bodyContent, subject);
+      for (var k = 0; k < emails.length; k++) {
+        var email = emails[k];
+        if (!candidateSet[email] || seen[email]) continue;
+        seen[email] = true;
+        failures.push({
+          email: candidateSet[email],
+          receivedAt: msg.receivedDateTime,
+          reason: subject.substring(0, 240),
+          messageId: msg.id || '',
+        });
+      }
+    }
+
+    return { ok: true, failures: failures };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
 function markOutlookMessagesRead(messageIds) {
   const ids = (messageIds || []).filter(Boolean);
   if (!ids.length) return { ok: true, marked: 0 };
@@ -527,6 +654,7 @@ function routeOutlook(action, p, body) {
     case 'resetEmailSignatureToDefault': return resetEmailSignatureToDefault();
     case 'setOutreachSignatureLogoUrl': return setOutreachSignatureLogoUrl(b);
     case 'syncOutlookReplies': return syncOutlookReplies(b.items || []);
+    case 'syncOutlookDeliveryFailures': return syncOutlookDeliveryFailures(b.items || []);
     case 'markOutlookMessagesRead': return markOutlookMessagesRead(b.messageIds || []);
     default: return null;
   }

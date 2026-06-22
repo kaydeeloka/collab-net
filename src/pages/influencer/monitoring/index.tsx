@@ -638,7 +638,10 @@ export default function Monitoring() {
     lastRun: rows.find(r => r.updated)?.updated || '',
   }
   const mimuseReviewCount = stats.brandCounts.mimuse ?? 0
-  const brandReviewCount  = BRANDS.filter(b => b !== 'mimuse').reduce((s, b) => s + (stats.brandCounts[b] ?? 0), 0)
+  const brandReviewCount = Object.entries(stats.brandCounts).reduce(
+    (sum, [key, count]) => (key === 'mimuse' ? sum : sum + count),
+    0,
+  )
   const platformReviewCounts = Object.fromEntries(
     PLATFORM_BUCKETS.map(key => [
       key,
@@ -766,11 +769,11 @@ export default function Monitoring() {
           valueColor="var(--blue-dk)"
           caption={(
             <>
-              <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>브랜드 리뷰</span>
-              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{brandReviewCount}</strong>
-              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
-              <span style={{ color: BRAND_COLORS.mimuse, fontWeight: 700 }}>MiMuse 리뷰</span>
+              <span style={{ color: BRAND_COLORS.mimuse, fontWeight: 700 }}>MiMuse</span>
               <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{mimuseReviewCount}</strong>
+              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
+              <span style={{ color: 'var(--gray-6)', fontWeight: 700 }}>브랜드별</span>
+              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{brandReviewCount}</strong>
             </>
           )}
         />
@@ -813,19 +816,19 @@ export default function Monitoring() {
         <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: '14px 20px', minWidth: 200 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>브랜드 횟수</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {BRANDS.map(brand => {
-              const count = stats.brandCounts?.[brand] ?? 0
-              return (
-                <div key={brand} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
-                    background: BRAND_COLORS[brand] + '18', color: BRAND_COLORS[brand],
-                    border: `1px solid ${BRAND_COLORS[brand]}44`,
-                  }}>{brand}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: count > 0 ? 'var(--gray-7)' : 'var(--gray-3)' }}>{count}</span>
-                </div>
-              )
-            })}
+            {[
+              { key: 'mimuse', label: 'MiMuse', count: mimuseReviewCount, color: BRAND_COLORS.mimuse },
+              { key: 'brand', label: '브랜드별', count: brandReviewCount, color: '#64748b' },
+            ].map(row => (
+              <div key={row.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20,
+                  background: row.color + '18', color: row.color,
+                  border: `1px solid ${row.color}44`,
+                }}>{row.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: row.count > 0 ? 'var(--gray-7)' : 'var(--gray-3)' }}>{row.count}</span>
+              </div>
+            ))}
           </div>
         </div>
 

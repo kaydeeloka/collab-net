@@ -1,8 +1,15 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
+import { fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
   bulkSendLimitMessage,
+  getOutreachSendError,
+  reportDeliveryBounces,
+  runBulkOutreachSend,
+  markBulkSendBounces,
+  type BulkSendLiveState,
   sendOutreachEmail,
   tryToggleBulkPage,
   tryToggleBulkSelection,
@@ -55,6 +62,7 @@ const TIER_COLOR: Record<string, string> = {
 const STATUS_OPTIONS = [
   { value: 'target',   label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
   { value: 'yes',      label: '발송 완료', bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'bounce',   label: '발송 실패', bg: '#fee2e2', color: '#b91c1c' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
   { value: 'positive', label: '긍정 검토', bg: '#d1fae5', color: '#065f46' },
   { value: 'negative', label: '부정 검토', bg: '#fee2e2', color: '#991b1b' },
@@ -229,6 +237,7 @@ export default function Outreach() {
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [bulkSending,     setBulkSending]     = useState(false)
+  const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
@@ -279,6 +288,92 @@ export default function Outreach() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showRoundFilter, showStatusFilter])
+
+  // ── Field update helpers ──
+  const updateField = useCallback(async (id: string, patch: Partial<Influencer>) => {
+    const inf = influencers.find(r => r.id === id)
+    const finalPatch = { ...patch }
+
+    // increment reply_count when status moves to a reply-type value
+    const replyStatuses = ['reply', 'positive', 'negative']
+    if (patch.status && replyStatuses.includes(patch.status) && inf?.status && !replyStatuses.includes(inf.status)) {
+      finalPatch.reply_count = (inf.reply_count ?? 0) + 1
+    }
+    if (patch.status && replyStatuses.includes(patch.status)) {
+      finalPatch.last_reply_at = supabaseNow()
+    }
+
+    const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
+    if (error) { showToast(error.message, 'error'); return }
+    setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
+
+    // sync to confirmed_influencers when status becomes accept (primary path)
+    if (patch.status === 'accept' && inf && viewPhaseId) {
+      const merged = { ...inf, ...finalPatch }
+      const result = await syncInfluencerOnAccept(merged, viewPhaseId)
+      if (!result.ok) {
+        showToast('확정 등록 실패: ' + result.error, 'error')
+      } else {
+        showToast(`${merged.display_name || merged.handle} 확정 등록 완료 — 확정 인플루언서 페이지에서 확인하세요`, 'success')
+      }
+    }
+
+    // remove from confirmed_influencers when status changes away from 'accept'
+    if (patch.status !== undefined && patch.status !== 'accept' && inf?.status === 'accept') {
+      const result = await removeInfluencerOnUnaccept(id)
+      if (!result.ok) showToast('확정 취소 실패: ' + result.error, 'error')
+      else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
+    }
+  }, [showToast, influencers, viewPhaseId])
+
+  const sendOutreachToInfluencer = useCallback(async (
+    inf: Influencer,
+    tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>,
+  ) => {
+    if (!inf.email) return
+    const subject = applyPlaceholders(tpl.title, inf)
+    const body = applyPlaceholders(tpl.body, inf)
+    const sentAt = supabaseNow()
+    const res = await sendOutreachEmail({ to: inf.email, subject, body })
+    const sendErr = getOutreachSendError(res)
+    if (sendErr) throw new Error(sendErr)
+    await logOutboundOutreach({
+      influencer_id: inf.id,
+      subject,
+      body,
+      template_name: tpl.name,
+      template_id: tpl.id,
+      sent_at: sentAt,
+    })
+    const { data: fresh, error: readErr } = await supabase
+      .from('influencers')
+      .select('contact_count')
+      .eq('id', inf.id)
+      .single()
+    if (readErr) throw new Error(readErr.message)
+    const nextCount = nextContactCountAfterSend(fresh?.contact_count)
+    await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
+  }, [updateField])
+
+  const applyDeliveryBounces = useCallback(async (
+    items: Array<{ id: string; email: string; label: string; since?: string | null }>,
+  ): Promise<Array<{ email: string; label: string; reason?: string }>> => {
+    const candidates = items
+      .filter(r => r.email.trim())
+      .map(r => ({ email: r.email, since: r.since || undefined, label: r.label, id: r.id }))
+    if (!candidates.length) return []
+
+    const failures = await fetchOutlookDeliveryFailures(candidates)
+    const bounced: Array<{ email: string; label: string; reason?: string }> = []
+    for (const f of failures) {
+      const row = candidates.find(c => c.email.toLowerCase() === f.email.toLowerCase())
+      if (!row) continue
+      await updateField(row.id, { status: 'bounce' })
+      bounced.push({ email: row.email, label: row.label, reason: f.reason })
+    }
+    if (bounced.length) reportDeliveryBounces(showToast, bounced)
+    return bounced
+  }, [updateField, showToast])
 
   const syncReplies = useCallback(async () => {
     const candidates = influencers.filter(r => {
@@ -342,6 +437,17 @@ export default function Outreach() {
 
       if (messageIds.length) await markRepliesReadInOutlook(messageIds)
 
+      try {
+        await applyDeliveryBounces(candidates.map(r => ({
+          id: r.id,
+          email: r.email!,
+          label: r.display_name || r.handle || r.email!,
+          since: toIsoTimestamp(r.last_contact_at),
+        })))
+      } catch (bounceErr) {
+        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
+      }
+
       setPage(1)
       await loadInfluencers()
 
@@ -355,71 +461,7 @@ export default function Outreach() {
     } finally {
       setSyncingReplies(false)
     }
-  }, [influencers, loadInfluencers, showToast])
-
-  // ── Field update helpers ──
-  const updateField = useCallback(async (id: string, patch: Partial<Influencer>) => {
-    const inf = influencers.find(r => r.id === id)
-    const finalPatch = { ...patch }
-
-    // increment reply_count when status moves to a reply-type value
-    const replyStatuses = ['reply', 'positive', 'negative']
-    if (patch.status && replyStatuses.includes(patch.status) && inf?.status && !replyStatuses.includes(inf.status)) {
-      finalPatch.reply_count = (inf.reply_count ?? 0) + 1
-    }
-    if (patch.status && replyStatuses.includes(patch.status)) {
-      finalPatch.last_reply_at = supabaseNow()
-    }
-
-    const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
-    if (error) { showToast(error.message, 'error'); return }
-    setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
-
-    // sync to confirmed_influencers when status becomes accept (primary path)
-    if (patch.status === 'accept' && inf && viewPhaseId) {
-      const merged = { ...inf, ...finalPatch }
-      const result = await syncInfluencerOnAccept(merged, viewPhaseId)
-      if (!result.ok) {
-        showToast('확정 등록 실패: ' + result.error, 'error')
-      } else {
-        showToast(`${merged.display_name || merged.handle} 확정 등록 완료 — 확정 인플루언서 페이지에서 확인하세요`, 'success')
-      }
-    }
-
-    // remove from confirmed_influencers when status changes away from 'accept'
-    if (patch.status !== undefined && patch.status !== 'accept' && inf?.status === 'accept') {
-      const result = await removeInfluencerOnUnaccept(id)
-      if (!result.ok) showToast('확정 취소 실패: ' + result.error, 'error')
-      else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
-    }
-  }, [showToast, influencers, viewPhaseId])
-
-  const sendOutreachToInfluencer = useCallback(async (
-    inf: Influencer,
-    tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>,
-  ) => {
-    if (!inf.email) return
-    const subject = applyPlaceholders(tpl.title, inf)
-    const body = applyPlaceholders(tpl.body, inf)
-    const sentAt = supabaseNow()
-    await sendOutreachEmail({ to: inf.email, subject, body })
-    await logOutboundOutreach({
-      influencer_id: inf.id,
-      subject,
-      body,
-      template_name: tpl.name,
-      template_id: tpl.id,
-      sent_at: sentAt,
-    })
-    const { data: fresh, error: readErr } = await supabase
-      .from('influencers')
-      .select('contact_count')
-      .eq('id', inf.id)
-      .single()
-    if (readErr) { showToast(readErr.message, 'error'); return }
-    const nextCount = nextContactCountAfterSend(fresh?.contact_count)
-    await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
-  }, [updateField, showToast])
+  }, [influencers, loadInfluencers, showToast, applyDeliveryBounces])
 
   const updateMemo = useCallback((id: string, value: string) => {
     setMemoEdits(prev => ({ ...prev, [id]: value }))
@@ -439,6 +481,61 @@ export default function Outreach() {
     })
     .sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
+
+  const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>) => {
+    const ids = Array.from(checkedIds)
+    const batchStartedAt = supabaseNow()
+    const sentRows: Influencer[] = []
+    const entries = ids.map(id => {
+      const inf = filtered.find(r => r.id === id)
+      return {
+        key: id,
+        label: inf?.display_name || inf?.handle || inf?.email || id,
+        email: inf?.email || undefined,
+        item: id,
+      }
+    })
+
+    setBulkSendModal({
+      running: true,
+      rows: entries.map(e => ({ key: e.key, label: e.label, email: e.email, status: 'pending' as const })),
+      progress: { current: 0, total: entries.length, failed: 0 },
+    })
+    setBulkSending(true)
+    try {
+      await runBulkOutreachSend(entries, async (id) => {
+        const inf = filtered.find(r => r.id === id)
+        if (!inf || !inf.email) return 'skipped'
+        await sendOutreachToInfluencer(inf, tpl)
+        sentRows.push(inf)
+        return 'sent'
+      }, setBulkSendModal)
+    } finally {
+      setBulkSending(false)
+      setCheckedIds(new Set())
+    }
+
+    if (sentRows.length) {
+      setBulkSendModal(prev => prev ? { ...prev, running: true, checkingBounces: true } : prev)
+      try {
+        const bounced = await applyDeliveryBounces(sentRows.map(inf => ({
+          id: inf.id,
+          email: inf.email!,
+          label: inf.display_name || inf.handle || inf.email!,
+          since: batchStartedAt,
+        })))
+        setBulkSendModal(prev => {
+          if (!prev) return prev
+          if (bounced.length) return markBulkSendBounces(prev, bounced)
+          return { ...prev, running: false, checkingBounces: false }
+        })
+      } catch (bounceErr) {
+        setBulkSendModal(prev => prev ? { ...prev, running: false, checkingBounces: false } : prev)
+        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
+      }
+    }
+    await loadInfluencers()
+  }, [checkedIds, filtered, sendOutreachToInfluencer, applyDeliveryBounces, loadInfluencers, showToast])
 
   const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
   const repliedCount   = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
@@ -592,19 +689,11 @@ export default function Outreach() {
                     return
                   }
                   showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
-                    setBulkSending(true)
-                    const ids = Array.from(checkedIds)
-                    for (const id of ids) {
-                      const inf = filtered.find(r => r.id === id)
-                      if (!inf || !inf.email) continue
-                      await sendOutreachToInfluencer(inf, tpl)
-                    }
-                    setBulkSending(false); setCheckedIds(new Set())
-                    showToast(`${ids.length}명에게 발송 완료`, 'success')
+                    await executeBulkSend(tpl)
                   }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
-                {bulkSending ? '발송 중...' : '일괄 발송'}
+                일괄 발송
               </Button>
               {checkedIds.size > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
@@ -861,15 +950,7 @@ export default function Outreach() {
                         return
                       }
                       showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
-                        setBulkSending(true)
-                        const ids = Array.from(checkedIds)
-                        for (const id of ids) {
-                          const inf = filtered.find(r => r.id === id)
-                          if (!inf || !inf.email) continue
-                          await sendOutreachToInfluencer(inf, tpl2)
-                        }
-                        setBulkSending(false); setCheckedIds(new Set())
-                        showToast(`${ids.length}명에게 발송 완료`, 'success')
+                        await executeBulkSend(tpl2)
                       }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                     }}
                     style={{ padding: '6px 14px', background: checkedIds.size === 0 ? 'var(--gray-3)' : 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
@@ -881,6 +962,13 @@ export default function Outreach() {
           </div>
         )
       })()}
+
+      <BulkSendProgressModal
+        open={bulkSendModal !== null}
+        state={bulkSendModal}
+        unit="명"
+        onClose={() => setBulkSendModal(null)}
+      />
     </div>
   )
 }

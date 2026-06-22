@@ -65,6 +65,8 @@ function StickyBarPhaseControls() {
     .sort((a, b) => phaseNum(a.label) - phaseNum(b.label))
   const phaseBadge = phaseList.find(p => p.id === viewPhaseId)?.name || '—'
   const selectedLabel = phaseList.find(p => p.id === activeDbId)?.name || phaseBadge
+  const selectedPhase = phaseList.find(p => p.id === activeDbId)
+  const selectedBadge = selectedPhase ? getPhaseStatusBadge(selectedPhase, activePhaseId) : null
 
   useEffect(() => {
     if (!open) return
@@ -95,6 +97,9 @@ function StickyBarPhaseControls() {
             aria-haspopup="listbox"
             aria-label="차수 전환"
           >
+            {selectedBadge?.tone === 'active' && (
+              <span className="sticky-bar__phase-live-dot" aria-label="활성" title="활성" />
+            )}
             {selectedLabel}
             <span className="sticky-bar__phase-chevron" aria-hidden>▾</span>
           </button>

@@ -10,9 +10,16 @@ import {
   shouldAutoMarkReply,
   toIsoTimestamp,
 } from '@/lib/reply-sync'
+import { fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
   bulkSendLimitMessage,
+  getOutreachSendError,
+  reportDeliveryBounces,
+  runBulkOutreachSend,
+  markBulkSendBounces,
+  type BulkSendLiveState,
   sendOutreachEmail,
   tryToggleBulkPage,
   tryToggleBulkSelection,
@@ -68,6 +75,7 @@ const TYPE_COLOR: Record<string, string> = {
 const STATUS_OPTIONS = [
   { value: '',         label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
   { value: 'yes',      label: '첫발송 완료', bg: '#dbeafe', color: '#1d4ed8' },
+  { value: 'bounce',   label: '발송 실패', bg: '#fee2e2', color: '#b91c1c' },
   { value: 'noreply',  label: '미회신',   bg: '#f1f5f9', color: '#64748b' },
   { value: 'reply',    label: '단순 회신', bg: '#fef3c7', color: '#d97706' },
   { value: 'positive', label: '긍정 검토', bg: '#d1fae5', color: '#065f46' },
@@ -124,6 +132,7 @@ export default function BrandContact() {
 
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
+  const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
@@ -268,6 +277,31 @@ export default function BrandContact() {
     }
   }, [showToast])
 
+  const applyDeliveryBounces = useCallback(async (
+    items: Array<{ row: BrandRow; since?: string | null }>,
+  ): Promise<Array<{ email: string; label: string; reason?: string }>> => {
+    const candidates = items
+      .filter(i => i.row.email?.trim())
+      .map(i => ({
+        email: i.row.email!,
+        since: i.since || undefined,
+        label: i.row.brand || i.row.email!,
+        row: i.row,
+      }))
+    if (!candidates.length) return []
+
+    const failures = await fetchOutlookDeliveryFailures(candidates)
+    const bounced: Array<{ email: string; label: string; reason?: string }> = []
+    for (const f of failures) {
+      const hit = candidates.find(c => c.email.toLowerCase() === f.email.toLowerCase())
+      if (!hit) continue
+      await updateField(hit.row, { status: 'bounce' })
+      bounced.push({ email: hit.email, label: hit.label, reason: f.reason })
+    }
+    if (bounced.length) reportDeliveryBounces(showToast, bounced)
+    return bounced
+  }, [updateField, showToast])
+
   const syncReplies = useCallback(async () => {
     const candidates = rows.filter(r => {
       const email = r.email?.trim()
@@ -330,6 +364,15 @@ export default function BrandContact() {
 
       if (messageIds.length) await markRepliesReadInOutlook(messageIds)
 
+      try {
+        await applyDeliveryBounces(candidates.map(row => ({
+          row,
+          since: toIsoTimestamp(row.last_contact_at),
+        })))
+      } catch (bounceErr) {
+        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
+      }
+
       setPage(1)
       await load()
       if (newReplies === 0) {
@@ -342,7 +385,7 @@ export default function BrandContact() {
     } finally {
       setSyncingReplies(false)
     }
-  }, [rows, showToast, load])
+  }, [rows, showToast, load, applyDeliveryBounces])
 
   const updateNote = useCallback((row: BrandRow, value: string) => {
     const key = row.id + row.source
@@ -360,6 +403,64 @@ export default function BrandContact() {
     return true
   }).sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
+
+  const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'title' | 'body'>) => {
+    const keys = Array.from(checkedIds)
+    const batchStartedAt = supabaseNow()
+    const sentRows: BrandRow[] = []
+    const entries = keys.map(key => {
+      const row = filtered.find(r => rowKey(r) === key)
+      return {
+        key,
+        label: row?.brand || row?.email || key,
+        email: row?.email || undefined,
+        item: key,
+      }
+    })
+
+    setBulkSendModal({
+      running: true,
+      rows: entries.map(e => ({ key: e.key, label: e.label, email: e.email, status: 'pending' as const })),
+      progress: { current: 0, total: entries.length, failed: 0 },
+    })
+    setBulkSending(true)
+    try {
+      await runBulkOutreachSend(entries, async (key) => {
+        const row = filtered.find(r => rowKey(r) === key)
+        if (!row || !row.email) return 'skipped'
+        const sentAt = supabaseNow()
+        const res = await sendOutreachEmail({
+          to: row.email,
+          subject: applyPlaceholders(tpl.title, row),
+          body: applyPlaceholders(tpl.body, row),
+        })
+        const sendErr = getOutreachSendError(res)
+        if (sendErr) throw new Error(sendErr)
+        if (!(await recordSendAfterEmail(row, sentAt))) throw new Error('DB 저장 실패')
+        sentRows.push(row)
+        return 'sent'
+      }, setBulkSendModal)
+    } finally {
+      setBulkSending(false)
+      setCheckedIds(new Set())
+    }
+
+    if (sentRows.length) {
+      setBulkSendModal(prev => prev ? { ...prev, running: true, checkingBounces: true } : prev)
+      try {
+        const bounced = await applyDeliveryBounces(sentRows.map(row => ({ row, since: batchStartedAt })))
+        setBulkSendModal(prev => {
+          if (!prev) return prev
+          if (bounced.length) return markBulkSendBounces(prev, bounced)
+          return { ...prev, running: false, checkingBounces: false }
+        })
+      } catch (bounceErr) {
+        setBulkSendModal(prev => prev ? { ...prev, running: false, checkingBounces: false } : prev)
+        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
+      }
+    }
+    await load()
+  }, [checkedIds, filtered, recordSendAfterEmail, applyDeliveryBounces, load, showToast])
 
   const sentCount    = rows.filter(r => r.send_count > 0).length
   const repliedCount = rows.filter(r => ['reply', 'positive', 'negative', 'accept'].includes(r.status)).length
@@ -495,26 +596,11 @@ export default function BrandContact() {
                     return
                   }
                   showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl), async () => {
-                    setBulkSending(true)
-                    let sent = 0
-                    for (const key of Array.from(checkedIds)) {
-                      const row = filtered.find(r => rowKey(r) === key)
-                      if (!row || !row.email) continue
-                      const sentAt = supabaseNow()
-                      await sendOutreachEmail({
-                        to: row.email,
-                        subject: applyPlaceholders(tpl.title, row),
-                        body: applyPlaceholders(tpl.body, row),
-                      })
-                      if (await recordSendAfterEmail(row, sentAt)) sent++
-                    }
-                    await load()
-                    setBulkSending(false); setCheckedIds(new Set())
-                    showToast(sent > 0 ? `일괄 발송 완료 (${sent}건)` : '일괄 발송 실패', sent > 0 ? 'success' : 'error')
+                    await executeBulkSend(tpl)
                   }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
-                {bulkSending ? '발송 중...' : '일괄 발송'}
+                일괄 발송
               </Button>
               {checkedIds.size > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
@@ -694,6 +780,13 @@ export default function BrandContact() {
           </div>
         </div>
       )}
+
+      <BulkSendProgressModal
+        open={bulkSendModal !== null}
+        state={bulkSendModal}
+        unit="건"
+        onClose={() => setBulkSendModal(null)}
+      />
 
     </div>
   )

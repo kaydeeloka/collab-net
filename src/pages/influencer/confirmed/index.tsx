@@ -71,26 +71,22 @@ interface ConfirmedRow {
 
 const INFLUENCER_TARGET = 50
 
-const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
-const BRAND_COLORS: Record<(typeof BRANDS)[number], string> = {
-  mimuse:  '#3b82f6',
-  aesthen: '#8b5cf6',
-  joodoc:  '#ec4899',
-  nesh:    '#f59e0b',
-  varuza:  '#10b981',
+const MIMUSE_BRAND_COLOR = '#3b82f6'
+const BRAND_TOTAL_COLOR = '#64748b'
+
+function emptyBrandCounts(): { mimuse: number; brand: number } {
+  return { mimuse: 0, brand: 0 }
 }
 
-function emptyBrandCounts(): Record<(typeof BRANDS)[number], number> {
-  return { mimuse: 0, aesthen: 0, joodoc: 0, nesh: 0, varuza: 0 }
-}
-
-function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand: string | null }[] }[] }[]): Record<(typeof BRANDS)[number], number> {
+function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand: string | null }[] }[] }[]): { mimuse: number; brand: number } {
   const counts = emptyBrandCounts()
   for (const r of data) {
     for (const p of r.influencer_platform ?? []) {
       for (const m of p.monitoring ?? []) {
-        const b = (m.brand || '').toLowerCase() as (typeof BRANDS)[number]
-        if (b in counts) counts[b]++
+        const b = (m.brand || '').toLowerCase()
+        if (!b) continue
+        if (b === 'mimuse') counts.mimuse++
+        else counts.brand++
       }
     }
   }
@@ -752,11 +748,10 @@ export default function Confirmed() {
               highlight
               label="브랜드 횟수"
               variant="grid"
-              columns={BRANDS.map(brand => ({
-                value: brandCounts[brand] ?? 0,
-                label: brand,
-                color: BRAND_COLORS[brand],
-              }))}
+              columns={[
+                { value: brandCounts.mimuse, label: 'MiMuse', color: MIMUSE_BRAND_COLOR },
+                { value: brandCounts.brand, label: '브랜드별', color: BRAND_TOTAL_COLOR },
+              ]}
             />
           </StatCards>
 

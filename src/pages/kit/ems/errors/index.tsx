@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { sendOutreachEmail } from '@/lib/outreach-email'
+import BulkSendProgressModal from '@/components/BulkSendProgressModal'
+import { getOutreachSendError, runBulkOutreachSend, type BulkSendLiveState, sendOutreachEmail } from '@/lib/outreach-email'
 import {
   EMS_ERROR_STATUS_STYLE,
   ERROR_STATUS_OPTIONS,
@@ -78,6 +79,7 @@ export default function EmsErrors() {
   const [templates, setTemplates] = useState<EmsTemplate[]>([])
   const [bulkTplIdx, setBulkTplIdx] = useState(0)
   const [bulkSending, setBulkSending] = useState(false)
+  const [bulkSendModal, setBulkSendModal] = useState<BulkSendLiveState | null>(null)
 
   useEffect(() => {
     loadEmsTemplates().then(setTemplates).catch(() => showToast('템플릿을 불러오지 못했습니다', 'error'))
@@ -210,35 +212,46 @@ export default function EmsErrors() {
                   const tpl = templates[bulkTplIdx]
                   if (!tpl) return
                   showConfirm(`${checkedIds.size}명에게 일괄 발송하시겠습니까?`, async () => {
-                    setBulkSending(true)
-                    let sent = 0
-                    let failed = 0
-                    for (const id of checkedIds) {
+                    const ids = Array.from(checkedIds)
+                    const entries = ids.map(id => {
                       const row = rows.find(r => r.id === id)
-                      if (!row?.email) continue
-                      try {
+                      return {
+                        key: id,
+                        label: row?.name || id,
+                        email: row?.email || undefined,
+                        item: id,
+                      }
+                    })
+
+                    setBulkSendModal({
+                      running: true,
+                      rows: entries.map(e => ({ key: e.key, label: e.label, email: e.email, status: 'pending' as const })),
+                      progress: { current: 0, total: entries.length, failed: 0 },
+                    })
+                    setBulkSending(true)
+                    try {
+                      await runBulkOutreachSend(entries, async (id) => {
+                        const row = rows.find(r => r.id === id)
+                        if (!row?.email) return 'skipped'
                         const res = await sendOutreachEmail({
                           to: row.email,
                           subject: applyEmsPlaceholders(tpl.title, row),
                           body: applyEmsPlaceholders(tpl.body, row),
                         })
-                        if (res.error || res.ok === false) throw new Error(res.error || '발송 실패')
+                        const sendErr = getOutreachSendError(res)
+                        if (sendErr) throw new Error(sendErr)
                         await updateEmsReship(row.id, { email_sent: true })
                         setRows(prev => prev.map(r => r.id === row.id ? { ...r, email_sent: true } : r))
-                        sent++
-                      } catch (e: unknown) {
-                        failed++
-                        showToast(`${row.name}: ${(e as Error).message}`, 'error')
-                      }
+                        return 'sent'
+                      }, setBulkSendModal)
+                    } finally {
+                      setBulkSending(false)
+                      setCheckedIds(new Set())
                     }
-                    setBulkSending(false)
-                    setCheckedIds(new Set())
-                    if (sent > 0) showToast(`${sent}명 일괄 발송 완료${failed > 0 ? ` (${failed}건 실패)` : ''}`, 'success')
-                    else if (failed === 0) showToast('이메일이 있는 선택 항목이 없습니다', 'error')
                   }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
                 }}
               >
-                {bulkSending ? '발송 중...' : '일괄 발송'}
+                일괄 발송
               </Button>
               {checkedIds.size > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
@@ -427,6 +440,12 @@ export default function EmsErrors() {
         </table>
       </div>
       )}
+      <BulkSendProgressModal
+        open={bulkSendModal !== null}
+        state={bulkSendModal}
+        unit="명"
+        onClose={() => setBulkSendModal(null)}
+      />
     </div>
   )
 }

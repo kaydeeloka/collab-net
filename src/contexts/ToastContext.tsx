@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback((msg: string, type: ToastType = 'success') => {
     const id = ++nextId
     setToasts(prev => [...prev, { id, msg, type }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), type === 'error' ? 8000 : 3500)
   }, [])
 
   const hideConfirm = useCallback(() => {
@@ -85,7 +85,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 display: 'flex', alignItems: 'center', gap: 10, pointerEvents: 'auto',
               }}>
                 <span style={{ fontSize: 16 }}>{icon}</span>
-                <span>{t.msg}</span>
+                <span style={{ whiteSpace: 'pre-line' }}>{t.msg}</span>
               </div>
             )
           })}
