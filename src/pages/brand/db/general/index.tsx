@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
+import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -289,11 +290,14 @@ export default function BrandDbGeneral() {
             {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}개)`}
           </button>
         )}
-        <button
-          onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' }); setShowAdd(true) }}
-          style={{ marginLeft: 'auto', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
-          + DB 추가
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <BrandDbPhaseImport table="brand_general" onImported={load} />
+          <button
+            onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' }); setShowAdd(true) }}
+            style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
+            + DB 추가
+          </button>
+        </div>
       </div>
 
       {/* Table */}

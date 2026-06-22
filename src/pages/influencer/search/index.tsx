@@ -981,7 +981,7 @@ export default function Listup() {
                 {configLoading ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--gray-5)' }}><Spinner sm /> 불러오는 중...</div>
                 ) : (
-                <div className="table-wrap">
+                <div className="table-wrap listup-soft-head-table">
                   <table style={{ minWidth: 0 }}>
                     <thead><tr><th>순위</th><th>규모</th><th>팔로워 범위</th><th>카테고리</th>{tierEditMode && <th></th>}</tr></thead>
                     <tbody>

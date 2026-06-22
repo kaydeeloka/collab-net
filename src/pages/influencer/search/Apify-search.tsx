@@ -763,7 +763,7 @@ export default function Listup() {
                     <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('기본값으로 초기화하시겠습니까?', () => { setTiers(DEFAULT_TIERS.map(t => ({...t}))); saveConfig('tiers', DEFAULT_TIERS); setTierEditMode(false) })}>↺</button>
                   </div>
                 </div>
-                <div className="table-wrap">
+                <div className="table-wrap listup-soft-head-table">
                   <table style={{ minWidth: 0 }}>
                     <thead><tr><th>순위</th><th>규모</th><th>팔로워 범위</th><th>카테고리</th>{tierEditMode && <th></th>}</tr></thead>
                     <tbody>
