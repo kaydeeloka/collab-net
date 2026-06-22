@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
-import { fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
@@ -9,6 +9,7 @@ import {
   reportDeliveryBounces,
   runBulkOutreachSend,
   markBulkSendBounces,
+  scheduleBulkDeliveryCheck,
   type BulkSendLiveState,
   sendOutreachEmail,
   tryToggleBulkPage,
@@ -244,6 +245,7 @@ export default function Outreach() {
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [bulkSending,     setBulkSending]     = useState(false)
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
+  const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
@@ -410,13 +412,17 @@ export default function Outreach() {
 
   const applyDeliveryBounces = useCallback(async (
     items: Array<{ id: string; email: string; label: string; since?: string | null }>,
+    options?: { bulk?: boolean },
   ): Promise<Array<{ email: string; label: string; reason?: string }>> => {
     const candidates = items
       .filter(r => r.email.trim())
       .map(r => ({ email: r.email, since: r.since || undefined, label: r.label, id: r.id }))
     if (!candidates.length) return []
 
-    const failures = await fetchOutlookDeliveryFailures(candidates)
+    const failures = await fetchOutlookDeliveryFailures(
+      candidates,
+      options?.bulk ? { delaysMs: BULK_BOUNCE_DELAYS_MS } : undefined,
+    )
     const bounced: Array<{ email: string; label: string; reason?: string }> = []
     for (const f of failures) {
       const row = candidates.find(c => c.email.toLowerCase() === f.email.toLowerCase())
@@ -575,26 +581,31 @@ export default function Outreach() {
       setCheckedIds(new Set())
     }
 
-    if (sentRows.length) {
-      setBulkSendModal(prev => prev ? { ...prev, running: true, checkingBounces: true } : prev)
-      try {
-        const bounced = await applyDeliveryBounces(sentRows.map(inf => ({
-          id: inf.id,
-          email: inf.email!,
-          label: inf.display_name || inf.handle || inf.email!,
-          since: batchStartedAt,
-        })))
-        setBulkSendModal(prev => {
-          if (!prev) return prev
-          if (bounced.length) return markBulkSendBounces(prev, bounced)
-          return { ...prev, running: false, checkingBounces: false }
-        })
-      } catch (bounceErr) {
-        setBulkSendModal(prev => prev ? { ...prev, running: false, checkingBounces: false } : prev)
-        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
-      }
-    }
     await loadInfluencers()
+
+    if (sentRows.length) {
+      const bounceItems = sentRows.map(inf => ({
+        id: inf.id,
+        email: inf.email!,
+        label: inf.display_name || inf.handle || inf.email!,
+        since: batchStartedAt,
+      }))
+      scheduleBulkDeliveryCheck(
+        bounceItems,
+        items => applyDeliveryBounces(items, { bulk: true }),
+        {
+          showToast,
+          onStart: () => setCheckingDeliveryFailures(true),
+          onFinish: () => setCheckingDeliveryFailures(false),
+          onBounces: bounced => {
+            if (bounced.length) {
+              setBulkSendModal(prev => (prev ? markBulkSendBounces(prev, bounced) : prev))
+            }
+          },
+          reload: loadInfluencers,
+        },
+      )
+    }
   }, [checkedIds, filtered, sendOutreachToInfluencer, applyDeliveryBounces, loadInfluencers, showToast])
 
   const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
@@ -750,6 +761,12 @@ export default function Outreach() {
                 >
                   선택 해제 ({checkedIds.size})
                 </button>
+              )}
+              {checkingDeliveryFailures && (
+                <span className="table-action-bar__pending-badge" title="메일이 수신자에게 전달되지 못한 경우를 받은편지함에서 확인 중입니다">
+                  <span className="table-action-bar__pending-badge-dot" aria-hidden />
+                  발송 실패 확인 중…
+                </span>
               )}
             </>
           }

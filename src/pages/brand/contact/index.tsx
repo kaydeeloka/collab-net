@@ -10,7 +10,7 @@ import {
   shouldAutoMarkReply,
   toIsoTimestamp,
 } from '@/lib/reply-sync'
-import { fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
 import { cancelBrandContact } from '@/lib/contact-cancel'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
@@ -20,6 +20,7 @@ import {
   reportDeliveryBounces,
   runBulkOutreachSend,
   markBulkSendBounces,
+  scheduleBulkDeliveryCheck,
   type BulkSendLiveState,
   sendOutreachEmail,
   tryToggleBulkPage,
@@ -136,6 +137,7 @@ export default function BrandContact() {
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
+  const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
@@ -282,6 +284,7 @@ export default function BrandContact() {
 
   const applyDeliveryBounces = useCallback(async (
     items: Array<{ row: BrandRow; since?: string | null }>,
+    options?: { bulk?: boolean },
   ): Promise<Array<{ email: string; label: string; reason?: string }>> => {
     const candidates = items
       .filter(i => i.row.email?.trim())
@@ -293,7 +296,10 @@ export default function BrandContact() {
       }))
     if (!candidates.length) return []
 
-    const failures = await fetchOutlookDeliveryFailures(candidates)
+    const failures = await fetchOutlookDeliveryFailures(
+      candidates,
+      options?.bulk ? { delaysMs: BULK_BOUNCE_DELAYS_MS } : undefined,
+    )
     const bounced: Array<{ email: string; label: string; reason?: string }> = []
     for (const f of failures) {
       const hit = candidates.find(c => c.email.toLowerCase() === f.email.toLowerCase())
@@ -501,21 +507,26 @@ export default function BrandContact() {
       setCheckedIds(new Set())
     }
 
-    if (sentRows.length) {
-      setBulkSendModal(prev => prev ? { ...prev, running: true, checkingBounces: true } : prev)
-      try {
-        const bounced = await applyDeliveryBounces(sentRows.map(row => ({ row, since: batchStartedAt })))
-        setBulkSendModal(prev => {
-          if (!prev) return prev
-          if (bounced.length) return markBulkSendBounces(prev, bounced)
-          return { ...prev, running: false, checkingBounces: false }
-        })
-      } catch (bounceErr) {
-        setBulkSendModal(prev => prev ? { ...prev, running: false, checkingBounces: false } : prev)
-        showToast(bounceErr instanceof Error ? bounceErr.message : '배송 실패 확인 실패', 'error')
-      }
-    }
     await load()
+
+    if (sentRows.length) {
+      const bounceItems = sentRows.map(row => ({ row, since: batchStartedAt }))
+      scheduleBulkDeliveryCheck(
+        bounceItems,
+        items => applyDeliveryBounces(items, { bulk: true }),
+        {
+          showToast,
+          onStart: () => setCheckingDeliveryFailures(true),
+          onFinish: () => setCheckingDeliveryFailures(false),
+          onBounces: bounced => {
+            if (bounced.length) {
+              setBulkSendModal(prev => (prev ? markBulkSendBounces(prev, bounced) : prev))
+            }
+          },
+          reload: load,
+        },
+      )
+    }
   }, [checkedIds, filtered, recordSendAfterEmail, applyDeliveryBounces, load, showToast])
 
   const sentCount    = rows.filter(r => r.send_count > 0).length
@@ -653,6 +664,12 @@ export default function BrandContact() {
                 >
                   선택 해제 ({checkedIds.size})
                 </button>
+              )}
+              {checkingDeliveryFailures && (
+                <span className="table-action-bar__pending-badge" title="메일이 수신자에게 전달되지 못한 경우를 받은편지함에서 확인 중입니다">
+                  <span className="table-action-bar__pending-badge-dot" aria-hidden />
+                  발송 실패 확인 중…
+                </span>
               )}
             </>
           }

@@ -67,7 +67,7 @@ const GROUPS: SideGroup[] = [
     children: [
       { to: '/archive/design',         label: '디자인 자료' },
       { to: '/archive/overall-report', label: '전체 리포트' },
-      { to: '/archive/brand-report',   label: '브랜드 리포트' },
+      { to: '/archive/brand-report',   label: '시즌 컬렉션' },
     ],
   },
 ]

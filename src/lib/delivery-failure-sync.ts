@@ -7,8 +7,11 @@ export interface DeliveryFailure {
   messageId?: string
 }
 
-/** NDRs often arrive a few seconds after Graph reports send success */
-const BOUNCE_RETRY_DELAYS_MS = [0, 4000, 10000, 18000]
+/** Quick retries when checking older sends (e.g. 회신 확인) */
+export const SYNC_BOUNCE_DELAYS_MS = [0, 4000, 10000, 18000]
+
+/** After bulk send — NDRs usually arrive ~1 min later; check once, then retry */
+export const BULK_BOUNCE_DELAYS_MS = [60000, 45000]
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -34,15 +37,15 @@ async function fetchOutlookDeliveryFailuresOnce(
 
 export async function fetchOutlookDeliveryFailures(
   candidates: Array<{ email: string; since?: string | null }>,
-  options?: { waitForBounces?: boolean },
+  options?: { waitForBounces?: boolean; delaysMs?: number[] },
 ): Promise<DeliveryFailure[]> {
   const items = candidates
     .map(c => ({ email: c.email.trim(), since: c.since || undefined }))
     .filter(i => i.email)
   if (!items.length) return []
 
-  const wait = options?.waitForBounces !== false
-  const delays = wait ? BOUNCE_RETRY_DELAYS_MS : [0]
+  const delays = options?.delaysMs
+    ?? (options?.waitForBounces === false ? [0] : SYNC_BOUNCE_DELAYS_MS)
   const merged = new Map<string, DeliveryFailure>()
 
   for (let i = 0; i < delays.length; i++) {

@@ -34,20 +34,16 @@ export default function BulkSendProgressModal({
 }) {
   if (!state) return null
 
-  const { running, checkingBounces, rows, progress } = state
-  const busy = running || !!checkingBounces
+  const { running, rows, progress } = state
+  const busy = running
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0
   const sent = rows.filter(r => r.status === 'sent').length
   const failed = rows.filter(r => r.status === 'failed').length
   const skipped = rows.filter(r => r.status === 'skipped').length
-  const title = checkingBounces
-    ? '반송 메일 확인 중…'
-    : running
-      ? `일괄 발송 중 (${progress.current}/${progress.total})`
-      : '일괄 발송 완료'
-  const statusLine = checkingBounces
-    ? '받은편지함에서 배달 실패(NDR) 확인 중…'
-    : '이메일 발송 중…'
+  const title = running
+    ? `일괄 발송 중 (${progress.current}/${progress.total})`
+    : '일괄 발송 완료'
+  const statusLine = '이메일 발송 중…'
   const summaryText = formatBulkSendSummary(sent, failed, unit)
   const listScrollable = rows.length > LIST_SCROLL_AT
 
@@ -68,16 +64,15 @@ export default function BulkSendProgressModal({
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, fontWeight: 600, color: 'var(--gray-6)' }}>
               <span>{statusLine}</span>
-              <span>{checkingBounces ? <Spinner sm /> : `${pct}%`}</span>
+              <span>{`${pct}%`}</span>
             </div>
             <div style={{ height: 8, borderRadius: 999, background: 'var(--gray-1)', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
-                width: checkingBounces ? '100%' : `${pct}%`,
+                width: `${pct}%`,
                 borderRadius: 999,
                 background: failed > 0 ? 'linear-gradient(90deg, var(--teal-dk), #f87171)' : 'var(--teal-dk)',
                 transition: 'width .25s ease',
-                opacity: checkingBounces ? 0.45 : 1,
               }} />
             </div>
           </div>
@@ -102,7 +97,7 @@ export default function BulkSendProgressModal({
               }}
             >
               <div style={{ width: 20, paddingTop: 1, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
-                {row.status === 'sending' || (checkingBounces && row.status === 'sent')
+                {row.status === 'sending'
                   ? <Spinner sm />
                   : (
                     <span style={{

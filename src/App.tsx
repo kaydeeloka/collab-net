@@ -43,7 +43,8 @@ import EmsData    from './pages/kit/ems-data'
 // ARCHIVE
 import ArchiveDesign        from './pages/archive/design'
 import ArchiveOverallReport from './pages/archive/overall-report'
-import ArchiveBrandReport   from './pages/archive/brand-report'
+import ArchiveBrandReport       from './pages/archive/brand-report'
+import ArchiveBrandReportPhase  from './pages/archive/brand-report/phase'
 
 export default function App() {
   return (
@@ -108,7 +109,8 @@ export default function App() {
                 {/* ── ARCHIVE ── */}
                 <Route path="/archive/design"          element={<ArchiveDesign />} />
                 <Route path="/archive/overall-report"  element={<ArchiveOverallReport />} />
-                <Route path="/archive/brand-report"    element={<ArchiveBrandReport />} />
+                <Route path="/archive/brand-report"           element={<ArchiveBrandReport />} />
+                <Route path="/archive/brand-report/:phaseId" element={<ArchiveBrandReportPhase />} />
 
               </Route>
             </Route>

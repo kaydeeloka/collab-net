@@ -138,6 +138,35 @@ export function reportDeliveryBounces(
   showToast(`배송 실패 ${bounces.length}건 감지\n${lines.join('\n')}${more}`, 'error')
 }
 
+/** Fire-and-forget NDR check after bulk send — does not block the progress modal. */
+export function scheduleBulkDeliveryCheck<T>(
+  items: T[],
+  check: (items: T[]) => Promise<Array<{ email: string; reason?: string }>>,
+  callbacks: {
+    showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+    onStart?: () => void
+    onFinish?: () => void
+    onBounces?: (failures: Array<{ email: string; reason?: string }>) => void
+    reload?: () => Promise<void>
+  },
+) {
+  if (!items.length) return
+
+  void (async () => {
+    callbacks.onStart?.()
+    callbacks.showToast('발송 완료 — 발송 실패 여부 확인 중… (약 1–2분)', 'info')
+    try {
+      const bounced = await check(items)
+      callbacks.onBounces?.(bounced)
+      await callbacks.reload?.()
+    } catch (e) {
+      callbacks.showToast(e instanceof Error ? e.message : '발송 실패 확인 실패', 'error')
+    } finally {
+      callbacks.onFinish?.()
+    }
+  })()
+}
+
 export function markBulkSendBounces(
   state: BulkSendLiveState,
   failures: Array<{ email: string; reason?: string }>,
