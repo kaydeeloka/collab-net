@@ -20,7 +20,9 @@ import {
   renderEmailBodyPreview,
 } from '@/lib/email-body-format'
 import { formatKstDateTime } from '@/lib/utils'
-import { previewDefaultSignatureHtml } from '@/lib/email-signature-sync'
+import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/email-signature-sync'
+
+const LOGO_SYNC_KEY = 'outreach-logo-compressed-synced'
 
 function renderWithDummy(
   text: string,
@@ -133,6 +135,14 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
     gasPost<{ ok?: boolean; signature?: string }>({ action: 'getEmailSignature' })
       .then(res => setSignature(res.signature || previewDefaultSignatureHtml()))
       .catch(() => setSignature(previewDefaultSignatureHtml()))
+
+    if (localStorage.getItem(LOGO_SYNC_KEY)) return
+    syncSignatureLogoAndReset()
+      .then(sig => {
+        localStorage.setItem(LOGO_SYNC_KEY, '1')
+        setSignature(sig)
+      })
+      .catch(() => { /* bucket/GAS not ready — upload manually if clip persists */ })
   }, [])
 
   useEffect(() => {

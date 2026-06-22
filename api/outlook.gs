@@ -144,8 +144,49 @@ function checkOutlookAuth() {
 // ── Outreach body → HTML (markdown links + optional signature) ─
 var OUTREACH_SIGNATURE_PROP = 'OUTREACH_EMAIL_SIGNATURE';
 var OUTREACH_SIGNATURE_MAX_CHARS = 2500;
-var OUTREACH_EMAIL_MAX_CHARS = 80000;
+var GMAIL_SAFE_MAX_BYTES = 92 * 1024;
+var OUTREACH_BODY_MAX_BYTES = 75000;
 var _MD_LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+
+function _htmlByteSize(html) {
+  return Utilities.newBlob(String(html || ''), 'text/html', 'email.html').getBytes().length;
+}
+
+function _stripAllEmailBloat(html) {
+  var s = String(html || '');
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*["']data:[^"']*["'][^>]*>/gi, '');
+  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*data:[^ >]+[^>]*>/gi, '');
+  s = s.replace(/\b(?:href|src)\s*=\s*["']cid:[^"']*["']/gi, '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+  s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  s = s.replace(/<!\[if[\s\S]*?endif\]>/gi, '');
+  s = s.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<\/?(o|v|w|m|st1):[^>]*>/gi, '');
+  s = s.replace(/<blockquote\b[\s\S]*?<\/blockquote>/gi, '');
+  return s.trim();
+}
+
+/** Gmail clips HTML over ~102KB. Strip bloat; drop logo if still too large. */
+function _ensureGmailSafeOutreachHtml(html) {
+  var s = _stripAllEmailBloat(html);
+  if (_htmlByteSize(s) <= GMAIL_SAFE_MAX_BYTES) return s;
+
+  s = s.replace(/<img\b[^>]*>/gi, '');
+  s = _stripAllEmailBloat(s);
+  if (_htmlByteSize(s) <= GMAIL_SAFE_MAX_BYTES) return s;
+
+  var bodyOnly = s
+    .replace(/^<div[^>]*>/i, '')
+    .replace(/<\/div>\s*$/i, '')
+    .replace(/<div style="margin-top:12px[\s\S]*$/i, '')
+    .replace(/<table[\s\S]*$/i, '')
+    .replace(/<br>\s*$/i, '');
+  return _stripAllEmailBloat(
+    '<div style="font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.7;color:#222;">'
+    + bodyOnly + '<br>' + textOnlyOutreachSignatureHtml() + '</div>'
+  );
+}
 
 function _escapeHtml(str) {
   return String(str || '')
@@ -196,12 +237,7 @@ function _getOutreachSignatureHtml() {
 }
 
 function _stripEmailHtmlBloat(html) {
-  var s = String(html || '');
-  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*["']data:[^"']*["'][^>]*>/gi, '');
-  s = s.replace(/<img\b[^>]*\bsrc\s*=\s*data:[^ >]+[^>]*>/gi, '');
-  s = s.replace(/<!--[\s\S]*?-->/g, '');
-  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  return s.trim();
+  return _stripAllEmailBloat(html);
 }
 
 function setOutreachSignatureLogoUrl(body) {
@@ -242,17 +278,11 @@ function _formatOutreachBodyHtml(plainBody) {
 
 function _assembleOutreachHtml(bodyPart, signaturePart) {
   var sig = signaturePart || '';
-  var html = '<div style="font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif;font-size:14px;line-height:1.7;color:#222;">'
+  var html = '<div style="font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.7;color:#222;">'
     + bodyPart
     + (sig ? '<br>' + sig : '')
     + '</div>';
-  html = _stripEmailHtmlBloat(html);
-  if (html.length > OUTREACH_EMAIL_MAX_CHARS) {
-    html = '<div style="font-family:\'Malgun Gothic\',\'Apple SD Gothic Neo\',sans-serif;font-size:14px;line-height:1.7;color:#222;">'
-      + bodyPart + '<br>' + defaultOutreachSignatureHtml() + '</div>';
-    html = _stripEmailHtmlBloat(html);
-  }
-  return html;
+  return _ensureGmailSafeOutreachHtml(html);
 }
 
 function _buildOutreachHtmlBody(plainBody) {
@@ -290,7 +320,7 @@ function sendOutlookEmail(body) {
   if (!email || !body.subject) return { ok: false, error: '이메일 주소 또는 제목이 없습니다.' };
   try {
     const token = getOutlookAccessToken();
-    const htmlBody = _stripEmailHtmlBloat(
+    const htmlBody = _ensureGmailSafeOutreachHtml(
       body.htmlBody
         ? _mergeHtmlBodyWithSignature(body.htmlBody)
         : _buildOutreachHtmlBody(body.body || ''),

@@ -3,13 +3,14 @@ import { gasPost } from '@/lib/api'
 import { buildDefaultOutreachSignatureHtml } from '@/lib/email-signature-config'
 
 const BUCKET = 'email-assets'
-const LOGO_PATH = 'crane-logo.png'
+const LOGO_FILE = 'crane-logo-compressed.png'
+const LOGO_PATH = LOGO_FILE
 
 export function localSignatureLogoUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/email/crane-logo.png`
+    return `${window.location.origin}/email/${LOGO_FILE}`
   }
-  return '/email/crane-logo.png'
+  return `/email/${LOGO_FILE}`
 }
 
 export function isLegacyOutreachSignature(html: string): boolean {
@@ -19,10 +20,10 @@ export function isLegacyOutreachSignature(html: string): boolean {
     || html.includes('<style')
 }
 
-/** Upload public/email/crane-logo.png → Supabase, set GAS logo URL, reset signature HTML. */
+/** Upload public/email/crane-logo-compressed.png → Supabase, set GAS logo URL, reset signature HTML. */
 export async function syncSignatureLogoAndReset(): Promise<string> {
-  const res = await fetch('/email/crane-logo.png', { cache: 'no-store' })
-  if (!res.ok) throw new Error('로고 파일을 찾을 수 없습니다 (public/email/crane-logo.png)')
+  const res = await fetch(`/email/${LOGO_FILE}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`로고 파일을 찾을 수 없습니다 (public/email/${LOGO_FILE})`)
 
   const blob = await res.blob()
   const { error: uploadErr } = await supabase.storage
