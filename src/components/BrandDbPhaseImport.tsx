@@ -6,6 +6,9 @@ import Modal from '@/components/Modal'
 
 type BrandTable = 'brand_general' | 'brand_personal'
 
+type GeneralPreviewRow = { brand_name: string; email: string[] | null; contacted: boolean }
+type PersonalPreviewRow = { brand_name: string; contact_name: string | null; personal_email: string[] | null; contacted: boolean }
+
 function generalDedupKey(row: { brand_name?: string | null; email?: string[] | null }) {
   const name = String(row.brand_name ?? '').trim().toLowerCase()
   const email = Array.isArray(row.email) ? (row.email[0] ?? '').trim().toLowerCase() : ''
@@ -17,6 +20,18 @@ function personalDedupKey(row: { brand_name?: string | null; contact_name?: stri
   const contact = String(row.contact_name ?? '').trim().toLowerCase()
   const email = Array.isArray(row.personal_email) ? (row.personal_email[0] ?? '').trim().toLowerCase() : ''
   return `${name}|${contact}|${email}`
+}
+
+function previewCounts<T extends { contacted: boolean }>(
+  current: T[],
+  source: T[],
+  dedupKey: (row: T) => string,
+  importContactedOnly: boolean,
+) {
+  const existingSet = new Set(current.map(r => dedupKey(r)))
+  const filtered = source.filter(r => !importContactedOnly || r.contacted === true)
+  const add = filtered.filter(r => !existingSet.has(dedupKey(r))).length
+  return { add, skip: filtered.length - add }
 }
 
 export default function BrandDbPhaseImport({
@@ -44,30 +59,102 @@ export default function BrandDbPhaseImport({
   const [importPreview, setImportPreview] = useState<{ add: number; skip: number } | null>(null)
   const [importing, setImporting] = useState(false)
 
-  const dedupKey = table === 'brand_general' ? generalDedupKey : personalDedupKey
-
   const loadImportPreview = useCallback(async () => {
     if (!selectedPhaseId || !importPhaseId) { setImportPreview(null); return }
 
-    const select = table === 'brand_general'
-      ? 'brand_name, email, contacted'
-      : 'brand_name, contact_name, personal_email, contacted'
+    if (table === 'brand_general') {
+      const [{ data: current }, { data: source }] = await Promise.all([
+        supabase.from('brand_general').select('brand_name, email, contacted').eq('phase_id', selectedPhaseId),
+        supabase.from('brand_general').select('brand_name, email, contacted').eq('phase_id', importPhaseId),
+      ])
+      setImportPreview(previewCounts(
+        (current ?? []) as GeneralPreviewRow[],
+        (source ?? []) as GeneralPreviewRow[],
+        generalDedupKey,
+        importContactedOnly,
+      ))
+      return
+    }
 
     const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from(table).select(select).eq('phase_id', selectedPhaseId),
-      supabase.from(table).select(select).eq('phase_id', importPhaseId),
+      supabase.from('brand_personal').select('brand_name, contact_name, personal_email, contacted').eq('phase_id', selectedPhaseId),
+      supabase.from('brand_personal').select('brand_name, contact_name, personal_email, contacted').eq('phase_id', importPhaseId),
     ])
-
-    const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
-    const filtered = (source ?? []).filter(r => !importContactedOnly || r.contacted === true)
-    const add = filtered.filter(r => !existingSet.has(dedupKey(r))).length
-    setImportPreview({ add, skip: filtered.length - add })
+    setImportPreview(previewCounts(
+      (current ?? []) as PersonalPreviewRow[],
+      (source ?? []) as PersonalPreviewRow[],
+      personalDedupKey,
+      importContactedOnly,
+    ))
   }, [selectedPhaseId, importPhaseId, importContactedOnly, table])
 
   useEffect(() => {
     if (!showModal) return
     void loadImportPreview()
   }, [showModal, loadImportPreview])
+
+  async function importGeneralFromPhase() {
+    const [{ data: current }, { data: source }] = await Promise.all([
+      supabase.from('brand_general').select('brand_name, email').eq('phase_id', selectedPhaseId!),
+      supabase.from('brand_general').select('*').eq('phase_id', importPhaseId),
+    ])
+    const existingSet = new Set((current ?? []).map(r => generalDedupKey(r)))
+    return (source ?? [])
+      .filter(r => !importContactedOnly || r.contacted === true)
+      .filter(r => !existingSet.has(generalDedupKey(r)))
+      .map(r => ({
+        phase_id:        selectedPhaseId!,
+        source_phase_id: importPhaseId,
+        contacted:       false,
+        status:          '',
+        send_count:      0,
+        reply_count:     0,
+        notes:           null,
+        last_reply_at:   null,
+        brand_name:       r.brand_name,
+        company:          r.company ?? null,
+        email:            Array.isArray(r.email) ? r.email : r.email ? [r.email] : null,
+        telephone:        r.telephone ?? null,
+        website:          r.website ?? null,
+        product_category: r.product_category ?? null,
+        overseas:         r.overseas ?? false,
+      }))
+  }
+
+  async function importPersonalFromPhase() {
+    const [{ data: current }, { data: source }] = await Promise.all([
+      supabase.from('brand_personal').select('brand_name, contact_name, personal_email').eq('phase_id', selectedPhaseId!),
+      supabase.from('brand_personal').select('*').eq('phase_id', importPhaseId),
+    ])
+    const existingSet = new Set((current ?? []).map(r => personalDedupKey(r)))
+    return (source ?? [])
+      .filter(r => !importContactedOnly || r.contacted === true)
+      .filter(r => !existingSet.has(personalDedupKey(r)))
+      .map(r => ({
+        phase_id:        selectedPhaseId!,
+        source_phase_id: importPhaseId,
+        contacted:       false,
+        status:          '',
+        send_count:      0,
+        reply_count:     0,
+        notes:           null,
+        last_reply_at:   null,
+        brand_name:       r.brand_name,
+        company:          r.company ?? null,
+        contact_name:     r.contact_name ?? null,
+        department:       r.department ?? null,
+        position:         r.position ?? null,
+        personal_email:   Array.isArray(r.personal_email)
+          ? r.personal_email
+          : r.personal_email ? [r.personal_email] : null,
+        personal_phone:   r.personal_phone ?? null,
+        website:          r.website ?? null,
+        rep_email:        r.rep_email ?? null,
+        telephone:        r.telephone ?? null,
+        product_category: r.product_category ?? null,
+        overseas:         r.overseas ?? false,
+      }))
+  }
 
   async function importFromPhase() {
     if (!selectedPhaseId || !importPhaseId) {
@@ -81,70 +168,26 @@ export default function BrandDbPhaseImport({
 
     setImporting(true)
     try {
-      const [{ data: current }, { data: source }] = await Promise.all([
-        supabase.from(table).select(
-          table === 'brand_general'
-            ? 'brand_name, email'
-            : 'brand_name, contact_name, personal_email',
-        ).eq('phase_id', selectedPhaseId),
-        supabase.from(table).select('*').eq('phase_id', importPhaseId),
-      ])
-
-      const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
-      const rows = (source ?? [])
-        .filter(r => !importContactedOnly || r.contacted === true)
-        .filter(r => !existingSet.has(dedupKey(r)))
-        .map(r => {
-          const base = {
-            phase_id:        selectedPhaseId,
-            source_phase_id: importPhaseId,
-            contacted:       false,
-            status:       '',
-            send_count:   0,
-            reply_count:  0,
-            notes:        null,
-            last_reply_at: null,
-          }
-          if (table === 'brand_general') {
-            return {
-              ...base,
-              brand_name:       r.brand_name,
-              company:          r.company ?? null,
-              email:            Array.isArray(r.email) ? r.email : r.email ? [r.email] : null,
-              telephone:        r.telephone ?? null,
-              website:          r.website ?? null,
-              product_category: r.product_category ?? null,
-              overseas:         r.overseas ?? false,
-            }
-          }
-          return {
-            ...base,
-            brand_name:       r.brand_name,
-            company:          r.company ?? null,
-            contact_name:     r.contact_name ?? null,
-            department:       r.department ?? null,
-            position:         r.position ?? null,
-            personal_email:   Array.isArray(r.personal_email)
-              ? r.personal_email
-              : r.personal_email ? [r.personal_email] : null,
-            personal_phone:   r.personal_phone ?? null,
-            website:          r.website ?? null,
-            rep_email:        r.rep_email ?? null,
-            telephone:        r.telephone ?? null,
-            product_category: r.product_category ?? null,
-            overseas:         r.overseas ?? false,
-          }
-        })
-
-      if (!rows.length) {
-        showToast('추가할 브랜드가 없습니다.', 'error')
-        return
+      if (table === 'brand_general') {
+        const rows = await importGeneralFromPhase()
+        if (!rows.length) {
+          showToast('추가할 브랜드가 없습니다.', 'error')
+          return
+        }
+        const { error } = await supabase.from('brand_general').insert(rows)
+        if (error) throw error
+        showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
+      } else {
+        const rows = await importPersonalFromPhase()
+        if (!rows.length) {
+          showToast('추가할 브랜드가 없습니다.', 'error')
+          return
+        }
+        const { error } = await supabase.from('brand_personal').insert(rows)
+        if (error) throw error
+        showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
       }
 
-      const { error } = await supabase.from(table).insert(rows)
-      if (error) throw error
-
-      showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
       setShowModal(false)
       onImported()
     } catch (e: unknown) {
