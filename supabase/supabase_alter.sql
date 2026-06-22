@@ -1156,3 +1156,19 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION dedupe_confirmed_phase(UUID) TO anon, authenticated;
+
+-- influencers — contacted flag (list membership, separate from outreach status)
+ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contacted BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Backfill: anyone with outreach status was in the contact pool
+UPDATE influencers
+SET contacted = TRUE
+WHERE status IS NOT NULL AND BTRIM(status) <> '';
+
+-- Clear contacted when there is no outreach status (fixes inconsistent rows)
+UPDATE influencers
+SET contacted = FALSE
+WHERE status IS NULL OR BTRIM(status) = '';
+
+CREATE INDEX IF NOT EXISTS idx_influencers_contacted ON influencers(phase_id, contacted)
+  WHERE contacted = TRUE;

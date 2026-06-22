@@ -20,6 +20,7 @@ import {
   TCM_TARGET_MIN,
   tryToggleTcmKeyword,
 } from '@/lib/tcm-search'
+import { markInfluencerContact } from '@/lib/contact-cancel'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
 type ListupTab = 'search' | 'database'
@@ -131,6 +132,7 @@ interface Influencer  {
   display_name: string | null; email: string | null; followers: number; following: number
   following_ratio: string | null;   total_likes: number; video_count: number
   engagement_rate: number; profile_url: string | null; avatar_url?: string | null; status: string
+  contacted: boolean
   source_phase_id?: string | null
   tiers?: { rank: string; label: string; category: string } | null
 }
@@ -640,24 +642,36 @@ export default function Listup() {
   async function markContact(id: string) {
     const inf = influencers.find(r => r.id === id)
     if (!inf) return
-    // only allow toggling off if status is exactly 'target'; advanced statuses can't be cleared here
-    if (inf.status && inf.status !== 'target') return
-    const newStatus = inf.status === 'target' ? '' : 'target'
-    const { error } = await supabase.from('influencers').update({ status: newStatus }).eq('id', id)
-    if (error) return
-    setInfluencers(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r))
+    const { ok, error } = await markInfluencerContact(id, !!inf.contacted, inf.status)
+    if (!ok) { showToast(error || '컨택 상태 변경 실패', 'error'); return }
+    const nextContacted = !inf.contacted
+    setInfluencers(prev => prev.map(r => r.id === id ? {
+      ...r,
+      contacted: nextContacted,
+      status: nextContacted && !r.status ? 'target' : r.status,
+    } : r))
   }
 
   async function bulkMarkTarget() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('influencers').update({ status: 'target' }).in('id', ids)
-    if (!error) {
-      setInfluencers(prev => prev.map(inf => selected.has(inf.id) ? { ...inf, status: 'target' } : inf))
-      setSelected(new Set())
-      navigate('/influencer/contact')
+    const selectedRows = influencers.filter(inf => selected.has(inf.id))
+    const { error } = await supabase.from('influencers').update({ contacted: true }).in('id', ids)
+    if (error) {
+      showToast(error.message, 'error')
+      setBulkLoading(false)
+      return
     }
+    const needsStatus = selectedRows.filter(r => !r.status).map(r => r.id)
+    if (needsStatus.length) {
+      await supabase.from('influencers').update({ status: 'target' }).in('id', needsStatus)
+    }
+    setInfluencers(prev => prev.map(inf => selected.has(inf.id)
+      ? { ...inf, contacted: true, status: inf.status || 'target' }
+      : inf))
+    setSelected(new Set())
+    navigate('/influencer/contact')
     setBulkLoading(false)
   }
 
@@ -722,7 +736,7 @@ export default function Listup() {
     let list = influencers
     if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
     if (dateFrom) list = list.filter(inf => matchesKstDate(inf.created_at, dateFrom))
-    return [...list].sort((a, b) => (a.status ? 1 : 0) - (b.status ? 1 : 0))
+    return [...list].sort((a, b) => (a.contacted ? 1 : 0) - (b.contacted ? 1 : 0))
   }
 
   function renderDbTable() {
@@ -818,7 +832,10 @@ export default function Listup() {
                 : rows.map(inf => {
                   const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
-                    <tr key={inf.id} style={tc ? { borderLeft: `3px solid ${tc}` } : undefined}>
+                    <tr key={inf.id} style={{
+                      ...(tc ? { borderLeft: `3px solid ${tc}` } : {}),
+                      background: inf.contacted ? '#f0fdf4' : undefined,
+                    }}>
                       <td style={{ textAlign: 'center' }}>
                         <input type="checkbox"
                           checked={selected.has(inf.id)}
@@ -855,11 +872,11 @@ export default function Listup() {
                           onClick={() => markContact(inf.id)}
                           style={{
                             padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
-                            border: `1.5px solid ${inf.status ? '#6ee7b7' : '#e2e8f0'}`,
-                            background: inf.status ? '#d1fae5' : '#f1f5f9',
-                            color: inf.status ? '#065f46' : '#94a3b8',
+                            border: `1.5px solid ${inf.contacted ? '#6ee7b7' : '#e2e8f0'}`,
+                            background: inf.contacted ? '#d1fae5' : '#f1f5f9',
+                            color: inf.contacted ? '#065f46' : '#94a3b8',
                           }}>
-                          {inf.status ? '✓ 컨택' : '컨택'}
+                          {inf.contacted ? '✓ 컨택' : '컨택'}
                         </button>
                       </td>
                     </tr>

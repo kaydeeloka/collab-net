@@ -11,6 +11,7 @@ import {
   toIsoTimestamp,
 } from '@/lib/reply-sync'
 import { fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import { cancelBrandContact } from '@/lib/contact-cancel'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
@@ -413,6 +414,52 @@ export default function BrandContact() {
     if (truncated) showToast(bulkSendLimitMessage(), 'error')
   }, [checkedIds, filtered, showToast])
 
+  const requestCancelContact = useCallback((row: BrandRow) => {
+    const name = row.brand || row.name || '해당 브랜드'
+    showConfirm(
+      `${name} 컨택을 취소하고 브랜드 DB로 되돌리시겠습니까?`,
+      async () => {
+        const result = await cancelBrandContact(row.id, row.source)
+        if (!result.ok) {
+          showToast(result.error || '컨택 취소 실패', 'error')
+          return
+        }
+        setRows(prev => prev.filter(r => !(r.id === row.id && r.source === row.source)))
+        setCheckedIds(prev => {
+          const next = new Set(prev)
+          next.delete(rowKey(row))
+          return next
+        })
+        showToast(`${name} 컨택 취소됨 — 브랜드 DB에서 다시 확인할 수 있습니다`, 'success')
+      },
+      { confirmLabel: '컨택 취소', confirmColor: '#b91c1c' },
+    )
+  }, [showConfirm, showToast])
+
+  const requestCancelContactBulk = useCallback(() => {
+    const keys = Array.from(checkedIds)
+    if (!keys.length) return
+    const targets = filtered.filter(r => keys.includes(rowKey(r)))
+    showConfirm(
+      `선택한 ${targets.length}건 컨택을 취소하고 브랜드 DB로 되돌리시겠습니까?`,
+      async () => {
+        let failed = 0
+        for (const row of targets) {
+          const result = await cancelBrandContact(row.id, row.source)
+          if (!result.ok) failed++
+        }
+        if (failed) {
+          showToast(`${failed}건 컨택 취소 실패`, 'error')
+        } else {
+          showToast(`${targets.length}건 컨택 취소됨`, 'success')
+        }
+        setRows(prev => prev.filter(r => !keys.includes(rowKey(r))))
+        setCheckedIds(new Set())
+      },
+      { confirmLabel: '컨택 취소', confirmColor: '#b91c1c' },
+    )
+  }, [checkedIds, filtered, showConfirm, showToast])
+
   const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'title' | 'body'>) => {
     const keys = Array.from(checkedIds)
     const batchStartedAt = supabaseNow()
@@ -632,6 +679,15 @@ export default function BrandContact() {
               >
                 일괄 발송
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={checkedIds.size === 0}
+                onClick={requestCancelContactBulk}
+                style={{ color: '#b91c1c', borderColor: '#fecaca' }}
+              >
+                컨택 취소
+              </Button>
             </>
           }
         >
@@ -683,11 +739,12 @@ export default function BrandContact() {
                     </th>
                     <th style={{ ...thBase, minWidth: 110 }}>마지막 컨택 날짜</th>
                     <th style={{ ...thBase, minWidth: 180 }}>비고</th>
+                    <th style={{ ...thBase, width: 88, textAlign: 'center' }}>관리</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                       컨택 대상으로 설정된 브랜드가 없습니다.
                     </td></tr>
                   )}
@@ -750,6 +807,25 @@ export default function BrandContact() {
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = noteVal ? 'var(--gray-0)' : 'transparent' }}
                           />
+                        </td>
+                        <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <button
+                            type="button"
+                            onClick={() => requestCancelContact(row)}
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              borderRadius: 999,
+                              border: '1px solid #fecaca',
+                              background: '#fff',
+                              color: '#b91c1c',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            컨택 취소
+                          </button>
                         </td>
                       </tr>
                     )

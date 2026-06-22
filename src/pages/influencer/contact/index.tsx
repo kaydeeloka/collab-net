@@ -17,6 +17,9 @@ import {
   toggleBulkAllFiltered,
 } from '@/lib/outreach-email'
 import {
+  cancelInfluencerContact,
+} from '@/lib/contact-cancel'
+import {
   removeInfluencerOnUnaccept,
   syncInfluencerOnAccept,
   syncMissingAcceptedToConfirmed,
@@ -89,6 +92,7 @@ interface Influencer {
   profile_url: string | null
   platform: string | null
   status: string
+  contacted: boolean
   contact_count: number
   last_contact_at: string | null
   last_reply_at: string | null
@@ -254,8 +258,9 @@ export default function Outreach() {
     setLoading(true)
     const { data, error } = await supabase
       .from('influencers')
-      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contact_count, last_contact_at, last_reply_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
+      .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contacted, contact_count, last_contact_at, last_reply_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
       .eq('phase_id', viewPhaseId)
+      .eq('contacted', true)
       .order('last_reply_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -327,6 +332,52 @@ export default function Outreach() {
       else showToast(`${inf.display_name || inf.handle} 확정 취소됨`, 'success')
     }
   }, [showToast, influencers, viewPhaseId])
+
+  const requestCancelContact = useCallback((inf: Influencer) => {
+    const name = inf.display_name || inf.handle || '해당 인플루언서'
+    showConfirm(
+      `${name} 컨택을 취소하고 리스트업 DB로 되돌리시겠습니까?`,
+      async () => {
+        const result = await cancelInfluencerContact(inf.id)
+        if (!result.ok) {
+          showToast(result.error || '컨택 취소 실패', 'error')
+          return
+        }
+        setInfluencers(prev => prev.filter(r => r.id !== inf.id))
+        setCheckedIds(prev => {
+          const next = new Set(prev)
+          next.delete(inf.id)
+          return next
+        })
+        showToast(`${name} 컨택 취소됨 — 리스트업에서 다시 확인할 수 있습니다`, 'success')
+      },
+      { confirmLabel: '컨택 취소', confirmColor: '#b91c1c' },
+    )
+  }, [showConfirm, showToast])
+
+  const requestCancelContactBulk = useCallback(() => {
+    const ids = Array.from(checkedIds)
+    if (!ids.length) return
+    const targets = influencers.filter(r => ids.includes(r.id))
+    showConfirm(
+      `선택한 ${targets.length}명 컨택을 취소하고 리스트업 DB로 되돌리시겠습니까?`,
+      async () => {
+        let failed = 0
+        for (const inf of targets) {
+          const result = await cancelInfluencerContact(inf.id)
+          if (!result.ok) failed++
+        }
+        if (failed) {
+          showToast(`${failed}건 컨택 취소 실패`, 'error')
+        } else {
+          showToast(`${targets.length}명 컨택 취소됨`, 'success')
+        }
+        setInfluencers(prev => prev.filter(r => !ids.includes(r.id)))
+        setCheckedIds(new Set())
+      },
+      { confirmLabel: '컨택 취소', confirmColor: '#b91c1c' },
+    )
+  }, [checkedIds, influencers, showConfirm, showToast])
 
   const sendOutreachToInfluencer = useCallback(async (
     inf: Influencer,
@@ -475,7 +526,7 @@ export default function Outreach() {
 
   // ── Derived ──
   const filtered = influencers
-    .filter(r => {
+    .filter((r: Influencer) => {
       if (activeTier !== '전체' && r.tiers?.rank !== activeTier) return false
       if (statusFilter && (r.status || '') !== statusFilter) return false
       if (roundFilter && String(r.contact_count ?? 0) !== roundFilter) return false
@@ -483,10 +534,10 @@ export default function Outreach() {
     })
     .sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
-  const allFilteredSelected = isBulkAllSelected(checkedIds, filtered.map(r => r.id))
+  const allFilteredSelected = isBulkAllSelected(checkedIds, influencers.map(r => r.id))
 
   const toggleSelectAllFiltered = useCallback(() => {
-    const { next, truncated } = toggleBulkAllFiltered(checkedIds, filtered.map(r => r.id))
+    const { next, truncated } = toggleBulkAllFiltered(checkedIds, influencers.map(r => r.id))
     setCheckedIds(next)
     if (truncated) showToast(bulkSendLimitMessage(), 'error')
   }, [checkedIds, filtered, showToast])
@@ -725,6 +776,15 @@ export default function Outreach() {
               >
                 일괄 발송
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={checkedIds.size === 0}
+                onClick={requestCancelContactBulk}
+                style={{ color: '#b91c1c', borderColor: '#fecaca' }}
+              >
+                컨택 취소
+              </Button>
             </>
           }
         >
@@ -835,12 +895,13 @@ export default function Outreach() {
                         )}
                       </div>
                     </th>
+                    <th style={{ ...thBase, width: 88, textAlign: 'center' }}>관리</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
-                      데이터가 없습니다.
+                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                      컨택 대상으로 설정된 인플루언서가 없습니다.
                     </td></tr>
                   )}
                   {pg.pageItems.map(inf => {
@@ -922,6 +983,25 @@ export default function Outreach() {
                             count={count}
                             onChange={n => updateField(inf.id, { contact_count: n })}
                           />
+                        </td>
+                        <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <button
+                            type="button"
+                            onClick={() => requestCancelContact(inf)}
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              borderRadius: 999,
+                              border: '1px solid #fecaca',
+                              background: '#fff',
+                              color: '#b91c1c',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            컨택 취소
+                          </button>
                         </td>
                       </tr>
                     )
