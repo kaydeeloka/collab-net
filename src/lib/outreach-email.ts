@@ -1,5 +1,4 @@
 import { gasPost } from '@/lib/api'
-import { plainBodyToHtmlForSend } from '@/lib/email-body-format'
 
 export const BULK_SEND_MAX = 500
 
@@ -49,12 +48,10 @@ export async function sendOutreachEmail(payload: {
   subject: string
   body: string
 }) {
-  const body = payload.body || ''
   return gasPost<{ ok?: boolean; error?: string; date?: string }>({
     action: 'sendOutreachEmail',
     to: payload.to,
     subject: payload.subject,
-    body,
-    htmlBody: plainBodyToHtmlForSend(body),
+    body: payload.body || '',
   })
 }

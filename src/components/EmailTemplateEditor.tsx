@@ -22,7 +22,7 @@ import {
 import { formatKstDateTime } from '@/lib/utils'
 import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/email-signature-sync'
 
-const LOGO_SYNC_KEY = 'outreach-logo-compressed-synced'
+const LOGO_SYNC_KEY = 'outreach-logo-supabase-v3'
 
 function renderWithDummy(
   text: string,

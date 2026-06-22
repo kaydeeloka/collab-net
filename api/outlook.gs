@@ -167,7 +167,7 @@ function _stripAllEmailBloat(html) {
   return s.trim();
 }
 
-/** Gmail clips HTML over ~102KB. Strip bloat; drop logo if still too large. */
+/** Gmail clips HTML over ~102KB. Logo uses external HTTPS URL (not inline attachment). */
 function _ensureGmailSafeOutreachHtml(html) {
   var s = _stripAllEmailBloat(html);
   if (_htmlByteSize(s) <= GMAIL_SAFE_MAX_BYTES) return s;
@@ -179,12 +179,12 @@ function _ensureGmailSafeOutreachHtml(html) {
   var bodyOnly = s
     .replace(/^<div[^>]*>/i, '')
     .replace(/<\/div>\s*$/i, '')
-    .replace(/<div style="margin-top:12px[\s\S]*$/i, '')
+    .replace(/<img\b[^>]*alt\s*=\s*["']Crane Communications["'][\s\S]*$/i, '')
     .replace(/<table[\s\S]*$/i, '')
     .replace(/<br>\s*$/i, '');
   return _stripAllEmailBloat(
     '<div style="font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.7;color:#222;">'
-    + bodyOnly + '<br>' + textOnlyOutreachSignatureHtml() + '</div>'
+    + bodyOnly + '<br><br>' + textOnlyOutreachSignatureHtml() + '</div>'
   );
 }
 
@@ -232,8 +232,8 @@ function _isLegacyOutreachSignature(html) {
 }
 
 /** Always build fresh compact signature (logo URL + text). Never use bloated saved HTML. */
-function _getOutreachSignatureHtml() {
-  return defaultOutreachSignatureHtml();
+function _getOutreachSignatureHtml(uniqueKey) {
+  return defaultOutreachSignatureHtml(uniqueKey);
 }
 
 function _stripEmailHtmlBloat(html) {
@@ -253,7 +253,8 @@ function _sanitizeOutreachHtml(html) {
   return s.replace(/<!--[\s\S]*?-->/g, '').trim();
 }
 
-function _formatOutreachBodyHtml(plainBody) {
+/** Plain template text → minimal HTML: escaped text, newlines as <br>, markdown links as <a> only. */
+function _formatOutreachBodyPlain(plainBody) {
   var text = String(plainBody || '');
   if (!text) return '';
   var parts = [];
@@ -276,24 +277,33 @@ function _formatOutreachBodyHtml(plainBody) {
   return parts.join('');
 }
 
-function _assembleOutreachHtml(bodyPart, signaturePart) {
-  var sig = signaturePart || '';
+function _outreachUniqueKey(email) {
+  return String(email || 'outreach') + '-' + Utilities.getUuid();
+}
+
+/** Body = plain text (+ link tags). Signature = HTML table with logo. */
+function _assembleOutreachHtml(bodyPlainHtml, signatureHtml) {
+  var sig = signatureHtml || '';
   var html = '<div style="font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.7;color:#222;">'
-    + bodyPart
+    + String(bodyPlainHtml || '')
     + (sig ? '<br>' + sig : '')
     + '</div>';
   return _ensureGmailSafeOutreachHtml(html);
 }
 
-function _buildOutreachHtmlBody(plainBody) {
-  return _assembleOutreachHtml(_formatOutreachBodyHtml(plainBody), _getOutreachSignatureHtml());
+function _buildOutreachHtmlBody(plainBody, email) {
+  var uniqueKey = _outreachUniqueKey(email);
+  return _assembleOutreachHtml(
+    _formatOutreachBodyPlain(plainBody),
+    _getOutreachSignatureHtml(uniqueKey)
+  );
 }
 
-function _mergeHtmlBodyWithSignature(htmlBody) {
+function _mergeHtmlBodyWithSignature(htmlBody, email) {
   var bodyPart = String(htmlBody || '')
     .replace(/^<div[^>]*>/i, '')
     .replace(/<\/div>\s*$/i, '');
-  return _assembleOutreachHtml(bodyPart, _getOutreachSignatureHtml());
+  return _assembleOutreachHtml(bodyPart, _getOutreachSignatureHtml(_outreachUniqueKey(email)));
 }
 
 function getEmailSignature() {
@@ -320,11 +330,9 @@ function sendOutlookEmail(body) {
   if (!email || !body.subject) return { ok: false, error: '이메일 주소 또는 제목이 없습니다.' };
   try {
     const token = getOutlookAccessToken();
-    const htmlBody = _ensureGmailSafeOutreachHtml(
-      body.htmlBody
-        ? _mergeHtmlBodyWithSignature(body.htmlBody)
-        : _buildOutreachHtmlBody(body.body || ''),
-    );
+    const htmlBody = body.htmlBody
+      ? _mergeHtmlBodyWithSignature(body.htmlBody, email)
+      : _buildOutreachHtmlBody(body.body || '', email);
     const payload = {
       message: {
         subject: body.subject,
