@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Building2, Globe, Mail, Phone, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -326,15 +328,6 @@ export default function BrandDbPersonal() {
     </div>
   )
 
-  const infoRow = (label: string, value: string | null | undefined, isLink = false) => (
-    <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>{label}</span>
-      {isLink && value
-        ? <a href={value.startsWith('http') ? value : 'https://' + value} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13 }}>↗ 방문</a>
-        : <span style={{ fontSize: 13, color: value ? 'var(--gray-8)' : 'var(--gray-3)' }}>{value || '—'}</span>}
-    </div>
-  )
-
   return (
     <div>
       {/* Toolbar + Search */}
@@ -497,43 +490,101 @@ export default function BrandDbPersonal() {
 
       {/* View Modal */}
       {viewRow && (
-        <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {infoRow('성명',      viewRow.contact_name ?? null)}
-            {infoRow('부서',        viewRow.department)}
-            {infoRow('직급',        viewRow.position)}
-            {viewRow.personal_email?.length ? (
-              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>개인 이메일</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {viewRow.personal_email.map((e, i) => (
-                    <a key={i} href={`mailto:${e}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{e}</a>
-                  ))}
+        <Modal
+          open={showView}
+          onClose={() => setShowView(false)}
+          title={`퍼스널 브랜드 · ${viewRow.brand_name}`}
+          size="lg"
+        >
+          <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <ReportCard icon={<User size={18} />} title="담당자">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <ReportStat label="성명" value={viewRow.contact_name || '—'} />
+                  <ReportStat label="부서" value={viewRow.department || '—'} />
+                  <ReportStat label="직급" value={viewRow.position || '—'} />
                 </div>
+              </ReportCard>
+
+              <ReportCard icon={<Mail size={18} />} title="연락처">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.personal_email?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {viewRow.personal_email.map((e, i) => (
+                          <a key={i} href={`mailto:${e}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{e}</a>
+                        ))}
+                      </div>
+                    ) : '—'}
+                  </div>
+                  {viewRow.rep_email && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginBottom: 2 }}>대표 메일</div>
+                        <a href={`mailto:${viewRow.rep_email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{viewRow.rep_email}</a>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                    {viewRow.personal_phone || '—'}
+                  </div>
+                  {viewRow.telephone && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginRight: 6 }}>내선</span>
+                        {viewRow.telephone}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Globe size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.website ? (
+                      <a
+                        href={viewRow.website.startsWith('http') ? viewRow.website : `https://${viewRow.website}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="video-link"
+                        style={{ fontSize: 13, fontWeight: 600, wordBreak: 'break-all' }}
+                      >
+                        ↗ {viewRow.website}
+                      </a>
+                    ) : '—'}
+                  </div>
+                </div>
+              </ReportCard>
+            </div>
+
+            <ReportCard icon={<Building2 size={18} />} title="브랜드 정보">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+                <ReportStat label="회사 명" value={viewRow.company || '—'} />
+                <ReportStat label="판매 제품" value={viewRow.product_category || '—'} />
+                <ReportStat
+                  label="해외 진출"
+                  value={viewRow.overseas
+                    ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
+                    : '—'}
+                />
               </div>
-            ) : infoRow('개인 이메일', null)}
-            {infoRow('개인 전화',   viewRow.personal_phone)}
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>홈페이지</span>
-              {viewRow.website
-                ? <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13, wordBreak: 'break-all' }}>↗ {viewRow.website}</a>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
+            </ReportCard>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingBottom: 4 }}>
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                onClick={() => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
+              >
+                삭제
+              </button>
+              <div className="modal-actions" style={{ marginTop: 0 }}>
+                <button type="button" className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
+                <button type="button" className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+              </div>
             </div>
-            {infoRow('대표 메일',   viewRow.rep_email)}
-            {infoRow('내선 번호',   viewRow.telephone)}
-            {infoRow('판매 제품',   viewRow.product_category)}
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110 }}>해외 진출</span>
-              {viewRow.overseas
-                ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-            <button onClick={() => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
-              style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>삭제</button>
-            <button onClick={() => { setShowView(false); openEdit(viewRow) }}
-              style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>수정</button>
           </div>
         </Modal>
       )}

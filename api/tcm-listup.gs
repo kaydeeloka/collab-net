@@ -13,6 +13,9 @@ const GAS_MAX_MS       = 5.75 * 60 * 1000; // hard cap — Google Apps Script ~6
 const TCM_TIMEOUT_MS   = 2 * 60 * 1000;   // TCM discover only (independent clock)
 const APIFY_TIMEOUT_MS = 5 * 60 * 1000;   // max Apify wait (clamped to remaining GAS time)
 const APIFY_MIN_TIMEOUT_SEC = 300;        // Apify actor default is often 300s — too short for large runs
+const APIFY_BATCH_SIZE = 50;              // profiles per Apify run — avoids actor OOM
+const APIFY_SCRAPE_MAX = 120;             // max profiles queued for Apify per search
+const APIFY_RUN_MEMORY_MB = 4096;         // 4 GB per run (Apify default is often 512–1024)
 
 // TCM pool + Apify queue = ceil(target × buffer)
 function _tcmSearchBuffer_(minF, maxF) {
@@ -114,11 +117,18 @@ function _tcmSearchPage(accountId, keyword, minF, maxF, page, token, countryCode
 function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, deadline, countryCode) {
   const pool = {};
   let lastError = null;
-  for (const kw of keywords) {
+  const kws = (keywords || []).map(function(k) { return String(k || '').trim(); }).filter(Boolean);
+  if (!kws.length) return { pool: pool, lastError: '키워드 없음', perKeywordTarget: 0, keywordCount: 0 };
+
+  const perKwTarget = Math.max(1, Math.ceil(collectTarget / kws.length));
+
+  for (var ki = 0; ki < kws.length; ki++) {
+    const kw = kws[ki];
     if (Object.keys(pool).length >= collectTarget) break;
     if (deadline && Date.now() > deadline) break;
+    let kwAdded = 0;
     let page = 1;
-    while (Object.keys(pool).length < collectTarget) {
+    while (kwAdded < perKwTarget && Object.keys(pool).length < collectTarget) {
       if (deadline && Date.now() > deadline) break;
       const d = _tcmSearchPage(accountId, kw, minF, maxF, page, token, countryCode);
       if ((d.code || 0) !== 0) {
@@ -131,7 +141,11 @@ function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, 
         const fc = c.followers_count || 0;
         if (fc < minF || fc > maxF) continue;
         const h = c.handle_name || '';
-        if (h && !pool[h]) pool[h] = c;
+        if (h && !pool[h]) {
+          pool[h] = c;
+          kwAdded++;
+          if (kwAdded >= perKwTarget) break;
+        }
       }
       const totalPages = ((d.data || {}).page_info || {}).total_page || 1;
       if (page >= totalPages) break;
@@ -139,7 +153,7 @@ function _tcmCollectTier(accountId, keywords, minF, maxF, collectTarget, token, 
       Utilities.sleep(800);
     }
   }
-  return { pool, lastError };
+  return { pool: pool, lastError: lastError, perKeywordTarget: perKwTarget, keywordCount: kws.length };
 }
 
 function _buildHandleSet_(raw) {
@@ -187,10 +201,16 @@ function _apifyActorTimeoutSec_(profileCount) {
 function _apifyStartProfileRun(handles, token) {
   var payload = { profiles: handles };
   var timeoutSec = _apifyActorTimeoutSec_(handles.length);
-  var res = UrlFetchApp.fetch(
-    'https://api.apify.com/v2/acts/' + TCM_PROFILE_ACTOR + '/runs?token=' + token + '&timeout=' + timeoutSec,
-    { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true }
-  );
+  var url = 'https://api.apify.com/v2/acts/' + TCM_PROFILE_ACTOR + '/runs'
+    + '?token=' + encodeURIComponent(token)
+    + '&timeout=' + timeoutSec
+    + '&memory=' + APIFY_RUN_MEMORY_MB;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
   var body = JSON.parse(res.getContentText());
   if (!body.data) return { error: 'Apify 오류: ' + res.getContentText().substring(0, 300) };
   return { runId: body.data.id, datasetId: body.data.defaultDatasetId, timeoutSec: timeoutSec };
@@ -233,6 +253,45 @@ function _apifyFetchDataset(datasetId, token) {
   );
   var items = JSON.parse(res.getContentText());
   return Array.isArray(items) ? items : [];
+}
+
+/** Scrape handles in small batches — single large runs OOM on automation-lab profile scraper. */
+function _apifyScrapeProfilesBatched(handles, token, deadline, requireEmail) {
+  var merged = {};
+  var noEmail = 0;
+  var batchCount = 0;
+  if (!handles.length) return { byHandle: merged, noEmail: 0, batchCount: 0 };
+
+  for (var i = 0; i < handles.length; i += APIFY_BATCH_SIZE) {
+    if (Date.now() > deadline) {
+      return { error: 'Apify 시간 초과 (배치 ' + batchCount + ' 완료)', byHandle: merged, noEmail: noEmail, batchCount: batchCount };
+    }
+    var batch = handles.slice(i, i + APIFY_BATCH_SIZE);
+    var started = _apifyStartProfileRun(batch, token);
+    if (started.error) return { error: started.error, byHandle: merged, noEmail: noEmail, batchCount: batchCount };
+
+    var batchWaitMs = Math.min(
+      Math.max(deadline - Date.now(), 0),
+      Math.max(90 * 1000, batch.length * 2500)
+    );
+    var waited = _apifyWaitForRun(started.runId, token, Date.now() + batchWaitMs);
+    if (waited.error) {
+      var err = waited.error;
+      if (err.indexOf('FAILED') !== -1) {
+        err += ' — 프로필 수가 많으면 목표를 낮추거나 Apify에서 memory를 늘려 주세요.';
+      }
+      return { error: err, byHandle: merged, noEmail: noEmail, batchCount: batchCount };
+    }
+
+    var items = _apifyFetchDataset(waited.datasetId, token);
+    var parsed = _apifyProfilesToMap(items, requireEmail);
+    var map = parsed.byHandle || {};
+    for (var k in map) merged[k] = map[k];
+    noEmail += parsed.noEmail || 0;
+    batchCount++;
+  }
+
+  return { byHandle: merged, noEmail: noEmail, batchCount: batchCount };
 }
 
 // Rough engagement % from profile stats: (likes/video ÷ followers) × 100
@@ -312,8 +371,18 @@ function _apifyProfilesToMap(items, requireEmail) {
   return { byHandle: result, noEmail: noEmail, uploadSkipped: 0 };
 }
 
-// params: tierRank, tierLabel, tierTags, category, targetCount, keyword, minF, maxF,
+// params: tierRank, tierLabel, tierTags, category, targetCount, keyword|keywords[], minF, maxF,
 //         existingHandles, maxRatio (%), requireEmail, proxyCountry
+const TCM_KEYWORD_MAX = 5;
+
+function _tcmNormalizeKeywords(params) {
+  if (Array.isArray(params.keywords)) {
+    return params.keywords.map(function(k) { return String(k || '').trim(); }).filter(Boolean);
+  }
+  var single = String(params.keyword || '').trim();
+  return single ? [single] : [];
+}
+
 function tcmRunSearch(params) {
   try {
     const cfg = _tcmCfg();
@@ -328,8 +397,11 @@ function tcmRunSearch(params) {
 
     if (!tierRank) return { error: '티어를 선택하세요.' };
 
-    const keyword = String(params.keyword || '').trim();
-    if (!keyword) return { error: '키워드를 선택하세요.' };
+    const kws = _tcmNormalizeKeywords(params);
+    if (!kws.length) return { error: '키워드를 선택하세요.' };
+    if (kws.length > TCM_KEYWORD_MAX) {
+      return { error: '키워드는 최대 ' + TCM_KEYWORD_MAX + '개까지 선택할 수 있습니다.' };
+    }
 
     const minF = parseInt(params.minF);
     const maxF = parseInt(params.maxF);
@@ -338,31 +410,39 @@ function tcmRunSearch(params) {
     const tierLabel = params.tierLabel || tierRank;
     const tierTags  = params.tierTags || params.tags || '';
     const category  = params.category || (tierTags === 'kbeauty' ? 'K-뷰티' : '일반뷰티');
-    const kws       = [keyword];
     const maxRatioDec   = (parseFloat(params.maxRatio) || 70) / 100;
     const requireEmail  = params.requireEmail !== false;
     const countryCode   = _tcmCountryCode(params.proxyCountry || params.country);
     const buffer        = _tcmSearchBuffer_(minF, maxF);
     const collect       = Math.ceil(target * buffer);
+    const perKeywordTarget = Math.max(1, Math.ceil(target / kws.length));
     const runStart      = Date.now();
     const gasLimit      = runStart + GAS_MAX_MS;
     const tcmDeadline   = runStart + TCM_TIMEOUT_MS;
 
     // Step 1: TCM discover (own timeout — does not eat into Apify time)
-    const { pool, lastError } = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, tcmDeadline, countryCode);
+    const collected = _tcmCollectTier(accountId, kws, minF, maxF, collect, cfg.token, tcmDeadline, countryCode);
+    const pool = collected.pool;
+    const lastError = collected.lastError;
 
     const existingSet = _buildHandleSet_(params.existingHandles);
-    const scrapeLimit = Math.ceil(target * buffer);
+    const scrapeLimit = Math.min(Math.ceil(target * buffer), APIFY_SCRAPE_MAX);
 
     const stats = {
       poolSize      : Object.keys(pool).length,
       buffer        : buffer,
       collectTarget : collect,
       scrapeLimit   : scrapeLimit,
+      apifyBatchSize: APIFY_BATCH_SIZE,
+      apifyScrapeMax: APIFY_SCRAPE_MAX,
+      keywordCount  : kws.length,
+      perKeywordTarget: perKeywordTarget,
+      keywords      : kws,
       dupes         : 0,
       followRatio   : 0,
       apifyQueued   : 0,
       apifyScraped  : 0,
+      apifyBatches  : 0,
       noEmail       : 0,
       uploadSkipped : 0,
       followerRange : 0,
@@ -378,26 +458,23 @@ function tcmRunSearch(params) {
       return { ok: true, creators: [], count: 0, tier: tierRank, tierLabel: tierLabel, category, stats };
     }
 
-    // Step 3: Apify profile scrape (own timeout — starts here, not shared with TCM)
+    // Step 3: Apify profile scrape — batched to avoid actor OOM
     const handles = candidates.map(function(c) { return c.handle; });
-    const started = _apifyStartProfileRun(handles, apifyToken);
-    if (started.error) return { error: started.error };
-
-    // Wait long enough for batch size, but never beyond GAS hard cap
     var apifyWaitMs = Math.min(
       APIFY_TIMEOUT_MS,
       Math.max(3 * 60 * 1000, handles.length * 2500)
     );
     var apifyDeadline = Math.min(gasLimit, Date.now() + apifyWaitMs);
-    const waited = _apifyWaitForRun(started.runId, apifyToken, apifyDeadline);
-    if (waited.error) {
-      stats.deadlineHit = waited.error.indexOf('시간 초과') !== -1;
-      return { error: waited.error };
+    const scraped = _apifyScrapeProfilesBatched(handles, apifyToken, apifyDeadline, requireEmail);
+    if (scraped.error && !Object.keys(scraped.byHandle || {}).length) {
+      stats.deadlineHit = scraped.error.indexOf('시간 초과') !== -1;
+      return { error: scraped.error };
     }
+    if (scraped.error) stats.apiError = scraped.error;
 
-    const items  = _apifyFetchDataset(waited.datasetId, apifyToken);
-    const parsed = _apifyProfilesToMap(items, requireEmail);
+    const parsed = { byHandle: scraped.byHandle || {}, noEmail: scraped.noEmail || 0 };
     stats.apifyScraped = Object.keys(parsed.byHandle).length;
+    stats.apifyBatches = scraped.batchCount || 0;
     stats.noEmail += parsed.noEmail;
 
     // Step 4: build creators up to target (Apify counts = source of truth for display)

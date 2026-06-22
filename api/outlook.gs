@@ -147,6 +147,49 @@ var OUTREACH_SIGNATURE_MAX_CHARS = 2500;
 var GMAIL_SAFE_MAX_BYTES = 92 * 1024;
 var OUTREACH_BODY_MAX_BYTES = 75000;
 var _MD_LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+var _MD_BOLD_RE = /\*\*([^*\n]+)\*\*/g;
+
+function _nextInlineMatch(text) {
+  _MD_LINK_RE.lastIndex = 0;
+  _MD_BOLD_RE.lastIndex = 0;
+  var linkMatch = _MD_LINK_RE.exec(text);
+  var boldMatch = _MD_BOLD_RE.exec(text);
+  var best = null;
+  if (linkMatch && linkMatch.index !== undefined) {
+    best = { index: linkMatch.index, kind: 'link', match: linkMatch };
+  }
+  if (boldMatch && boldMatch.index !== undefined) {
+    if (!best || boldMatch.index < best.index) {
+      best = { index: boldMatch.index, kind: 'bold', match: boldMatch };
+    }
+  }
+  return best;
+}
+
+function _inlineMarkdownToHtml(text) {
+  var parts = [];
+  var remaining = String(text || '');
+  while (remaining.length > 0) {
+    var found = _nextInlineMatch(remaining);
+    if (!found) {
+      parts.push(_escapeHtml(remaining).replace(/\n/g, '<br>'));
+      break;
+    }
+    if (found.index > 0) {
+      parts.push(_escapeHtml(remaining.slice(0, found.index)).replace(/\n/g, '<br>'));
+    }
+    if (found.kind === 'link') {
+      parts.push(
+        '<a href="' + _escapeHtml(found.match[2]) + '" style="color:#2563eb;text-decoration:underline;">'
+        + _inlineMarkdownToHtml(found.match[1]) + '</a>'
+      );
+    } else {
+      parts.push('<b>' + _inlineMarkdownToHtml(found.match[1]) + '</b>');
+    }
+    remaining = remaining.slice(found.index + found.match[0].length);
+  }
+  return parts.join('');
+}
 
 function _htmlByteSize(html) {
   return Utilities.newBlob(String(html || ''), 'text/html', 'email.html').getBytes().length;
@@ -253,28 +296,9 @@ function _sanitizeOutreachHtml(html) {
   return s.replace(/<!--[\s\S]*?-->/g, '').trim();
 }
 
-/** Plain template text → minimal HTML: escaped text, newlines as <br>, markdown links as <a> only. */
+/** Plain template text → minimal HTML: escaped text, newlines as <br>, links and **bold**. */
 function _formatOutreachBodyPlain(plainBody) {
-  var text = String(plainBody || '');
-  if (!text) return '';
-  var parts = [];
-  var last = 0;
-  var m;
-  _MD_LINK_RE.lastIndex = 0;
-  while ((m = _MD_LINK_RE.exec(text)) !== null) {
-    if (m.index > last) {
-      parts.push(_escapeHtml(text.slice(last, m.index)).replace(/\n/g, '<br>'));
-    }
-    parts.push(
-      '<a href="' + _escapeHtml(m[2]) + '" style="color:#2563eb;text-decoration:underline;">'
-      + _escapeHtml(m[1]) + '</a>'
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) {
-    parts.push(_escapeHtml(text.slice(last)).replace(/\n/g, '<br>'));
-  }
-  return parts.join('');
+  return _inlineMarkdownToHtml(String(plainBody || ''));
 }
 
 function _outreachUniqueKey(email) {

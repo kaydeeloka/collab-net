@@ -10,6 +10,13 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageTabs } from '@/components/ui'
+import {
+  isLowPerKeywordTarget,
+  tcmKeywordLimitMessage,
+  TCM_KEYWORD_MAX,
+  TCM_PER_KEYWORD_TARGET_WARN,
+  tryToggleTcmKeyword,
+} from '@/lib/tcm-search'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
 type ListupTab = 'search' | 'database'
@@ -239,7 +246,7 @@ export default function Listup() {
 
   // Apify / TCM search state
   const [apifyTierIdx, setApifyTierIdx] = useState<number | null>(null)
-  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([])
   const [targetCreators, setTargetCreators] = useState(100)
   const [apifyLoading, setApifyLoading] = useState(false)
   const [apifyResults, setApifyResults] = useState<ApifyCreator[] | null>(null)
@@ -301,13 +308,23 @@ export default function Listup() {
     },
   ]
 
+  const lowPerKeywordTarget = isLowPerKeywordTarget(targetCreators, selectedKeywords.length)
+
+  function toggleKeyword(kw: string) {
+    setSelectedKeywords(prev => {
+      const { next, rejected } = tryToggleTcmKeyword(prev, kw)
+      if (rejected) showToast(tcmKeywordLimitMessage(), 'error')
+      return next
+    })
+  }
+
   function selectTier(idx: number) {
     setApifyTierIdx(idx)
-    setSelectedKeyword(null)
+    setSelectedKeywords([])
   }
 
   async function runTcmSearch() {
-    if (apifyTierIdx === null || !selectedKeyword) return
+    if (apifyTierIdx === null || !selectedKeywords.length) return
     const tier = tiers[apifyTierIdx]
     setApifyLoading(true)
     setApifyResults(null)
@@ -347,7 +364,7 @@ export default function Listup() {
           tierTags: tier.tags,
           category: tier.category,
           targetCount: targetCreators,
-          keyword: selectedKeyword,
+          keywords: selectedKeywords,
           minF: tier.minF,
           maxF: tier.maxF,
           existingHandles: existingHandlesRef.current,
@@ -1030,10 +1047,13 @@ export default function Listup() {
               <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>키워드 설정</div>
                 <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 12 }}>
-                  키워드 1개 선택 (TCM)
+                  키워드 복수 선택 (TCM) · 최대 {TCM_KEYWORD_MAX}개
                   {selectedTier
                     ? <> · <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier.category}</strong> 목록에서 선택</>
                     : ' · 티어 선택 시 해당 카테고리에서 선택'}
+                  {selectedKeywords.length > 0 && (
+                    <> · <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong></>
+                  )}
                 </div>
                 {keywordCategories.map((cat, idx) => {
                   const selectable = selectedTier?.tags === cat.tag
@@ -1053,14 +1073,16 @@ export default function Listup() {
                             const kws = [...cat.initialRef.current]
                             cat.setKws(kws)
                             saveConfig(cat.cfgKey, kws)
-                            if (selectedKeyword && !kws.includes(selectedKeyword)) setSelectedKeyword(null)
+                            if (selectedKeywords.some(k => !kws.includes(k))) {
+                              setSelectedKeywords(prev => prev.filter(k => kws.includes(k)))
+                            }
                             cat.setEdit(false)
                           })}>↺</button>
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                         {cat.keywords.map(kw => {
-                          const isSelected = selectable && selectedKeyword === kw
+                          const isSelected = selectable && selectedKeywords.includes(kw)
                           return (
                             <span
                               key={kw}
@@ -1070,7 +1092,7 @@ export default function Listup() {
                                 cursor: cat.edit || selectable ? (cat.edit ? 'default' : 'pointer') : 'default',
                                 opacity: selectable || cat.edit ? 1 : 0.85,
                               }}
-                              onClick={() => { if (!cat.edit && selectable) setSelectedKeyword(isSelected ? null : kw) }}
+                              onClick={() => { if (!cat.edit && selectable) toggleKeyword(kw) }}
                             >
                               {kw}
                               {cat.edit && (
@@ -1079,7 +1101,9 @@ export default function Listup() {
                                   const next = cat.keywords.filter(k => k !== kw)
                                   cat.setKws(next)
                                   saveConfig(cat.cfgKey, next)
-                                  if (selectedKeyword === kw) setSelectedKeyword(null)
+                                  if (selectedKeywords.includes(kw)) {
+                                    setSelectedKeywords(prev => prev.filter(k => k !== kw))
+                                  }
                                 }}>×</button>
                               )}
                             </span>
@@ -1113,8 +1137,13 @@ export default function Listup() {
                     </div>
                   )
                 })}
-                {selectedTier && !selectedKeyword && (
-                  <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 12 }}>탐색할 키워드를 1개 선택하세요.</div>
+                {selectedTier && !selectedKeywords.length && (
+                  <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 12 }}>탐색할 키워드를 1개 이상 선택하세요 (최대 {TCM_KEYWORD_MAX}개).</div>
+                )}
+                {lowPerKeywordTarget && (
+                  <div style={{ fontSize: 12, color: '#b45309', marginTop: 12, fontWeight: 600 }}>
+                    키워드당 목표가 {TCM_PER_KEYWORD_TARGET_WARN}명 미만입니다. 결과가 부족할 수 있으니 키워드 수를 줄이거나 목표를 늘려 보세요.
+                  </div>
                 )}
               </div>
             </div>
@@ -1124,7 +1153,9 @@ export default function Listup() {
             <div className="filters" style={{ marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
                 선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier?.rank ?? '← 위 표에서 선택'}</strong>
-                {selectedKeyword && <> · 키워드 <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeyword}</strong></>}
+                {selectedKeywords.length > 0 && (
+                  <> · 키워드 <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong></>
+                )}
               </span>
               <div className="filter-group">
                 <label>목표 인플루언서 수 (명)</label>
@@ -1132,7 +1163,7 @@ export default function Listup() {
               </div>
               <button
                 className="listup-find-btn"
-                disabled={apifyLoading || apifyTierIdx === null || !selectedKeyword}
+                disabled={apifyLoading || apifyTierIdx === null || !selectedKeywords.length}
                 onClick={runTcmSearch}
               >Find Creators (TCM)</button>
               {apifyLoading && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 import { supabase } from '@/lib/supabase'
 import { dedupeConfirmedPhaseViaDb, uniquePlatformAccounts } from '@/lib/confirm-influencer'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
@@ -249,27 +250,6 @@ function InfluencerAvatar({ url, label, size = 56 }: { url?: string | null; labe
       {url
         ? <img src={url} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         : fallback}
-    </div>
-  )
-}
-
-function ReportCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '16px 18px', border: '1px solid var(--gray-2)', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <span style={{ color: 'var(--gray-6)', display: 'flex' }}>{icon}</span>
-        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-8)' }}>{title}</span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function ReportStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-8)' }}>{value}</div>
     </div>
   )
 }

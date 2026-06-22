@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Building2, Globe, Mail, Phone } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -452,57 +454,77 @@ export default function BrandDbGeneral() {
 
       {/* ── View Modal ── */}
       {viewRow && (
-        <Modal open={showView} onClose={() => setShowView(false)} title={viewRow.brand_name}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Emails */}
-            {viewRow.email?.length ? (
-              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>이메일</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {viewRow.email.map((e, i) => (
-                    <a key={i} href={`mailto:${e}`} style={{ fontSize: 13, color: 'var(--blue-dk)', textDecoration: 'none' }}>{e}</a>
-                  ))}
+        <Modal
+          open={showView}
+          onClose={() => setShowView(false)}
+          title={`브랜드 정보 · ${viewRow.brand_name}`}
+          size="lg"
+        >
+          <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <ReportCard icon={<Mail size={18} />} title="연락처">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.email?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {viewRow.email.map((e, i) => (
+                          <a key={i} href={`mailto:${e}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{e}</a>
+                        ))}
+                      </div>
+                    ) : '—'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                    {viewRow.telephone || '—'}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>이메일</span>
-                <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>
-              </div>
-            )}
-            {[
-              { label: '회사 명',    value: viewRow.company },
-              { label: '내선번호',   value: viewRow.telephone },
-              { label: '판매 제품',  value: viewRow.product_category },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>{label}</span>
-                <span style={{ fontSize: 13, color: value ? 'var(--gray-8)' : 'var(--gray-3)' }}>{value || '—'}</span>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gray-1)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110, flexShrink: 0 }}>홈페이지</span>
-              {viewRow.website
-                ? <a href={viewRow.website.startsWith('http') ? viewRow.website : 'https://' + viewRow.website} target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13, wordBreak: 'break-all' }}>↗ {viewRow.website}</a>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
-            </div>
-            <div style={{ display: 'flex', gap: 12, padding: '8px 0' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', minWidth: 110 }}>해외 진출</span>
-              {viewRow.overseas
-                ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
-                : <span style={{ fontSize: 13, color: 'var(--gray-3)' }}>—</span>}
-            </div>
-          </div>
+              </ReportCard>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-            <button onClick={() => showConfirm('이 브랜드를 삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
-              style={{ padding: '7px 14px', border: '1px solid var(--red)', borderRadius: 8, background: '#fff', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              삭제
-            </button>
-            <button onClick={() => { setShowView(false); openEdit(viewRow) }}
-              style={{ padding: '7px 18px', border: 'none', borderRadius: 8, background: 'var(--teal-dk)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              ✎ 편집
-            </button>
+              <ReportCard icon={<Globe size={18} />} title="홈페이지">
+                <div style={{ fontSize: 13, color: 'var(--gray-7)', wordBreak: 'break-all' }}>
+                  {viewRow.website ? (
+                    <a
+                      href={viewRow.website.startsWith('http') ? viewRow.website : `https://${viewRow.website}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="video-link"
+                      style={{ fontSize: 13, fontWeight: 600 }}
+                    >
+                      ↗ {viewRow.website}
+                    </a>
+                  ) : '—'}
+                </div>
+              </ReportCard>
+            </div>
+
+            <ReportCard icon={<Building2 size={18} />} title="브랜드 정보">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+                <ReportStat label="회사 명" value={viewRow.company || '—'} />
+                <ReportStat label="판매 제품" value={viewRow.product_category || '—'} />
+                <ReportStat
+                  label="해외 진출"
+                  value={viewRow.overseas
+                    ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
+                    : '—'}
+                />
+              </div>
+            </ReportCard>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingBottom: 4 }}>
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                onClick={() => showConfirm('이 브랜드를 삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
+              >
+                삭제
+              </button>
+              <div className="modal-actions" style={{ marginTop: 0 }}>
+                <button type="button" className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
+                <button type="button" className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

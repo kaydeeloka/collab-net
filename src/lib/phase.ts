@@ -1,3 +1,5 @@
+import { kstToday } from '@/lib/kst-time'
+
 export interface PhaseLike {
   id: string
   started_at: string | null
@@ -14,8 +16,6 @@ export function normalizePhaseId(value: unknown): string | null {
   return null
 }
 
-import { kstToday } from '@/lib/kst-time'
-
 /** Phase whose date range includes today. */
 export function getDateActivePhaseId(phases: PhaseLike[], today = kstToday()): string | null {
   return phases.find(p => {
@@ -24,4 +24,17 @@ export function getDateActivePhaseId(phases: PhaseLike[], today = kstToday()): s
     const end   = p.ended_at.split('T')[0]
     return today >= start && today <= end
   })?.id ?? null
+}
+
+export type PhaseStatusBadge = { label: '활성' | '완료'; tone: 'active' | 'completed' }
+
+/** Badge for phase dropdown: 활성 (current date range) or 완료 (ended). */
+export function getPhaseStatusBadge(
+  phase: PhaseLike,
+  activePhaseId: string | null,
+  today = kstToday(),
+): PhaseStatusBadge | null {
+  if (activePhaseId && phase.id === activePhaseId) return { label: '활성', tone: 'active' }
+  if (phase.ended_at && today > phase.ended_at.split('T')[0]) return { label: '완료', tone: 'completed' }
+  return null
 }

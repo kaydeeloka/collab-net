@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Link2, Mail } from 'lucide-react'
+import { Link2, Mail, Bold } from 'lucide-react'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
@@ -17,6 +17,7 @@ import { getEmailTemplateUiConfig } from '@/lib/email-template-ui-config'
 import {
   getSelectedText,
   insertMarkdownLink,
+  insertMarkdownBold,
   renderEmailBodyPreview,
 } from '@/lib/email-body-format'
 import { formatKstDateTime } from '@/lib/utils'
@@ -214,6 +215,10 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
         )}
       </div>
     )
+  }
+
+  function wrapBold() {
+    insertMarkdownBold(bodyRef.current, body, setBody)
   }
 
   function openLinkModal() {
@@ -746,6 +751,26 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
+                  onClick={wrapBold}
+                  style={{
+                    fontSize: 10,
+                    padding: '2px 8px',
+                    background: 'var(--gray-1)',
+                    border: '1px solid var(--gray-3)',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    color: 'var(--gray-7)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontWeight: 700,
+                  }}
+                >
+                  <Bold size={11} />
+                  굵게
+                </button>
+                <button
+                  type="button"
                   onClick={openLinkModal}
                   style={{
                     fontSize: 10,
@@ -802,7 +827,8 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
               }}
             />
             <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6, lineHeight: 1.5 }}>
-              링크 수정: <code style={{ fontSize: 10 }}>[표시 텍스트](URL)</code> 형식에서 대괄호 안 글자를 바꾸면 링크 이름이 변경됩니다.
+              굵게: <code style={{ fontSize: 10 }}>**텍스트**</code> 또는 텍스트 선택 후 「굵게」 ·
+              링크: <code style={{ fontSize: 10 }}>[표시 텍스트](URL)</code>
             </div>
           </div>
 

@@ -386,14 +386,18 @@ a { text-decoration: none; }
   white-space: nowrap;
 }
 
+.sticky-bar__phase-wrap {
+  position: relative;
+}
+
 .sticky-bar__phase-select {
-  padding: 8px 34px 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   border-radius: var(--r-pill);
   border: 1.5px solid var(--yellow-md);
-  background: var(--yellow) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a07800' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center;
-  background-size: 12px;
-  -webkit-appearance: none;
-  appearance: none;
+  background: var(--yellow);
   font-size: 12px;
   font-weight: 700;
   color: var(--yellow-text);
@@ -401,12 +405,79 @@ a { text-decoration: none; }
   outline: none;
   transition: opacity .15s, box-shadow .15s;
   font-family: inherit;
+  white-space: nowrap;
+}
+
+.sticky-bar__phase-chevron {
+  font-size: 10px;
+  opacity: .75;
+  line-height: 1;
 }
 
 .sticky-bar__phase-select:hover,
 .sticky-bar__phase-select:focus {
   opacity: .9;
   box-shadow: 0 0 0 3px rgba(255, 233, 160, .45);
+}
+
+.sticky-bar__phase-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--white);
+  border: 1px solid var(--surface-md);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+  z-index: 200;
+}
+
+.sticky-bar__phase-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-7);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background .12s, color .12s;
+}
+
+.sticky-bar__phase-option:hover {
+  background: var(--gray-0);
+  color: var(--gray-8);
+}
+
+.sticky-bar__phase-option.is-active {
+  background: var(--blue-lt);
+  color: var(--blue-dk);
+}
+
+.sticky-bar__phase-status {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.sticky-bar__phase-status--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sticky-bar__phase-status--completed {
+  background: #f1f5f9;
+  color: #64748b;
 }
 
 /* Table bulk action bar */

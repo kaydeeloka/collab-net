@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
+import { Globe, Info, Mail, Package, Phone, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
+import { archiveDetailPath } from '../archive/slug'
 import {
-  Badge,
   Button,
-  DetailList,
-  DetailRow,
   FormGrid,
   FormInput,
   FormSection,
@@ -350,45 +350,107 @@ export default function BrandConfirmedManagement() {
         <Modal
           open={showView}
           onClose={() => setShowView(false)}
-          title={viewRow.brand_name}
-          footer={
-            <ModalFooter
-              split
-              danger={{ label: '삭제', onClick: () => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) }) }}
-              confirm={{ label: '✎ 편집', onClick: () => { setShowView(false); openEdit(viewRow) } }}
-            />
-          }
+          title={`확정 브랜드 · ${viewRow.brand_name}`}
+          size="lg"
         >
-          <Badge tone={viewRow.received ? 'success' : 'muted'} style={{ marginBottom: 16 }}>
-            {viewRow.received ? '✓ 제품 받음' : '미수령'}
-          </Badge>
-          <DetailList>
-            <DetailRow label="담당자" value={viewRow.contact_name} />
-            <DetailRow label="직급" value={viewRow.position} />
-            <DetailRow label="휴대폰" value={viewRow.phone} />
-            <DetailRow label="제품" value={viewRow.product} />
-            <DetailRow label="생산원가" value={viewRow.production_cost} />
-            <DetailRow
-              label="이메일"
-              value={viewRow.email ? <a href={`mailto:${viewRow.email}`}>{viewRow.email}</a> : undefined}
-              empty={!viewRow.email}
-            />
-            <DetailRow
-              label="홈페이지"
-              value={viewRow.website ? (
-                <a href={formatWebsiteUrl(viewRow.website)} target="_blank" rel="noopener noreferrer">
-                  {viewRow.website}
-                </a>
-              ) : undefined}
-              empty={!viewRow.website}
-            />
-            <DetailRow
-              label="자료 아카이브"
-              value="—"
-              empty
-            />
-            {viewRow.notes && <DetailRow label="비고" value={viewRow.notes} />}
-          </DetailList>
+          <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <ReportCard icon={<User size={18} />} title="담당자">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <ReportStat label="담당자" value={viewRow.contact_name || '—'} />
+                  <ReportStat label="직급" value={viewRow.position || '—'} />
+                </div>
+              </ReportCard>
+
+              <ReportCard icon={<Mail size={18} />} title="연락처">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.email ? (
+                      <a href={`mailto:${viewRow.email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{viewRow.email}</a>
+                    ) : '—'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                    {viewRow.phone || '—'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Globe size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.website ? (
+                      <a
+                        href={formatWebsiteUrl(viewRow.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="video-link"
+                        style={{ fontSize: 13, fontWeight: 600, wordBreak: 'break-all' }}
+                      >
+                        ↗ {viewRow.website}
+                      </a>
+                    ) : '—'}
+                  </div>
+                </div>
+              </ReportCard>
+            </div>
+
+            <ReportCard icon={<Package size={18} />} title="제품 정보">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+                <ReportStat label="제품" value={viewRow.product || '—'} />
+                <ReportStat label="생산원가" value={viewRow.production_cost || '—'} />
+                <ReportStat
+                  label="제품 수령"
+                  value={viewRow.received
+                    ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>✓ 받음</span>
+                    : <span style={{ fontSize: 11, fontWeight: 700, background: '#f1f5f9', color: '#94a3b8', borderRadius: 20, padding: '2px 10px' }}>미수령</span>}
+                />
+              </div>
+            </ReportCard>
+
+            <div style={{ marginTop: 14 }}>
+              <ReportCard icon={<Info size={18} />} title="비고 · 자료">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: '4px 0 8px' }}>
+                  <ReportStat
+                    label="자료 아카이브"
+                    value={(
+                      <Link
+                        to={archiveDetailPath(viewRow, rows)}
+                        className="video-link"
+                        style={{ fontSize: 13, fontWeight: 600 }}
+                        onClick={() => setShowView(false)}
+                      >
+                        ↗ 아카이브 보기
+                      </Link>
+                    )}
+                  />
+                </div>
+                <div style={{
+                  fontSize: 13,
+                  color: viewRow.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  borderTop: '1px solid var(--gray-1)',
+                  paddingTop: 12,
+                }}>
+                  {viewRow.notes?.trim() || '—'}
+                </div>
+              </ReportCard>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingBottom: 4 }}>
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                onClick={() => showConfirm('삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
+              >
+                삭제
+              </button>
+              <div className="modal-actions" style={{ marginTop: 0 }}>
+                <button type="button" className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
+                <button type="button" className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+              </div>
+            </div>
+          </div>
         </Modal>
       )}
 
