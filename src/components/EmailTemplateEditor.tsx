@@ -542,9 +542,6 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 {renderEmailPreview(title, body)}
-                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 8 }}>
-                  치환 구문은 발송 시 자동 적용됩니다
-                </div>
               </div>
             </>
           ) : (
@@ -953,9 +950,6 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
         size="lg"
       >
         {renderEmailPreview(title, body)}
-        <div style={{ fontSize: 11, color: 'var(--gray-4)', marginTop: 12 }}>
-          치환 구문은 발송 시 자동 적용됩니다
-        </div>
       </Modal>
 
       <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} />

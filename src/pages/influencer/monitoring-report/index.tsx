@@ -7,7 +7,7 @@ import {
   type ContentReport,
   type UploadChannelSegment,
 } from '@/lib/monitoring-data'
-import { PLATFORM_DISPLAY, type PlatformBucket } from '@/lib/content-platforms'
+import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/content-platforms'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
 
@@ -18,28 +18,20 @@ const CHANNEL_COLORS: Record<PlatformBucket, string> = {
   magazine:  PLATFORM_DISPLAY.magazine.statColor,
 }
 
-const sectionBadge: CSSProperties = {
-  display: 'inline-block',
-  background: 'var(--teal-dk)',
-  color: '#fff',
-  fontSize: 12,
-  fontWeight: 700,
-  padding: '8px 18px',
-  borderRadius: 999,
-}
-
 const thStyle: CSSProperties = {
   padding: '12px 14px',
   background: 'var(--teal-dk)',
   color: '#fff',
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 700,
   textAlign: 'center',
-  borderRight: '1px solid rgba(255,255,255,.15)',
+  textTransform: 'uppercase',
+  letterSpacing: '.6px',
+  borderRight: '1px solid rgba(255,255,255,.12)',
 }
 
 const tdStyle: CSSProperties = {
-  padding: '11px 14px',
+  padding: '12px 14px',
   fontSize: 13,
   fontWeight: 600,
   textAlign: 'center',
@@ -49,29 +41,54 @@ const tdStyle: CSSProperties = {
   background: '#fff',
 }
 
-function SectionBadge({ children }: { children: ReactNode }) {
-  return <div style={{ ...sectionBadge, marginBottom: 12 }}>{children}</div>
+function PlatformTh({ label, color }: { label: string; color: string }) {
+  return (
+    <th style={thStyle}>
+      <span className="report-th-platform">
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        {label}
+      </span>
+    </th>
+  )
 }
 
-function ReportTable({ title, children }: { title: string; children: ReactNode }) {  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <SectionBadge>{title}</SectionBadge>
-      <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--gray-2)', boxShadow: 'var(--sh-sm)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          {children}
-        </table>
-      </div>
+function PlatformBadge({ platform }: { platform: string }) {
+  const { label, style } = platformBadgeStyle(platform)
+  return <span className={platformBadgeClass(platform)} style={style}>{label}</span>
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank <= 3) {
+    return <span className={`report-rank report-rank--${rank}`}>{rank}</span>
+  }
+  return <span className="report-rank">{rank}</span>
+}
+
+function ReportPanel({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <div className="report-panel" style={{ flex: 1, minWidth: 0 }}>
+      {title ? <div className="report-panel__title">{title}</div> : null}
+      <div className="report-panel__body">{children}</div>
     </div>
   )
 }
 
-function UploadChannelChart({ channels }: { channels: UploadChannelSegment[] }) {
+function ReportTable({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <ReportPanel title={title}>
+      <table className="report-table">{children}</table>
+    </ReportPanel>
+  )
+}
+
+function UploadChannelChart({ channels, compact = false }: { channels: UploadChannelSegment[]; compact?: boolean }) {
   const active = channels.filter(c => c.count > 0)
   const total = active.reduce((s, c) => s + c.count, 0)
-  const size = 260
+  const size = compact ? 168 : 220
   const cx = size / 2
   const cy = size / 2
-  const outerR = 92
+  const outerR = compact ? 72 : 88
+  const innerR = compact ? 44 : 54
 
   const toRad = (deg: number) => (deg * Math.PI) / 180
   const polar = (deg: number, r: number) => ({
@@ -79,14 +96,17 @@ function UploadChannelChart({ channels }: { channels: UploadChannelSegment[] }) 
     y: cy + r * Math.sin(toRad(deg)),
   })
 
-  const piePath = (startDeg: number, endDeg: number) => {
-    const start = polar(startDeg, outerR)
-    const end = polar(endDeg, outerR)
+  const donutPath = (startDeg: number, endDeg: number) => {
+    const startOuter = polar(startDeg, outerR)
+    const endOuter = polar(endDeg, outerR)
+    const startInner = polar(endDeg, innerR)
+    const endInner = polar(startDeg, innerR)
     const large = endDeg - startDeg > 180 ? 1 : 0
     return [
-      `M ${cx} ${cy}`,
-      `L ${start.x} ${start.y}`,
-      `A ${outerR} ${outerR} 0 ${large} 1 ${end.x} ${end.y}`,
+      `M ${startOuter.x} ${startOuter.y}`,
+      `A ${outerR} ${outerR} 0 ${large} 1 ${endOuter.x} ${endOuter.y}`,
+      `L ${startInner.x} ${startInner.y}`,
+      `A ${innerR} ${innerR} 0 ${large} 0 ${endInner.x} ${endInner.y}`,
       'Z',
     ].join(' ')
   }
@@ -96,94 +116,66 @@ function UploadChannelChart({ channels }: { channels: UploadChannelSegment[] }) 
     const sweep = (c.count / total) * 360
     const start = angleCursor
     const end = angleCursor + sweep
-    const mid = start + sweep / 2
     angleCursor = end
-
-    const isSmall = sweep < 28
-    const labelR = outerR + (isSmall ? 18 : 32)
-    const edge = polar(mid, outerR + 2)
-    const labelPt = polar(mid, labelR)
-    const textR = isSmall ? labelR + 8 : labelR + (Math.cos(toRad(mid)) >= 0 ? 10 : -10)
-    const textPt = polar(mid, textR)
-
     return {
       ...c,
       pct: Math.round((c.count / total) * 100),
-      start,
-      end,
-      mid,
-      path: piePath(start, end),
-      edge,
-      labelPt,
-      textPt,
-      anchorAlign: (Math.cos(toRad(mid)) >= 0 ? 'start' : 'end') as 'start' | 'end',
-      showLine: isSmall,
+      path: donutPath(start, end),
     }
   })
 
   return (
-    <div style={{
-      background: 'var(--gray-1)',
-      borderRadius: 22,
-      padding: '22px 24px 18px',
-      border: '1px solid var(--gray-2)',
-      boxShadow: 'var(--sh-sm)',
-      minWidth: 300,
-    }}>
-      <SectionBadge>콘텐츠 업로드 채널</SectionBadge>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        style={{ display: 'block', margin: '8px auto 0', overflow: 'visible' }}
-        aria-label="콘텐츠 업로드 채널"
-      >
-        {!total && (
-          <circle cx={cx} cy={cy} r={outerR} fill="var(--gray-2)" />
+    <ReportPanel title="플랫폼별 운영 채널">
+      <div className="report-chart-panel__body">
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          style={{ display: 'block', overflow: 'visible' }}
+          aria-label="플랫폼별 운영 채널"
+        >
+          {!total && (
+            <circle cx={cx} cy={cy} r={outerR} fill="var(--gray-2)" />
+          )}
+          {slices.map(s => (
+            <path
+              key={s.key}
+              d={s.path}
+              fill={CHANNEL_COLORS[s.key]}
+              stroke="#fff"
+              strokeWidth={2.5}
+            />
+          ))}
+          {total > 0 && (
+            <>
+              <text x={cx} y={cy - 2} textAnchor="middle" fill="var(--gray-8)" fontSize={compact ? 20 : 24} fontWeight={800}>
+                {total}
+              </text>
+              <text x={cx} y={cy + 16} textAnchor="middle" fill="var(--gray-5)" fontSize={11} fontWeight={600}>
+                건
+              </text>
+            </>
+          )}
+        </svg>
+
+        {total > 0 ? (
+          <div className="report-chart-legend">
+            {slices.map(s => (
+              <span key={s.key} className="report-chart-legend__item">
+                <span className="report-chart-legend__dot" style={{ background: CHANNEL_COLORS[s.key] }} />
+                {s.label}
+                <span className="report-chart-legend__pct">{s.pct}%</span>
+                <span style={{ color: 'var(--gray-4)', fontWeight: 500 }}>({s.count})</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray-5)', marginTop: 8 }}>
+            업로드된 콘텐츠 없음
+          </div>
         )}
-        {slices.map(s => (
-          <path key={s.key} d={s.path} fill={CHANNEL_COLORS[s.key]} />
-        ))}
-        {slices.filter(s => s.showLine).map(s => (
-          <line
-            key={`line-${s.key}`}
-            x1={s.edge.x}
-            y1={s.edge.y}
-            x2={s.labelPt.x}
-            y2={s.labelPt.y}
-            stroke="var(--gray-3)"
-            strokeWidth={1}
-          />
-        ))}
-        {slices.map(s => (
-          <g key={`label-${s.key}`}>
-            <text
-              x={s.textPt.x}
-              y={s.textPt.y - 6}
-              textAnchor={s.anchorAlign}
-              fill="var(--gray-6)"
-              fontSize={12}
-              fontWeight={600}
-            >
-              {s.label}
-            </text>
-            <text
-              x={s.textPt.x}
-              y={s.textPt.y + 10}
-              textAnchor={s.anchorAlign}
-              fill="var(--gray-8)"
-              fontSize={13}
-              fontWeight={800}
-            >
-              {s.pct}%
-            </text>
-          </g>
-        ))}
-      </svg>
-      {!total && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--gray-5)', marginTop: 8 }}>업로드된 콘텐츠 없음</div>
-      )}
-    </div>
+      </div>
+    </ReportPanel>
   )
 }
 
@@ -235,7 +227,11 @@ export default function MonitoringReport() {
         <>
           <div className="section-title--dash">성과 요약</div>
 
-          <StatCards className="stat-cards--tall" columns="repeat(3, minmax(0, 1fr))" style={{ marginBottom: 28 }}>
+          <StatCards
+            className="stat-cards--tall"
+            columns="repeat(3, minmax(0, 1fr))"
+            style={{ marginBottom: 32 }}
+          >
             <StatCard
               variant="metric"
               align="left"
@@ -243,6 +239,13 @@ export default function MonitoringReport() {
               value={summary.uploadRate.current}
               valueSuffix={<span style={SUFFIX_STYLE}> / {summary.uploadRate.total} 명</span>}
               progress={summary.uploadRate.pct}
+              caption={summary.uploadRate.notUploaded > 0 ? (
+                <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+                  미업로드 {summary.uploadRate.notUploaded}명
+                </span>
+              ) : (
+                <span style={{ color: '#16a34a', fontWeight: 600 }}>전원 업로드 완료</span>
+              )}
               footer={`${summary.uploadRate.pct}%`}
             />
             <StatCard
@@ -272,34 +275,74 @@ export default function MonitoringReport() {
               ]}
             />
           </StatCards>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr minmax(280px, 340px)', gap: 20, alignItems: 'start' }}>
+
+          <div className="section-title" style={{ marginBottom: 16 }}>콘텐츠 분석</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 20, alignItems: 'stretch', marginBottom: 28 }}>
             <ReportTable title="콘텐츠 종류">
               <thead>
                 <tr>
-                  <th style={{ ...thStyle, textAlign: 'left' }}>구분</th>
-                  <th style={thStyle}>TikTok</th>
-                  <th style={thStyle}>Instagram</th>
-                  <th style={{ ...thStyle, borderRight: 'none' }}>Magazine</th>
-                  <th style={{ ...thStyle, background: 'var(--blue-dk)' }}>Total</th>
+                  <th style={{ ...thStyle, textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12 }}>구분</th>
+                  <PlatformTh label="TikTok" color={CHANNEL_COLORS.tiktok} />
+                  <PlatformTh label="Instagram" color={CHANNEL_COLORS.instagram} />
+                  <th style={{ ...thStyle, borderRight: 'none', textAlign: 'right', paddingRight: 18 }}>
+                    <span className="report-th-platform" style={{ justifyContent: 'flex-end' }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: CHANNEL_COLORS.magazine, flexShrink: 0 }} />
+                      Magazine
+                    </span>
+                  </th>
+                  <th style={{ ...thStyle, background: 'var(--blue-dk)', borderRight: 'none', minWidth: 56 }}>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {report.contentTypeRows.map(row => (
-                  <tr key={row.label}>
-                    <td style={{ ...tdStyle, textAlign: 'left', fontWeight: row.label === '합계' ? 800 : 600 }}>{row.label}</td>
+                  <tr key={row.label} className={row.label === '합계' ? 'is-total' : undefined}>
+                    <td style={{ ...tdStyle, textAlign: 'left' }}>{row.label}</td>
                     <td style={tdStyle}>{row.tiktok || '—'}</td>
                     <td style={tdStyle}>{row.instagram || '—'}</td>
-                    <td style={tdStyle}>{row.magazine || '—'}</td>
-                    <td style={{ ...tdStyle, fontWeight: 800, background: 'var(--gray-0)' }}>{row.total}</td>
+                    <td style={{ ...tdStyle, borderRight: 'none', textAlign: 'right', paddingRight: 18 }}>{row.magazine || '—'}</td>
+                    <td style={{ ...tdStyle, fontWeight: 800, background: 'var(--gray-0)', borderRight: 'none', color: 'var(--blue-dk)' }}>{row.total}</td>
                   </tr>
                 ))}
               </tbody>
             </ReportTable>
 
-            <ReportTable title="콘텐츠 성과">
+            <ReportTable title="Mi Muse vs 브랜드 평균 성과">
               <thead>
                 <tr>
-                  <th style={{ ...thStyle, textAlign: 'left' }}>플랫폼</th>
+                  <th style={{ ...thStyle, textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12 }}>구분</th>
+                  <th style={thStyle}>건수</th>
+                  <th style={thStyle}>평균 조회수</th>
+                  <th style={thStyle}>평균 좋아요</th>
+                  <th style={{ ...thStyle, borderRight: 'none' }}>평균 댓글</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.brandPerformanceRows.map(row => (
+                  <tr key={row.key}>
+                    <td style={{
+                      ...tdStyle,
+                      textAlign: 'left',
+                      fontWeight: 700,
+                      color: row.key === 'mimuse' ? 'var(--teal-dk)' : 'var(--gray-7)',
+                    }}>
+                      {row.label}
+                    </td>
+                    <td style={tdStyle}>{row.count || '—'}</td>
+                    <td style={{ ...tdStyle, fontWeight: row.avgViews ? 700 : 600 }}>{fmtAvg(row.avgViews)}</td>
+                    <td style={tdStyle}>{fmtAvg(row.avgLikes)}</td>
+                    <td style={{ ...tdStyle, borderRight: 'none' }}>{fmtAvg(row.avgComments)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </ReportTable>
+          </div>
+
+          <div className="section-title" style={{ marginBottom: 16 }}>플랫폼 분석</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.35fr minmax(280px, 1fr)', gap: 20, alignItems: 'stretch', marginBottom: 32 }}>
+            <ReportTable title="플랫폼별 성과">
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12 }}>플랫폼</th>
                   <th style={thStyle}>건수</th>
                   <th style={thStyle}>평균 조회수</th>
                   <th style={thStyle}>평균 좋아요</th>
@@ -309,17 +352,70 @@ export default function MonitoringReport() {
               <tbody>
                 {report.performanceRows.map(row => (
                   <tr key={row.platform}>
-                    <td style={{ ...tdStyle, textAlign: 'left' }}>{row.label}</td>
-                    <td style={tdStyle}>{row.count}</td>
-                    <td style={tdStyle}>{fmtAvg(row.avgViews)}</td>
+                    <td style={{ ...tdStyle, textAlign: 'left' }}>
+                      <PlatformBadge platform={row.platform} />
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: 700 }}>{row.count}</td>
+                    <td style={{ ...tdStyle, fontWeight: row.avgViews ? 700 : 600 }}>{fmtAvg(row.avgViews)}</td>
                     <td style={tdStyle}>{fmtAvg(row.avgLikes)}</td>
-                    <td style={tdStyle}>{fmtAvg(row.avgComments)}</td>
+                    <td style={{ ...tdStyle, borderRight: 'none' }}>{fmtAvg(row.avgComments)}</td>
                   </tr>
                 ))}
               </tbody>
             </ReportTable>
+            <UploadChannelChart channels={report.uploadChannels} compact />
+          </div>
 
-            <UploadChannelChart channels={report.uploadChannels} />
+          <div className="section-title" style={{ marginBottom: 8 }}>Top 콘텐츠</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-6)', marginBottom: 14 }}>조회수 상위 10건</div>
+          <div>
+            <ReportPanel>
+              <table className="report-table report-table--equal-cols">
+              <thead>
+                <tr>
+                  <th style={thStyle}>#</th>
+                  <th style={{ ...thStyle, textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12 }}>인플루언서</th>
+                  <th style={thStyle}>플랫폼</th>
+                  <th style={thStyle}>브랜드</th>
+                  <th style={thStyle}>조회수</th>
+                  <th style={thStyle}>좋아요</th>
+                  <th style={{ ...thStyle, borderRight: 'none' }}>댓글</th>
+                  <th style={{ ...thStyle, background: 'var(--blue-dk)', borderRight: 'none' }}>링크</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.topPosts.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ ...tdStyle, padding: '28px 14px', color: 'var(--gray-5)', borderRight: 'none' }}>
+                      업로드된 콘텐츠가 없습니다
+                    </td>
+                  </tr>
+                ) : report.topPosts.map(row => (
+                  <tr key={row.id}>
+                    <td style={tdStyle}>
+                      <RankBadge rank={row.rank} />
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--gray-8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.displayName || row.handle}</div>
+                      <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{row.handle}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      <PlatformBadge platform={row.platformLabel} />
+                    </td>
+                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.brandLabel}</td>
+                    <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--ink)' }}>{fmtNum(row.views)}</td>
+                    <td style={{ ...tdStyle, color: '#dc2626' }}>{fmtNum(row.likes)}</td>
+                    <td style={{ ...tdStyle, color: 'var(--teal-dk)' }}>{fmtNum(row.comments)}</td>
+                    <td style={{ ...tdStyle, borderRight: 'none' }}>
+                      <a href={row.reviewLink} target="_blank" rel="noopener noreferrer" className="video-link" style={{ fontSize: 12 }}>
+                        ↗ 보기
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              </table>
+            </ReportPanel>
           </div>
         </>
       )}

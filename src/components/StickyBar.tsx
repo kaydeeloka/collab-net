@@ -203,6 +203,7 @@ export function TableActionBar({
   maxSelection,
   unit = '명',
   children,
+  statusActions,
   actions,
   className = '',
 }: {
@@ -210,6 +211,7 @@ export function TableActionBar({
   maxSelection?: number
   unit?: string
   children?: ReactNode
+  statusActions?: ReactNode
   actions?: ReactNode
   className?: string
 }) {
@@ -223,12 +225,51 @@ export function TableActionBar({
       : '선택 없음'
   return (
     <div className={`table-action-bar${hasSelection ? ' is-active' : ''} ${className}`.trim()}>
-      <span className="table-action-bar__status">
-        {statusText}
-      </span>
+      <div className="table-action-bar__status-group">
+        <span className="table-action-bar__status">
+          {statusText}
+        </span>
+        {statusActions}
+      </div>
       <div className="table-action-bar__divider" aria-hidden />
       <div className="table-action-bar__body">{children}</div>
       {actions && <div className="table-action-bar__actions">{actions}</div>}
+    </div>
+  )
+}
+
+export function TableTemplateSelect({
+  value,
+  onChange,
+  options,
+  disabled,
+  emptyLabel,
+}: {
+  value: number
+  onChange: (index: number) => void
+  options: { id: string; name: string }[]
+  disabled?: boolean
+  emptyLabel?: string
+}) {
+  if (options.length === 0 && emptyLabel) {
+    return <span className="table-action-bar__empty">{emptyLabel}</span>
+  }
+  return (
+    <div className="table-action-bar__template">
+      <span className="table-action-bar__template-label">템플릿</span>
+      <div className="table-action-bar__select-wrap">
+        <select
+          className="table-action-bar__select"
+          value={value}
+          disabled={disabled}
+          onChange={e => onChange(+e.target.value)}
+        >
+          {options.map((t, i) => (
+            <option key={t.id} value={i}>{t.name}</option>
+          ))}
+        </select>
+        <span className="table-action-bar__select-chevron" aria-hidden>▾</span>
+      </div>
     </div>
   )
 }

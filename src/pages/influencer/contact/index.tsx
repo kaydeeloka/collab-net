@@ -13,6 +13,8 @@ import {
   sendOutreachEmail,
   tryToggleBulkPage,
   tryToggleBulkSelection,
+  isBulkAllSelected,
+  toggleBulkAllFiltered,
 } from '@/lib/outreach-email'
 import {
   removeInfluencerOnUnaccept,
@@ -37,7 +39,7 @@ import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
-import { TableActionBar } from '@/components/StickyBar'
+import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import {
   coerceContactCount,
@@ -481,6 +483,13 @@ export default function Outreach() {
     })
     .sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
+  const allFilteredSelected = isBulkAllSelected(checkedIds, filtered.map(r => r.id))
+
+  const toggleSelectAllFiltered = useCallback(() => {
+    const { next, truncated } = toggleBulkAllFiltered(checkedIds, filtered.map(r => r.id))
+    setCheckedIds(next)
+    if (truncated) showToast(bulkSendLimitMessage(), 'error')
+  }, [checkedIds, filtered, showToast])
 
   const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>) => {
     const ids = Array.from(checkedIds)
@@ -672,6 +681,27 @@ export default function Outreach() {
           selectedCount={checkedIds.size}
           maxSelection={BULK_SEND_MAX}
           unit="명"
+          statusActions={
+            <>
+              <button
+                type="button"
+                className={`table-action-bar__select-all${allFilteredSelected ? ' is-active' : ''}`}
+                disabled={filtered.length === 0}
+                onClick={toggleSelectAllFiltered}
+              >
+                {allFilteredSelected ? '전체 해제' : '전체 선택'}
+              </button>
+              {checkedIds.size > 0 && (
+                <button
+                  type="button"
+                  className="table-action-bar__clear-selection"
+                  onClick={() => setCheckedIds(new Set())}
+                >
+                  선택 해제 ({checkedIds.size})
+                </button>
+              )}
+            </>
+          }
           actions={
             <>
               <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)}>
@@ -695,17 +725,14 @@ export default function Outreach() {
               >
                 일괄 발송
               </Button>
-              {checkedIds.size > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
-                  선택 해제
-                </Button>
-              )}
             </>
           }
         >
-          <select className="table-action-bar__select" value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}>
-            {templates.map((t: { id: string; name: string }, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-          </select>
+          <TableTemplateSelect
+            value={bulkTplIdx}
+            onChange={setBulkTplIdx}
+            options={templates}
+          />
         </TableActionBar>
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>
@@ -717,6 +744,7 @@ export default function Outreach() {
                     {/* Checkbox */}
                     <th style={{ ...thBase, width: 36, padding: '9px 8px', textAlign: 'center' }}>
                       <input type="checkbox"
+                        title="현재 페이지 전체 선택"
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(r.id))}
                         onChange={e => setCheckedIds(prev => {
                           const pageIds = pg.pageItems.map(r => r.id)
@@ -935,8 +963,7 @@ export default function Outreach() {
                   {tpl?.body ? renderWithDummy(tpl.body) : <span style={{ color: 'var(--gray-4)' }}>본문 없음</span>}
                 </div>
               </div>
-              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>치환 구문은 발송 시 자동 적용됩니다</span>
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setShowBulkPreview(false)}
                     style={{ padding: '6px 14px', background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>닫기</button>

@@ -208,6 +208,43 @@ export function tryToggleBulkPage<T>(
   return { next, rejected }
 }
 
+/** Select all items in the current filtered list (capped at BULK_SEND_MAX). */
+export function selectBulkAll<T>(allIds: T[]): { next: Set<T>; truncated: boolean } {
+  const next = new Set<T>()
+  let truncated = false
+  for (const id of allIds) {
+    if (next.size >= BULK_SEND_MAX) {
+      truncated = true
+      break
+    }
+    next.add(id)
+  }
+  return { next, truncated }
+}
+
+export function deselectBulkAll<T>(prev: Set<T>, allIds: T[]): Set<T> {
+  const next = new Set(prev)
+  allIds.forEach(id => next.delete(id))
+  return next
+}
+
+export function isBulkAllSelected<T>(checked: Set<T>, allIds: T[]): boolean {
+  if (allIds.length === 0) return false
+  const capped = allIds.slice(0, BULK_SEND_MAX)
+  return capped.every(id => checked.has(id))
+}
+
+export function toggleBulkAllFiltered<T>(
+  prev: Set<T>,
+  allIds: T[],
+): { next: Set<T>; truncated: boolean } {
+  if (isBulkAllSelected(prev, allIds)) {
+    return { next: deselectBulkAll(prev, allIds), truncated: false }
+  }
+  const { next, truncated } = selectBulkAll(allIds)
+  return { next, truncated }
+}
+
 export async function sendOutreachEmail(payload: {
   to: string
   subject: string

@@ -18,6 +18,9 @@ const STATUS_COLOR: Record<string, string> = {
   skipped: 'var(--gray-5)',
 }
 
+const LIST_SCROLL_AT = 10
+const ROW_HEIGHT_PX = 52
+
 export default function BulkSendProgressModal({
   open,
   state,
@@ -44,9 +47,9 @@ export default function BulkSendProgressModal({
       : '일괄 발송 완료'
   const statusLine = checkingBounces
     ? '받은편지함에서 배달 실패(NDR) 확인 중…'
-    : running
-      ? '이메일 발송 중…'
-      : formatBulkSendSummary(sent, failed, unit)
+    : '이메일 발송 중…'
+  const summaryText = formatBulkSendSummary(sent, failed, unit)
+  const listScrollable = rows.length > LIST_SCROLL_AT
 
   return (
     <Modal
@@ -61,29 +64,28 @@ export default function BulkSendProgressModal({
       ) : undefined}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, fontWeight: 600, color: 'var(--gray-6)' }}>
-            <span>{statusLine}</span>
-            <span>{checkingBounces ? <Spinner sm /> : `${pct}%`}</span>
+        {busy && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, fontWeight: 600, color: 'var(--gray-6)' }}>
+              <span>{statusLine}</span>
+              <span>{checkingBounces ? <Spinner sm /> : `${pct}%`}</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 999, background: 'var(--gray-1)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: checkingBounces ? '100%' : `${pct}%`,
+                borderRadius: 999,
+                background: failed > 0 ? 'linear-gradient(90deg, var(--teal-dk), #f87171)' : 'var(--teal-dk)',
+                transition: 'width .25s ease',
+                opacity: checkingBounces ? 0.45 : 1,
+              }} />
+            </div>
           </div>
-          <div style={{ height: 8, borderRadius: 999, background: 'var(--gray-1)', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: checkingBounces ? '100%' : `${pct}%`,
-              borderRadius: 999,
-              background: failed > 0 ? 'linear-gradient(90deg, var(--teal-dk), #f87171)' : 'var(--teal-dk)',
-              transition: 'width .25s ease',
-              opacity: checkingBounces ? 0.45 : 1,
-            }} />
-          </div>
-          {!busy && skipped > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--gray-5)' }}>건너뜀 {skipped}{unit}</div>
-          )}
-        </div>
+        )}
 
         <div style={{
-          maxHeight: 360,
-          overflowY: 'auto',
+          maxHeight: listScrollable ? ROW_HEIGHT_PX * LIST_SCROLL_AT : undefined,
+          overflowY: listScrollable ? 'auto' : undefined,
           border: '1px solid var(--gray-2)',
           borderRadius: 12,
           background: 'var(--gray-0)',
@@ -140,6 +142,26 @@ export default function BulkSendProgressModal({
             </div>
           ))}
         </div>
+
+        {!busy && (
+          <div style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: failed > 0 ? '#fef2f2' : 'var(--gray-1)',
+            border: `1px solid ${failed > 0 ? '#fecaca' : 'var(--gray-2)'}`,
+          }}>
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: failed > 0 ? '#991b1b' : '#14532d',
+            }}>
+              {summaryText}
+            </div>
+            {skipped > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--gray-5)' }}>건너뜀 {skipped}{unit}</div>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   )

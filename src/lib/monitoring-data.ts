@@ -50,9 +50,33 @@ export interface CollectionRate {
 }
 
 export interface ReportSummary {
-  uploadRate:   CollectionRate
+  uploadRate:   CollectionRate & { notUploaded: number }
   totalContent: { count: number; mimuse: number; brand: number }
   engagement:   { views: number; likes: number; comments: number }
+}
+
+export interface BrandPerformanceRow {
+  key:         'mimuse' | 'brand'
+  label:       string
+  count:       number
+  avgViews:    number | null
+  avgLikes:    number | null
+  avgComments: number | null
+}
+
+export interface TopPostRow {
+  id:            string
+  rank:          number
+  handle:        string
+  displayName:   string | null
+  platform:      string
+  platformLabel: string
+  brand:         string | null
+  brandLabel:    string
+  views:         number
+  likes:         number
+  comments:      number
+  reviewLink:    string
 }
 
 export interface UploadChannelSegment {
@@ -63,10 +87,64 @@ export interface UploadChannelSegment {
 }
 
 export interface ContentReport {
-  summary:         ReportSummary
-  contentTypeRows: ContentTypeRow[]
-  performanceRows: PlatformPerformanceRow[]
-  uploadChannels:  UploadChannelSegment[]
+  summary:             ReportSummary
+  contentTypeRows:       ContentTypeRow[]
+  brandPerformanceRows:  BrandPerformanceRow[]
+  performanceRows:       PlatformPerformanceRow[]
+  topPosts:              TopPostRow[]
+  uploadChannels:        UploadChannelSegment[]
+}
+
+const BRAND_PERF_LABELS: Record<'mimuse' | 'brand', string> = {
+  mimuse: 'Mi Muse',
+  brand:  '브랜드별',
+}
+
+const TOP_POSTS_LIMIT = 10
+
+function brandDisplayLabel(brand: string | null): string {
+  const b = (brand || '').toLowerCase()
+  if (!b) return '—'
+  if (b === 'mimuse') return 'Mi Muse'
+  return brand!
+}
+
+function buildBrandPerformanceRows(reviewRows: MonitoringRow[]): BrandPerformanceRow[] {
+  return (['mimuse', 'brand'] as const).map(key => {
+    const matched = reviewRows.filter(r => contentTypeBucket(r.brand) === key)
+    return {
+      key,
+      label:       BRAND_PERF_LABELS[key],
+      count:       matched.length,
+      avgViews:    matched.length ? avgField(matched, 'views') : null,
+      avgLikes:    matched.length ? avgField(matched, 'likes') : null,
+      avgComments: matched.length ? avgField(matched, 'comments') : null,
+    }
+  })
+}
+
+function buildTopPosts(reviewRows: MonitoringRow[]): TopPostRow[] {
+  return reviewRows
+    .slice()
+    .sort((a, b) => b.views - a.views || b.likes - a.likes)
+    .slice(0, TOP_POSTS_LIMIT)
+    .map((r, i) => {
+      const bucket = platformBucket(r.platform)
+      return {
+        id:            r.id,
+        rank:          i + 1,
+        handle:        r.handle,
+        displayName:   r.display_name,
+        platform:      r.platform,
+        platformLabel: PLATFORM_DISPLAY[bucket].label,
+        brand:         r.brand,
+        brandLabel:    brandDisplayLabel(r.brand),
+        views:         r.views,
+        likes:         r.likes,
+        comments:      r.comments,
+        reviewLink:    r.review_link!,
+      }
+    })
 }
 
 function mapMonitoringRecord(m: any): MonitoringRow {
@@ -301,12 +379,15 @@ export function computeContentReport(rows: MonitoringRow[]): ContentReport {
     }
   })
 
+  const notUploaded = groups.length - uploadedGroups
+
   return {
     summary: {
       uploadRate: {
-        current: uploadedGroups,
-        total:   groups.length,
-        pct:     pct(uploadedGroups, groups.length),
+        current:     uploadedGroups,
+        total:       groups.length,
+        pct:         pct(uploadedGroups, groups.length),
+        notUploaded,
       },
       totalContent: {
         count:  reviewRows.length,
@@ -320,7 +401,9 @@ export function computeContentReport(rows: MonitoringRow[]): ContentReport {
       },
     },
     contentTypeRows,
+    brandPerformanceRows: buildBrandPerformanceRows(reviewRows),
     performanceRows,
+    topPosts: buildTopPosts(reviewRows),
     uploadChannels,
   }
 }

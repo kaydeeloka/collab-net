@@ -11,10 +11,13 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageTabs } from '@/components/ui'
 import {
+  clampTargetCreators,
   isLowPerKeywordTarget,
   tcmKeywordLimitMessage,
   TCM_KEYWORD_MAX,
   TCM_PER_KEYWORD_TARGET_WARN,
+  TCM_TARGET_MAX,
+  TCM_TARGET_MIN,
   tryToggleTcmKeyword,
 } from '@/lib/tcm-search'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
@@ -363,7 +366,7 @@ export default function Listup() {
           tierLabel: tier.label,
           tierTags: tier.tags,
           category: tier.category,
-          targetCount: targetCreators,
+          targetCount: clampTargetCreators(targetCreators),
           keywords: selectedKeywords,
           minF: tier.minF,
           maxF: tier.maxF,
@@ -1158,8 +1161,16 @@ export default function Listup() {
                 )}
               </span>
               <div className="filter-group">
-                <label>목표 인플루언서 수 (명)</label>
-                <input type="number" value={targetCreators} min={10} max={1000} step={10} style={{ width: 70 }} onChange={e => setTargetCreators(+e.target.value)} />
+                <label>목표 인플루언서 수 (명, 최대 {TCM_TARGET_MAX})</label>
+                <input
+                  type="number"
+                  value={targetCreators}
+                  min={TCM_TARGET_MIN}
+                  max={TCM_TARGET_MAX}
+                  step={10}
+                  style={{ width: 70 }}
+                  onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
+                />
               </div>
               <button
                 className="listup-find-btn"

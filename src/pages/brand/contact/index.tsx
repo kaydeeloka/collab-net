@@ -23,6 +23,8 @@ import {
   sendOutreachEmail,
   tryToggleBulkPage,
   tryToggleBulkSelection,
+  isBulkAllSelected,
+  toggleBulkAllFiltered,
 } from '@/lib/outreach-email'
 import { supabase } from '@/lib/supabase'
 import { supabaseNow } from '@/lib/kst-time'
@@ -30,7 +32,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
-import { TableActionBar } from '@/components/StickyBar'
+import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact-count'
 
@@ -403,6 +405,13 @@ export default function BrandContact() {
     return true
   }).sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
+  const allFilteredSelected = isBulkAllSelected(checkedIds, filtered.map(rowKey))
+
+  const toggleSelectAllFiltered = useCallback(() => {
+    const { next, truncated } = toggleBulkAllFiltered(checkedIds, filtered.map(rowKey))
+    setCheckedIds(next)
+    if (truncated) showToast(bulkSendLimitMessage(), 'error')
+  }, [checkedIds, filtered, showToast])
 
   const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'title' | 'body'>) => {
     const keys = Array.from(checkedIds)
@@ -579,6 +588,27 @@ export default function BrandContact() {
           selectedCount={checkedIds.size}
           maxSelection={BULK_SEND_MAX}
           unit="건"
+          statusActions={
+            <>
+              <button
+                type="button"
+                className={`table-action-bar__select-all${allFilteredSelected ? ' is-active' : ''}`}
+                disabled={filtered.length === 0}
+                onClick={toggleSelectAllFiltered}
+              >
+                {allFilteredSelected ? '전체 해제' : '전체 선택'}
+              </button>
+              {checkedIds.size > 0 && (
+                <button
+                  type="button"
+                  className="table-action-bar__clear-selection"
+                  onClick={() => setCheckedIds(new Set())}
+                >
+                  선택 해제 ({checkedIds.size})
+                </button>
+              )}
+            </>
+          }
           actions={
             <>
               <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
@@ -602,21 +632,15 @@ export default function BrandContact() {
               >
                 일괄 발송
               </Button>
-              {checkedIds.size > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setCheckedIds(new Set())}>
-                  선택 해제
-                </Button>
-              )}
             </>
           }
         >
-          {templates.length === 0
-            ? <span style={{ fontSize: 12, color: 'var(--gray-5)', fontStyle: 'italic' }}>템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요</span>
-            : (
-              <select className="table-action-bar__select" value={bulkTplIdx} onChange={e => setBulkTplIdx(+e.target.value)}>
-                {templates.map((t: { id: string; name: string }, i: number) => <option key={t.id} value={i}>{t.name}</option>)}
-              </select>
-            )}
+          <TableTemplateSelect
+            value={bulkTplIdx}
+            onChange={setBulkTplIdx}
+            options={templates}
+            emptyLabel="템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요"
+          />
         </TableActionBar>
 
         {loading
@@ -628,6 +652,7 @@ export default function BrandContact() {
                   <tr>
                     <th style={{ ...thBase, width: 36, padding: '9px 8px', textAlign: 'center' }}>
                       <input type="checkbox"
+                        title="현재 페이지 전체 선택"
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(rowKey(r)))}
                         onChange={e => setCheckedIds(prev => {
                           const pageIds = pg.pageItems.map(rowKey)
@@ -776,7 +801,6 @@ export default function BrandContact() {
                 {renderWithDummy(templates[bulkTplIdx].body)}
               </div>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 8 }}>치환 구문은 발송 시 자동 적용됩니다</div>
           </div>
         </div>
       )}

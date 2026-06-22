@@ -1,5 +1,16 @@
 export const TCM_KEYWORD_MAX = 5
 export const TCM_PER_KEYWORD_TARGET_WARN = 10
+export const TCM_TARGET_MIN = 10
+export const TCM_TARGET_MAX = 120
+
+export function tcmTargetLimitMessage() {
+  return `목표 인플루언서 수는 ${TCM_TARGET_MIN}~${TCM_TARGET_MAX}명까지 설정할 수 있습니다`
+}
+
+export function clampTargetCreators(value: number): number {
+  const n = Number.isFinite(value) ? Math.round(value) : TCM_TARGET_MIN
+  return Math.min(TCM_TARGET_MAX, Math.max(TCM_TARGET_MIN, n))
+}
 
 export function tcmKeywordLimitMessage() {
   return `TCM 키워드는 최대 ${TCM_KEYWORD_MAX}개까지 선택할 수 있습니다`

@@ -20,7 +20,7 @@ const APIFY_RUN_MEMORY_MB = 4096;         // 4 GB per run (Apify default is ofte
 // TCM pool + Apify queue = ceil(target × buffer)
 function _tcmSearchBuffer_(minF, maxF) {
   if (maxF <= 10000) return 6; // nano (e.g. 3K–10K) — sparse pool, needs more oversampling
-  return 2.5;                  // micro+ (e.g. 10K–50K, 60K–100K)
+  return 3;                  // micro+ (e.g. 10K–50K, 60K–100K)
 }
 
 function _tcmCfg() {
