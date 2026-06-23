@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
-import { archiveSectionFromPath, archivePhaseSlugFromPath, archiveSectionPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
+import { archivePhaseSlugFromPath, archiveSectionPath, isArchiveDetailPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
 import { formatKstShortDate } from '@/lib/kst-time'
 
 interface NavSubChild extends StickyBarNavSubChild {}
@@ -224,9 +224,10 @@ export default function Layout() {
   const stickyGroup = useMemo((): StickyBarGroup | null => {
     if (!activeGroup) return null
     if (activeGroup.label !== 'ARCHIVE') return activeGroup
+    if (!isArchiveDetailPath(pathname)) return null
 
     const phaseSlug = archivePhaseSlugFromPath(pathname)
-    if (!phaseSlug) return { ...activeGroup, children: [] }
+    if (!phaseSlug) return null
 
     const phase = phaseFromArchiveSlug(phaseList, phaseSlug)
     if (!phase) return { ...activeGroup, children: [] }

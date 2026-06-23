@@ -1,17 +1,21 @@
 import { Navigate, useOutletContext, useParams } from 'react-router-dom'
-import { archiveSectionPath } from '../archive-slug'
+import { archiveBrandReportPath, archiveSectionPath, brandFromArchiveBrandSlug, isLegacyArchiveBrandIdSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
 import type { ArchiveBrandReportOutletContext } from './layout'
 
 export default function ArchiveBrandReportBrand() {
-  const { brandId } = useParams<{ brandId: string }>()
+  const { brandSlug } = useParams<{ brandSlug: string }>()
   const { phase } = useArchivePhase()
   const { phaseName, brands } = useOutletContext<ArchiveBrandReportOutletContext>()
 
-  const brand = brands.find(b => b.id === brandId)
+  const brand = brandFromArchiveBrandSlug(brands, brandSlug)
   if (!brand) {
     if (!phase) return null
     return <Navigate to={archiveSectionPath(phase, 'brand-report')} replace />
+  }
+
+  if (phase && isLegacyArchiveBrandIdSlug(brandSlug)) {
+    return <Navigate to={archiveBrandReportPath(phase, brand, brands)} replace />
   }
 
   return (

@@ -150,7 +150,7 @@ export default function App() {
                 <Route path="/archive/:phaseName/season" element={<ArchiveBrandReportPhase />} />
                 <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportLayout />}>
                   <Route index element={<ArchiveBrandReportIndex />} />
-                  <Route path=":brandId" element={<ArchiveBrandReportBrand />} />
+                  <Route path=":brandSlug" element={<ArchiveBrandReportBrand />} />
                 </Route>
                 <Route path="/archive/design" element={<Navigate to="/archive" replace />} />
                 <Route path="/archive/design/:legacySlug" element={<RedirectLegacyDesignPhase />} />

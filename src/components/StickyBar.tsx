@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { type ReactNode } from 'react'
 import { formatStickyBarClock } from '@/lib/kst-time'
 import { getPhaseStatusBadge } from '@/lib/phase'
@@ -164,9 +165,20 @@ export default function StickyBar({
   onSubLeave,
 }: StickyBarProps) {
   const showNav = group.children.length > 0
+  const isArchiveDetail = group.label === 'ARCHIVE'
+    && archivePhaseSlugFromPath(pathname) != null
 
   return (
     <header className="sticky-bar">
+      {isArchiveDetail && (
+        <div className="sticky-bar__left">
+          <NavLink to="/archive" className="sticky-bar__back">
+            <ArrowLeft size={14} aria-hidden />
+            아카이브
+          </NavLink>
+        </div>
+      )}
+
       {showNav && (
       <nav className="sticky-bar__nav" aria-label={`${group.label} navigation`}>
         {group.children.map(child => {

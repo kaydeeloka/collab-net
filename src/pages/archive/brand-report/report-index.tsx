@@ -8,5 +8,5 @@ export default function ArchiveBrandReportIndex() {
   const { brands } = useOutletContext<ArchiveBrandReportOutletContext>()
 
   if (!phase || !brands.length) return null
-  return <Navigate to={archiveBrandReportPath(phase, brands[0].id)} replace />
+  return <Navigate to={archiveBrandReportPath(phase, brands[0], brands)} replace />
 }

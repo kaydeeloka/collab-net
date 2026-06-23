@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { Search } from 'lucide-react'
 import { gasPost } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { matchesKstDate, supabaseNow } from '@/lib/kst-time'
@@ -29,17 +30,6 @@ type ListupTab = 'search' | 'database'
 const DEFAULT_FILTER_CONDS: FilterCond[] = [
   { cat: '중복', desc: '1~5순위까지의 중복 계정 필터링', type: 'dedup', enabled: true },
 ]
-
-const FILTER_SELECT: CSSProperties = {
-  padding: '4px 10px', borderRadius: 6, border: '1px solid var(--gray-3)',
-  fontSize: 13, background: '#fff', fontWeight: 600, minWidth: 72,
-}
-const FILTER_CHECK_LABEL: CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-6)', cursor: 'pointer', margin: 0,
-}
-const FILTER_INLINE: CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--gray-6)',
-}
 
 interface SearchFilters {
   maxRatio: number
@@ -931,175 +921,196 @@ export default function Listup() {
 
         {activeTab === 'search' && (
           <div>
-            {/* 필터링 조건 */}
-            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>인플루언서 필터링 조건</div>
-              <div className="table-wrap listup-filter-table">
-                <table>
-                  <thead><tr><th className="filter-no">NO.</th><th className="filter-cat">구분</th><th>내용</th></tr></thead>
-                  <tbody>
-                    <tr>
-                      <td className="filter-no">1</td>
-                      <td className="filter-cat">팔로잉 비율</td>
-                      <td>
-                        <div style={FILTER_INLINE}>
-                          <span>팔로잉 수가 팔로워 수의</span>
-                          <select value={maxRatio} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail }) }}>
-                            <option value={50}>50%</option>
-                            <option value={60}>60%</option>
-                            <option value={70}>70%</option>
-                            <option value={80}>80%</option>
-                          </select>
-                          <span>초과 시 제외</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="filter-no">2</td>
-                      <td className="filter-cat">업로드 주기</td>
-                      <td>
-                        <div style={FILTER_INLINE}>
-                          <span>최근</span>
-                          <select value={maxUploadDays} style={FILTER_SELECT}
-                            onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail }) }}>
-                            <option value={30}>30일</option>
-                            <option value={49}>7주</option>
-                          </select>
-                          <span>이내 업로드 콘텐츠가 없는 계정 제외</span>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="filter-no">3</td>
-                      <td className="filter-cat">국가</td>
-                      <td>
-                        <select value={proxyCountry} style={{ ...FILTER_SELECT, minWidth: 180, maxWidth: 240 }}
-                          onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail }) }}>
-                          {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="filter-no">4</td>
-                      <td className="filter-cat">이메일</td>
-                      <td>
-                        <label style={FILTER_CHECK_LABEL}>
-                          <input type="checkbox" checked={requireEmail}
-                            onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v }) }} />
-                          bio에 이메일이 없는 계정 제외
-                        </label>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="filter-no">5</td>
-                      <td className="filter-cat">중복</td>
-                      <td>
-                        <label style={FILTER_CHECK_LABEL}>
-                          <input type="checkbox" checked={(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).enabled !== false}
-                            onChange={e => setDedupEnabled(e.target.checked)} />
-                          {(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).desc}
-                        </label>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Tier table + Keywords */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>우선순위 등급표</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
-                    <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('DB 기본값으로 초기화하시겠습니까?', () => resetTiersFromDb())}>↺</button>
+            <div className="listup-filter-panel">
+              <div className="listup-setup-head">인플루언서 필터링 조건</div>
+              <div className="listup-filter-grid listup-filter-grid--inline">
+                  <div className="listup-filter-item listup-filter-item--wide">
+                    <span className="listup-filter-item__label">팔로잉 비율</span>
+                    <p className="listup-filter-item__sentence">
+                      팔로잉 수가 팔로워 수의{' '}
+                      <select className="listup-filter-control listup-filter-control--inline" value={maxRatio}
+                        onChange={e => { const v = +e.target.value; setMaxRatio(v); saveSearchFilters({ maxRatio: v, maxUploadDays, proxyCountry, requireEmail }) }}>
+                        <option value={50}>50%</option>
+                        <option value={60}>60%</option>
+                        <option value={70}>70%</option>
+                        <option value={80}>80%</option>
+                      </select>
+                      {' '}초과 시 제외
+                    </p>
+                  </div>
+                  <div className="listup-filter-item listup-filter-item--wide">
+                    <span className="listup-filter-item__label">업로드 주기</span>
+                    <p className="listup-filter-item__sentence">
+                      최근{' '}
+                      <select className="listup-filter-control listup-filter-control--inline" value={maxUploadDays}
+                        onChange={e => { const v = +e.target.value; setMaxUploadDays(v); saveSearchFilters({ maxRatio, maxUploadDays: v, proxyCountry, requireEmail }) }}>
+                        <option value={30}>30일</option>
+                        <option value={49}>7주</option>
+                      </select>
+                      {' '}이내 미업로드 계정 제외
+                    </p>
+                  </div>
+                  <div className="listup-filter-item">
+                    <span className="listup-filter-item__label">국가</span>
+                    <div className="listup-filter-item__control">
+                      <select className="listup-filter-control listup-filter-control--wide" value={proxyCountry}
+                        onChange={e => { const v = e.target.value; setProxyCountry(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry: v, requireEmail }) }}>
+                        {Object.entries(COUNTRY_MAP).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="listup-filter-item listup-filter-item--wide">
+                    <span className="listup-filter-item__label">이메일</span>
+                    <label className="listup-filter-check">
+                      <input type="checkbox" checked={requireEmail}
+                        onChange={e => { const v = e.target.checked; setRequireEmail(v); saveSearchFilters({ maxRatio, maxUploadDays, proxyCountry, requireEmail: v }) }} />
+                      bio에 이메일이 없는 계정 제외
+                    </label>
+                  </div>
+                  <div className="listup-filter-item listup-filter-item--wide">
+                    <span className="listup-filter-item__label">중복</span>
+                    <label className="listup-filter-check">
+                      <input type="checkbox" checked={(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).enabled !== false}
+                        onChange={e => setDedupEnabled(e.target.checked)} />
+                      {(filterConds.find(isDedupCond) ?? DEFAULT_FILTER_CONDS[0]).desc}
+                    </label>
                   </div>
                 </div>
-                {configLoading ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--gray-5)' }}><Spinner sm /> 불러오는 중...</div>
-                ) : (
-                <div className="table-wrap listup-soft-head-table">
-                  <table style={{ minWidth: 0 }}>
-                    <thead><tr><th>순위</th><th>규모</th><th>팔로워 범위</th><th>카테고리</th>{tierEditMode && <th></th>}</tr></thead>
-                    <tbody>
-                      {tiers.map((t, i) => (
-                        <tr key={i} style={{ cursor: tierEditMode ? undefined : 'pointer', background: apifyTierIdx === i ? 'var(--blue-lt)' : undefined }}
-                          onClick={() => !tierEditMode && selectTier(i)}>
-                          {tierEditMode ? (
-                            <>
-                              <td><input className="cfg-input" style={{ width: 60 }} value={t.rank} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, rank: e.target.value } : r))} /></td>
-                              <td><input className="cfg-input" style={{ width: 120 }} value={t.label} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, label: e.target.value } : r))} /></td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <input className="cfg-input" type="number" style={{ width: 60 }} value={t.minF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, minF: +e.target.value } : r))} />
-                                  <span style={{ color: 'var(--gray-5)', fontSize: 11 }}>~</span>
-                                  <input className="cfg-input" type="number" style={{ width: 60 }} value={t.maxF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, maxF: +e.target.value } : r))} />
-                                </div>
-                              </td>
-                              <td>
-                                <select className="cfg-input" value={t.tags} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, tags: e.target.value, category: e.target.value === 'kbeauty' ? 'K-뷰티' : '일반뷰티' } : r))}>
-                                  <option value="kbeauty">K-뷰티</option>
-                                  <option value="beauty">일반뷰티</option>
-                                </select>
-                              </td>
-                              <td><button className="cfg-btn cfg-btn--danger" onClick={() => showConfirm(`"${t.label}" 티어를 삭제할까요?`, () => setTiers(prev => prev.filter((_, j) => j !== i)))}>×</button></td>
-                            </>
-                          ) : (
-                            <>
-                              <td><strong>{t.rank}</strong></td>
-                              <td>{t.label}</td>
-                              <td style={{ color: 'var(--gray-5)' }}>{(t.minF/1000).toFixed(0)}K~{(t.maxF/1000).toFixed(0)}K</td>
-                              <td><span className="platform-badge" style={{ background: t.tags === 'kbeauty' ? '#111' : 'var(--blue)', color: '#fff' }}>{t.category}</span></td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                )}
-                {tierEditMode && !configLoading && (
-                  <button className="cfg-btn" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setTiers(prev => [...prev, { rank: (prev.length + 1) + '순위', label: '새 티어', minF: 1000, maxF: 10000, tags: 'beauty', category: '일반뷰티' }])}>+ 티어 추가</button>
-                )}
-              </div>
+            </div>
 
-              {/* Keywords — both categories, single selection for selected tier */}
-              <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>키워드 설정</div>
-                <div style={{ fontSize: 12, color: 'var(--gray-5)', marginBottom: 12 }}>
-                  키워드 복수 선택 (TCM) · 최대 {TCM_KEYWORD_MAX}개
-                  {selectedTier
-                    ? <> · <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier.category}</strong> 목록에서 선택</>
-                    : ' · 티어 선택 시 해당 카테고리에서 선택'}
-                  {selectedKeywords.length > 0 && (
-                    <> · <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong></>
+            <div className="listup-setup-row">
+              <div className="listup-setup-box">
+                  <div className="listup-setup-col__head">
+                    <div className="listup-setup-head listup-setup-head--blue">우선순위 등급표</div>
+                    <div className="listup-setup-col__actions">
+                      <button className="cfg-btn" onClick={() => { if (tierEditMode) saveConfig('tiers', tiers); setTierEditMode(!tierEditMode) }}>{tierEditMode ? '완료' : '편집'}</button>
+                      <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('DB 기본값으로 초기화하시겠습니까?', () => resetTiersFromDb())}>↺</button>
+                    </div>
+                  </div>
+                  {configLoading ? (
+                    <div className="listup-setup-loading"><Spinner sm /> 불러오는 중...</div>
+                  ) : (
+                    <div className="listup-flat-table-wrap">
+                      <table className="listup-tier-table">
+                        <thead>
+                          <tr>
+                            <th>순위</th>
+                            <th>규모</th>
+                            <th>팔로워 범위</th>
+                            <th>카테고리</th>
+                            {tierEditMode && <th className="listup-tier-table__action-col" />}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tiers.map((t, i) => (
+                            <tr
+                              key={i}
+                              className={[
+                                tierEditMode ? '' : 'listup-tier-row',
+                                !tierEditMode && apifyTierIdx === i ? 'listup-tier-row--selected' : '',
+                              ].filter(Boolean).join(' ')}
+                              onClick={() => !tierEditMode && selectTier(i)}
+                            >
+                              {tierEditMode ? (
+                                <>
+                                  <td><input className="cfg-input cfg-input--sm" value={t.rank} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, rank: e.target.value } : r))} /></td>
+                                  <td><input className="cfg-input cfg-input--sm cfg-input--md" value={t.label} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, label: e.target.value } : r))} /></td>
+                                  <td>
+                                    <div className="listup-tier-range">
+                                      <input className="cfg-input cfg-input--sm" type="number" value={t.minF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, minF: +e.target.value } : r))} />
+                                      <span>~</span>
+                                      <input className="cfg-input cfg-input--sm" type="number" value={t.maxF} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, maxF: +e.target.value } : r))} />
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <select className="cfg-input cfg-input--sm" value={t.tags} onChange={e => setTiers(prev => prev.map((r, j) => j === i ? { ...r, tags: e.target.value, category: e.target.value === 'kbeauty' ? 'K-뷰티' : '일반뷰티' } : r))}>
+                                      <option value="kbeauty">K-뷰티</option>
+                                      <option value="beauty">일반뷰티</option>
+                                    </select>
+                                  </td>
+                                  <td className="listup-tier-table__action-col">
+                                    <button type="button" className="listup-tier-del" onClick={() => showConfirm(`"${t.label}" 티어를 삭제할까요?`, () => setTiers(prev => prev.filter((_, j) => j !== i)))} title="삭제">×</button>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td><strong>{t.rank}</strong></td>
+                                  <td>{t.label}</td>
+                                  <td className="listup-tier-table__muted">{(t.minF/1000).toFixed(0)}K~{(t.maxF/1000).toFixed(0)}K</td>
+                                  <td>
+                                    <span className="platform-badge" style={{ background: t.tags === 'kbeauty' ? '#111' : 'var(--blue)', color: '#fff' }}>{t.category}</span>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {tierEditMode && !configLoading && (
+                    <button type="button" className="listup-tier-add" onClick={() => setTiers(prev => [...prev, { rank: (prev.length + 1) + '순위', label: '새 티어', minF: 1000, maxF: 10000, tags: 'beauty', category: '일반뷰티' }])}>+ 티어 추가</button>
                   )}
                 </div>
+
+              <div className="listup-setup-box">
+                  <div className="listup-setup-col__head">
+                    <div className="listup-setup-head">키워드 설정</div>
+                    <div className="listup-setup-col__actions">
+                      <button
+                        type="button"
+                        className="cfg-btn cfg-btn--ghost"
+                        disabled={!selectedKeywords.length}
+                        onClick={() => setSelectedKeywords([])}
+                        title="선택한 키워드 초기화"
+                      >
+                        ↺ 선택 초기화
+                      </button>
+                    </div>
+                  </div>
+                  <div className="listup-keyword-sub">
+                    키워드 복수 선택 (TCM) · 최대 {TCM_KEYWORD_MAX}개
+                    {selectedTier ? (
+                      selectedKeywords.length > 0 ? (
+                        <> · <strong>{selectedTier.category}</strong> 목록 · <strong>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong></>
+                      ) : (
+                        <> · <strong>탐색할 키워드를 1개 이상 선택하세요 (최대 {TCM_KEYWORD_MAX}개)</strong></>
+                      )
+                    ) : (
+                      ' · 티어 선택 시 해당 카테고리에서 선택'
+                    )}
+                  </div>
                 {keywordCategories.map((cat, idx) => {
                   const selectable = selectedTier?.tags === cat.tag
                   const yellow = { background: 'var(--yellow)', color: 'var(--yellow-text)', border: '1px solid var(--yellow-md)' }
                   const blue   = { background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }
                   const muted  = { background: 'var(--gray-1)', color: 'var(--gray-5)', border: '1px solid var(--gray-2)' }
                   return (
-                    <div key={cat.tag} style={{ marginBottom: idx < keywordCategories.length - 1 ? 16 : 0, paddingBottom: idx < keywordCategories.length - 1 ? 16 : 0, borderBottom: idx < keywordCategories.length - 1 ? '1px solid var(--gray-2)' : undefined }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div key={cat.tag} className={`listup-keyword-block${idx < keywordCategories.length - 1 ? '' : ' listup-keyword-block--last'}`}>
+                      <div className="listup-keyword-block__head">
+                        <div className="listup-keyword-block__title">
                           <span className="platform-badge" style={{ background: cat.badgeBg, color: '#fff' }}>{cat.title}</span>
-                          {selectable && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--yellow-text)' }}>선택 가능</span>}
+                          {selectable && <span className="listup-keyword-block__hint">선택 가능</span>}
                         </div>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          <button className="cfg-btn" onClick={() => cat.setEdit(!cat.edit)}>{cat.edit ? '완료' : '편집'}</button>
-                          <button className="cfg-btn cfg-btn--ghost" onClick={() => showConfirm('처음 불러온 값으로 초기화?', () => {
-                            const kws = [...cat.initialRef.current]
-                            cat.setKws(kws)
-                            saveConfig(cat.cfgKey, kws)
-                            if (selectedKeywords.some(k => !kws.includes(k))) {
-                              setSelectedKeywords(prev => prev.filter(k => kws.includes(k)))
-                            }
-                            cat.setEdit(false)
-                          })}>↺</button>
+                        <div className="listup-setup-col__actions">
+                          <button type="button" className="cfg-btn" onClick={() => cat.setEdit(!cat.edit)}>{cat.edit ? '완료' : '편집'}</button>
+                          {cat.edit && (
+                            <button
+                              type="button"
+                              className="cfg-btn cfg-btn--ghost"
+                              onClick={() => showConfirm('처음 불러온 값으로 목록을 복원할까요?', () => {
+                                const kws = [...cat.initialRef.current]
+                                cat.setKws(kws)
+                                saveConfig(cat.cfgKey, kws)
+                                if (selectedKeywords.some(k => !kws.includes(k))) {
+                                  setSelectedKeywords(prev => prev.filter(k => kws.includes(k)))
+                                }
+                                cat.setEdit(false)
+                              })}
+                            >
+                              목록 복원
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1120,12 +1131,14 @@ export default function Listup() {
                               {cat.edit && (
                                 <button className="tag-remove" onClick={e => {
                                   e.stopPropagation()
-                                  const next = cat.keywords.filter(k => k !== kw)
-                                  cat.setKws(next)
-                                  saveConfig(cat.cfgKey, next)
-                                  if (selectedKeywords.includes(kw)) {
-                                    setSelectedKeywords(prev => prev.filter(k => k !== kw))
-                                  }
+                                  showConfirm(`「${kw}」 키워드를 삭제하시겠습니까?`, () => {
+                                    const next = cat.keywords.filter(k => k !== kw)
+                                    cat.setKws(next)
+                                    saveConfig(cat.cfgKey, next)
+                                    if (selectedKeywords.includes(kw)) {
+                                      setSelectedKeywords(prev => prev.filter(k => k !== kw))
+                                    }
+                                  })
                                 }}>×</button>
                               )}
                             </span>
@@ -1159,49 +1172,56 @@ export default function Listup() {
                     </div>
                   )
                 })}
-                {selectedTier && !selectedKeywords.length && (
-                  <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 12 }}>탐색할 키워드를 1개 이상 선택하세요 (최대 {TCM_KEYWORD_MAX}개).</div>
-                )}
                 {lowPerKeywordTarget && (
-                  <div style={{ fontSize: 12, color: '#b45309', marginTop: 12, fontWeight: 600 }}>
+                  <div className="listup-keyword-warn">
                     키워드당 목표가 {TCM_PER_KEYWORD_TARGET_WARN}명 미만입니다. 결과가 부족할 수 있으니 키워드 수를 줄이거나 목표를 늘려 보세요.
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Find Creators box */}
-            <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 20, marginBottom: 16 }}>
-            <div className="filters" style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
-                선택 티어 <strong style={{ color: 'var(--yellow-text)' }}>{selectedTier?.rank ?? '← 위 표에서 선택'}</strong>
-                {selectedKeywords.length > 0 && (
-                  <> · 키워드 <strong style={{ color: 'var(--yellow-text)' }}>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong></>
+            {/* Find Creators */}
+            <div className="listup-search-panel">
+              <div className="listup-search-bar">
+                <div className="listup-search-bar__meta">
+                  {selectedTier ? (
+                    <>
+                      선택 티어{' '}
+                      <span className="listup-search-bar__cat">{selectedTier.category}</span>
+                      <strong>{selectedTier.rank}</strong>
+                      {selectedKeywords.length > 0 && (
+                        <> · 키워드 <strong>{selectedKeywords.length}/{TCM_KEYWORD_MAX}</strong> {selectedKeywords.join(', ')}</>
+                      )}
+                    </>
+                  ) : (
+                    <>선택 티어 <strong>← 위 표에서 선택</strong></>
+                  )}
+                </div>
+                <div className="listup-search-bar__target">
+                  <label htmlFor="tcm-target-count">목표 인플루언서 수 (명, 최대 {TCM_TARGET_MAX})</label>
+                  <input
+                    id="tcm-target-count"
+                    type="number"
+                    value={targetCreators}
+                    min={TCM_TARGET_MIN}
+                    max={TCM_TARGET_MAX}
+                    step={10}
+                    onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
+                  />
+                </div>
+                <button
+                  className="listup-find-btn"
+                  disabled={apifyLoading || apifyTierIdx === null || !selectedKeywords.length}
+                  onClick={runTcmSearch}
+                >
+                  Find Creators (TCM)
+                </button>
+                {apifyLoading && (
+                  <span className="listup-search-bar__timer">
+                    {formatSearchDuration(searchLiveMs, true)}
+                  </span>
                 )}
-              </span>
-              <div className="filter-group">
-                <label>목표 인플루언서 수 (명, 최대 {TCM_TARGET_MAX})</label>
-                <input
-                  type="number"
-                  value={targetCreators}
-                  min={TCM_TARGET_MIN}
-                  max={TCM_TARGET_MAX}
-                  step={10}
-                  style={{ width: 70 }}
-                  onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
-                />
               </div>
-              <button
-                className="listup-find-btn"
-                disabled={apifyLoading || apifyTierIdx === null || !selectedKeywords.length}
-                onClick={runTcmSearch}
-              >Find Creators (TCM)</button>
-              {apifyLoading && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-5)', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatSearchDuration(searchLiveMs, true)}
-                </span>
-              )}
-            </div>
 
             {/* Results */}
             {apifyResults !== null ? (
@@ -1259,7 +1279,7 @@ export default function Listup() {
             ) : (
               <div className="listup-empty-state">
                 <div className={`listup-empty-icon${apifyLoading ? ' listup-empty-icon--loading' : ''}`}>
-                  {apifyLoading ? <Spinner /> : '🔍'}
+                  {apifyLoading ? <Spinner /> : <Search size={26} strokeWidth={2.2} aria-hidden />}
                 </div>
                 <div className="listup-empty-title">
                   {apifyLoading
@@ -1273,7 +1293,7 @@ export default function Listup() {
                 </div>
               </div>
             )}
-            </div>{/* end Find Creators box */}
+            </div>{/* end Find Creators */}
           </div>
         )}
 

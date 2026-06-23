@@ -395,11 +395,7 @@ export default function Ems() {
 
       {!loading && (
         <>
-          <div className="ems-toolbar">
-            <div className="section-title section-title--inline">MiMuse 배송 &amp; 클라이언트 통합 대장</div>
-          </div>
-
-          <div className="filters" style={{ marginBottom: 16, marginTop: 16 }}>
+          <div className="filters" style={{ marginBottom: 16 }}>
             <input
               type="text"
               placeholder="이름, 이메일, 접수번호, 등기번호 검색..."

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Pencil, Save, Trash2, Upload } from 'lucide-react'
+import { ArrowRight, Pencil, Save, Trash2, Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -436,10 +436,7 @@ export default function ArchiveBrandReportPhase() {
         <div className="brand-archive-empty">
           시즌을 찾을 수 없습니다.
           <div style={{ marginTop: 16 }}>
-            <Link to="/archive" className="page-hero-back">
-              <ArrowLeft size={14} />
-              시즌 선택
-            </Link>
+            <Link to="/archive">아카이브로 돌아가기</Link>
           </div>
         </div>
       </div>
@@ -464,13 +461,7 @@ export default function ArchiveBrandReportPhase() {
     <div className="page page--fill">
       <PageHeroBanner>
         <PageHeroBannerContent
-          eyebrow={(
-            <Link to="/archive" className="page-hero-back">
-              <ArrowLeft size={14} />
-              시즌 선택
-            </Link>
-          )}
-          title={`시즌 컬렉션 · ${phase.name}`}
+          title={`${phase.name} 시즌 컬렉션`}
           description={formatPhasePeriod(phase.started_at, phase.ended_at)}
           actions={(
             <>

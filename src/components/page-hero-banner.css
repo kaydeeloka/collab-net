@@ -239,7 +239,7 @@
 }
 
 .page-hero-countdown-label--done {
-  color: var(--green);
+  color: var(--gray-5);
 }
 
 .page-hero-countdown-value {
@@ -292,20 +292,6 @@
     ),
     var(--page-hero-bg-image, url('/img/hero-blue.png')) center / cover no-repeat;
   pointer-events: none;
-}
-
-.page-hero-aside--done {
-  border-color: rgba(42, 157, 92, 0.2);
-}
-
-.page-hero-aside--done::before {
-  background:
-    linear-gradient(
-      165deg,
-      rgba(248, 252, 249, 0.92) 0%,
-      rgba(238, 247, 241, 0.82) 100%
-    ),
-    var(--page-hero-bg-image, url('/img/hero-blue.png')) center / cover no-repeat;
 }
 
 .page-hero-aside-label {

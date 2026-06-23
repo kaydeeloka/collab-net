@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { formatKstShortDate } from '@/lib/kst-time'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -76,16 +74,7 @@ export default function ArchiveDesignPhase() {
     <div className="page page--fill">
       <PageHeroBanner className="design-archive-hero">
         <PageHeroBannerContent
-          eyebrow={(
-            <Link to="/archive" className="page-hero-back">
-              <ArrowLeft size={14} />
-              시즌 선택
-            </Link>
-          )}
           title={title}
-          actions={(
-            <span className="design-archive-hero__section">{phase.name} · 디자인 자료</span>
-          )}
           description={(
             <div className="design-archive-hero__copy">
               <p className="design-archive-hero__period">{period}</p>

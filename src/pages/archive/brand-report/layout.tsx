@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { PageTabs } from '@/components/ui'
 import Spinner from '@/components/Spinner'
-import { archiveBrandIdFromPath, archiveBrandReportPath } from '../archive-slug'
+import { archiveBrandReportPath, archiveBrandSlugFromPath, archiveBrandSlugKey, brandFromArchiveBrandSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
 import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
 import './brand-report.css'
@@ -45,23 +44,18 @@ export default function ArchiveBrandReportLayout() {
     )
   }
 
-  const activeBrandId = archiveBrandIdFromPath(pathname)
-  const activeTab = brands.some(b => b.id === activeBrandId)
-    ? activeBrandId!
-    : brands[0]?.id ?? ''
+  const activeBrandSlug = archiveBrandSlugFromPath(pathname)
+  const activeBrand = brandFromArchiveBrandSlug(brands, activeBrandSlug)
+  const activeTab = activeBrand
+    ? archiveBrandSlugKey(activeBrand, brands)
+    : brands[0] ? archiveBrandSlugKey(brands[0], brands) : ''
 
   return (
     <div className="page page--fill">
       <PageHeroBanner>
         <PageHeroBannerContent
-          eyebrow={(
-            <Link to="/archive" className="page-hero-back">
-              <ArrowLeft size={14} />
-              시즌 선택
-            </Link>
-          )}
-          title={`${phase.name} · 브랜드별 리포트`}
-          description={`${phase.name} 시즌 브랜드별 성과 리포트 아카이브`}
+          title="브랜드별 리포트"
+          description={`${phase.name} 시즌`}
         />
       </PageHeroBanner>
 
@@ -74,9 +68,12 @@ export default function ArchiveBrandReportLayout() {
       ) : (
         <>
           <PageTabs
-            tabs={brands.map(b => ({ id: b.id, label: b.brandName }))}
+            tabs={brands.map(b => ({ id: archiveBrandSlugKey(b, brands), label: b.brandName }))}
             active={activeTab}
-            onChange={id => navigate(archiveBrandReportPath(phase, id))}
+            onChange={slug => {
+              const brand = brands.find(b => archiveBrandSlugKey(b, brands) === slug)
+              if (brand) navigate(archiveBrandReportPath(phase, brand, brands))
+            }}
           />
           <div className="ftab-content">
             <Outlet context={{ phaseName: phase.name, brands } satisfies ArchiveBrandReportOutletContext} />
