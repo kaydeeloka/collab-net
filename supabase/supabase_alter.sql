@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS confirmed_brands (
   production_cost  TEXT,
   received         BOOLEAN     NOT NULL DEFAULT FALSE,
   notes            TEXT,
+  archive_meta     TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE confirmed_brands ENABLE ROW LEVEL SECURITY;
@@ -934,6 +935,19 @@ END $$;
 -- ============================================================
 --  confirmed brand archive — assets + storage
 -- ============================================================
+-- confirmed_brands.archive_meta — memo for 자료 아카이브 page only (not notes / season collection)
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS archive_meta TEXT;
+
+-- migrate legacy archive memo rows into confirmed_brands (safe to re-run)
+UPDATE confirmed_brands cb
+SET archive_meta = m.archive_memo
+FROM confirmed_brand_archive_meta m
+WHERE m.confirmed_brand_id = cb.id
+  AND (cb.archive_meta IS NULL OR BTRIM(cb.archive_meta) = '')
+  AND m.archive_memo IS NOT NULL
+  AND BTRIM(m.archive_memo) <> '';
+
+-- legacy table — superseded by confirmed_brands.archive_meta
 CREATE TABLE IF NOT EXISTS confirmed_brand_archive_meta (
   confirmed_brand_id UUID PRIMARY KEY REFERENCES confirmed_brands(id) ON DELETE CASCADE,
   archive_memo       TEXT,
@@ -1175,3 +1189,6 @@ CREATE INDEX IF NOT EXISTS idx_influencers_contacted ON influencers(phase_id, co
 
 -- phases — project concept for season collection / new phase setup
 ALTER TABLE phases ADD COLUMN IF NOT EXISTS project_concept TEXT;
+
+-- phases — custom hero image for season collection report
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS collection_hero_path TEXT;

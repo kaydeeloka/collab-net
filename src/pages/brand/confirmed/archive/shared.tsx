@@ -20,10 +20,11 @@ export type CategoryKey = typeof CATEGORIES[number]['key']
 export const VIEW_TOP_ROW: CategoryKey[] = ['logo', 'product_main', 'product_sub', 'cutout']
 
 export interface ConfirmedBrand {
-  id:         string
-  brand_name: string
-  product:    string | null
-  received:   boolean
+  id:           string
+  brand_name:   string
+  product:      string | null
+  received:     boolean
+  archive_meta?: string | null
 }
 
 export interface BrandAsset {

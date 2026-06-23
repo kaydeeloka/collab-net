@@ -7,6 +7,7 @@ import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import '@/pages/brand/confirmed/archive/archive.css'
+import { getSeasonCollectionCopy } from './season-collection-content'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
@@ -20,20 +21,24 @@ function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
 function PhaseCollectionCard({
   phaseId,
   name,
+  projectConcept,
   startedAt,
   endedAt,
-  brandCount,
+  brandNames,
   statusLabel,
   statusDone,
 }: {
   phaseId: string
   name: string
+  projectConcept: string | null
   startedAt: string | null
   endedAt: string | null
-  brandCount: number
+  brandNames: string[]
   statusLabel: string | null
   statusDone: boolean
 }) {
+  const title = getSeasonCollectionCopy(name, brandNames.length, projectConcept).title
+  const brandLine = brandNames.length ? brandNames.join(' · ') : '—'
   return (
     <Link to={`/archive/brand-report/${phaseId}`} className="brand-archive-card">
       <div className="brand-archive-card__media">
@@ -62,10 +67,10 @@ function PhaseCollectionCard({
       </div>
 
       <div className="brand-archive-card__body">
-        <div className="brand-archive-card__title">시즌 {name}</div>
+        <div className="brand-archive-card__title">{title}</div>
         <div className="brand-archive-card__product">{formatPhasePeriod(startedAt, endedAt)}</div>
         <div className="brand-archive-card__product" style={{ marginTop: 2 }}>
-          확정 브랜드 {brandCount}개
+          {brandLine}
         </div>
         <div className="brand-archive-card__footer">
           <span className="brand-archive-card__cta">
@@ -80,31 +85,37 @@ function PhaseCollectionCard({
 
 export default function ArchiveBrandReport() {
   const { phases, loading, activePhaseId } = usePhase()
-  const [brandCounts, setBrandCounts] = useState<Record<string, number>>({})
-  const [countsLoading, setCountsLoading] = useState(true)
+  const [brandNamesByPhase, setBrandNamesByPhase] = useState<Record<string, string[]>>({})
+  const [brandsLoading, setBrandsLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadCounts() {
-      setCountsLoading(true)
-      const { data } = await supabase.from('confirmed_brands').select('phase_id')
+    async function loadBrandNames() {
+      setBrandsLoading(true)
+      const { data } = await supabase
+        .from('confirmed_brands')
+        .select('phase_id, brand_name')
+        .order('brand_name')
       if (cancelled) return
 
-      const counts: Record<string, number> = {}
+      const names: Record<string, string[]> = {}
       for (const row of data ?? []) {
         const id = row.phase_id as string
-        counts[id] = (counts[id] ?? 0) + 1
+        const brandName = (row.brand_name as string)?.trim()
+        if (!id || !brandName) continue
+        if (!names[id]) names[id] = []
+        names[id].push(brandName)
       }
-      setBrandCounts(counts)
-      setCountsLoading(false)
+      setBrandNamesByPhase(names)
+      setBrandsLoading(false)
     }
 
-    void loadCounts()
+    void loadBrandNames()
     return () => { cancelled = true }
   }, [])
 
-  const isLoading = loading || countsLoading
+  const isLoading = loading || brandsLoading
 
   return (
     <div className="page page--fill">
@@ -142,9 +153,10 @@ export default function ArchiveBrandReport() {
                   key={phase.id}
                   phaseId={phase.id}
                   name={phase.name}
+                  projectConcept={phase.project_concept}
                   startedAt={phase.started_at}
                   endedAt={phase.ended_at}
-                  brandCount={brandCounts[phase.id] ?? 0}
+                  brandNames={brandNamesByPhase[phase.id] ?? []}
                   statusLabel={badge?.label ?? null}
                   statusDone={badge?.tone === 'completed'}
                 />

@@ -20,19 +20,13 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
   if (error || !brands?.length) return []
 
   const ids = brands.map(b => b.id)
-  const [{ data: assets }, { data: metas }] = await Promise.all([
-    supabase
-      .from('confirmed_brand_assets')
-      .select('confirmed_brand_id, category, storage_path, sort_order, created_at')
-      .in('confirmed_brand_id', ids)
-      .in('category', ['product_main', 'logo'])
-      .order('sort_order')
-      .order('created_at'),
-    supabase
-      .from('confirmed_brand_archive_meta')
-      .select('confirmed_brand_id, archive_memo')
-      .in('confirmed_brand_id', ids),
-  ])
+  const { data: assets } = await supabase
+    .from('confirmed_brand_assets')
+    .select('confirmed_brand_id, category, storage_path, sort_order, created_at')
+    .in('confirmed_brand_id', ids)
+    .in('category', ['product_main', 'logo'])
+    .order('sort_order')
+    .order('created_at')
 
   const assetByBrand = new Map<string, { path: string; category: string }>()
   for (const asset of assets ?? []) {
@@ -49,10 +43,6 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
     }
   }
 
-  const memoByBrand = new Map(
-    (metas ?? []).map(m => [m.confirmed_brand_id as string, m.archive_memo as string | null]),
-  )
-
   const items = await Promise.all(
     brands.map(async brand => {
       const storagePath = assetByBrand.get(brand.id)?.path
@@ -62,9 +52,8 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
         imageUrl = url
       }
 
-      const memo = memoByBrand.get(brand.id)?.trim()
       const notes = (brand.notes as string | null)?.trim()
-      const description = memo || notes || null
+      const description = notes || null
 
       return {
         id: brand.id,

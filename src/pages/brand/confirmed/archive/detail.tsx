@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import JSZip from 'jszip'
 import { ArrowLeft, Download, Pencil, Save, Trash2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -60,7 +59,7 @@ export default function BrandArchiveDetail() {
     setLoading(true)
     const { data, error } = await supabase
       .from('confirmed_brands')
-      .select('id, brand_name, product, received')
+      .select('id, brand_name, product, received, archive_meta')
       .eq('phase_id', selectedPhaseId)
       .order('brand_name')
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -70,23 +69,14 @@ export default function BrandArchiveDetail() {
 
   const loadAssets = useCallback(async (id: string) => {
     setAssetsLoading(true)
-    const [{ data: assetRows, error: assetErr }, { data: metaRow, error: metaErr }] = await Promise.all([
-      supabase
-        .from('confirmed_brand_assets')
-        .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
-        .eq('confirmed_brand_id', id)
-        .order('sort_order')
-        .order('created_at'),
-      supabase
-        .from('confirmed_brand_archive_meta')
-        .select('archive_memo')
-        .eq('confirmed_brand_id', id)
-        .maybeSingle(),
-    ])
+    const { data: assetRows, error: assetErr } = await supabase
+      .from('confirmed_brand_assets')
+      .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
+      .eq('confirmed_brand_id', id)
+      .order('sort_order')
+      .order('created_at')
     if (assetErr) showToast(assetErr.message, 'error')
-    if (metaErr) showToast(metaErr.message, 'error')
     setAssets((assetRows ?? []) as BrandAsset[])
-    setArchiveMemo(metaRow?.archive_memo ?? '')
     setAssetsLoading(false)
   }, [showToast])
 
@@ -102,6 +92,10 @@ export default function BrandArchiveDetail() {
     if (brandId) loadAssets(brandId)
     else { setAssets([]); setArchiveMemo(''); setLogoUrl(null) }
   }, [brandId, loadAssets])
+
+  useEffect(() => {
+    setArchiveMemo(brand?.archive_meta ?? '')
+  }, [brand?.id, brand?.archive_meta])
 
   const logoAsset = assets.find(a => a.category === 'logo')
 
@@ -280,9 +274,11 @@ export default function BrandArchiveDetail() {
     if (memoTimer.current) clearTimeout(memoTimer.current)
     memoTimer.current = setTimeout(async () => {
       const { error } = await supabase
-        .from('confirmed_brand_archive_meta')
-        .upsert({ confirmed_brand_id: brandId, archive_memo: value || null, updated_at: supabaseNow() })
+        .from('confirmed_brands')
+        .update({ archive_meta: value || null })
+        .eq('id', brandId)
       if (error) showToast(error.message, 'error')
+      else setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_meta: value || null } : b))
     }, 700)
   }
 
@@ -296,12 +292,14 @@ export default function BrandArchiveDetail() {
     if (memoTimer.current) clearTimeout(memoTimer.current)
     try {
       const { error } = await supabase
-        .from('confirmed_brand_archive_meta')
-        .upsert({ confirmed_brand_id: brandId, archive_memo: archiveMemo || null, updated_at: supabaseNow() })
+        .from('confirmed_brands')
+        .update({ archive_meta: archiveMemo || null })
+        .eq('id', brandId)
       if (error) {
         showToast(error.message, 'error')
         return
       }
+      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_meta: archiveMemo || null } : b))
       setEditMode(false)
       showToast('저장되었습니다', 'success')
     } finally {
