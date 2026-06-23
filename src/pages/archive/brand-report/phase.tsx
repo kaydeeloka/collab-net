@@ -7,10 +7,15 @@ import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import { PAGE_HERO_DEFAULT_BG } from '@/components/page-hero-banner.constants'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './season-collection.css'
 import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
 import { getSeasonCollectionCopy, conceptTitleFromProjectConcept, splitArchiveParagraphs } from './season-collection-content'
+import { getSeasonCollectionOverview } from './season-collection-overview'
+import { getSeasonCollectionKitComposition } from './season-collection-kit-composition'
+import SeasonCollectionOverview from './SeasonCollectionOverview'
+import SeasonCollectionKitComposition from './SeasonCollectionKitComposition'
 import {
   loadStorageImageUrl,
   removeBrandCover,
@@ -19,6 +24,19 @@ import {
   uploadCollectionImg,
 } from './season-collection-images'
 import { useArchivePhase } from '../use-archive-phase'
+import { designCoverPath } from '../design/design-archive-images'
+
+async function resolveSeasonHeroUrl(phase: {
+  design_theme_img?: string | null
+  collection_img?: string | null
+}) {
+  const coverPath = designCoverPath(phase)
+  if (coverPath) {
+    const url = await loadStorageImageUrl(coverPath)
+    if (url) return url
+  }
+  return PAGE_HERO_DEFAULT_BG
+}
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
@@ -140,6 +158,7 @@ export default function ArchiveBrandReportPhase() {
   const [heroPath, setHeroPath] = useState<string | null>(null)
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [heroLoading, setHeroLoading] = useState(true)
+  const [overviewKitUrl, setOverviewKitUrl] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [brandArchiveDescs, setBrandArchiveDescs] = useState<Record<string, string>>({})
   const [uploadingHero, setUploadingHero] = useState(false)
@@ -168,6 +187,7 @@ export default function ArchiveBrandReportPhase() {
       setPhaseProjectConcept('')
       setHeroPath(null)
       setHeroUrl(null)
+      setOverviewKitUrl(null)
       setHeroLoading(false)
       return
     }
@@ -178,12 +198,21 @@ export default function ArchiveBrandReportPhase() {
     void (async () => {
       const { data, error } = await supabase
         .from('phases')
-        .select('collection_img, archive_desc, project_concept')
+        .select('collection_img, archive_desc, project_concept, design_kit_box_img, design_theme_img')
         .eq('id', resolvedPhaseId)
         .maybeSingle()
       if (cancelled) return
 
       if (error) {
+        if (!cancelled && phase) {
+          const url = await resolveSeasonHeroUrl({
+            design_theme_img: phase.design_theme_img,
+            collection_img: phase.collection_img,
+          })
+          setHeroPath(phase.collection_img)
+          setHeroUrl(url)
+          setOverviewKitUrl(await loadStorageImageUrl(phase.design_kit_box_img))
+        }
         setHeroLoading(false)
         return
       }
@@ -191,17 +220,27 @@ export default function ArchiveBrandReportPhase() {
       const projectConcept = (data?.project_concept as string | null) ?? phase?.project_concept ?? null
       setPhaseArchiveDesc((data?.archive_desc as string | null) ?? '')
       setPhaseProjectConcept(conceptTitleFromProjectConcept(projectConcept))
-      const path = (data?.collection_img as string | null) ?? null
-      setHeroPath(path)
-      const url = await loadStorageImageUrl(path)
+      const collectionPath = (data?.collection_img as string | null) ?? phase?.collection_img ?? null
+      const designThemePath = (data?.design_theme_img as string | null) ?? phase?.design_theme_img ?? null
+      setHeroPath(collectionPath)
+      const [url, kitUrl] = await Promise.all([
+        resolveSeasonHeroUrl({
+          design_theme_img: designThemePath,
+          collection_img: collectionPath,
+        }),
+        loadStorageImageUrl(
+          (data?.design_kit_box_img as string | null) ?? phase?.design_kit_box_img ?? null,
+        ),
+      ])
       if (!cancelled) {
         setHeroUrl(url)
+        setOverviewKitUrl(kitUrl)
         setHeroLoading(false)
       }
     })()
 
     return () => { cancelled = true }
-  }, [resolvedPhaseId, phase?.project_concept])
+  }, [resolvedPhaseId, phase?.project_concept, phase?.collection_img, phase?.design_theme_img, phase?.design_kit_box_img])
 
   function buildProjectConceptForSave(title: string, existingConcept?: string | null, archiveDesc?: string) {
     const trimmedTitle = title.trim()
@@ -301,7 +340,10 @@ export default function ArchiveBrandReportPhase() {
         return
       }
 
-      const url = await loadStorageImageUrl(path)
+      const url = await resolveSeasonHeroUrl({
+        design_theme_img: phase?.design_theme_img,
+        collection_img: path,
+      })
       setHeroPath(path)
       setHeroUrl(url)
       showToast('히어로 이미지가 업로드되었습니다', 'success')
@@ -322,7 +364,10 @@ export default function ArchiveBrandReportPhase() {
             return
           }
           setHeroPath(null)
-          setHeroUrl(null)
+          setHeroUrl(await resolveSeasonHeroUrl({
+            design_theme_img: phase?.design_theme_img,
+            collection_img: null,
+          }))
           showToast('히어로 이미지가 삭제되었습니다', 'success')
         } finally {
           setUploadingHero(false)
@@ -407,6 +452,11 @@ export default function ArchiveBrandReportPhase() {
     displayConcept,
     phaseArchiveDesc,
   )
+  const overview = getSeasonCollectionOverview(
+    phase.name,
+    brands.map(b => b.brandName),
+  )
+  const kitComposition = getSeasonCollectionKitComposition(phase.name)
   const contentLoading = brandsLoading || heroLoading
 
   return (
@@ -470,7 +520,7 @@ export default function ArchiveBrandReportPhase() {
                 <img src={heroUrl} alt={copy.title} />
               ) : (
                 <span className="season-collection__hero-placeholder">
-                  {editMode ? '히어로 이미지 업로드' : '히어로 이미지 없음'}
+                  {editMode ? '히어로 이미지 업로드' : '커버 이미지 없음'}
                 </span>
               )}
               {editMode && (
@@ -566,6 +616,16 @@ export default function ArchiveBrandReportPhase() {
               <strong>확정 브랜드 → 브랜드 관리</strong>에서 브랜드를 추가하세요.
             </div>
           )}
+
+          <div className="season-collection__divider">
+            <span className="season-collection__divider-line" aria-hidden />
+            <span className="season-collection__divider-label">Overview</span>
+            <span className="season-collection__divider-line" aria-hidden />
+          </div>
+
+          <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
+
+          <SeasonCollectionKitComposition composition={kitComposition} />
         </div>
       )}
     </div>
