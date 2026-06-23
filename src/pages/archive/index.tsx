@@ -16,6 +16,7 @@ import ArchivePhaseListSidebar from '@/components/ArchivePhaseListSidebar'
 import { phaseYearKey } from './brand-report/season-archive-shared'
 import { designCoverPath } from './design/design-archive-images'
 import { archiveSectionPath } from './archive-slug'
+import { setGlobalArchivePhase } from './archive-phase-sync'
 import './archive.css'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
@@ -91,7 +92,10 @@ function ArchivePhaseCard({
       </div>
 
       <div className="brand-archive-card__body">
-        <div className="brand-archive-card__title">{title}</div>
+        <div className="archive-picker-card__head">
+          <div className="brand-archive-card__title">{title}</div>
+          <span className="archive-picker-card__phase">{phase.name}</span>
+        </div>
         <div className="brand-archive-card__product">{formatPhasePeriod(phase.started_at, phase.ended_at)}</div>
         <div className="brand-archive-card__product" style={{ marginTop: 2 }}>
           {brandLine}
@@ -160,11 +164,10 @@ export default function ArchivePicker() {
     })
   }, [sortedPhases, filterYear])
 
-  async function openPhase(phaseId: string) {
+  function openPhase(phaseId: string) {
     const phase = phases.find(p => p.id === phaseId)
     if (!phase) return
-    await switchPhase(phaseId)
-    navigate(archiveSectionPath(phase, 'design'))
+    void setGlobalArchivePhase(phase, 'season', switchPhase, navigate)
   }
 
   return (
@@ -172,7 +175,7 @@ export default function ArchivePicker() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="아카이브"
-          description="시즌(차수)을 선택하면 디자인 자료, 시즌 컬렉션, 브랜드별 리포트를 확인할 수 있습니다."
+          description="시즌(차수)을 선택하면 시즌 컬렉션, 디자인 자료, 브랜드별 리포트를 확인할 수 있습니다."
         />
       </PageHeroBanner>
 
@@ -195,7 +198,7 @@ export default function ArchivePicker() {
             filterYear={filterYear}
             visibleCount={filteredPhases.length}
             onFilterYear={setFilterYear}
-            onOpenPhase={phase => { void openPhase(phase.id) }}
+            onOpenPhase={phase => openPhase(phase.id)}
           />
           <div className="bn-archive-main">
             {!filteredPhases.length ? (
@@ -214,7 +217,7 @@ export default function ArchivePicker() {
                         brandNames={brandNamesByPhase[phase.id] ?? []}
                         statusLabel={badge?.label ?? null}
                         statusDone={badge?.tone === 'completed'}
-                        onOpen={() => { void openPhase(phase.id) }}
+                        onOpen={() => openPhase(phase.id)}
                       />
                     )
                   })}

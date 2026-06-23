@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { type ReactNode } from 'react'
 import { formatStickyBarClock } from '@/lib/kst-time'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { phaseNum } from '@/lib/utils'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
+import {
+  archiveSectionFromPath,
+  archivePhaseSlugFromPath,
+} from '@/pages/archive/archive-slug'
+import { setGlobalArchivePhase } from '@/pages/archive/archive-phase-sync'
 
 export interface StickyBarNavSubChild {
   label: string
@@ -55,9 +60,14 @@ function StickyBarClock() {
 
 function StickyBarPhaseControls() {
   const { showToast } = useToast()
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
   const { activePhaseId, viewPhaseId, phases: phaseList, switchPhase } = usePhase()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  const archiveSection = archiveSectionFromPath(pathname)
+  const isArchiveDetail = archiveSection != null && archivePhaseSlugFromPath(pathname) != null
 
   const activeDbId = viewPhaseId ?? ''
   const dbOptions = phaseList
@@ -80,6 +90,16 @@ function StickyBarPhaseControls() {
   async function onSwitchPhase(id: string) {
     setOpen(false)
     if (!id || id === activeDbId) return
+
+    if (isArchiveDetail && archiveSection) {
+      const phase = phaseList.find(p => p.id === id)
+      if (phase) {
+        await setGlobalArchivePhase(phase, archiveSection, switchPhase, navigate)
+        showToast(`「${phase.name}」 전환 완료`, 'success')
+        return
+      }
+    }
+
     await switchPhase(id)
     showToast(`「${phaseList.find(p => p.id === id)?.name}」 전환 완료`, 'success')
   }

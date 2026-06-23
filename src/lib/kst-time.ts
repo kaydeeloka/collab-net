@@ -49,11 +49,11 @@ export function kstParts(iso: string | null | undefined): {
   }
 }
 
-/** `M/D` in KST (contact/reply badges). */
+/** `M월 D일` in KST (phase periods, contact/reply badges). */
 export function formatKstShortDate(iso: string | null | undefined): string | null {
   const p = kstParts(iso)
   if (!p) return null
-  return `${p.month}/${p.day}`
+  return `${p.month}월 ${p.day}일`
 }
 
 /** `YYYY-MM-DD` in KST. */
@@ -141,5 +141,5 @@ export function formatStickyBarClock(now = new Date()): string {
   const day = get('day')
   const weekday = now.toLocaleDateString('ko-KR', { timeZone: KST, weekday: 'short' })
   const time = `${get('hour').padStart(2, '0')}:${get('minute').padStart(2, '0')}`
-  return `${month}월. ${day}일 (${weekday}) ${time}`
+  return `${month}월 ${day}일 (${weekday}) ${time}`
 }

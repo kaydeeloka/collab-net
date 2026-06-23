@@ -13,6 +13,7 @@ export function useArchivePhase() {
     [phases, phaseName],
   )
 
+  // Direct links / bookmarks: align global phase with URL once.
   useEffect(() => {
     if (phase && phase.id !== viewPhaseId) {
       void switchPhase(phase.id)

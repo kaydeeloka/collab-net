@@ -19,6 +19,36 @@
   margin-bottom: 6px;
 }
 
+.design-archive-hero .page-hero-main-inner {
+  align-items: flex-start;
+}
+
+.design-archive-hero .page-hero-title--page {
+  font-size: clamp(24px, 2.5vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.design-archive-hero .page-hero-actions {
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.design-archive-hero__section {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue-dk);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(100, 128, 133, 0.22);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(100, 128, 133, 0.1);
+}
+
 .design-archive-detail {
   display: flex;
   flex-direction: column;
@@ -26,74 +56,33 @@
   padding-bottom: 32px;
 }
 
-.design-archive-detail__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
+.design-archive-hero__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.design-archive-hero__period {
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
   color: var(--blue-dk);
-  text-decoration: none;
-  margin-bottom: 4px;
 }
 
-.design-archive-detail__back:hover {
-  text-decoration: underline;
+.design-archive-hero__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--gray-6);
 }
 
-.design-archive-theme {
-  padding: 28px;
-  background: var(--white);
-  border: 1px solid var(--surface-md);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-xs);
-}
-
-.design-archive-theme__placeholder,
 .design-archive-asset__placeholder {
   font-size: 13px;
   color: var(--gray-5);
   text-align: center;
   padding: 24px;
   line-height: 1.6;
-}
-
-.design-archive-theme__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.design-archive-theme__label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--gray-5);
-}
-
-.design-archive-theme__title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: clamp(28px, 3vw, 36px);
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.5px;
-  color: var(--ink);
-}
-
-.design-archive-theme__period {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--blue-dk);
-}
-
-.design-archive-theme__desc {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.75;
-  color: var(--gray-6);
 }
 
 .design-archive-assets {

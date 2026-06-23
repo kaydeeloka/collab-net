@@ -57,7 +57,15 @@ export default function ArchiveDesignPhase() {
   }
 
   const title = designArchiveTitle(phase)
-  const descParagraphs = splitArchiveParagraphs(phase.design_archive_desc ?? phase.project_concept)
+  const period = formatPhasePeriod(phase.started_at, phase.ended_at)
+  const descParagraphs = (() => {
+    const fromArchive = splitArchiveParagraphs(phase.design_archive_desc)
+    if (fromArchive.length) return fromArchive
+
+    const fromConcept = splitArchiveParagraphs(phase.project_concept)
+    if (fromConcept.length <= 1) return []
+    return fromConcept.slice(1)
+  })()
   const assetMap = {
     kitBox: assets.kitBox,
     collectionCard: assets.collectionCard,
@@ -66,37 +74,36 @@ export default function ArchiveDesignPhase() {
 
   return (
     <div className="page page--fill">
-      <PageHeroBanner>
+      <PageHeroBanner className="design-archive-hero">
         <PageHeroBannerContent
-          title={`${phase.name} · 디자인 자료`}
-          description={title}
-          actions={(
-            <Link to="/archive" className="design-archive-detail__back">
+          eyebrow={(
+            <Link to="/archive" className="page-hero-back">
               <ArrowLeft size={14} />
               시즌 선택
             </Link>
+          )}
+          title={title}
+          actions={(
+            <span className="design-archive-hero__section">{phase.name} · 디자인 자료</span>
+          )}
+          description={(
+            <div className="design-archive-hero__copy">
+              <p className="design-archive-hero__period">{period}</p>
+              {descParagraphs.length ? (
+                descParagraphs.map((p, i) => (
+                  <p key={i} className="design-archive-hero__desc">{p}</p>
+                ))
+              ) : (
+                <p className="design-archive-hero__desc">
+                  {phase.name} 시즌 키트 디자인 테마 및 시각 아이덴티티 아카이브입니다.
+                </p>
+              )}
+            </div>
           )}
         />
       </PageHeroBanner>
 
       <div className="design-archive-detail">
-        <section className="design-archive-theme">
-          <div className="design-archive-theme__copy">
-            <span className="design-archive-theme__label">Theme</span>
-            <h1 className="design-archive-theme__title">{title}</h1>
-            <p className="design-archive-theme__period">{formatPhasePeriod(phase.started_at, phase.ended_at)}</p>
-            {descParagraphs.length ? (
-              descParagraphs.map((p, i) => (
-                <p key={i} className="design-archive-theme__desc">{p}</p>
-              ))
-            ) : (
-              <p className="design-archive-theme__desc">
-                {phase.name} 시즌 키트 디자인 테마 및 시각 아이덴티티 아카이브입니다.
-              </p>
-            )}
-          </div>
-        </section>
-
         <section className="design-archive-assets">
           <h2 className="design-archive-assets__heading">디자인 산출물</h2>
           <div className="design-archive-assets__grid">

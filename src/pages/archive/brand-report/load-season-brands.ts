@@ -33,7 +33,7 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
     .from('confirmed_brand_assets')
     .select('id, confirmed_brand_id, category, storage_path, file_name, file_size, sort_order, created_at')
     .in('confirmed_brand_id', ids)
-    .in('category', ['product_cover', 'product_main', 'logo'])
+    .in('category', ['product_cover', 'product_main', 'product_sub', 'logo'])
     .order('sort_order')
     .order('created_at')
 
@@ -42,7 +42,8 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
   const categoryRank = (category: string) => {
     if (category === 'product_cover') return 0
     if (category === 'product_main') return 1
-    return 2
+    if (category === 'product_sub') return 2
+    return 3
   }
   for (const asset of assets ?? []) {
     const brandId = asset.confirmed_brand_id as string
@@ -70,7 +71,8 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
 
   const items = await Promise.all(
     brands.map(async brand => {
-      const storagePath = assetByBrand.get(brand.id)?.path
+      const cover = coverByBrand.get(brand.id)
+      const storagePath = cover?.storage_path ?? assetByBrand.get(brand.id)?.path
       let imageUrl: string | null = null
       if (storagePath) {
         const { url } = await getSignedUrl(storagePath)
@@ -88,7 +90,7 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
         website: brand.website as string | null,
         description,
         imageUrl,
-        coverAsset: coverByBrand.get(brand.id) ?? null,
+        coverAsset: cover ?? null,
       }
     }),
   )

@@ -9,6 +9,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
 import { archiveSectionFromPath, archivePhaseSlugFromPath, archiveSectionPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
+import { formatKstShortDate } from '@/lib/kst-time'
 
 interface NavSubChild extends StickyBarNavSubChild {}
 interface NavChild extends StickyBarNavChild {}
@@ -217,20 +218,6 @@ export default function Layout() {
   useEffect(() => { setOpenSub(null) }, [pathname])
   useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
 
-  useEffect(() => {
-    const section = archiveSectionFromPath(pathname)
-    const urlPhaseSlug = archivePhaseSlugFromPath(pathname)
-    if (!section || !urlPhaseSlug || !viewPhaseId) return
-
-    const phase = phaseList.find(p => p.id === viewPhaseId)
-    if (!phase) return
-
-    const urlPhase = phaseFromArchiveSlug(phaseList, urlPhaseSlug)
-    if (!urlPhase || urlPhase.id !== viewPhaseId) {
-      navigate(archiveSectionPath(phase, section), { replace: true })
-    }
-  }, [viewPhaseId, pathname, phaseList, navigate])
-
   const activeLabel = getActiveGroup(pathname)
   const activeGroup = GROUPS.find(g => g.label === activeLabel)
 
@@ -247,8 +234,8 @@ export default function Layout() {
     return {
       ...activeGroup,
       children: [
-        { to: archiveSectionPath(phase, 'design'), label: '디자인 자료' },
         { to: archiveSectionPath(phase, 'season'), label: '시즌 컬렉션' },
+        { to: archiveSectionPath(phase, 'design'), label: '디자인 자료' },
         { to: archiveSectionPath(phase, 'brand-report'), label: '브랜드별 리포트', end: true },
       ],
     }
@@ -355,7 +342,11 @@ export default function Layout() {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {p.started_at && <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>{p.started_at.split('T')[0]} ~ {p.ended_at?.split('T')[0] ?? '?'}</span>}
+                  {p.started_at && (
+                    <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>
+                      {formatKstShortDate(p.started_at)} ~ {formatKstShortDate(p.ended_at) ?? '?'}
+                    </span>
+                  )}
                   <button
                     style={{ background: 'none', border: 'none', color: 'var(--blue-dk)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                     onClick={() => openEditPhase(p)}

@@ -66,7 +66,7 @@ export function PageHeroBannerContent({
         ) : (
           <h1 className="page-hero-title page-hero-title--page">{title}</h1>
         )}
-        {description && <p className="page-hero-desc">{description}</p>}
+        {description && <div className="page-hero-desc">{description}</div>}
       </div>
       {trailing}
       {actions && <div className="page-hero-actions">{actions}</div>}

@@ -27,7 +27,7 @@ export function nextContactCountAfterSend(current: number | null | undefined): n
   return coerceContactCount(current) + 1
 }
 
-/** M/D label for contact / reply badges in KST (e.g. 6/17). */
+/** `M월 D일` label for contact / reply badges in KST (e.g. 6월 17일). */
 export function formatShortContactDate(iso: string | null | undefined): string | null {
   return formatKstShortDate(iso)
 }

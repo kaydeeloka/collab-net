@@ -390,7 +390,7 @@ export default function ArchiveBrandReportPhase() {
         <div className="brand-archive-empty">
           시즌을 찾을 수 없습니다.
           <div style={{ marginTop: 16 }}>
-            <Link to="/archive" className="brand-archive-detail__back">
+            <Link to="/archive" className="page-hero-back">
               <ArrowLeft size={14} />
               시즌 선택
             </Link>
@@ -413,14 +413,16 @@ export default function ArchiveBrandReportPhase() {
     <div className="page page--fill">
       <PageHeroBanner>
         <PageHeroBannerContent
+          eyebrow={(
+            <Link to="/archive" className="page-hero-back">
+              <ArrowLeft size={14} />
+              시즌 선택
+            </Link>
+          )}
           title={`시즌 컬렉션 · ${phase.name}`}
           description={formatPhasePeriod(phase.started_at, phase.ended_at)}
           actions={(
             <>
-              <Link to="/archive" className="brand-archive-detail__back">
-                <ArrowLeft size={14} />
-                시즌 선택
-              </Link>
               {editMode ? (
                 <>
                   <button
@@ -542,7 +544,7 @@ export default function ArchiveBrandReportPhase() {
               <div className="season-collection__kit-head">
                 <h2 className="season-collection__kit-heading">{copy.kitHeading}</h2>
               </div>
-              <div className="season-collection__products" style={{ marginTop: 32 }}>
+              <div className="season-collection__products">
                 {brands.map(brand => (
                   <ProductCard
                     key={brand.id}

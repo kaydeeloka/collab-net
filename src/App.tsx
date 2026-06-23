@@ -46,7 +46,9 @@ import EmsData    from './pages/kit/ems-data'
 import ArchivePicker              from './pages/archive'
 import ArchiveDesignPhase         from './pages/archive/design/phase'
 import ArchiveBrandReportPhase    from './pages/archive/brand-report/phase'
-import ArchiveBrandReportSection  from './pages/archive/brand-report-section'
+import ArchiveBrandReportLayout    from './pages/archive/brand-report/layout'
+import ArchiveBrandReportIndex     from './pages/archive/brand-report/report-index'
+import ArchiveBrandReportBrand     from './pages/archive/brand-report/report-brand'
 import { phaseFromDesignSlug }    from './pages/archive/design/design-slug'
 import { phaseFromSlug }          from './pages/archive/brand-report/slug'
 
@@ -60,7 +62,7 @@ function ArchiveRedirectSpinner() {
 
 function RedirectArchivePhaseDefault() {
   const { phaseName } = useParams<{ phaseName: string }>()
-  return <Navigate to={`/archive/${phaseName}/design`} replace />
+  return <Navigate to={`/archive/${phaseName}/season`} replace />
 }
 
 function RedirectLegacyDesignPhase() {
@@ -146,7 +148,10 @@ export default function App() {
                 <Route path="/archive/:phaseName" element={<RedirectArchivePhaseDefault />} />
                 <Route path="/archive/:phaseName/design" element={<ArchiveDesignPhase />} />
                 <Route path="/archive/:phaseName/season" element={<ArchiveBrandReportPhase />} />
-                <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportSection />} />
+                <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportLayout />}>
+                  <Route index element={<ArchiveBrandReportIndex />} />
+                  <Route path=":brandId" element={<ArchiveBrandReportBrand />} />
+                </Route>
                 <Route path="/archive/design" element={<Navigate to="/archive" replace />} />
                 <Route path="/archive/design/:legacySlug" element={<RedirectLegacyDesignPhase />} />
                 <Route path="/archive/season" element={<Navigate to="/archive" replace />} />
