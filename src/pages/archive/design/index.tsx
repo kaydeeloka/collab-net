@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Archive, ChevronRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Archive, ChevronRight, Palette } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import ArchivePhaseListSidebar from '@/components/ArchivePhaseListSidebar'
 import { usePhase } from '@/contexts/PhaseContext'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { formatKstShortDate } from '@/lib/kst-time'
@@ -10,7 +11,6 @@ import '@/pages/brand/confirmed/archive/archive.css'
 import '../brand-report/season-collection.css'
 import './design-archive.css'
 import { phaseYearKey } from '../brand-report/season-archive-shared'
-import DesignArchiveSidebar from './design-archive-sidebar'
 import { designCoverPath, loadStorageImageUrl } from './design-archive-images'
 import { designArchivePath, designArchiveTitle } from './design-slug'
 import type { PhaseSlugInput } from './design-slug'
@@ -98,6 +98,7 @@ function DesignPhaseCard({
 }
 
 export default function ArchiveDesign() {
+  const navigate = useNavigate()
   const { phases, loading, activePhaseId } = usePhase()
   const [filterYear, setFilterYear] = useState<string | null>(null)
 
@@ -130,12 +131,19 @@ export default function ArchiveDesign() {
         </div>
       ) : (
         <div className="bn-archive-layout">
-          <DesignArchiveSidebar
-            allPhases={phases}
+          <ArchivePhaseListSidebar
+            title="디자인 아카이브"
+            phases={phases}
             loading={loading}
             filterYear={filterYear}
             visibleCount={filteredPhases.length}
             onFilterYear={setFilterYear}
+            itemIcon={<Palette size={13} strokeWidth={2.2} />}
+            getItemSubtitle={phase => designArchiveTitle(phase)}
+            showBrandPill={false}
+            onOpenPhase={phase => {
+              navigate(designArchivePath(phase, phases))
+            }}
           />
           <div className="bn-archive-main">
             {!filteredPhases.length ? (

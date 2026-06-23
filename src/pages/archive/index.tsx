@@ -12,7 +12,7 @@ import '@/pages/brand/confirmed/archive/archive.css'
 import { getSeasonCollectionCopy } from './brand-report/season-collection-content'
 import { loadStorageImageUrl } from './brand-report/season-collection-images'
 import './brand-report/season-collection.css'
-import SeasonArchiveSidebar from './brand-report/season-archive-sidebar'
+import ArchivePhaseListSidebar from '@/components/ArchivePhaseListSidebar'
 import { phaseYearKey } from './brand-report/season-archive-shared'
 import { designCoverPath } from './design/design-archive-images'
 import { archiveSectionPath } from './archive-slug'
@@ -188,8 +188,8 @@ export default function ArchivePicker() {
         </div>
       ) : (
         <div className="bn-archive-layout archive-picker">
-          <SeasonArchiveSidebar
-            allPhases={phases}
+          <ArchivePhaseListSidebar
+            phases={phases}
             brandCountByPhase={brandCountByPhase}
             loading={isLoading}
             filterYear={filterYear}

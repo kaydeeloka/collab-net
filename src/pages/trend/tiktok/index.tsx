@@ -11,6 +11,7 @@ import {
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import TiktokArchiveSidebar, { draftMonthKey, type TrendDraft } from './archive-sidebar'
 
 type Volume = 'HIGH' | 'RISING' | 'MEDIUM'
 
@@ -39,18 +40,6 @@ interface TiktokReport {
   focus: string
   videos: Video[]
   hashtags: Hashtag[]
-}
-
-interface TrendDraft {
-  subject: string
-  body: string
-  date: string
-  ts: number
-}
-
-interface ArchiveGroup {
-  label: string
-  items: TrendDraft[]
 }
 
 export const TIKTOK_HASHTAGS_PREVIEW: { tag: string; volume: Volume; category: string }[] = [
@@ -153,19 +142,6 @@ const VOL: Record<Volume, { bg: string; text: string; label: string }> = {
   HIGH:   { bg: '#dcfce7', text: '#16a34a', label: '● HIGH' },
   RISING: { bg: '#ffedd5', text: '#ea580c', label: '↑ RISING' },
   MEDIUM: { bg: '#dbeafe', text: '#2563eb', label: '● MEDIUM' },
-}
-
-function groupDrafts(drafts: TrendDraft[]): { order: string[]; groups: Record<string, ArchiveGroup> } {
-  const groups: Record<string, ArchiveGroup> = {}
-  const order: string[] = []
-  drafts.forEach(d => {
-    const dt = new Date(d.ts)
-    const mk = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0')
-    const ml = dt.getFullYear() + '년 ' + (dt.getMonth() + 1) + '월'
-    if (!groups[mk]) { groups[mk] = { label: ml, items: [] }; order.push(mk) }
-    groups[mk].items.push(d)
-  })
-  return { order, groups }
 }
 
 function TiktokReportBody({ data, fromArchive = false, showHeader = false }: { data: TiktokReport; fromArchive?: boolean; showHeader?: boolean }) {
@@ -339,11 +315,13 @@ export default function TiktokTrend() {
   const [drafts, setDrafts] = useState<TrendDraft[]>([])
   const [archiveListLoading, setArchiveListLoading] = useState(false)
   const [archiveReportLoading, setArchiveReportLoading] = useState(false)
-  const [archiveGroups, setArchiveGroups] = useState<Record<string, ArchiveGroup>>({})
-  const [archiveOrder, setArchiveOrder] = useState<string[]>([])
-  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
+  const [archiveFilterMonth, setArchiveFilterMonth] = useState<string | null>(null)
   const [selectedTs, setSelectedTs] = useState<number | null>(null)
   const [selectedDraft, setSelectedDraft] = useState<TrendDraft | null>(null)
+
+  const filteredDrafts = archiveFilterMonth
+    ? drafts.filter(draft => draftMonthKey(draft) === archiveFilterMonth)
+    : drafts
 
   useEffect(() => { loadRecipients() }, [])
 
@@ -443,10 +421,6 @@ export default function TiktokTrend() {
       const data = await gasGet<{ drafts?: TrendDraft[]; error?: string }>('getAllTrendDrafts')
       const list = (data.drafts || []).filter(d => d.ts)
       setDrafts(list)
-      const { order, groups } = groupDrafts(list)
-      setArchiveGroups(groups)
-      setArchiveOrder(order)
-      if (order.length > 0) setOpenMonths(new Set([order[0]]))
     } catch {}
     finally { setArchiveListLoading(false) }
   }
@@ -587,50 +561,6 @@ export default function TiktokTrend() {
     </div>
   )
 
-  const archiveListPanel = (
-    <div className="bn-archive-panel">
-      <div className="bn-archive-header">
-        <span className="bn-archive-title">📁 주간 아카이브</span>
-        <span className="bn-archive-hint">최대 12주</span>
-      </div>
-      <div className="bn-archive-list">
-        {archiveListLoading && <div className="bn-archive-loading"><Spinner sm /> 불러오는 중...</div>}
-        {!archiveListLoading && archiveOrder.length === 0 && (
-          <div className="bn-archive-empty">저장된 아카이브가 없습니다.<br />Outlook 초안에 트렌드 리포트가 있으면 표시됩니다.</div>
-        )}
-        {archiveOrder.map(mk => {
-          const g    = archiveGroups[mk]
-          const open = openMonths.has(mk)
-          return (
-            <div key={mk} className="bn-arch-group">
-              <button type="button" className={`bn-arch-month${open ? ' open' : ''}`} onClick={() => {
-                const next = new Set(openMonths)
-                open ? next.delete(mk) : next.add(mk)
-                setOpenMonths(next)
-              }}>
-                <span className="bn-arch-month-label">{g.label}</span>
-                <span className="bn-arch-month-right">
-                  <span className="bn-arch-month-count">{g.items.length}건</span>
-                  <span className="bn-arch-month-chevron">{open ? '▾' : '›'}</span>
-                </span>
-              </button>
-              {open && g.items.map(d => {
-                const isSelected = d.ts === selectedTs
-                return (
-                  <div key={d.ts}
-                    className={`bn-archive-item${isSelected ? ' selected' : ''}`}
-                    onClick={() => loadArchive(d.ts)}>
-                    <div className="bn-archive-item-date">{d.date}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-
   return (
     <div className="page">
       <PageHeroBanner>
@@ -668,23 +598,33 @@ export default function TiktokTrend() {
       )}
 
       {activeTab === 'archive' && (
-        <div>
-          <div className="bn-half-row">
-            {archiveListPanel}
-            {archiveBriefingPanel}
-          </div>
+        <div className="bn-archive-layout" style={{ padding: '0 24px 48px' }}>
+          <TiktokArchiveSidebar
+            drafts={drafts}
+            loading={archiveListLoading}
+            selectedTs={selectedTs}
+            filterMonth={archiveFilterMonth}
+            visibleCount={filteredDrafts.length}
+            onFilterMonth={setArchiveFilterMonth}
+            onSelect={ts => { void loadArchive(ts) }}
+          />
+          <div className="bn-archive-main">
+            <div className="bn-half-row bn-half-row--single">
+              {archiveBriefingPanel}
+            </div>
 
-          <div className="bn-report-card" id="tiktok-archive-report">
-            <div className="bn-report-body">
-              {archiveReportLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
-              {!archiveReportLoading && !selectedDraft && (
-                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
-                  왼쪽 목록에서 주차를 선택하세요.
-                </div>
-              )}
-              {!archiveReportLoading && selectedDraft && (
-                <ArchiveDraftBody draft={selectedDraft} />
-              )}
+            <div className="bn-report-card" id="tiktok-archive-report">
+              <div className="bn-report-body">
+                {archiveReportLoading && <div className="bn-loading"><Spinner /><span>리포트를 불러오는 중...</span></div>}
+                {!archiveReportLoading && !selectedDraft && (
+                  <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--teal-dk)', fontSize: 14 }}>
+                    왼쪽 목록에서 주차를 선택하세요.
+                  </div>
+                )}
+                {!archiveReportLoading && selectedDraft && (
+                  <ArchiveDraftBody draft={selectedDraft} />
+                )}
+              </div>
             </div>
           </div>
         </div>

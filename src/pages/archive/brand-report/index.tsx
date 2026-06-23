@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Archive, ChevronRight } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import ArchivePhaseListSidebar from '@/components/ArchivePhaseListSidebar'
 import { usePhase } from '@/contexts/PhaseContext'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { formatKstShortDate } from '@/lib/kst-time'
@@ -11,7 +12,6 @@ import '@/pages/brand/confirmed/archive/archive.css'
 import './season-collection.css'
 import { getSeasonCollectionCopy } from './season-collection-content'
 import { loadStorageImageUrl } from './season-collection-images'
-import SeasonArchiveSidebar from './season-archive-sidebar'
 import { phaseYearKey } from './season-archive-shared'
 import { phaseCollectionPath, type PhaseSlugInput } from './slug'
 
@@ -98,6 +98,7 @@ function PhaseCollectionCard({
 }
 
 export default function ArchiveBrandReport() {
+  const navigate = useNavigate()
   const { phases, loading, activePhaseId } = usePhase()
   const [brandNamesByPhase, setBrandNamesByPhase] = useState<Record<string, string[]>>({})
   const [brandsLoading, setBrandsLoading] = useState(true)
@@ -169,13 +170,16 @@ export default function ArchiveBrandReport() {
         </div>
       ) : (
         <div className="bn-archive-layout">
-          <SeasonArchiveSidebar
-            allPhases={phases}
+          <ArchivePhaseListSidebar
+            phases={phases}
             brandCountByPhase={brandCountByPhase}
             loading={isLoading}
             filterYear={filterYear}
             visibleCount={filteredPhases.length}
             onFilterYear={setFilterYear}
+            onOpenPhase={phase => {
+              navigate(phaseCollectionPath(phase, phases, brandCountByPhase[phase.id] ?? 0))
+            }}
           />
           <div className="bn-archive-main">
             {!filteredPhases.length ? (
