@@ -8,6 +8,7 @@ import { isEmsDelivered, isEmsException, isEmsInTransit } from '@/lib/ems/ems-tr
 import { usePhase } from '@/contexts/PhaseContext'
 import { parseKstDateOnly } from '@/lib/kst-time'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
+import { PageHeroBanner, PageHeroAside } from '@/components/PageHeroBanner'
 interface PhaseCtx {
   dbOptions: { id: string; label: string }[]
   activeDbId: string
@@ -203,121 +204,107 @@ export default function Dashboard() {
   return (
     <div className="page">
 
-      {/* ── Hero + D-DAY row ── */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'stretch' }}>
-
-        {/* Hero — 3/4 */}
-        <div style={{
-          flex: 3, minWidth: 0,
-          background: '#0d1117',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: 16, padding: '28px 32px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
-          position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: -40, right: 120, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,233,160,0.06)', pointerEvents: 'none', filter: 'blur(50px)' }} />
-          <div style={{ position: 'absolute', bottom: -30, right: 0, width: 180, height: 180, borderRadius: '50%', background: 'rgba(159,186,197,0.08)', pointerEvents: 'none', filter: 'blur(40px)' }} />
-
-          {/* Left: title */}
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              {dbOptions.length > 0 ? (
-                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                  <select value={activeDbId} onChange={e => switchPhase(e.target.value)} style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '3px 28px 3px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', outline: 'none', appearance: 'none', WebkitAppearance: 'none' }}>
-                    {dbOptions.map(o => <option key={o.id} value={o.id} style={{ background: '#1e293b' }}>{o.label}</option>)}
-                  </select>
-                  <span style={{ position: 'absolute', right: 10, pointerEvents: 'none', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>▾</span>
-                </div>
-              ) : (
-                <span style={{ background: 'rgba(16,185,129,0.2)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 800, letterSpacing: '1px' }}>LIVE</span>
-              )}
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>인플루언서 마케팅 자동화 시스템</span>
-            </div>
-            <div style={{ fontSize: 52, fontWeight: 900, color: '#fff', letterSpacing: '-3px', lineHeight: 1, marginBottom: 10 }}>MiMuse 대시보드</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>미국 인플루언서 시딩 프로젝트 Mi Muse 현황을 한눈에 확인하세요</div>
-          </div>
-
-          {/* Right: 발송까지 D-DAY */}
-          {(() => {
-            if (!dispatchDate) return null
-            const now  = new Date()
-            const diff = Math.ceil((dispatchDate.getTime() - now.getTime()) / 86_400_000)
-            const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
-            const done = diff < 0
-            return (
-              <div style={{ position: 'relative', zIndex: 1, textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: done ? '#34d399cc' : '#ffe9a0cc', textTransform: 'uppercase', letterSpacing: '2px' }}>발송까지</div>
-                <div style={{ fontSize: 52, fontWeight: 900, color: done ? '#34d399' : '#ffe9a0', letterSpacing: '-3px', lineHeight: 1 }}>{done ? '완료' : dday}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
-                  {done ? '키트 발송 완료' : `${dispatchDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정`}
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-
-        {/* D-DAY — 1/3 white card */}
-        {(() => {
-          const phase  = dbOptions.find(o => o.id === activeDbId)?.label
-          const now    = new Date()
-          const diff   = deadlineDate ? Math.ceil((deadlineDate.getTime() - now.getTime()) / 86_400_000) : null
+      <PageHeroBanner
+        aside={(() => {
+          const phase = dbOptions.find(o => o.id === activeDbId)?.label
+          const now = new Date()
+          const diff = deadlineDate ? Math.ceil((deadlineDate.getTime() - now.getTime()) / 86_400_000) : null
           const isDone = diff !== null && diff < 0
-          const dday   = diff === null ? '—' : diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
-          const accent = isDone ? '#10b981' : '#9FBAC5'
+          const dday = diff === null ? '—' : diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
           const months = diff !== null ? Math.floor(Math.max(diff, 0) / 30) : 0
-          const days   = diff !== null ? Math.max(diff, 0) % 30 : 0
+          const days = diff !== null ? Math.max(diff, 0) % 30 : 0
           const deadlineLabel = deadlineDate
             ? deadlineDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
             : '마감일 미설정'
           return (
-            <div style={{
-              flex: 1, minWidth: 0,
-              background: '#0d1117',
-              border: `1px solid ${accent}35`,
-              borderRadius: 16,
-              padding: '28px 28px',
-              display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 180, height: 180, borderRadius: '50%', background: `${accent}20`, filter: 'blur(50px)', pointerEvents: 'none' }} />
-
+            <PageHeroAside done={isDone}>
               {isDone ? (
                 <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>프로젝트 완료</div>
-                  <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>마감</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>모든 일정이 완료되었습니다</div>
+                  <div className="page-hero-aside-label">프로젝트 완료</div>
+                  <div className="page-hero-aside-value">마감</div>
+                  <div className="page-hero-aside-remain">모든 일정이 완료되었습니다</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: `${accent}cc`, textTransform: 'uppercase', letterSpacing: '2px', position: 'relative' }}>프로젝트마감</div>
-                  <div style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-3px', lineHeight: 1, color: accent, position: 'relative' }}>{dday}</div>
+                  <div className="page-hero-aside-label">프로젝트 마감</div>
+                  <div className="page-hero-aside-value">{dday}</div>
                   {diff !== null && diff > 0 && (
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.5px' }}>
+                    <div className="page-hero-aside-remain">
                       {months > 0 && <span>{months}개월 </span>}{days}일
                     </div>
                   )}
                 </>
               )}
-              <div style={{ borderTop: `1px solid rgba(255,255,255,0.08)`, paddingTop: 14, marginTop: 6, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, position: 'relative' }}>
+              <div className="page-hero-aside-foot">
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{deadlineLabel}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>프로젝트 최종 마감일</div>
+                  <div className="page-hero-aside-foot-label">프로젝트 최종 마감일</div>
+                  <div className="page-hero-aside-foot-value">{deadlineLabel}</div>
                 </div>
                 {phase && (
                   <>
-                    <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.12)' }} />
+                    <div className="page-hero-aside-foot-divider" />
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: 600, letterSpacing: '0.5px', marginBottom: 3 }}>현재 차수</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: accent, letterSpacing: '-0.5px' }}>{phase}</div>
+                      <div className="page-hero-aside-foot-label">현재 차수</div>
+                      <div className="page-hero-aside-foot-value">{phase}</div>
                     </div>
                   </>
                 )}
               </div>
+            </PageHeroAside>
+          )
+        })()}
+      >
+        <div className="page-hero-copy">
+          <div className="page-hero-meta">
+            {dbOptions.length > 0 ? (
+              <div className="page-hero-phase-wrap">
+                <select
+                  className="page-hero-phase-select"
+                  value={activeDbId}
+                  onChange={e => switchPhase(e.target.value)}
+                >
+                  {dbOptions.map(o => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+                <span className="page-hero-phase-caret">▾</span>
+              </div>
+            ) : (
+              <span className="page-hero-eyebrow">Live</span>
+            )}
+            <span className="page-hero-eyebrow">K-Beauty Creator Seeding</span>
+          </div>
+          <div className="page-hero-brand">
+            <img src="/img/logo-black.svg" alt="Mi Muse" className="page-hero-logo" />
+            <h1 className="page-hero-title">대시보드</h1>
+          </div>
+          <p className="page-hero-desc">
+            미국 인플루언서 시딩 프로젝트 Mi Muse 현황을 한눈에 확인하세요
+          </p>
+        </div>
+
+        {dispatchDate && (() => {
+          const now = new Date()
+          const diff = Math.ceil((dispatchDate.getTime() - now.getTime()) / 86_400_000)
+          const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${Math.abs(diff)}`
+          const done = diff < 0
+          return (
+            <div className="page-hero-countdown">
+              <div className={`page-hero-countdown-label${done ? ' page-hero-countdown-label--done' : ''}`}>
+                발송까지
+              </div>
+              <div className={`page-hero-countdown-value${done ? ' page-hero-countdown-value--done' : ''}`}>
+                {done ? '완료' : dday}
+              </div>
+              <div className="page-hero-countdown-sub">
+                {done
+                  ? '키트 발송 완료'
+                  : `${dispatchDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정`}
+              </div>
             </div>
           )
         })()}
-
-      </div>{/* end hero+dday row */}
+      </PageHeroBanner>
 
       {/* ── Status cards 2×2 ── */}
       {(() => {

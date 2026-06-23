@@ -1,0 +1,325 @@
+/* Page hero banner — reusable editorial background shell */
+
+.page-hero-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: stretch;
+}
+
+.page-hero-main,
+.page-hero-aside {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.page-hero-main {
+  flex: 3;
+  min-width: 0;
+  min-height: 188px;
+  display: flex;
+  background: var(--blue-lt);
+  border: 1px solid rgba(100, 128, 133, 0.16);
+  box-shadow: var(--sh-xs);
+}
+
+.page-hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      102deg,
+      rgba(234, 242, 246, 0.98) 0%,
+      rgba(234, 242, 246, 0.92) 38%,
+      rgba(234, 242, 246, 0.55) 58%,
+      rgba(190, 214, 222, 0.25) 78%,
+      rgba(159, 186, 197, 0.12) 100%
+    ),
+    var(--page-hero-bg-image, url('/img/dashboard-hero-flower.png')) right 18% center / cover no-repeat;
+  pointer-events: none;
+}
+
+.page-hero-main-inner {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 32px;
+  min-height: 188px;
+}
+
+.page-hero-copy {
+  min-width: 0;
+  max-width: 58%;
+}
+
+.page-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.page-hero-phase-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.page-hero-phase-select {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--blue-dk);
+  border: 1px solid rgba(100, 128, 133, 0.2);
+  border-radius: 999px;
+  padding: 4px 28px 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  backdrop-filter: blur(8px);
+}
+
+.page-hero-phase-caret {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  font-size: 10px;
+  color: var(--gray-5);
+}
+
+.page-hero-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gray-5);
+}
+
+.page-hero-brand {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  height: 52px;
+}
+
+.page-hero-logo {
+  height: 52px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.page-hero-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 52px;
+  letter-spacing: -0.5px;
+  color: var(--blue-dk);
+}
+
+.page-hero-desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.75;
+  color: var(--gray-6);
+  max-width: 400px;
+}
+
+.page-hero-countdown {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  text-align: right;
+  padding: 18px 22px;
+  margin-left: 8px;
+  min-width: 120px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(100, 128, 133, 0.08);
+}
+
+.page-hero-countdown-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gray-5);
+}
+
+.page-hero-countdown-label--done {
+  color: var(--green);
+}
+
+.page-hero-countdown-value {
+  font-family: var(--font-sans);
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--blue-dk);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-hero-countdown-value--done {
+  font-size: 36px;
+  color: var(--green);
+}
+
+.page-hero-countdown-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gray-5);
+  letter-spacing: 0.02em;
+}
+
+/* Aside / deadline card */
+.page-hero-aside {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 28px;
+  background: linear-gradient(165deg, #f4f9fb 0%, #eaf2f6 100%);
+  border: 1px solid rgba(100, 128, 133, 0.16);
+  box-shadow: var(--sh-xs);
+}
+
+.page-hero-aside::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(159, 186, 197, 0.28) 0%, transparent 58%);
+  pointer-events: none;
+}
+
+.page-hero-aside--done {
+  border-color: rgba(42, 157, 92, 0.2);
+  background: linear-gradient(165deg, #f8fcf9 0%, #eef7f1 100%);
+}
+
+.page-hero-aside-label {
+  position: relative;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gray-5);
+}
+
+.page-hero-aside-value {
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--blue-dk);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-hero-aside--done .page-hero-aside-value {
+  color: var(--green);
+}
+
+.page-hero-aside-remain {
+  position: relative;
+  font-size: 11px;
+  color: var(--gray-5);
+  letter-spacing: 0.02em;
+}
+
+.page-hero-aside-foot {
+  position: relative;
+  border-top: 1px solid rgba(100, 128, 133, 0.14);
+  padding-top: 14px;
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.page-hero-aside-foot-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(100, 128, 133, 0.16);
+}
+
+.page-hero-aside-foot-label {
+  font-size: 10px;
+  color: var(--gray-5);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.page-hero-aside-foot-value {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--blue-dk);
+  letter-spacing: -0.2px;
+}
+
+@media (max-width: 1100px) {
+  .page-hero-row {
+    flex-direction: column;
+  }
+
+  .page-hero-main-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .page-hero-copy {
+    max-width: none;
+  }
+
+  .page-hero-bg {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(234, 242, 246, 0.96) 0%,
+        rgba(234, 242, 246, 0.88) 55%,
+        rgba(190, 214, 222, 0.4) 100%
+      ),
+      var(--page-hero-bg-image, url('/img/dashboard-hero-flower.png')) center bottom / cover no-repeat;
+  }
+
+  .page-hero-countdown {
+    align-items: flex-start;
+    text-align: left;
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+}
