@@ -40,12 +40,17 @@ export default function SeasonCollectionOverview({ overview, kitImageUrl }: Prop
           <div className="season-overview__timeline-track">
             {overview.timeline.map(step => (
               <div key={step.period} className="season-overview__timeline-step">
-                <div className="season-overview__timeline-period">{step.period}</div>
-                <ul className="season-overview__timeline-list">
-                  {step.items.map(item => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                <div className="season-overview__timeline-marker" aria-hidden>
+                  <span className="season-overview__timeline-dot" />
+                </div>
+                <div className="season-overview__timeline-body">
+                  <div className="season-overview__timeline-period">{step.period}</div>
+                  <ul className="season-overview__timeline-list">
+                    {step.items.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             ))}
           </div>

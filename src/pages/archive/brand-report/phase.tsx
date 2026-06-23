@@ -16,6 +16,7 @@ import { getSeasonCollectionOverview } from './season-collection-overview'
 import { getSeasonCollectionKitComposition } from './season-collection-kit-composition'
 import SeasonCollectionOverview from './SeasonCollectionOverview'
 import SeasonCollectionKitComposition from './SeasonCollectionKitComposition'
+import SeasonCollectionContentPerformance from './SeasonCollectionContentPerformance'
 import {
   loadStorageImageUrl,
   removeBrandCover,
@@ -623,9 +624,15 @@ export default function ArchiveBrandReportPhase() {
             <span className="season-collection__divider-line" aria-hidden />
           </div>
 
-          <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
+          <div className="season-collection__post-overview">
+            <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
 
-          <SeasonCollectionKitComposition composition={kitComposition} />
+            <SeasonCollectionKitComposition composition={kitComposition} />
+
+            {resolvedPhaseId && (
+              <SeasonCollectionContentPerformance phaseId={resolvedPhaseId} />
+            )}
+          </div>
         </div>
       )}
     </div>
