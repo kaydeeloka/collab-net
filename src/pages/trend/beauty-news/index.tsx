@@ -35,7 +35,7 @@ import {
   setAllEmailRecipientsSelected,
   setEmailRecipientSelected,
   type EmailRecipient,
-} from '@/lib/email-recipients'
+} from '@/lib/template/email-recipients'
 
 interface TrendDraft {
   date: string

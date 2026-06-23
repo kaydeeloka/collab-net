@@ -36,6 +36,7 @@ interface ConfirmedBrand {
   phone:           string | null
   website:         string | null
   product:         string | null
+  product_en:      string | null
   production_cost: string | null
   received:        boolean
   notes:           string | null
@@ -50,6 +51,7 @@ const EMPTY_FORM = {
   phone:           '',
   website:         '',
   product:         '',
+  product_en:      '',
   production_cost: '',
   notes:           '',
 }
@@ -112,6 +114,7 @@ export default function BrandConfirmedManagement() {
       phone:           addForm.phone.trim()           || null,
       website:         addForm.website.trim()         || null,
       product:         addForm.product.trim()         || null,
+      product_en:      addForm.product_en.trim()      || null,
       production_cost: addForm.production_cost.trim() || null,
       notes:           addForm.notes.trim()           || null,
     })
@@ -131,6 +134,7 @@ export default function BrandConfirmedManagement() {
       phone:           r.phone           ?? '',
       website:         r.website         ?? '',
       product:         r.product         ?? '',
+      product_en:      r.product_en      ?? '',
       production_cost: r.production_cost ?? '',
       notes:           r.notes           ?? '',
     })
@@ -148,6 +152,7 @@ export default function BrandConfirmedManagement() {
       phone:           editForm.phone.trim()           || null,
       website:         editForm.website.trim()         || null,
       product:         editForm.product.trim()         || null,
+      product_en:      editForm.product_en.trim()      || null,
       production_cost: editForm.production_cost.trim() || null,
       notes:           editForm.notes.trim()           || null,
     }).eq('id', editId)
@@ -211,7 +216,8 @@ export default function BrandConfirmedManagement() {
         <FormInput label="이메일" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@brand.com" />
         <FormInput label="휴대폰" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="010-0000-0000" />
         <FormInput label="홈페이지" value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} placeholder="https://" />
-        <FormInput label="제품" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} placeholder="제품명 입력" />
+        <FormInput label="제품" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} placeholder="제품명 (한국어)" />
+        <FormInput label="제품 (영문)" value={form.product_en} onChange={e => setForm({ ...form, product_en: e.target.value })} placeholder="Product name in English" />
         <FormInput label="생산원가" value={form.production_cost} onChange={e => setForm({ ...form, production_cost: e.target.value })} placeholder="예: $12.50" />
       </FormGrid>
       <FormInput label="비고" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="메모" />
@@ -395,6 +401,7 @@ export default function BrandConfirmedManagement() {
             <ReportCard icon={<Package size={18} />} title="제품 정보">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
                 <ReportStat label="제품" value={viewRow.product || '—'} />
+                <ReportStat label="제품 (영문)" value={viewRow.product_en || '—'} />
                 <ReportStat label="생산원가" value={viewRow.production_cost || '—'} />
                 <ReportStat
                   label="제품 수령"

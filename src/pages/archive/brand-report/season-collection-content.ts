@@ -17,10 +17,22 @@ export const SEASON_COLLECTION_COPY: Record<string, SeasonCollectionCopy> = {
   },
 }
 
+export function conceptTitleFromProjectConcept(projectConcept?: string | null) {
+  const paragraphs = splitArchiveParagraphs(projectConcept)
+  return paragraphs[0] ?? ''
+}
+
+export function splitArchiveParagraphs(text: string | null | undefined): string[] {
+  const trimmed = text?.trim()
+  if (!trimmed) return []
+  return trimmed.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+}
+
 export function getSeasonCollectionCopy(
   phaseName: string,
   brandCount: number,
   projectConcept?: string | null,
+  archiveDesc?: string | null,
 ): SeasonCollectionCopy {
   const base = SEASON_COLLECTION_COPY[phaseName] ?? {
     volume: phaseName === '2차' ? '2026 VOL.2' : `2026 ${phaseName}`,
@@ -32,12 +44,22 @@ export function getSeasonCollectionCopy(
     kitHeading: 'What Was Inside the Kit',
   }
 
-  const concept = projectConcept?.trim()
-  if (!concept) return base
+  let copy = base
 
-  const paragraphs = concept.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
-  if (paragraphs.length === 1) {
-    return { ...base, title: paragraphs[0] }
+  const concept = projectConcept?.trim()
+  if (concept) {
+    const paragraphs = splitArchiveParagraphs(concept)
+    if (paragraphs.length === 1) {
+      copy = { ...copy, title: paragraphs[0] }
+    } else if (paragraphs.length > 1) {
+      copy = { ...copy, title: paragraphs[0], intro: paragraphs.slice(1) }
+    }
   }
-  return { ...base, title: paragraphs[0], intro: paragraphs.slice(1) }
+
+  const introParagraphs = splitArchiveParagraphs(archiveDesc)
+  if (introParagraphs.length) {
+    copy = { ...copy, intro: introParagraphs }
+  }
+
+  return copy
 }

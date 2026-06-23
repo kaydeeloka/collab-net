@@ -11,7 +11,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { PageTabs } from '@/components/ui'
-import { clampTargetCreators, TCM_TARGET_MAX, TCM_TARGET_MIN } from '@/lib/tcm-search'
+import { clampTargetCreators, TCM_TARGET_MAX, TCM_TARGET_MIN } from '@/lib/influencer/tcm-search'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
 type ListupTab = 'search' | 'database'

@@ -1,21 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Pencil, Trash2, Upload } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, ArrowRight, Pencil, Save, Trash2, Upload } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
-import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './season-collection.css'
 import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
-import { getSeasonCollectionCopy } from './season-collection-content'
+import { getSeasonCollectionCopy, conceptTitleFromProjectConcept, splitArchiveParagraphs } from './season-collection-content'
 import {
-  loadCollectionHeroUrl,
-  removeCollectionHero,
-  uploadCollectionHero,
-} from './season-collection-hero'
+  loadStorageImageUrl,
+  removeBrandCover,
+  removeCollectionImg,
+  uploadBrandCover,
+  uploadCollectionImg,
+} from './season-collection-images'
+import { phaseCollectionPath, phaseCollectionSlug, phaseFromSlug } from './slug'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
@@ -26,68 +28,153 @@ function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   return '기간 미설정'
 }
 
-function ProductCard({ brand }: { brand: SeasonBrandItem }) {
-  const title = brand.product?.trim() || brand.brandName
-  const desc = brand.description
-    || `${brand.brandName} — a Mi Muse kit partner brand selected for this season's creator collection.`
+function defaultBrandDesc(brand: SeasonBrandItem) {
+  return `${brand.brandName} — a Mi Muse kit partner brand selected for this season's creator collection.`
+}
+
+function ProductCard({
+  brand,
+  editMode,
+  description,
+  onDescriptionChange,
+  onUpload,
+  onRemoveCover,
+  uploading,
+  disabled,
+}: {
+  brand: SeasonBrandItem
+  editMode: boolean
+  description: string
+  onDescriptionChange: (value: string) => void
+  onUpload: (file: File) => void
+  onRemoveCover: () => void
+  uploading: boolean
+  disabled: boolean
+}) {
+  const productKo = brand.product?.trim()
+  const productEn = brand.productEn?.trim()
+  const primaryTitle = productEn || productKo || brand.brandName
+  const secondaryTitle = productEn && productKo ? productKo : null
+  const desc = description.trim() || defaultBrandDesc(brand)
 
   return (
-    <article className="season-collection__product">
-      <div className="season-collection__product-media">
+    <article className={`season-collection__product${editMode ? ' season-collection__product--edit' : ''}`}>
+      <div className={`season-collection__product-media${editMode ? ' season-collection__media-edit' : ''}`}>
         {brand.imageUrl ? (
-          <img src={brand.imageUrl} alt={title} />
+          <img src={brand.imageUrl} alt={primaryTitle} />
         ) : (
           <span className="season-collection__product-placeholder">
-            자료 아카이브에<br />대표 이미지 없음
+            {editMode ? '커버 이미지 업로드' : '커버 이미지 없음'}
           </span>
+        )}
+        {editMode && (
+          <div className="season-collection__media-edit-actions">
+            <label className="cfg-btn cfg-btn--ghost season-collection__media-btn">
+              <Upload size={13} />
+              {uploading ? '처리 중…' : '업로드'}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={disabled || uploading}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) onUpload(file)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            {brand.coverAsset && (
+              <button
+                type="button"
+                className="cfg-btn cfg-btn--ghost season-collection__media-btn"
+                disabled={disabled || uploading}
+                onClick={onRemoveCover}
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div className="season-collection__product-copy">
-        <span className="season-collection__product-brand">{brand.brandName}</span>
-        <h3 className="season-collection__product-title">{title}</h3>
-        <p className="season-collection__product-desc">{desc}</p>
+        <div className="season-collection__product-brand-block">
+          <span className="season-collection__product-brand">{brand.brandName}</span>
+          {secondaryTitle && (
+            <p className="season-collection__product-title-sub">{secondaryTitle}</p>
+          )}
+        </div>
+        <h3 className="season-collection__product-title">{primaryTitle}</h3>
+        {editMode ? (
+          <textarea
+            className="season-collection__edit-textarea season-collection__edit-textarea--product"
+            value={description}
+            onChange={e => onDescriptionChange(e.target.value)}
+            placeholder={defaultBrandDesc(brand)}
+            rows={5}
+          />
+        ) : (
+          <p className="season-collection__product-desc">{desc}</p>
+        )}
       </div>
     </article>
   )
 }
 
 export default function ArchiveBrandReportPhase() {
-  const { phaseId } = useParams<{ phaseId: string }>()
-  const { phases, loading: phasesLoading } = usePhase()
+  const { phaseSlug } = useParams<{ phaseSlug: string }>()
+  const navigate = useNavigate()
+  const { phases, loading: phasesLoading, refreshPhases } = usePhase()
   const { showToast, showConfirm } = useToast()
-  const phase = phases.find(p => p.id === phaseId)
+  const phase = phaseFromSlug(phases, phaseSlug)
+  const resolvedPhaseId = phase?.id ?? null
 
   const [brands, setBrands] = useState<SeasonBrandItem[]>([])
   const [brandsLoading, setBrandsLoading] = useState(true)
+  const [phaseArchiveDesc, setPhaseArchiveDesc] = useState('')
+  const [phaseProjectConcept, setPhaseProjectConcept] = useState('')
+  const [editSnapshot, setEditSnapshot] = useState<{
+    title: string
+    archiveDesc: string
+    brandDescs: Record<string, string>
+  } | null>(null)
   const [heroPath, setHeroPath] = useState<string | null>(null)
   const [heroUrl, setHeroUrl] = useState<string | null>(null)
   const [heroLoading, setHeroLoading] = useState(true)
-  const [showEditHero, setShowEditHero] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [brandArchiveDescs, setBrandArchiveDescs] = useState<Record<string, string>>({})
   const [uploadingHero, setUploadingHero] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingBrandId, setUploadingBrandId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!phaseId) {
+    if (phasesLoading || !phase || !phaseSlug) return
+    const canonical = phaseCollectionSlug(phase, phases, brands.length)
+    if (decodeURIComponent(phaseSlug) !== canonical) {
+      navigate(phaseCollectionPath(phase, phases, brands.length), { replace: true })
+    }
+  }, [phasesLoading, phase, phaseSlug, phases, brands.length, navigate])
+
+  const reloadBrands = useCallback(async () => {
+    if (!resolvedPhaseId) {
       setBrands([])
       setBrandsLoading(false)
       return
     }
-
-    let cancelled = false
     setBrandsLoading(true)
-
-    void loadSeasonBrands(phaseId).then(rows => {
-      if (!cancelled) {
-        setBrands(rows)
-        setBrandsLoading(false)
-      }
-    })
-
-    return () => { cancelled = true }
-  }, [phaseId])
+    const rows = await loadSeasonBrands(resolvedPhaseId)
+    setBrands(rows)
+    setBrandsLoading(false)
+  }, [resolvedPhaseId])
 
   useEffect(() => {
-    if (!phaseId) {
+    void reloadBrands()
+  }, [reloadBrands])
+
+  useEffect(() => {
+    if (!resolvedPhaseId) {
+      setPhaseArchiveDesc('')
+      setPhaseProjectConcept('')
       setHeroPath(null)
       setHeroUrl(null)
       setHeroLoading(false)
@@ -100,8 +187,8 @@ export default function ArchiveBrandReportPhase() {
     void (async () => {
       const { data, error } = await supabase
         .from('phases')
-        .select('collection_hero_path')
-        .eq('id', phaseId)
+        .select('collection_img, archive_desc, project_concept')
+        .eq('id', resolvedPhaseId)
         .maybeSingle()
       if (cancelled) return
 
@@ -110,9 +197,12 @@ export default function ArchiveBrandReportPhase() {
         return
       }
 
-      const path = (data?.collection_hero_path as string | null) ?? null
+      const projectConcept = (data?.project_concept as string | null) ?? phase?.project_concept ?? null
+      setPhaseArchiveDesc((data?.archive_desc as string | null) ?? '')
+      setPhaseProjectConcept(conceptTitleFromProjectConcept(projectConcept))
+      const path = (data?.collection_img as string | null) ?? null
       setHeroPath(path)
-      const url = await loadCollectionHeroUrl(path)
+      const url = await loadStorageImageUrl(path)
       if (!cancelled) {
         setHeroUrl(url)
         setHeroLoading(false)
@@ -120,10 +210,107 @@ export default function ArchiveBrandReportPhase() {
     })()
 
     return () => { cancelled = true }
-  }, [phaseId])
+  }, [resolvedPhaseId, phase?.project_concept])
+
+  function buildProjectConceptForSave(title: string, existingConcept?: string | null, archiveDesc?: string) {
+    const trimmedTitle = title.trim()
+    const restParagraphs = splitArchiveParagraphs(existingConcept).slice(1)
+    const hasArchiveDesc = Boolean(archiveDesc?.trim())
+
+    if (hasArchiveDesc) return trimmedTitle || null
+    if (restParagraphs.length) {
+      return trimmedTitle
+        ? [trimmedTitle, ...restParagraphs].join('\n\n')
+        : restParagraphs.join('\n\n')
+    }
+    return trimmedTitle || null
+  }
+
+  function cancelEditMode() {
+    if (editSnapshot) {
+      setPhaseProjectConcept(editSnapshot.title)
+      setPhaseArchiveDesc(editSnapshot.archiveDesc)
+      setBrandArchiveDescs(editSnapshot.brandDescs)
+    }
+    setEditSnapshot(null)
+    setEditMode(false)
+  }
+
+  const isUploading = uploadingHero || uploadingBrandId !== null
+  const isBusy = isUploading || saving
+
+  function startEditMode() {
+    const descs: Record<string, string> = {}
+    for (const brand of brands) descs[brand.id] = brand.description ?? ''
+    const title = phaseProjectConcept || conceptTitleFromProjectConcept(phase?.project_concept)
+    setPhaseProjectConcept(title)
+    setEditSnapshot({ title, archiveDesc: phaseArchiveDesc, brandDescs: descs })
+    setBrandArchiveDescs(descs)
+    setEditMode(true)
+  }
+
+  async function handleSaveEdit() {
+    if (!resolvedPhaseId || !phase || saving) return
+    setSaving(true)
+    try {
+      const archiveDescValue = phaseArchiveDesc.trim() || null
+      const projectConceptValue = buildProjectConceptForSave(
+        phaseProjectConcept,
+        phase.project_concept,
+        phaseArchiveDesc,
+      )
+
+      const { error: phaseErr } = await supabase
+        .from('phases')
+        .update({
+          archive_desc: archiveDescValue,
+          project_concept: projectConceptValue,
+        })
+        .eq('id', resolvedPhaseId)
+      if (phaseErr) {
+        showToast(phaseErr.message, 'error')
+        return
+      }
+
+      const updates = brands.map(brand =>
+        supabase
+          .from('confirmed_brands')
+          .update({ archive_desc: brandArchiveDescs[brand.id]?.trim() || null })
+          .eq('id', brand.id),
+      )
+      const results = await Promise.all(updates)
+      const failed = results.find(r => r.error)
+      if (failed?.error) {
+        showToast(failed.error.message, 'error')
+        return
+      }
+
+      const updatedPhase = {
+        ...phase,
+        project_concept: projectConceptValue,
+        archive_desc: archiveDescValue,
+      }
+
+      await refreshPhases()
+      setEditSnapshot(null)
+      await reloadBrands()
+      setEditMode(false)
+      showToast('저장되었습니다', 'success')
+
+      const phasesForSlug = phases.map(p =>
+        p.id === resolvedPhaseId ? updatedPhase : p,
+      )
+      const nextPath = phaseCollectionPath(updatedPhase, phasesForSlug, brands.length)
+      if (decodeURIComponent(phaseSlug ?? '') !== phaseCollectionSlug(updatedPhase, phasesForSlug, brands.length)) {
+        navigate(nextPath, { replace: true })
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function handleHeroUpload(file: File | undefined) {
-    if (!phaseId || !file || uploadingHero) return
+    if (!resolvedPhaseId || !file || uploadingHero) return
     if (!file.type.startsWith('image/')) {
       showToast('이미지 파일만 업로드할 수 있습니다', 'error')
       return
@@ -131,38 +318,82 @@ export default function ArchiveBrandReportPhase() {
 
     setUploadingHero(true)
     try {
-      const { path, error } = await uploadCollectionHero(phaseId, file, heroPath)
+      const { path, error } = await uploadCollectionImg(resolvedPhaseId, file, heroPath)
       if (error || !path) {
         showToast(error ?? '업로드 실패', 'error')
         return
       }
 
-      const url = await loadCollectionHeroUrl(path)
+      const url = await loadStorageImageUrl(path)
       setHeroPath(path)
       setHeroUrl(url)
-      showToast('대표 이미지가 업로드되었습니다', 'success')
+      showToast('히어로 이미지가 업로드되었습니다', 'success')
     } finally {
       setUploadingHero(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
   function handleHeroRemove() {
-    if (!phaseId || !heroPath || uploadingHero) return
-    showConfirm('대표 이미지를 삭제하시겠습니까?', () => {
+    if (!resolvedPhaseId || !heroPath || isBusy) return
+    showConfirm('히어로 이미지를 삭제하시겠습니까?', () => {
       void (async () => {
         setUploadingHero(true)
         try {
-          const { error } = await removeCollectionHero(phaseId, heroPath)
+          const { error } = await removeCollectionImg(resolvedPhaseId, heroPath)
           if (error) {
             showToast(error, 'error')
             return
           }
           setHeroPath(null)
           setHeroUrl(null)
-          showToast('대표 이미지가 삭제되었습니다', 'success')
+          showToast('히어로 이미지가 삭제되었습니다', 'success')
         } finally {
           setUploadingHero(false)
+        }
+      })()
+    })
+  }
+
+  async function handleBrandUpload(brandId: string, file: File) {
+    if (!resolvedPhaseId || isBusy) return
+    if (!file.type.startsWith('image/')) {
+      showToast('이미지 파일만 업로드할 수 있습니다', 'error')
+      return
+    }
+
+    setUploadingBrandId(brandId)
+    try {
+      const { imageUrl, coverAsset, error } = await uploadBrandCover(resolvedPhaseId, brandId, file)
+      if (error) {
+        showToast(error, 'error')
+        return
+      }
+
+      setBrands(prev => prev.map(b => (
+        b.id === brandId ? { ...b, imageUrl, coverAsset } : b
+      )))
+      showToast('커버 이미지가 업로드되었습니다', 'success')
+    } finally {
+      setUploadingBrandId(null)
+    }
+  }
+
+  function handleBrandCoverRemove(brand: SeasonBrandItem) {
+    const asset = brand.coverAsset
+    if (!asset || isBusy) return
+    showConfirm(`"${asset.file_name}" 삭제할까요?`, () => {
+      void (async () => {
+        setUploadingBrandId(brand.id)
+        try {
+          const { error } = await removeBrandCover(asset.id, asset.storage_path)
+          if (error) {
+            showToast(error, 'error')
+            return
+          }
+          await reloadBrands()
+          showToast('커버 이미지가 삭제되었습니다', 'success')
+        } finally {
+          setUploadingBrandId(null)
         }
       })()
     })
@@ -182,7 +413,7 @@ export default function ArchiveBrandReportPhase() {
         <div className="brand-archive-empty">
           시즌을 찾을 수 없습니다.
           <div style={{ marginTop: 16 }}>
-            <Link to="/archive/brand-report" className="brand-archive-detail__back">
+            <Link to="/archive/season" className="brand-archive-detail__back">
               <ArrowLeft size={14} />
               시즌 컬렉션으로
             </Link>
@@ -192,7 +423,14 @@ export default function ArchiveBrandReportPhase() {
     )
   }
 
-  const copy = getSeasonCollectionCopy(phase.name, brands.length, phase.project_concept)
+  const displayConcept = phaseProjectConcept.trim() || phase.project_concept
+  const copy = getSeasonCollectionCopy(
+    phase.name,
+    brands.length,
+    displayConcept,
+    phaseArchiveDesc,
+  )
+  const contentLoading = brandsLoading || heroLoading
 
   return (
     <div className="page page--fill">
@@ -203,49 +441,121 @@ export default function ArchiveBrandReportPhase() {
           <div className="page-banner-desc">{formatPhasePeriod(phase.started_at, phase.ended_at)}</div>
         </div>
         <div className="page-banner-actions">
-          <Link to="/archive/brand-report" className="brand-archive-detail__back">
+          <Link to="/archive/season" className="brand-archive-detail__back">
             <ArrowLeft size={14} />
             전체 시즌
           </Link>
-          <button
-            type="button"
-            className="brand-archive-detail__back"
-            onClick={() => setShowEditHero(true)}
-          >
-            <Pencil size={14} />
-            수정
-          </button>
+          {editMode ? (
+            <>
+              <button
+                type="button"
+                className="cfg-btn cfg-btn--ghost"
+                disabled={isBusy}
+                onClick={cancelEditMode}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="cfg-btn"
+                disabled={isBusy}
+                onClick={() => { void handleSaveEdit() }}
+              >
+                <Save size={13} />
+                {saving ? '저장 중…' : '저장'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="cfg-btn cfg-btn--ghost"
+              onClick={startEditMode}
+            >
+              <Pencil size={13} />
+              편집
+            </button>
+          )}
         </div>
       </div>
 
-      {brandsLoading || heroLoading ? (
+      {contentLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
           <Spinner />
         </div>
       ) : (
-        <div className="season-collection">
+        <div className={`season-collection${editMode ? ' season-collection--edit' : ''}`}>
           <section className="season-collection__hero">
-            <div className="season-collection__hero-media">
+            <div className={`season-collection__hero-media${editMode ? ' season-collection__media-edit' : ''}`}>
               {heroUrl ? (
                 <img src={heroUrl} alt={copy.title} />
               ) : (
                 <span className="season-collection__hero-placeholder">
-                  상단 <strong>수정</strong> 버튼에서<br />시즌 대표 이미지를 업로드하세요
+                  {editMode ? '히어로 이미지 업로드' : '히어로 이미지 없음'}
                 </span>
+              )}
+              {editMode && (
+                <div className="season-collection__media-edit-actions">
+                  <label className="cfg-btn cfg-btn--ghost season-collection__media-btn">
+                    <Upload size={13} />
+                    {uploadingHero ? '처리 중…' : '업로드'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      disabled={isBusy}
+                      onChange={e => {
+                        void handleHeroUpload(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {heroPath && (
+                    <button
+                      type="button"
+                      className="cfg-btn cfg-btn--ghost season-collection__media-btn"
+                      disabled={isBusy}
+                      onClick={handleHeroRemove}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className="season-collection__hero-copy">
               <span className="season-collection__volume">{copy.volume}</span>
-              <h1 className="season-collection__title">{copy.title}</h1>
-              <div className="season-collection__intro">
-                {copy.intro.map(paragraph => (
-                  <p key={paragraph.slice(0, 32)}>{paragraph}</p>
-                ))}
-              </div>
-              <button type="button" className="season-collection__download" disabled title="곧 제공 예정">
-                Download Report
-                <ArrowRight size={14} />
-              </button>
+              {editMode ? (
+                <input
+                  type="text"
+                  className="season-collection__edit-title"
+                  value={phaseProjectConcept}
+                  onChange={e => setPhaseProjectConcept(e.target.value)}
+                  placeholder={getSeasonCollectionCopy(phase.name, brands.length).title}
+                />
+              ) : (
+                <h1 className="season-collection__title">{copy.title}</h1>
+              )}
+              {editMode ? (
+                <textarea
+                  className="season-collection__edit-textarea season-collection__edit-textarea--intro"
+                  value={phaseArchiveDesc}
+                  onChange={e => setPhaseArchiveDesc(e.target.value)}
+                  placeholder={'시즌 소개 문단을 입력하세요.\n\n문단 사이는 빈 줄로 구분합니다.'}
+                  rows={8}
+                />
+              ) : (
+                <div className="season-collection__intro">
+                  {copy.intro.map(paragraph => (
+                    <p key={paragraph.slice(0, 32)}>{paragraph}</p>
+                  ))}
+                </div>
+              )}
+              {!editMode && (
+                <button type="button" className="season-collection__download" disabled title="곧 제공 예정">
+                  Download Report
+                  <ArrowRight size={14} />
+                </button>
+              )}
             </div>
           </section>
 
@@ -256,83 +566,28 @@ export default function ArchiveBrandReportPhase() {
               </div>
               <div className="season-collection__products" style={{ marginTop: 32 }}>
                 {brands.map(brand => (
-                  <ProductCard key={brand.id} brand={brand} />
+                  <ProductCard
+                    key={brand.id}
+                    brand={brand}
+                    editMode={editMode}
+                    description={editMode ? (brandArchiveDescs[brand.id] ?? '') : (brand.description ?? '')}
+                    onDescriptionChange={value => setBrandArchiveDescs(prev => ({ ...prev, [brand.id]: value }))}
+                    onUpload={file => { void handleBrandUpload(brand.id, file) }}
+                    onRemoveCover={() => handleBrandCoverRemove(brand)}
+                    uploading={uploadingBrandId === brand.id}
+                    disabled={isBusy}
+                  />
                 ))}
               </div>
             </section>
           ) : (
             <div className="brand-archive-empty">
               이 시즌에 등록된 확정 브랜드가 없습니다.<br />
-              <strong>확정 브랜드 → 브랜드 관리</strong>에서 브랜드를 추가하고 자료 아카이브에 이미지를 업로드하세요.
+              <strong>확정 브랜드 → 브랜드 관리</strong>에서 브랜드를 추가하세요.
             </div>
           )}
         </div>
       )}
-
-      <Modal
-        open={showEditHero}
-        onClose={() => !uploadingHero && setShowEditHero(false)}
-        title="시즌 대표 이미지"
-        size="md"
-        footer={(
-          <div className="modal-actions" style={{ marginTop: 0 }}>
-            <button
-              type="button"
-              className="modal-btn-cancel"
-              onClick={() => setShowEditHero(false)}
-              disabled={uploadingHero}
-            >
-              닫기
-            </button>
-          </div>
-        )}
-      >
-        <div className="season-collection__hero-edit">
-          <div className="season-collection__hero-edit-preview">
-            {heroUrl ? (
-              <img src={heroUrl} alt="" />
-            ) : (
-              <span className="season-collection__hero-placeholder">등록된 이미지 없음</span>
-            )}
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={e => { void handleHeroUpload(e.target.files?.[0]) }}
-          />
-
-          <div className="season-collection__hero-edit-actions">
-            <button
-              type="button"
-              className="modal-btn-confirm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingHero}
-            >
-              <Upload size={14} />
-              {uploadingHero ? '처리 중...' : heroUrl ? '이미지 변경' : '이미지 업로드'}
-            </button>
-            {heroUrl && (
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
-                onClick={handleHeroRemove}
-                disabled={uploadingHero}
-              >
-                <Trash2 size={14} />
-                삭제
-              </button>
-            )}
-          </div>
-
-          <p className="season-collection__hero-edit-hint">
-            시즌 컬렉션 상단에 표시할 대표 이미지입니다. JPG, PNG, WebP 등 이미지 파일을 업로드하세요.
-          </p>
-        </div>
-      </Modal>
     </div>
   )
 }

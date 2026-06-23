@@ -1,5 +1,5 @@
-import { supabase } from './supabase'
-import { supabaseNow } from './kst-time'
+import { supabase } from '../supabase'
+import { supabaseNow } from '../kst-time'
 
 export type EmailTemplateDomain = 'influencer' | 'brand' | 'ems'
 

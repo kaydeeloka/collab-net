@@ -12,7 +12,7 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
-import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/content-platforms'
+import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/influencer/content-platforms'
 
 const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
 const MONITORING_LIST_PATH = '/influencer/monitoring-list'

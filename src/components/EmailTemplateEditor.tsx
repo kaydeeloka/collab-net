@@ -12,16 +12,16 @@ import {
   deleteEmailTemplate,
   type EmailTemplate,
   type EmailTemplateDomain,
-} from '@/lib/email-templates'
-import { getEmailTemplateUiConfig } from '@/lib/email-template-ui-config'
+} from '@/lib/template/email-templates'
+import { getEmailTemplateUiConfig } from '@/lib/template/email-template-ui-config'
 import {
   getSelectedText,
   insertMarkdownLink,
   insertMarkdownBold,
   renderEmailBodyPreview,
-} from '@/lib/email-body-format'
+} from '@/lib/template/email-body-format'
 import { formatKstDateTime } from '@/lib/utils'
-import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/email-signature-sync'
+import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/template/email-signature-sync'
 
 const LOGO_SYNC_KEY = 'outreach-logo-supabase-v3'
 

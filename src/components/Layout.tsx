@@ -65,9 +65,9 @@ const GROUPS: SideGroup[] = [
   {
     label: 'ARCHIVE', icon: <Archive size={22} />, defaultTo: '/archive/design', prefix: '/archive',
     children: [
-      { to: '/archive/design',         label: '디자인 자료' },
-      { to: '/archive/overall-report', label: '전체 리포트' },
-      { to: '/archive/brand-report',   label: '시즌 컬렉션' },
+      { to: '/archive/design',       label: '디자인 자료' },
+      { to: '/archive/season',       label: '시즌 컬렉션' },
+      { to: '/archive/brand-report', label: '브랜드별 리포트' },
     ],
   },
 ]

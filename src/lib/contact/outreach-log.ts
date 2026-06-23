@@ -1,5 +1,5 @@
 import { supabaseNow } from '@/lib/kst-time'
-import { supabase } from './supabase'
+import { supabase } from '../supabase'
 
 /** Optional audit log when user clicks 발송 (outbound only). Failures are non-blocking. */
 export async function logOutboundOutreach(params: {

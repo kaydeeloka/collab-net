@@ -12,7 +12,8 @@ interface Phase {
   kit_send_date: string | null
   google_sheets_url: string | null
   project_concept: string | null
-  collection_hero_path: string | null
+  collection_img: string | null
+  archive_desc: string | null
 }
 
 interface PhaseContextValue {
@@ -22,6 +23,7 @@ interface PhaseContextValue {
   phases: Phase[]
   loading: boolean
   switchPhase: (phaseId: string) => Promise<void>
+  refreshPhases: () => Promise<Phase[]>
 }
 
 const PhaseContext = createContext<PhaseContextValue>({
@@ -31,6 +33,7 @@ const PhaseContext = createContext<PhaseContextValue>({
   phases: [],
   loading: true,
   switchPhase: async () => {},
+  refreshPhases: async () => [],
 })
 
 export function PhaseProvider({ children }: { children: React.ReactNode }) {
@@ -81,8 +84,18 @@ export function PhaseProvider({ children }: { children: React.ReactNode }) {
     setViewPhaseId(phaseId)
   }
 
+  async function refreshPhases() {
+    const { data: phaseList } = await supabase
+      .from('phases')
+      .select('*')
+      .order('started_at', { ascending: true })
+    const list = (phaseList || []) as Phase[]
+    setPhases(list)
+    return list
+  }
+
   return (
-    <PhaseContext.Provider value={{ selectedPhaseId, viewPhaseId, activePhaseId, phases, loading, switchPhase }}>
+    <PhaseContext.Provider value={{ selectedPhaseId, viewPhaseId, activePhaseId, phases, loading, switchPhase, refreshPhases }}>
       {children}
     </PhaseContext.Provider>
   )

@@ -44,48 +44,6 @@
   line-height: 1.6;
 }
 
-.season-collection__hero-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.season-collection__hero-edit-preview {
-  min-height: 220px;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  background: linear-gradient(145deg, #f8fafc 0%, #e2e8f0 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.season-collection__hero-edit-preview img {
-  width: 100%;
-  max-height: 320px;
-  object-fit: cover;
-}
-
-.season-collection__hero-edit-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.season-collection__hero-edit-actions .modal-btn-confirm,
-.season-collection__hero-edit-actions .modal-btn-cancel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.season-collection__hero-edit-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--gray-5);
-}
-
 .season-collection__hero-copy {
   display: flex;
   flex-direction: column;
@@ -207,6 +165,12 @@
   min-height: 100%;
 }
 
+.season-collection__product-brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .season-collection__product-brand {
   font-size: 11px;
   font-weight: 700;
@@ -225,12 +189,99 @@
   letter-spacing: -0.01em;
 }
 
+.season-collection__product-title-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--gray-5);
+  letter-spacing: 0.01em;
+}
+
 .season-collection__product-desc {
   margin: 0;
   font-size: 13px;
   line-height: 1.7;
   color: var(--gray-6);
   flex: 1;
+}
+
+.season-collection--edit .season-collection__hero,
+.season-collection__product--edit {
+  border-color: var(--teal-lt);
+  box-shadow: var(--sh-xs), 0 0 0 1px rgba(13, 148, 136, 0.08);
+}
+
+.season-collection__media-edit {
+  position: relative;
+}
+
+.season-collection__media-edit-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.season-collection__media-btn {
+  padding: 7px 10px !important;
+  font-size: 11px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(4px);
+}
+
+.season-collection__edit-title {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--surface-md);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  padding: 8px 12px;
+  margin: 0;
+}
+
+.season-collection__edit-title:focus {
+  outline: none;
+  border-color: var(--teal-lt);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.season-collection__edit-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--surface-md);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--gray-6);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.75;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.season-collection__edit-textarea--intro {
+  min-height: 180px;
+}
+
+.season-collection__edit-textarea--product {
+  min-height: 120px;
+  font-size: 13px;
+  flex: 1;
+}
+
+.season-collection__edit-textarea:focus {
+  outline: none;
+  border-color: var(--teal-lt);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
 }
 
 @media (max-width: 1100px) {
@@ -255,5 +306,53 @@
 
   .season-collection__hero {
     padding: 20px;
+  }
+}
+
+/* Season list — two collections per year */
+.season-collection-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.season-collection-card .brand-archive-card__media {
+  height: 300px;
+}
+
+.season-collection-card .brand-archive-card__media img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.season-collection-card .brand-archive-card__body {
+  padding: 22px 24px 24px;
+  gap: 8px;
+}
+
+.season-collection-card .brand-archive-card__title {
+  font-size: 18px;
+}
+
+.season-collection-card .brand-archive-card__product {
+  font-size: 14px;
+}
+
+.season-collection-card .brand-archive-card__footer {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.season-collection-card__placeholder {
+  position: relative;
+  z-index: 1;
+  font-size: 42px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.03em;
+}
+
+@media (max-width: 768px) {
+  .season-collection-grid {
+    grid-template-columns: 1fr;
   }
 }

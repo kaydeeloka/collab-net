@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart2, ChevronRight } from 'lucide-react'
+import { Archive, BarChart2, ChevronRight } from 'lucide-react'
 import { usePhase } from '@/contexts/PhaseContext'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import '@/pages/brand/confirmed/archive/archive.css'
+import './season-collection.css'
 import { getSeasonCollectionCopy } from './season-collection-content'
+import { loadStorageImageUrl } from './season-collection-images'
+import SeasonArchiveSidebar from './season-archive-sidebar'
+import { phaseYearKey } from './season-archive-shared'
+import { phaseCollectionPath, type PhaseSlugInput } from './slug'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
@@ -19,42 +24,50 @@ function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
 }
 
 function PhaseCollectionCard({
-  phaseId,
-  name,
+  phase,
+  phases,
   projectConcept,
+  collectionImg,
   startedAt,
   endedAt,
   brandNames,
   statusLabel,
   statusDone,
 }: {
-  phaseId: string
-  name: string
+  phase: PhaseSlugInput
+  phases: PhaseSlugInput[]
   projectConcept: string | null
+  collectionImg: string | null
   startedAt: string | null
   endedAt: string | null
   brandNames: string[]
   statusLabel: string | null
   statusDone: boolean
 }) {
-  const title = getSeasonCollectionCopy(name, brandNames.length, projectConcept).title
+  const title = getSeasonCollectionCopy(phase.name, brandNames.length, projectConcept).title
   const brandLine = brandNames.length ? brandNames.join(' · ') : '—'
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const url = await loadStorageImageUrl(collectionImg)
+      if (!cancelled) setImageUrl(url)
+    })()
+    return () => { cancelled = true }
+  }, [collectionImg])
+
   return (
-    <Link to={`/archive/brand-report/${phaseId}`} className="brand-archive-card">
+    <Link to={phaseCollectionPath(phase, phases, brandNames.length)} className="brand-archive-card season-collection-card">
       <div className="brand-archive-card__media">
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            fontSize: 36,
-            fontWeight: 800,
-            color: 'rgba(255,255,255,.95)',
-            letterSpacing: '-0.03em',
-          }}
-        >
-          {name}
-        </div>
-        <div className="brand-archive-card__media-overlay" />
+        {imageUrl ? (
+          <>
+            <img src={imageUrl} alt={title} />
+            <div className="brand-archive-card__media-overlay" />
+          </>
+        ) : (
+          <span className="season-collection-card__placeholder">{phase.name}</span>
+        )}
         {statusLabel && (
           <span
             className={`brand-archive-card__status ${
@@ -87,6 +100,7 @@ export default function ArchiveBrandReport() {
   const { phases, loading, activePhaseId } = usePhase()
   const [brandNamesByPhase, setBrandNamesByPhase] = useState<Record<string, string[]>>({})
   const [brandsLoading, setBrandsLoading] = useState(true)
+  const [filterYear, setFilterYear] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -115,6 +129,22 @@ export default function ArchiveBrandReport() {
     return () => { cancelled = true }
   }, [])
 
+  const brandCountByPhase = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const [id, names] of Object.entries(brandNamesByPhase)) {
+      counts[id] = names.length
+    }
+    return counts
+  }, [brandNamesByPhase])
+
+  const filteredPhases = useMemo(() => {
+    if (!filterYear) return phases
+    return phases.filter(phase => {
+      const key = phaseYearKey(phase) ?? 'unknown'
+      return key === filterYear
+    })
+  }, [phases, filterYear])
+
   const isLoading = loading || brandsLoading
 
   return (
@@ -122,46 +152,59 @@ export default function ArchiveBrandReport() {
       <div className="page-banner">
         <span className="page-banner-deco"><BarChart2 size={28} /></span>
         <div>
-          <div className="page-banner-title">시즌 컬렉션</div>
-          <div className="page-banner-desc">시즌별 브랜드 캠페인 성과 리포트를 모아봅니다.</div>
+          <div className="page-banner-title">전체 리포트 아카이브</div>
+          <div className="page-banner-desc">모든 캠페인의 전체 성과 리포트를 아카이브합니다.</div>
         </div>
       </div>
 
       {isLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-          <Spinner />
+        <div className="bn-archive-cards-wrap">
+          <div className="bn-archive-brand-loading"><Spinner sm /> 불러오는 중...</div>
         </div>
       ) : !phases.length ? (
-        <div className="brand-archive-empty">
-          등록된 시즌이 없습니다.<br />
-          상단에서 시즌(차수)을 먼저 설정하세요.
+        <div className="bn-archive-empty-panel">
+          <Archive size={28} strokeWidth={1.5} className="bn-archive-empty-icon" />
+          <span>등록된 시즌이 없습니다.</span>
+          <span className="bn-archive-empty-sub">상단에서 시즌(차수)을 먼저 설정하세요.</span>
         </div>
       ) : (
-        <div className="brand-archive-list">
-          <div className="brand-archive-toolbar">
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-6)' }}>
-              시즌을 선택해 브랜드 리포트를 확인하세요
-            </span>
-            <span className="brand-archive-count">{phases.length}개 시즌</span>
-          </div>
-
-          <div className="brand-archive-grid">
-            {phases.map(phase => {
-              const badge = getPhaseStatusBadge(phase, activePhaseId)
-              return (
-                <PhaseCollectionCard
-                  key={phase.id}
-                  phaseId={phase.id}
-                  name={phase.name}
-                  projectConcept={phase.project_concept}
-                  startedAt={phase.started_at}
-                  endedAt={phase.ended_at}
-                  brandNames={brandNamesByPhase[phase.id] ?? []}
-                  statusLabel={badge?.label ?? null}
-                  statusDone={badge?.tone === 'completed'}
-                />
-              )
-            })}
+        <div className="bn-archive-layout">
+          <SeasonArchiveSidebar
+            allPhases={phases}
+            brandCountByPhase={brandCountByPhase}
+            loading={isLoading}
+            filterYear={filterYear}
+            visibleCount={filteredPhases.length}
+            onFilterYear={setFilterYear}
+          />
+          <div className="bn-archive-main">
+            {!filteredPhases.length ? (
+              <div className="bn-archive-empty-panel">
+                {filterYear ? `${filterYear}년 시즌이 없습니다.` : '표시할 시즌이 없습니다.'}
+              </div>
+            ) : (
+              <div className="bn-archive-cards-wrap">
+                <div className="brand-archive-grid bn-archive-cards-grid season-collection-grid">
+                  {filteredPhases.map(phase => {
+                    const badge = getPhaseStatusBadge(phase, activePhaseId)
+                    return (
+                      <PhaseCollectionCard
+                        key={phase.id}
+                        phase={phase}
+                        phases={phases}
+                        projectConcept={phase.project_concept}
+                        collectionImg={phase.collection_img}
+                        startedAt={phase.started_at}
+                        endedAt={phase.ended_at}
+                        brandNames={brandNamesByPhase[phase.id] ?? []}
+                        statusLabel={badge?.label ?? null}
+                        statusDone={badge?.tone === 'completed'}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
-import { formatBulkSendSummary, type BulkSendLiveState } from '@/lib/outreach-email'
+import { formatBulkSendSummary, type BulkSendLiveState } from '@/lib/contact/outreach-email'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '대기',

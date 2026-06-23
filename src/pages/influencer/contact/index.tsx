@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
-import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
+import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/template/delivery-failure-sync'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
@@ -16,15 +16,15 @@ import {
   tryToggleBulkSelection,
   isBulkAllSelected,
   toggleBulkAllFiltered,
-} from '@/lib/outreach-email'
+} from '@/lib/contact/outreach-email'
 import {
   cancelInfluencerContact,
-} from '@/lib/contact-cancel'
+} from '@/lib/contact/contact-cancel'
 import {
   removeInfluencerOnUnaccept,
   syncInfluencerOnAccept,
   syncMissingAcceptedToConfirmed,
-} from '@/lib/confirm-influencer'
+} from '@/lib/influencer/confirm-influencer'
 import {
   checkOutlookConnected,
   compareByRecentReply,
@@ -34,8 +34,8 @@ import {
   replyTimestamp,
   shouldAutoMarkReply,
   toIsoTimestamp,
-} from '@/lib/reply-sync'
-import { logOutboundOutreach } from '@/lib/outreach-log'
+} from '@/lib/contact/reply-sync'
+import { logOutboundOutreach } from '@/lib/contact/outreach-log'
 import { supabase } from '@/lib/supabase'
 import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -51,8 +51,8 @@ import {
   formatContactCount,
   nextContactCountAfterSend,
   formatShortContactDate,
-} from '@/lib/contact-count'
-import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
+} from '@/lib/contact/contact-count'
+import { fetchEmailTemplates, type EmailTemplate } from '@/lib/template/email-templates'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']

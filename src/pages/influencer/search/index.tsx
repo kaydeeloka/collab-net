@@ -19,8 +19,8 @@ import {
   TCM_TARGET_MAX,
   TCM_TARGET_MIN,
   tryToggleTcmKeyword,
-} from '@/lib/tcm-search'
-import { markInfluencerContact } from '@/lib/contact-cancel'
+} from '@/lib/influencer/tcm-search'
+import { markInfluencerContact } from '@/lib/contact/contact-cancel'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
 type ListupTab = 'search' | 'database'

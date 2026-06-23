@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { removeInfluencerOnUnaccept } from '@/lib/confirm-influencer'
+import { removeInfluencerOnUnaccept } from '@/lib/influencer/confirm-influencer'
 
 export async function markInfluencerContact(
   influencerId: string,

@@ -200,10 +200,12 @@ CREATE TABLE IF NOT EXISTS confirmed_brands (
   phone            TEXT,
   website          TEXT,
   product          TEXT,
+  product_en       TEXT,
   production_cost  TEXT,
   received         BOOLEAN     NOT NULL DEFAULT FALSE,
   notes            TEXT,
   archive_meta     TEXT,
+  archive_desc     TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE confirmed_brands ENABLE ROW LEVEL SECURITY;
@@ -957,7 +959,7 @@ CREATE TABLE IF NOT EXISTS confirmed_brand_archive_meta (
 CREATE TABLE IF NOT EXISTS confirmed_brand_assets (
   id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   confirmed_brand_id UUID        NOT NULL REFERENCES confirmed_brands(id) ON DELETE CASCADE,
-  category           TEXT        NOT NULL CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients')),
+  category           TEXT        NOT NULL CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover')),
   file_name          TEXT        NOT NULL,
   storage_path       TEXT        NOT NULL UNIQUE,
   file_size          INTEGER,
@@ -1190,5 +1192,28 @@ CREATE INDEX IF NOT EXISTS idx_influencers_contacted ON influencers(phase_id, co
 -- phases — project concept for season collection / new phase setup
 ALTER TABLE phases ADD COLUMN IF NOT EXISTS project_concept TEXT;
 
--- phases — custom hero image for season collection report
-ALTER TABLE phases ADD COLUMN IF NOT EXISTS collection_hero_path TEXT;
+-- phases — season collection hero image (storage path in brand-archive bucket)
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS collection_img TEXT;
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS archive_desc TEXT;
+
+-- confirmed_brands — season collection brand card description
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS archive_desc TEXT;
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS product_en TEXT;
+
+-- migrate legacy column name if present
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'phases' AND column_name = 'collection_hero_path'
+  ) THEN
+    UPDATE phases
+    SET collection_img = collection_hero_path
+    WHERE collection_img IS NULL AND collection_hero_path IS NOT NULL;
+  END IF;
+END $$;
+
+-- confirmed_brand_assets — season collection product cover (separate from product_main)
+ALTER TABLE confirmed_brand_assets DROP CONSTRAINT IF EXISTS confirmed_brand_assets_category_check;
+ALTER TABLE confirmed_brand_assets ADD CONSTRAINT confirmed_brand_assets_category_check
+  CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover'));

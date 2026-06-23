@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { defaultProfileUrl } from '@/lib/content-platforms'
+import { defaultProfileUrl } from '@/lib/influencer/content-platforms'
 
 export interface InfluencerConfirmSource {
   id: string

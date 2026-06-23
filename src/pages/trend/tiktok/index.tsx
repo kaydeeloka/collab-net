@@ -7,7 +7,7 @@ import {
   selectedRecipientEmails,
   setEmailRecipientSelected,
   type EmailRecipient,
-} from '@/lib/email-recipients'
+} from '@/lib/template/email-recipients'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
 

@@ -6,8 +6,8 @@ import {
   loadMonitoringData,
   type ContentReport,
   type UploadChannelSegment,
-} from '@/lib/monitoring-data'
-import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/content-platforms'
+} from '@/lib/influencer/monitoring-data'
+import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/influencer/content-platforms'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
 

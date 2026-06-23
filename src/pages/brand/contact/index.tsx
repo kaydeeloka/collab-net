@@ -9,9 +9,9 @@ import {
   replyTimestamp,
   shouldAutoMarkReply,
   toIsoTimestamp,
-} from '@/lib/reply-sync'
-import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/delivery-failure-sync'
-import { cancelBrandContact } from '@/lib/contact-cancel'
+} from '@/lib/contact/reply-sync'
+import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/template/delivery-failure-sync'
+import { cancelBrandContact } from '@/lib/contact/contact-cancel'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
   BULK_SEND_MAX,
@@ -27,7 +27,7 @@ import {
   tryToggleBulkSelection,
   isBulkAllSelected,
   toggleBulkAllFiltered,
-} from '@/lib/outreach-email'
+} from '@/lib/contact/outreach-email'
 import { supabase } from '@/lib/supabase'
 import { supabaseNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -36,9 +36,9 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
-import { formatShortContactDate } from '@/lib/contact-count'
+import { formatShortContactDate } from '@/lib/contact/contact-count'
 
-import { fetchEmailTemplates, type EmailTemplate } from '@/lib/email-templates'
+import { fetchEmailTemplates, type EmailTemplate } from '@/lib/template/email-templates'
 
 const DUMMY: Record<string, { value: string; color: string }> = {
   '{{브랜드명}}': { value: 'AmorePacific', color: '#a07800' },

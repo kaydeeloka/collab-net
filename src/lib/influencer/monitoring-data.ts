@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket } from '@/lib/content-platforms'
+import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket } from '@/lib/influencer/content-platforms'
 
 export const MON_SCRAPE_LIMIT = 50
 

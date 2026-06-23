@@ -6,7 +6,7 @@ import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import HeaderFilterMenu, { type HeaderFilterOption } from '@/components/HeaderFilterMenu'
-import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems-errors'
+import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems/ems-errors'
 import { formatKstSyncLabel } from '@/lib/kst-time'
 import {
   EMS_STATUS_FILTER_OPTIONS,
@@ -14,7 +14,7 @@ import {
   getEmsStatusColor,
   MANUAL_RECEIVED_STATUS,
   emsStatusSelectWidth,
-} from '@/lib/ems-tracking-status'
+} from '@/lib/ems/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from './layout'
 

@@ -6,7 +6,7 @@ import {
   setAllEmailRecipientsSelected,
   setEmailRecipientSelected,
   type EmailRecipient,
-} from '@/lib/email-recipients'
+} from '@/lib/template/email-recipients'
 import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
 import type { ReportData } from './archive/shared'

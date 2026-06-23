@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { PhaseProvider } from '@/contexts/PhaseContext'
@@ -45,6 +45,11 @@ import ArchiveDesign        from './pages/archive/design'
 import ArchiveOverallReport from './pages/archive/overall-report'
 import ArchiveBrandReport       from './pages/archive/brand-report'
 import ArchiveBrandReportPhase  from './pages/archive/brand-report/phase'
+
+function RedirectLegacySeasonPhase() {
+  const { phaseSlug } = useParams<{ phaseSlug: string }>()
+  return <Navigate to={`/archive/season/${phaseSlug ?? ''}`} replace />
+}
 
 export default function App() {
   return (
@@ -108,9 +113,11 @@ export default function App() {
 
                 {/* ── ARCHIVE ── */}
                 <Route path="/archive/design"          element={<ArchiveDesign />} />
-                <Route path="/archive/overall-report"  element={<ArchiveOverallReport />} />
-                <Route path="/archive/brand-report"           element={<ArchiveBrandReport />} />
-                <Route path="/archive/brand-report/:phaseId" element={<ArchiveBrandReportPhase />} />
+                <Route path="/archive/brand-report"    element={<ArchiveOverallReport />} />
+                <Route path="/archive/season"           element={<ArchiveBrandReport />} />
+                <Route path="/archive/season/:phaseSlug" element={<ArchiveBrandReportPhase />} />
+                <Route path="/archive/overall-report"  element={<Navigate to="/archive/brand-report" replace />} />
+                <Route path="/archive/brand-report/:phaseSlug" element={<RedirectLegacySeasonPhase />} />
 
               </Route>
             </Route>

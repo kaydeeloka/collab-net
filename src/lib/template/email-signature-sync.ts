@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import {
   buildDefaultOutreachSignatureHtml,
-} from '@/lib/email-signature-config'
+} from '@/lib/template/email-signature-config'
 
 const BUCKET = 'email-assets'
 const LOGO_FILE = 'crane-logo-compressed.png'

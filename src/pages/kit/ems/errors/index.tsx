@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
-import { getOutreachSendError, runBulkOutreachSend, type BulkSendLiveState, sendOutreachEmail } from '@/lib/outreach-email'
+import { getOutreachSendError, runBulkOutreachSend, type BulkSendLiveState, sendOutreachEmail } from '@/lib/contact/outreach-email'
 import {
   EMS_ERROR_STATUS_STYLE,
   ERROR_STATUS_OPTIONS,
   fetchEmsErrors,
   updateEmsReship,
   type EmsErrorRow,
-} from '@/lib/ems-errors'
+} from '@/lib/ems/ems-errors'
 import { formatKstDate } from '@/lib/kst-time'
-import { EMS_STATUS_OPTIONS, getEmsStatusColor } from '@/lib/ems-tracking-status'
-import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/ems-templates'
+import { EMS_STATUS_OPTIONS, getEmsStatusColor } from '@/lib/ems/ems-tracking-status'
+import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/template/ems-templates'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useEmsLayout } from '../layout'
