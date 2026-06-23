@@ -11,6 +11,7 @@ interface Phase {
   ended_at: string | null
   kit_send_date: string | null
   google_sheets_url: string | null
+  project_concept: string | null
 }
 
 interface PhaseContextValue {

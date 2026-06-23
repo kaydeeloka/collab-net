@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { phaseNum, escHtml } from '@/lib/utils'
+import { phaseNum, escHtml, normalizePhaseNameInput, suggestNextPhaseName } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
@@ -106,11 +106,13 @@ export default function Layout() {
   const [editEndDate,    setEditEndDate]    = useState('')
   const [editKitDate,    setEditKitDate]    = useState('')
   const [editSheetsUrl,  setEditSheetsUrl]  = useState('')
+  const [editConcept,    setEditConcept]    = useState('')
   const [editLoading,    setEditLoading]    = useState(false)
   const [editStatus,     setEditStatus]     = useState('')
 
   // New phase form fields
   const [newPhaseName,        setNewPhaseName]        = useState('')
+  const [newPhaseConcept,     setNewPhaseConcept]     = useState('')
   const [newPhaseStartDate,   setNewPhaseStartDate]   = useState('')
   const [newPhaseEndDate,     setNewPhaseEndDate]      = useState('')
   const [newPhaseKitDate,     setNewPhaseKitDate]      = useState('')
@@ -127,12 +129,24 @@ export default function Layout() {
   }
 
   function resetNewPhaseForm() {
-    setNewPhaseName(''); setNewPhaseStartDate(''); setNewPhaseEndDate('')
+    setNewPhaseName(''); setNewPhaseConcept(''); setNewPhaseStartDate(''); setNewPhaseEndDate('')
     setNewPhaseKitDate(''); setNewPhaseSheetsUrl(''); setNewPhaseStatus('')
   }
 
+  function openNewPhaseModal() {
+    setShowManage(false)
+    setNewPhaseName(suggestNextPhaseName(phaseList))
+    setNewPhaseConcept('')
+    setNewPhaseStartDate('')
+    setNewPhaseEndDate('')
+    setNewPhaseKitDate('')
+    setNewPhaseSheetsUrl('')
+    setNewPhaseStatus('')
+    setShowNewPhase(true)
+  }
+
   async function confirmNewPhase() {
-    const name = newPhaseName.trim()
+    const name = normalizePhaseNameInput(newPhaseName)
     if (!name) return
     setNewPhaseLoading(true)
     setNewPhaseStatus('차수 생성 중...')
@@ -144,6 +158,7 @@ export default function Layout() {
         ended_at:         newPhaseEndDate    || null,
         kit_send_date:    newPhaseKitDate    || null,
         google_sheets_url: newPhaseSheetsUrl.trim() || null,
+        project_concept:  newPhaseConcept.trim() || null,
       })
       if (error) { setNewPhaseStatus('오류: ' + error.message); return }
       setNewPhaseStatus('완료!')
@@ -153,13 +168,14 @@ export default function Layout() {
     } finally { setNewPhaseLoading(false) }
   }
 
-  function openEditPhase(p: { id: string; name: string; started_at?: string | null; ended_at?: string | null; kit_send_date?: string | null; google_sheets_url?: string | null }) {
+  function openEditPhase(p: { id: string; name: string; started_at?: string | null; ended_at?: string | null; kit_send_date?: string | null; google_sheets_url?: string | null; project_concept?: string | null }) {
     setEditPhaseId(p.id)
     setEditPhaseName(p.name)
     setEditStartDate(p.started_at ? p.started_at.split('T')[0] : '')
     setEditEndDate(p.ended_at ? p.ended_at.split('T')[0] : '')
     setEditKitDate(p.kit_send_date ?? '')
     setEditSheetsUrl(p.google_sheets_url ?? '')
+    setEditConcept(p.project_concept ?? '')
     setEditStatus('')
     setShowManage(false)
     setShowEditPhase(true)
@@ -175,6 +191,7 @@ export default function Layout() {
         ended_at:          editEndDate    || null,
         kit_send_date:     editKitDate    || null,
         google_sheets_url: editSheetsUrl.trim() || null,
+        project_concept:   editConcept.trim() || null,
       }).eq('id', editPhaseId)
       if (error) { setEditStatus('오류: ' + error.message); return }
       setEditStatus('완료!')
@@ -288,7 +305,7 @@ export default function Layout() {
           <span className="phase-badge-nav" style={{ marginLeft: 8 }}>{phaseBadge}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button className="new-phase-btn" onClick={() => { setShowManage(false); setShowNewPhase(true) }}>
+          <button className="new-phase-btn" onClick={openNewPhaseModal}>
             + 새 차수 시작
           </button>
         </div>
@@ -331,9 +348,28 @@ export default function Layout() {
       <Modal open={showNewPhase} onClose={() => { setShowNewPhase(false); resetNewPhaseForm() }} title="새 차수 시작">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label className="modal-label">차수 이름 *</label>
-            <input className="modal-input" type="text" placeholder="예: 3차, Q3-2025" maxLength={30}
-              value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} autoFocus />
+            <label className="modal-label">차수 *</label>
+            <input
+              className="modal-input"
+              type="text"
+              placeholder="예: 3차"
+              maxLength={20}
+              value={newPhaseName}
+              onChange={e => setNewPhaseName(e.target.value)}
+              onBlur={() => setNewPhaseName(prev => normalizePhaseNameInput(prev))}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="modal-label">프로젝트 컨셉</label>
+            <textarea
+              className="modal-input"
+              rows={3}
+              placeholder="예: A Seollal collection — 설날을 테마로 한 시즌 키트"
+              value={newPhaseConcept}
+              onChange={e => setNewPhaseConcept(e.target.value)}
+              style={{ resize: 'vertical', minHeight: 72 }}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
@@ -356,7 +392,7 @@ export default function Layout() {
         </div>
         <div className="modal-actions" style={{ marginTop: 16 }}>
           <button className="modal-btn-cancel" onClick={() => { setShowNewPhase(false); resetNewPhaseForm() }}>취소</button>
-          <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading || !newPhaseName.trim()}>
+          <button className="modal-btn-confirm" onClick={confirmNewPhase} disabled={newPhaseLoading || !normalizePhaseNameInput(newPhaseName)}>
             {newPhaseLoading ? '처리 중...' : '생성'}
           </button>
         </div>
@@ -364,8 +400,19 @@ export default function Layout() {
       </Modal>
 
       {/* Edit Phase */}
-      <Modal open={showEditPhase} onClose={() => setShowEditPhase(false)} title={`「${editPhaseName}」 날짜 수정`}>
+      <Modal open={showEditPhase} onClose={() => setShowEditPhase(false)} title={`「${editPhaseName}」 수정`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label className="modal-label">프로젝트 컨셉</label>
+            <textarea
+              className="modal-input"
+              rows={3}
+              placeholder="시즌 컬렉션에 표시할 프로젝트 컨셉"
+              value={editConcept}
+              onChange={e => setEditConcept(e.target.value)}
+              style={{ resize: 'vertical', minHeight: 72 }}
+            />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label className="modal-label">프로젝트 시작일</label>

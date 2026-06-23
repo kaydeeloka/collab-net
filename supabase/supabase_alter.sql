@@ -1172,3 +1172,6 @@ WHERE status IS NULL OR BTRIM(status) = '';
 
 CREATE INDEX IF NOT EXISTS idx_influencers_contacted ON influencers(phase_id, contacted)
   WHERE contacted = TRUE;
+
+-- phases — project concept for season collection / new phase setup
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS project_concept TEXT;

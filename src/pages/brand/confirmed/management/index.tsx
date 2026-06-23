@@ -393,7 +393,7 @@ export default function BrandConfirmedManagement() {
             </div>
 
             <ReportCard icon={<Package size={18} />} title="제품 정보">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
                 <ReportStat label="제품" value={viewRow.product || '—'} />
                 <ReportStat label="생산원가" value={viewRow.production_cost || '—'} />
                 <ReportStat
@@ -402,34 +402,31 @@ export default function BrandConfirmedManagement() {
                     ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>✓ 받음</span>
                     : <span style={{ fontSize: 11, fontWeight: 700, background: '#f1f5f9', color: '#94a3b8', borderRadius: 20, padding: '2px 10px' }}>미수령</span>}
                 />
+                <ReportStat
+                  label="자료 아카이브"
+                  value={(
+                    <Link
+                      to={archiveDetailPath(viewRow, rows)}
+                      className="video-link"
+                      style={{ fontSize: 13, fontWeight: 600 }}
+                      onClick={() => setShowView(false)}
+                    >
+                      ↗ 아카이브 보기
+                    </Link>
+                  )}
+                />
               </div>
             </ReportCard>
 
             <div style={{ marginTop: 14 }}>
-              <ReportCard icon={<Info size={18} />} title="비고 · 자료">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: '4px 0 8px' }}>
-                  <ReportStat
-                    label="자료 아카이브"
-                    value={(
-                      <Link
-                        to={archiveDetailPath(viewRow, rows)}
-                        className="video-link"
-                        style={{ fontSize: 13, fontWeight: 600 }}
-                        onClick={() => setShowView(false)}
-                      >
-                        ↗ 아카이브 보기
-                      </Link>
-                    )}
-                  />
-                </div>
+              <ReportCard icon={<Info size={18} />} title="비고">
                 <div style={{
                   fontSize: 13,
                   color: viewRow.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)',
                   lineHeight: 1.6,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  borderTop: '1px solid var(--gray-1)',
-                  paddingTop: 12,
+                  padding: '4px 0',
                 }}>
                   {viewRow.notes?.trim() || '—'}
                 </div>

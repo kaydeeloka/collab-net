@@ -29,6 +29,20 @@ export function phaseNum(name: string): number {
   return m ? parseInt(m[1], 10) : 0
 }
 
+/** Normalize user input to phase label like `3차`. */
+export function normalizePhaseNameInput(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  const withoutSuffix = trimmed.replace(/차\s*$/i, '').trim()
+  if (/^\d+$/.test(withoutSuffix)) return `${parseInt(withoutSuffix, 10)}차`
+  return trimmed
+}
+
+export function suggestNextPhaseName(phases: { name: string }[]): string {
+  const max = phases.reduce((m, p) => Math.max(m, phaseNum(p.name)), 0)
+  return `${max + 1}차`
+}
+
 export function buildPhaseDbOptions(data: {
   phases?: { name?: string; outreachId?: string }[]
   phase1SheetId?: string

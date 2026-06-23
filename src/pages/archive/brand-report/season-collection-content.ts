@@ -25,13 +25,13 @@ export const SEASON_COLLECTION_COPY: Record<string, SeasonCollectionCopy> = {
   },
 }
 
-export function getSeasonCollectionCopy(phaseName: string, brandCount: number): SeasonCollectionCopy {
-  const copy = SEASON_COLLECTION_COPY[phaseName]
-  if (copy) return copy
-
-  const vol = phaseName === '2차' ? '2026 VOL.2' : `2026 ${phaseName}`
-  return {
-    volume: vol,
+export function getSeasonCollectionCopy(
+  phaseName: string,
+  brandCount: number,
+  projectConcept?: string | null,
+): SeasonCollectionCopy {
+  const base = SEASON_COLLECTION_COPY[phaseName] ?? {
+    volume: phaseName === '2차' ? '2026 VOL.2' : `2026 ${phaseName}`,
     title: `Mi Muse ${phaseName} Collection`,
     intro: [
       `The Mi Muse ${phaseName} season brings together curated indie K-Beauty partners for creators.`,
@@ -40,4 +40,13 @@ export function getSeasonCollectionCopy(phaseName: string, brandCount: number): 
     kitHeading: 'What Was Inside the Kit',
     kitIntro: DEFAULT_KIT_INTRO,
   }
+
+  const concept = projectConcept?.trim()
+  if (!concept) return base
+
+  const paragraphs = concept.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  if (paragraphs.length === 1) {
+    return { ...base, title: paragraphs[0] }
+  }
+  return { ...base, title: paragraphs[0], intro: paragraphs.slice(1) }
 }

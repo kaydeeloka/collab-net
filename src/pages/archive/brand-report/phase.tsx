@@ -95,7 +95,7 @@ export default function ArchiveBrandReportPhase() {
     )
   }
 
-  const copy = getSeasonCollectionCopy(phase.name, brands.length)
+  const copy = getSeasonCollectionCopy(phase.name, brands.length, phase.project_concept)
   const heroImage = brands.find(b => b.imageUrl)?.imageUrl ?? null
 
   return (
