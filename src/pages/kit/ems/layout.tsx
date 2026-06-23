@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems/ems-errors'
 import { isEmsDelivered, isEmsInTransit } from '@/lib/ems/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
-export const INFLUENCER_TARGET = 50
-
-export interface EmsStats {
+interface EmsStats {
   total:            number
   totalParcels:     number
   primaryParcels:   number
@@ -20,16 +19,6 @@ export interface EmsStats {
   reshipNeeded:     number
   reshipCompleted:  number
   errorTotal:       number
-}
-
-export interface EmsLayoutContext {
-  refreshStats:       () => Promise<void>
-  notifyReshipChange: () => void
-  reshipVersion:      number
-}
-
-export function useEmsLayout() {
-  return useOutletContext<EmsLayoutContext>()
 }
 
 const TABS = [
@@ -164,17 +153,17 @@ export default function EmsLayout() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <div>
-          <div className="page-banner-title">EMS 글로벌 배송 &amp; 통합 관리 시스템</div>
-          <div className="page-banner-desc">확정 인플루언서의 배송 정보를 통합 관리합니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button type="button" className="page-banner-btn page-banner-btn--secondary" onClick={loadStats}>
-            <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
-          </button>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="EMS 글로벌 배송 & 통합 관리 시스템"
+          description="확정 인플루언서의 배송 정보를 통합 관리합니다."
+          actions={(
+            <button type="button" className="page-banner-btn page-banner-btn--secondary" onClick={loadStats}>
+              <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+            </button>
+          )}
+        />
+      </PageHeroBanner>
 
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
       {!loading && stats && <EmsStatsCards stats={stats} />}

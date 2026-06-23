@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Download, FileSpreadsheet } from 'lucide-react'
+import { Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { kstToday } from '@/lib/kst-time'
@@ -8,6 +8,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 interface EmsDataRow {
   id:              string
@@ -375,21 +376,22 @@ export default function EmsData() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco"><FileSpreadsheet size={28} /></span>
-        <div>
-          <div className="page-banner-title">EMS 발송 데이터</div>
-          <div className="page-banner-desc">확정 인플루언서(seq) 배송 정보를 우체국 EMS 양식 형식으로 확인합니다. 행을 클릭하면 상세 정보를 볼 수 있습니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={handleDownload} disabled={loading || rows.length === 0}>
-            <Download size={15} /> Excel 다운로드
-          </button>
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={loadData}>
-            <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
-          </button>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="EMS 발송 데이터"
+          description="확정 인플루언서(seq) 배송 정보를 우체국 EMS 양식 형식으로 확인합니다. 행을 클릭하면 상세 정보를 볼 수 있습니다."
+          actions={(
+            <>
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={handleDownload} disabled={loading || rows.length === 0}>
+                <Download size={15} /> Excel 다운로드
+              </button>
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={loadData}>
+                <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+              </button>
+            </>
+          )}
+        />
+      </PageHeroBanner>
 
       <div className="cards">
         <div className="card highlight"><div className="card-label">총 인원</div><div className="card-value">{rows.length}</div></div>

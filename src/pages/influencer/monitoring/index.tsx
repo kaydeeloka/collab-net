@@ -12,6 +12,7 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/influencer/content-platforms'
 
 const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
@@ -697,35 +698,38 @@ export default function Monitoring() {
 
   return (
     <div className="page page--fill">
-      {/* Banner */}
-      <div className="page-banner">
-        <div>
-          <div className="page-banner-title">인플루언서 리뷰 모니터링</div>
-          <div className="page-banner-desc">
-            Apify로 최대 50명의 인플루언서 콘텐츠를 스캔하여 키워드 감지 결과를 실시간 추적합니다.
-            {stats.lastRun && stats.lastRun !== '-' && (
-              <span style={{ marginLeft: 10, color: 'var(--gray-5)', fontSize: 11 }}>
-                마지막 실행: {stats.lastRun}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="page-banner-actions">
-          {runPending && (
-            <button className="page-banner-btn" onClick={resetScrape}
-              style={{ background: 'var(--yellow)', color: 'var(--yellow-text)', borderColor: 'var(--yellow-md)' }}>
-              취소
-            </button>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="인플루언서 리뷰 모니터링"
+          description={(
+            <>
+              Apify로 최대 50명의 인플루언서 콘텐츠를 스캔하여 키워드 감지 결과를 실시간 추적합니다.
+              {stats.lastRun && stats.lastRun !== '-' && (
+                <span style={{ marginLeft: 10, color: 'var(--gray-5)', fontSize: 11 }}>
+                  마지막 실행: {stats.lastRun}
+                </span>
+              )}
+            </>
           )}
-          <button className="page-banner-btn" onClick={startScrape} disabled={scrapeLoading || runPending}
-            style={{ background: 'var(--teal)', color: '#fff', borderColor: 'var(--teal)' }}>
-            {scrapeLoading && !runPending ? '실행 중…' : '모니터링 실행'}
-          </button>
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={loadMonitoring}>
-            <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
-          </button>
-        </div>
-      </div>
+          actions={(
+            <>
+              {runPending && (
+                <button className="page-banner-btn" onClick={resetScrape}
+                  style={{ background: 'var(--yellow)', color: 'var(--yellow-text)', borderColor: 'var(--yellow-md)' }}>
+                  취소
+                </button>
+              )}
+              <button className="page-banner-btn" onClick={startScrape} disabled={scrapeLoading || runPending}
+                style={{ background: 'var(--teal)', color: '#fff', borderColor: 'var(--teal)' }}>
+                {scrapeLoading && !runPending ? '실행 중…' : '모니터링 실행'}
+              </button>
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={loadMonitoring}>
+                <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+              </button>
+            </>
+          )}
+        />
+      </PageHeroBanner>
 
       {scrapeMsg && (
         <div style={{

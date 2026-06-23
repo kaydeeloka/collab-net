@@ -12,6 +12,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import { StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { getEmsStatusColor, isEmsDelivered, isEmsException } from '@/lib/ems/ems-tracking-status'
 
 const GOOGLE_FORM_URL = ''
@@ -682,31 +683,33 @@ export default function Confirmed() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <div>
-          <div className="page-banner-title">확정 인플루언서 관리</div>
-          <div className="page-banner-desc">아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요.</div>
-        </div>
-        <div className="page-banner-actions">
-          <Link to="/influencer/monitoring" className="page-banner-btn"
-            style={{ textDecoration: 'none', background: 'var(--teal-dk)', color: '#fff', border: '1px solid var(--teal-dk)' }}>
-            리뷰 모니터링으로 이동
-          </Link>
-          <Link to="/kit/ems" className="page-banner-btn"
-            style={{ textDecoration: 'none', background: 'var(--teal)', color: '#fff', border: '1px solid var(--teal)' }}>
-            배송 추적 보기
-          </Link>
-          {GOOGLE_FORM_URL && (
-            <a href={GOOGLE_FORM_URL} target="_blank" rel="noopener"
-              className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>
-              구글폼 보기
-            </a>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="확정 인플루언서 관리"
+          description="아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요."
+          actions={(
+            <>
+              <Link to="/influencer/monitoring" className="page-banner-btn"
+                style={{ textDecoration: 'none', background: 'var(--teal-dk)', color: '#fff', border: '1px solid var(--teal-dk)' }}>
+                리뷰 모니터링으로 이동
+              </Link>
+              <Link to="/kit/ems" className="page-banner-btn"
+                style={{ textDecoration: 'none', background: 'var(--teal)', color: '#fff', border: '1px solid var(--teal)' }}>
+                배송 추적 보기
+              </Link>
+              {GOOGLE_FORM_URL && (
+                <a href={GOOGLE_FORM_URL} target="_blank" rel="noopener"
+                  className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>
+                  구글폼 보기
+                </a>
+              )}
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>
+                {loading ? <Spinner sm /> : <span style={{ color: 'var(--blue-dk)' }}>↻</span>} 새로고침
+              </button>
+            </>
           )}
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>
-            {loading ? <Spinner sm /> : <span style={{ color: 'var(--blue-dk)' }}>↻</span>} 새로고침
-          </button>
-        </div>
-      </div>
+        />
+      </PageHeroBanner>
 
       {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
 

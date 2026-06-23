@@ -14,7 +14,7 @@ import { EMS_STATUS_OPTIONS, getEmsStatusColor } from '@/lib/ems/ems-tracking-st
 import { applyEmsPlaceholders, loadEmsTemplates, type EmsTemplate } from '@/lib/template/ems-templates'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
-import { useEmsLayout } from '../layout'
+import { useEmsLayout } from '../use-ems-layout'
 import Spinner from '@/components/Spinner'
 import { TableActionBar } from '@/components/StickyBar'
 import { Button } from '@/components/ui'

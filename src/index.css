@@ -388,6 +388,15 @@ a { text-decoration: none; }
 
 .sticky-bar__phase-wrap {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sticky-bar__right--solo {
+  margin-left: auto;
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .sticky-bar__phase-select {
@@ -424,6 +433,7 @@ a { text-decoration: none; }
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
+  left: auto;
   min-width: 168px;
   padding: 6px;
   background: var(--white);

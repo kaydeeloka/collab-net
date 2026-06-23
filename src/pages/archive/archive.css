@@ -1,0 +1,15 @@
+.archive-picker {
+  padding: 0 24px 48px;
+}
+
+.archive-picker.bn-archive-layout {
+  padding-bottom: 48px;
+}
+
+button.brand-archive-card.archive-picker-card {
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}

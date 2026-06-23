@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { PAGE_HERO_DEFAULT_BG } from './page-hero-banner.constants'
 import './page-hero-banner.css'
-
-export const PAGE_HERO_DEFAULT_BG = '/img/dashboard-hero-flower.png'
 
 export interface PageHeroBannerProps {
   children: ReactNode
@@ -24,13 +23,54 @@ export function PageHeroBanner({
   } as CSSProperties
 
   return (
-    <div className={['page-hero-row', className].filter(Boolean).join(' ')} style={style}>
+    <div
+      className={['page-hero-row', className].filter(Boolean).join(' ')}
+      style={{ ...style, ...bgStyle }}
+    >
       <div className="page-hero-main">
         <div className="page-hero-bg" aria-hidden style={bgStyle} />
         <div className="page-hero-main-inner">{children}</div>
       </div>
       {aside}
     </div>
+  )
+}
+
+export interface PageHeroBannerContentProps {
+  title: ReactNode
+  description?: ReactNode
+  actions?: ReactNode
+  showLogo?: boolean
+  eyebrow?: ReactNode
+  trailing?: ReactNode
+}
+
+/** Standard page hero copy block (title + description + optional actions). */
+export function PageHeroBannerContent({
+  title,
+  description,
+  actions,
+  showLogo = false,
+  eyebrow,
+  trailing,
+}: PageHeroBannerContentProps) {
+  return (
+    <>
+      <div className="page-hero-copy page-hero-copy--fluid">
+        {eyebrow && <div className="page-hero-meta">{eyebrow}</div>}
+        {showLogo ? (
+          <div className="page-hero-brand page-hero-brand--page">
+            <img src="/img/logo-black.svg" alt="Mi Muse" className="page-hero-logo page-hero-logo--page" />
+            <h1 className="page-hero-title page-hero-title--page">{title}</h1>
+          </div>
+        ) : (
+          <h1 className="page-hero-title page-hero-title--page">{title}</h1>
+        )}
+        {description && <p className="page-hero-desc">{description}</p>}
+      </div>
+      {trailing}
+      {actions && <div className="page-hero-actions">{actions}</div>}
+    </>
   )
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, BarChart2, ChevronRight } from 'lucide-react'
+import { Archive, ChevronRight } from 'lucide-react'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { usePhase } from '@/contexts/PhaseContext'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { formatKstShortDate } from '@/lib/kst-time'
@@ -149,13 +150,12 @@ export default function ArchiveBrandReport() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco"><BarChart2 size={28} /></span>
-        <div>
-          <div className="page-banner-title">전체 리포트 아카이브</div>
-          <div className="page-banner-desc">모든 캠페인의 전체 성과 리포트를 아카이브합니다.</div>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="전체 리포트 아카이브"
+          description="모든 캠페인의 전체 성과 리포트를 아카이브합니다."
+        />
+      </PageHeroBanner>
 
       {isLoading ? (
         <div className="bn-archive-cards-wrap">

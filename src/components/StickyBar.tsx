@@ -143,10 +143,11 @@ export default function StickyBar({
   onSubEnter,
   onSubLeave,
 }: StickyBarProps) {
-  if (group.children.length === 0) return null
+  const showNav = group.children.length > 0
 
   return (
     <header className="sticky-bar">
+      {showNav && (
       <nav className="sticky-bar__nav" aria-label={`${group.label} navigation`}>
         {group.children.map(child => {
           const hasSub = !!child.sub?.length
@@ -189,8 +190,9 @@ export default function StickyBar({
           )
         })}
       </nav>
+      )}
 
-      <div className="sticky-bar__right">
+      <div className={`sticky-bar__right${showNav ? '' : ' sticky-bar__right--solo'}`}>
         <StickyBarPhaseControls />
       </div>
     </header>

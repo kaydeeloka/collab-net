@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 export interface BrandConfirmedContext {
   refreshStats: () => Promise<void>
@@ -48,23 +49,20 @@ export default function BrandConfirmed() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">🎯</span>
-        <div>
-          <div className="page-banner-title">확정 브랜드</div>
-          <div className="page-banner-desc">확정 브랜드별 로고·제품 이미지·전성분표 등 자료를 업로드하고 관리합니다.</div>
-        </div>
-        {total > 0 && (
-          <div className="page-banner-actions">
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="확정 브랜드"
+          description="확정 브랜드별 로고·제품 이미지·전성분표 등 자료를 업로드하고 관리합니다."
+          actions={total > 0 ? (
             <span style={{
               padding: '8px 16px', fontSize: 13, fontWeight: 700, color: 'var(--teal-dk)',
               background: 'var(--white)', border: '1px solid var(--teal-lt)', borderRadius: 'var(--r-pill)',
             }}>
               확정 브랜드 {total}
             </span>
-          </div>
-        )}
-      </div>
+          ) : undefined}
+        />
+      </PageHeroBanner>
 
       <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 20 }}>
         <StatCard highlight variant="metric" align="left" label="총 확정 브랜드" value={total} unit="개" valueColor="var(--teal-dk)" />

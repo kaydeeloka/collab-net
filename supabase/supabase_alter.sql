@@ -1192,7 +1192,13 @@ CREATE INDEX IF NOT EXISTS idx_influencers_contacted ON influencers(phase_id, co
 -- phases — project concept for season collection / new phase setup
 ALTER TABLE phases ADD COLUMN IF NOT EXISTS project_concept TEXT;
 
--- phases — season collection hero image (storage path in brand-archive bucket)
+-- phases — design archive assets (storage paths in brand-archive bucket)
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS design_theme_img TEXT;
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS design_kit_box_img TEXT;
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS design_collection_card_img TEXT;
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS design_brochure_img TEXT;
+ALTER TABLE phases ADD COLUMN IF NOT EXISTS design_archive_desc TEXT;
+
 ALTER TABLE phases ADD COLUMN IF NOT EXISTS collection_img TEXT;
 ALTER TABLE phases ADD COLUMN IF NOT EXISTS archive_desc TEXT;
 

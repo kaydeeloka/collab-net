@@ -1,15 +1,14 @@
-import { BookOpen } from 'lucide-react'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 export default function ArchiveOverallReport() {
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco"><BookOpen size={28} /></span>
-        <div>
-          <div className="page-banner-title">전체 리포트 아카이브</div>
-          <div className="page-banner-desc">모든 캠페인의 전체 성과 리포트를 아카이브합니다.</div>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="전체 리포트 아카이브"
+          description="모든 캠페인의 전체 성과 리포트를 아카이브합니다."
+        />
+      </PageHeroBanner>
       <WipBlock />
     </div>
   )

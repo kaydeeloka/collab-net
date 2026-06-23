@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ToastProvider } from '@/contexts/ToastContext'
-import { PhaseProvider } from '@/contexts/PhaseContext'
+import { PhaseProvider, usePhase } from '@/contexts/PhaseContext'
 import RequireAuth from '@/components/RequireAuth'
 import Layout from '@/components/Layout'
+import Spinner from '@/components/Spinner'
+import { archiveSectionPath } from '@/pages/archive/archive-slug'
 
 import Lock        from './pages/Lock'
 import Dashboard   from './pages/home'
@@ -41,14 +43,42 @@ import BrandArchiveDetail     from './pages/brand/confirmed/archive/detail'
 // KIT — ems
 import EmsData    from './pages/kit/ems-data'
 // ARCHIVE
-import ArchiveDesign        from './pages/archive/design'
-import ArchiveOverallReport from './pages/archive/overall-report'
-import ArchiveBrandReport       from './pages/archive/brand-report'
-import ArchiveBrandReportPhase  from './pages/archive/brand-report/phase'
+import ArchivePicker              from './pages/archive'
+import ArchiveDesignPhase         from './pages/archive/design/phase'
+import ArchiveBrandReportPhase    from './pages/archive/brand-report/phase'
+import ArchiveBrandReportSection  from './pages/archive/brand-report-section'
+import { phaseFromDesignSlug }    from './pages/archive/design/design-slug'
+import { phaseFromSlug }          from './pages/archive/brand-report/slug'
+
+function ArchiveRedirectSpinner() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+      <Spinner />
+    </div>
+  )
+}
+
+function RedirectArchivePhaseDefault() {
+  const { phaseName } = useParams<{ phaseName: string }>()
+  return <Navigate to={`/archive/${phaseName}/design`} replace />
+}
+
+function RedirectLegacyDesignPhase() {
+  const { legacySlug } = useParams<{ legacySlug: string }>()
+  const { phases, loading } = usePhase()
+  if (loading) return <ArchiveRedirectSpinner />
+  const phase = phaseFromDesignSlug(phases, legacySlug)
+  if (!phase) return <Navigate to="/archive" replace />
+  return <Navigate to={archiveSectionPath(phase, 'design')} replace />
+}
 
 function RedirectLegacySeasonPhase() {
-  const { phaseSlug } = useParams<{ phaseSlug: string }>()
-  return <Navigate to={`/archive/season/${phaseSlug ?? ''}`} replace />
+  const { legacySlug } = useParams<{ legacySlug: string }>()
+  const { phases, loading } = usePhase()
+  if (loading) return <ArchiveRedirectSpinner />
+  const phase = phaseFromSlug(phases, legacySlug, {})
+  if (!phase) return <Navigate to="/archive" replace />
+  return <Navigate to={archiveSectionPath(phase, 'season')} replace />
 }
 
 export default function App() {
@@ -109,15 +139,21 @@ export default function App() {
                 <Route path="/kit/ems-error" element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems/check"   element={<Navigate to="/kit/ems/errors" replace />} />
                 <Route path="/kit/ems-data"                        element={<EmsData />} />
-                <Route path="/kit/design-archive"        element={<Navigate to="/archive/design" replace />} />
+                <Route path="/kit/design-archive" element={<Navigate to="/archive" replace />} />
 
                 {/* ── ARCHIVE ── */}
-                <Route path="/archive/design"          element={<ArchiveDesign />} />
-                <Route path="/archive/brand-report"    element={<ArchiveOverallReport />} />
-                <Route path="/archive/season"           element={<ArchiveBrandReport />} />
-                <Route path="/archive/season/:phaseSlug" element={<ArchiveBrandReportPhase />} />
-                <Route path="/archive/overall-report"  element={<Navigate to="/archive/brand-report" replace />} />
-                <Route path="/archive/brand-report/:phaseSlug" element={<RedirectLegacySeasonPhase />} />
+                <Route path="/archive" element={<ArchivePicker />} />
+                <Route path="/archive/:phaseName" element={<RedirectArchivePhaseDefault />} />
+                <Route path="/archive/:phaseName/design" element={<ArchiveDesignPhase />} />
+                <Route path="/archive/:phaseName/season" element={<ArchiveBrandReportPhase />} />
+                <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportSection />} />
+                <Route path="/archive/design" element={<Navigate to="/archive" replace />} />
+                <Route path="/archive/design/:legacySlug" element={<RedirectLegacyDesignPhase />} />
+                <Route path="/archive/season" element={<Navigate to="/archive" replace />} />
+                <Route path="/archive/season/:legacySlug" element={<RedirectLegacySeasonPhase />} />
+                <Route path="/archive/brand-report" element={<Navigate to="/archive" replace />} />
+                <Route path="/archive/brand-report/:legacySlug" element={<RedirectLegacySeasonPhase />} />
+                <Route path="/archive/overall-report" element={<Navigate to="/archive" replace />} />
 
               </Route>
             </Route>

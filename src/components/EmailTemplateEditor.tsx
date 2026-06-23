@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Link2, Mail, Bold } from 'lucide-react'
+import { Link2, Bold } from 'lucide-react'
 import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import ConfirmToast, { useConfirmToast } from '@/components/ConfirmToast'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { useToast } from '@/contexts/ToastContext'
 import { gasPost } from '@/lib/api'
 import {
@@ -327,25 +328,22 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">
-          {config.bannerDeco === 'mail-icon' ? <Mail size={28} /> : '✉️'}
-        </span>
-        <div>
-          <div className="page-banner-title">{config.bannerTitle}</div>
-          <div className="page-banner-desc">{config.bannerDesc}</div>
-        </div>
-        <div className="page-banner-actions">
-          <button
-            type="button"
-            className="page-banner-btn page-banner-btn--secondary"
-            onClick={createNew}
-            disabled={saving}
-          >
-            + 새 템플릿
-          </button>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title={config.bannerTitle}
+          description={config.bannerDesc}
+          actions={(
+            <button
+              type="button"
+              className="page-banner-btn page-banner-btn--secondary"
+              onClick={createNew}
+              disabled={saving}
+            >
+              + 새 템플릿
+            </button>
+          )}
+        />
+      </PageHeroBanner>
 
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20, alignItems: 'start' }}>
         <div

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Archive, Newspaper } from 'lucide-react'
 import { PageTabs } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 export default function BeautyNewsShell({
   tab,
@@ -14,13 +15,12 @@ export default function BeautyNewsShell({
 
   return (
     <div className="page">
-      <div className="page-banner">
-        <span className="page-banner-deco">📊</span>
-        <div>
-          <div className="page-banner-title">트렌드 분석</div>
-          <div className="page-banner-desc">뷰티 뉴스 AI 분석 및 틱톡 트렌드 리포트를 확인하세요.</div>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="트렌드 분석"
+          description="뷰티 뉴스 AI 분석 및 틱톡 트렌드 리포트를 확인하세요."
+        />
+      </PageHeroBanner>
 
       <PageTabs
         tabs={[

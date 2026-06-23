@@ -11,6 +11,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { PageTabs } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { clampTargetCreators, TCM_TARGET_MAX, TCM_TARGET_MIN } from '@/lib/influencer/tcm-search'
 import { SearchStatsCards, TIER_COLOR } from './SearchStatsCards'
 
@@ -651,17 +652,18 @@ export default function Listup() {
 
   return (
     <div className="page page--fill" id="page-listup">
-      <div className="page-banner">
-        <span className="page-banner-deco">👥</span>
-        <div>
-          <div className="page-banner-title">인플루언서 리스트업 &amp; 크리에이터 DB 관리</div>
-          <div className="page-banner-desc">Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다.</div>
-        </div>
-        <div className="page-banner-actions">
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('database')}>인플루언서 DB</button>
-          <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setDbLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침</button>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="인플루언서 리스트업 & 크리에이터 DB 관리"
+          description="Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다."
+          actions={(
+            <>
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('database')}>인플루언서 DB</button>
+              <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setDbLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침</button>
+            </>
+          )}
+        />
+      </PageHeroBanner>
 
       {dashStats && <SearchStatsCards dashStats={dashStats} phaseLabel={phaseLabel} />}
 

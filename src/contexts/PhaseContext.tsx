@@ -14,6 +14,11 @@ interface Phase {
   project_concept: string | null
   collection_img: string | null
   archive_desc: string | null
+  design_theme_img: string | null
+  design_kit_box_img: string | null
+  design_collection_card_img: string | null
+  design_brochure_img: string | null
+  design_archive_desc: string | null
 }
 
 interface PhaseContextValue {

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, ArrowRight, Pencil, Save, Trash2, Upload } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './season-collection.css'
 import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
@@ -17,7 +18,7 @@ import {
   uploadBrandCover,
   uploadCollectionImg,
 } from './season-collection-images'
-import { phaseCollectionPath, phaseCollectionSlug, phaseFromSlug } from './slug'
+import { useArchivePhase } from '../use-archive-phase'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
@@ -122,12 +123,10 @@ function ProductCard({
 }
 
 export default function ArchiveBrandReportPhase() {
-  const { phaseSlug } = useParams<{ phaseSlug: string }>()
-  const navigate = useNavigate()
-  const { phases, loading: phasesLoading, refreshPhases } = usePhase()
-  const { showToast, showConfirm } = useToast()
-  const phase = phaseFromSlug(phases, phaseSlug)
+  const { phase, phasesLoading } = useArchivePhase()
+  const { phases, refreshPhases } = usePhase()
   const resolvedPhaseId = phase?.id ?? null
+  const { showToast, showConfirm } = useToast()
 
   const [brands, setBrands] = useState<SeasonBrandItem[]>([])
   const [brandsLoading, setBrandsLoading] = useState(true)
@@ -146,14 +145,6 @@ export default function ArchiveBrandReportPhase() {
   const [uploadingHero, setUploadingHero] = useState(false)
   const [uploadingBrandId, setUploadingBrandId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (phasesLoading || !phase || !phaseSlug) return
-    const canonical = phaseCollectionSlug(phase, phases, brands.length)
-    if (decodeURIComponent(phaseSlug) !== canonical) {
-      navigate(phaseCollectionPath(phase, phases, brands.length), { replace: true })
-    }
-  }, [phasesLoading, phase, phaseSlug, phases, brands.length, navigate])
 
   const reloadBrands = useCallback(async () => {
     if (!resolvedPhaseId) {
@@ -285,25 +276,11 @@ export default function ArchiveBrandReportPhase() {
         return
       }
 
-      const updatedPhase = {
-        ...phase,
-        project_concept: projectConceptValue,
-        archive_desc: archiveDescValue,
-      }
-
       await refreshPhases()
       setEditSnapshot(null)
       await reloadBrands()
       setEditMode(false)
       showToast('저장되었습니다', 'success')
-
-      const phasesForSlug = phases.map(p =>
-        p.id === resolvedPhaseId ? updatedPhase : p,
-      )
-      const nextPath = phaseCollectionPath(updatedPhase, phasesForSlug, brands.length)
-      if (decodeURIComponent(phaseSlug ?? '') !== phaseCollectionSlug(updatedPhase, phasesForSlug, brands.length)) {
-        navigate(nextPath, { replace: true })
-      }
     } finally {
       setSaving(false)
     }
@@ -413,9 +390,9 @@ export default function ArchiveBrandReportPhase() {
         <div className="brand-archive-empty">
           시즌을 찾을 수 없습니다.
           <div style={{ marginTop: 16 }}>
-            <Link to="/archive/season" className="brand-archive-detail__back">
+            <Link to="/archive" className="brand-archive-detail__back">
               <ArrowLeft size={14} />
-              시즌 컬렉션으로
+              시즌 선택
             </Link>
           </div>
         </div>
@@ -434,49 +411,50 @@ export default function ArchiveBrandReportPhase() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">✦</span>
-        <div>
-          <div className="page-banner-title">시즌 컬렉션 · {phase.name}</div>
-          <div className="page-banner-desc">{formatPhasePeriod(phase.started_at, phase.ended_at)}</div>
-        </div>
-        <div className="page-banner-actions">
-          <Link to="/archive/season" className="brand-archive-detail__back">
-            <ArrowLeft size={14} />
-            전체 시즌
-          </Link>
-          {editMode ? (
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title={`시즌 컬렉션 · ${phase.name}`}
+          description={formatPhasePeriod(phase.started_at, phase.ended_at)}
+          actions={(
             <>
-              <button
-                type="button"
-                className="cfg-btn cfg-btn--ghost"
-                disabled={isBusy}
-                onClick={cancelEditMode}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="cfg-btn"
-                disabled={isBusy}
-                onClick={() => { void handleSaveEdit() }}
-              >
-                <Save size={13} />
-                {saving ? '저장 중…' : '저장'}
-              </button>
+              <Link to="/archive" className="brand-archive-detail__back">
+                <ArrowLeft size={14} />
+                시즌 선택
+              </Link>
+              {editMode ? (
+                <>
+                  <button
+                    type="button"
+                    className="cfg-btn cfg-btn--ghost"
+                    disabled={isBusy}
+                    onClick={cancelEditMode}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    className="cfg-btn"
+                    disabled={isBusy}
+                    onClick={() => { void handleSaveEdit() }}
+                  >
+                    <Save size={13} />
+                    {saving ? '저장 중…' : '저장'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="cfg-btn cfg-btn--ghost"
+                  onClick={startEditMode}
+                >
+                  <Pencil size={13} />
+                  편집
+                </button>
+              )}
             </>
-          ) : (
-            <button
-              type="button"
-              className="cfg-btn cfg-btn--ghost"
-              onClick={startEditMode}
-            >
-              <Pencil size={13} />
-              편집
-            </button>
           )}
-        </div>
-      </div>
+        />
+      </PageHeroBanner>
 
       {contentLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>

@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { usePhase } from '@/contexts/PhaseContext'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 interface Stats {
   generalCount:  number
@@ -39,13 +40,12 @@ export default function BrandDb() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner">
-        <span className="page-banner-deco">🗃️</span>
-        <div>
-          <div className="page-banner-title">브랜드 DB</div>
-          <div className="page-banner-desc">일반 DB와 퍼스널 DB를 통합 관리합니다.</div>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="브랜드 DB"
+          description="일반 DB와 퍼스널 DB를 통합 관리합니다."
+        />
+      </PageHeroBanner>
 
       {stats && (
         <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 20 }}>

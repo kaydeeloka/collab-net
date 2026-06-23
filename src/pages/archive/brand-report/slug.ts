@@ -1,4 +1,5 @@
 import { getSeasonCollectionCopy } from './season-collection-content'
+import { archiveSectionPath } from '../archive-slug'
 
 export interface PhaseSlugInput {
   id: string
@@ -31,9 +32,8 @@ export function phaseCollectionSlug(phase: PhaseSlugInput, phases: PhaseSlugInpu
   return index <= 0 ? base : `${base}-${index + 1}`
 }
 
-export function phaseCollectionPath(phase: PhaseSlugInput, phases: PhaseSlugInput[], brandCount = 0) {
-  const slug = phaseCollectionSlug(phase, phases, brandCount)
-  return `/archive/season/${encodeURIComponent(slug)}`
+export function phaseCollectionPath(phase: PhaseSlugInput, _phases?: PhaseSlugInput[], _brandCount = 0) {
+  return archiveSectionPath(phase, 'season')
 }
 
 export function phaseFromSlug<T extends PhaseSlugInput>(

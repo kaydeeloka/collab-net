@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -8,6 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
+import { archiveSectionFromPath, archivePhaseSlugFromPath, archiveSectionPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
 
 interface NavSubChild extends StickyBarNavSubChild {}
 interface NavChild extends StickyBarNavChild {}
@@ -63,12 +64,8 @@ const GROUPS: SideGroup[] = [
     ],
   },
   {
-    label: 'ARCHIVE', icon: <Archive size={22} />, defaultTo: '/archive/design', prefix: '/archive',
-    children: [
-      { to: '/archive/design',       label: '디자인 자료' },
-      { to: '/archive/season',       label: '시즌 컬렉션' },
-      { to: '/archive/brand-report', label: '브랜드별 리포트' },
-    ],
+    label: 'ARCHIVE', icon: <Archive size={22} />, defaultTo: '/archive', prefix: '/archive',
+    children: [],
   },
 ]
 
@@ -220,8 +217,42 @@ export default function Layout() {
   useEffect(() => { setOpenSub(null) }, [pathname])
   useEffect(() => () => { if (subTimer.current) clearTimeout(subTimer.current) }, [])
 
+  useEffect(() => {
+    const section = archiveSectionFromPath(pathname)
+    const urlPhaseSlug = archivePhaseSlugFromPath(pathname)
+    if (!section || !urlPhaseSlug || !viewPhaseId) return
+
+    const phase = phaseList.find(p => p.id === viewPhaseId)
+    if (!phase) return
+
+    const urlPhase = phaseFromArchiveSlug(phaseList, urlPhaseSlug)
+    if (!urlPhase || urlPhase.id !== viewPhaseId) {
+      navigate(archiveSectionPath(phase, section), { replace: true })
+    }
+  }, [viewPhaseId, pathname, phaseList, navigate])
+
   const activeLabel = getActiveGroup(pathname)
   const activeGroup = GROUPS.find(g => g.label === activeLabel)
+
+  const stickyGroup = useMemo((): StickyBarGroup | null => {
+    if (!activeGroup) return null
+    if (activeGroup.label !== 'ARCHIVE') return activeGroup
+
+    const phaseSlug = archivePhaseSlugFromPath(pathname)
+    if (!phaseSlug) return { ...activeGroup, children: [] }
+
+    const phase = phaseFromArchiveSlug(phaseList, phaseSlug)
+    if (!phase) return { ...activeGroup, children: [] }
+
+    return {
+      ...activeGroup,
+      children: [
+        { to: archiveSectionPath(phase, 'design'), label: '디자인 자료' },
+        { to: archiveSectionPath(phase, 'season'), label: '시즌 컬렉션' },
+        { to: archiveSectionPath(phase, 'brand-report'), label: '브랜드별 리포트', end: true },
+      ],
+    }
+  }, [activeGroup, pathname, phaseList])
 
   const onSubEnter = (to: string) => {
     if (subTimer.current) clearTimeout(subTimer.current)
@@ -283,9 +314,9 @@ export default function Layout() {
       {/* ── Main ── */}
       <div className="main-area">
 
-        {activeGroup && (
+        {stickyGroup && (
           <StickyBar
-            group={activeGroup}
+            group={stickyGroup}
             pathname={pathname}
             openSub={openSub}
             onSubEnter={onSubEnter}

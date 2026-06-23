@@ -27,6 +27,7 @@ export default function SeasonArchiveSidebar({
   filterYear,
   visibleCount,
   onFilterYear,
+  onOpenPhase,
 }: {
   allPhases: SeasonArchivePhase[]
   brandCountByPhase: Record<string, number>
@@ -34,6 +35,7 @@ export default function SeasonArchiveSidebar({
   filterYear: string | null
   visibleCount: number
   onFilterYear: (yearKey: string | null) => void
+  onOpenPhase?: (phase: SeasonArchivePhase) => void
 }) {
   const navigate = useNavigate()
   const groups = useMemo(() => groupPhasesByYear(allPhases), [allPhases])
@@ -55,6 +57,10 @@ export default function SeasonArchiveSidebar({
   }
 
   function openPhase(phase: SeasonArchivePhase) {
+    if (onOpenPhase) {
+      onOpenPhase(phase)
+      return
+    }
     navigate(phaseCollectionPath(phase, allPhases, brandCountByPhase[phase.id] ?? 0))
   }
 

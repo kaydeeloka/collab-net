@@ -16,7 +16,7 @@ import {
   emsStatusSelectWidth,
 } from '@/lib/ems/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
-import { useEmsLayout } from './layout'
+import { useEmsLayout } from './use-ems-layout'
 
 interface EmsRow {
   confirmed_influencer_id: string

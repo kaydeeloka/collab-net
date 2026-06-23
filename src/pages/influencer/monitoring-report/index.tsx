@@ -10,6 +10,7 @@ import {
 import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/influencer/content-platforms'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 const SUFFIX_STYLE = { fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 } as const
 const CHANNEL_COLORS: Record<PlatformBucket, string> = {
@@ -207,13 +208,13 @@ export default function MonitoringReport() {
 
   return (
     <div className="page page--fill">
-      <div className="page-banner" style={{ marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--teal-dk)', marginBottom: 4 }}>Content Performance</div>
-          <div className="page-banner-title">콘텐츠 성과 OVERVIEW</div>
-          <div className="page-banner-desc">리뷰 모니터링 데이터를 기반으로 업로드 현황·콘텐츠 종류·플랫폼별 성과를 집계합니다.</div>
-        </div>
-      </div>
+      <PageHeroBanner style={{ marginBottom: 20 }}>
+        <PageHeroBannerContent
+          eyebrow={<span style={{ fontSize: 13, fontWeight: 600, color: 'var(--teal-dk)' }}>Content Performance</span>}
+          title="콘텐츠 성과 OVERVIEW"
+          description="리뷰 모니터링 데이터를 기반으로 업로드 현황·콘텐츠 종류·플랫폼별 성과를 집계합니다."
+        />
+      </PageHeroBanner>
 
       {loading && (
         <div className="loader"><Spinner />데이터 불러오는 중...</div>

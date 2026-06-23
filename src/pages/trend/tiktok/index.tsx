@@ -10,6 +10,7 @@ import {
 } from '@/lib/template/email-recipients'
 import Spinner from '@/components/Spinner'
 import { PageTabs } from '@/components/ui'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 type Volume = 'HIGH' | 'RISING' | 'MEDIUM'
 
@@ -632,13 +633,12 @@ export default function TiktokTrend() {
 
   return (
     <div className="page">
-      <div className="page-banner">
-        <span className="page-banner-deco">🎵</span>
-        <div>
-          <div className="page-banner-title">틱톡 트렌드 분석</div>
-          <div className="page-banner-desc">Weekly US TikTok Beauty Insight Report · 미국 뷰티 틱톡 주간 인사이트</div>
-        </div>
-      </div>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="틱톡 트렌드 분석"
+          description="Weekly US TikTok Beauty Insight Report · 미국 뷰티 틱톡 주간 인사이트"
+        />
+      </PageHeroBanner>
 
       <PageTabs
         tabs={[
