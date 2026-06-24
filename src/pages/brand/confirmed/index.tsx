@@ -17,16 +17,10 @@ export default function BrandConfirmed() {
 
   const tabs = [
     { path: '/brand/confirmed/management', label: '브랜드 관리' },
-    { path: '/brand/confirmed/archive',    label: '자료 아카이브', disabled: true },
+    { path: '/brand/confirmed/archive',    label: '자료 아카이브' },
   ]
 
-  const activeTab = tabs.find(t => !t.disabled && pathname.startsWith(t.path))?.path ?? tabs[0].path
-
-  useEffect(() => {
-    if (pathname.startsWith('/brand/confirmed/archive')) {
-      navigate('/brand/confirmed/management', { replace: true })
-    }
-  }, [pathname, navigate])
+  const activeTab = tabs.find(t => pathname.startsWith(t.path))?.path ?? tabs[0].path
 
   const loadStats = useCallback(async () => {
     if (!selectedPhaseId) {
@@ -78,7 +72,7 @@ export default function BrandConfirmed() {
       </StatCards>
 
       <PageTabs
-        tabs={tabs.map(t => ({ id: t.path, label: t.label, disabled: t.disabled }))}
+        tabs={tabs.map(t => ({ id: t.path, label: t.label }))}
         active={activeTab}
         onChange={path => navigate(path)}
       />
