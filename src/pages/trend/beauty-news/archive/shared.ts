@@ -154,6 +154,21 @@ export function reportTitleDisplayDate(report: ReportData): string {
   return fmtTodayKor()
 }
 
+/** Padded Korean date for briefing card header — e.g. 2026년 06월 22일 */
+export function reportHeaderDisplayDate(report: ReportData): string {
+  const iso = parseReportTitleDate(report.reportTitle)
+    || report.windowsEnd
+    || report.windowsStart
+  if (iso) return fmtKorFullPadded(iso)
+  if (report.reportTitle) {
+    const stripped = report.reportTitle.replace(/^이번\s*주\s*뷰티?\s*브리핑\s*[—\-–]\s*/u, '').trim()
+    if (stripped) return stripped
+  }
+  const d = new Date()
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return fmtKorFullPadded(today)
+}
+
 export function reportWindowBasis(report: ReportData): string | null {
   if (report.windowsStart && report.windowsEnd) {
     return `${fmtKor(report.windowsStart)} – ${fmtKor(report.windowsEnd)} 기준`

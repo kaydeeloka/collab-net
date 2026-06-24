@@ -2254,6 +2254,9 @@ button.brand-archive-card.bn-archive-brand-card {
   margin-top: auto; flex-shrink: 0; padding: 12px 20px 16px;
   border-top: 1px solid var(--surface-md); background: var(--surface);
 }
+.bn-date-card .bn-card-footer {
+  padding-top: 20px;
+}
 .bn-card-footer-status { font-size: 11px; color: var(--gray-5); line-height: 1.4; margin-bottom: 8px; text-align: center; }
 .bn-card-footer-note { font-size: 11px; color: var(--gray-4); margin-top: 8px; line-height: 1.5; text-align: center; }
 .bn-panel-body {
@@ -2261,8 +2264,13 @@ button.brand-archive-card.bn-archive-brand-card {
   padding: 12px 20px; min-height: 0; overflow: hidden;
 }
 .bn-date-card-body {
-  flex: 0 1 auto; display: flex; flex-direction: column; gap: 10px;
-  padding: 12px 20px; min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  padding: 0 20px 20px;
+  min-height: 0;
 }
 /* Date info card (left half) */
 .bn-date-card { background: var(--white); border-radius: var(--r); border: 1px solid var(--surface-md); box-shadow: var(--sh); }
@@ -2276,6 +2284,7 @@ button.brand-archive-card.bn-archive-brand-card {
   background: #eef8f7; color: var(--teal-dk); border: 1px solid #cceee8;
 }
 .bn-date-card-label { font-size: 14px; font-weight: 700; color: var(--ink); flex: 1; min-width: 0; }
+.bn-date-card-label-date { font-weight: 600; color: var(--gray-6); }
 .bn-header-fetch-btn {
   flex-shrink: 0; padding: 6px 12px; border: 1px solid var(--teal-dk); border-radius: var(--r-pill);
   background: var(--white); color: var(--teal-dk); font-size: 11px; font-weight: 700;
@@ -2296,7 +2305,9 @@ button.brand-archive-card.bn-archive-brand-card {
 .bn-date-card-meta { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface); border: 1px solid var(--surface-md); border-radius: var(--r); }
 .bn-date-card-meta-label { font-size: 13px; color: var(--teal-dk); font-weight: 600; }
 .bn-date-card-meta-value { font-size: 15px; font-weight: 800; color: var(--teal); }
-.bn-date-card-kw-block { display: flex; flex-direction: column; gap: 8px; }
+.bn-date-card-stats-block { display: flex; flex-direction: column; gap: 8px; }
+.bn-date-card-kw-block { display: flex; flex-direction: column; gap: 12px; }
+.bn-date-card-section-label,
 .bn-date-card-kw-label { font-size: 12px; font-weight: 700; color: var(--gray-5); text-transform: uppercase; letter-spacing: .4px; }
 .bn-date-card-keywords { display: flex; flex-wrap: wrap; gap: 6px; }
 .bn-date-card-kw { font-size: 13px; font-weight: 700; color: var(--teal-dk); background: var(--yellow-lt); border: 1px solid var(--yellow-md); padding: 5px 12px; border-radius: var(--r-pill); line-height: 1.45; }

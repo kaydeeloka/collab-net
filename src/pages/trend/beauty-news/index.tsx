@@ -17,7 +17,7 @@ import {
   fmtKorFull,
   reportArticleCount,
   reportFromRow,
-  reportTitleDisplayDate,
+  reportHeaderDisplayDate,
   reportWindowBasis,
 } from './archive/shared'
 
@@ -397,15 +397,16 @@ export default function BeautyNews() {
     return h
   }
 
-  const latestTitleDate = latestReport ? reportTitleDisplayDate(latestReport) : null
-  const latestWindowBasis = latestReport ? reportWindowBasis(latestReport) : null
+  const latestHeaderDate = latestReport ? reportHeaderDisplayDate(latestReport) : null
 
   const briefingPanel = (
     <div className="bn-date-card">
       <div className="bn-card-top">
         <div className="bn-date-card-header">
           <CardIconWrap soft><Calendar size={16} strokeWidth={2.2} /></CardIconWrap>
-          <span className="bn-date-card-label">이번 주 브리핑</span>
+          <span className="bn-date-card-label">
+            이번 주 브리핑{latestHeaderDate ? <> - <span className="bn-date-card-label-date">{latestHeaderDate}</span></> : null}
+          </span>
           <button
             type="button"
             className="bn-header-fetch-btn"
@@ -421,27 +422,24 @@ export default function BeautyNews() {
         {latestLoading && <div className="bn-date-card-loading"><Spinner sm /> 불러오는 중...</div>}
         {!latestLoading && latestReport && (
           <>
-            <div className="bn-date-card-range">
-              {latestTitleDate}
-            </div>
-            {latestWindowBasis && (
-              <div className="bn-date-card-sub">{latestWindowBasis}</div>
-            )}
-            <div className="bn-date-card-stats">
-              <div className="bn-date-card-stat">
-                <span className="bn-date-card-stat-value">{reportArticleCount(latestReport)}</span>
-                <span className="bn-date-card-stat-label">뷰티 뉴스</span>
-              </div>
-              {(latestReport.keywords?.length ?? 0) > 0 && (
+            <div className="bn-date-card-stats-block">
+              <div className="bn-date-card-section-label">요약</div>
+              <div className="bn-date-card-stats">
                 <div className="bn-date-card-stat">
-                  <span className="bn-date-card-stat-value">{latestReport.keywords!.length}</span>
-                  <span className="bn-date-card-stat-label">트렌드 키워드</span>
+                  <span className="bn-date-card-stat-value">{reportArticleCount(latestReport)}</span>
+                  <span className="bn-date-card-stat-label">뷰티 뉴스</span>
                 </div>
-              )}
+                {(latestReport.keywords?.length ?? 0) > 0 && (
+                  <div className="bn-date-card-stat">
+                    <span className="bn-date-card-stat-value">{latestReport.keywords!.length}</span>
+                    <span className="bn-date-card-stat-label">트렌드 키워드</span>
+                  </div>
+                )}
+              </div>
             </div>
             {(latestReport.keywords?.length ?? 0) > 0 && (
               <div className="bn-date-card-kw-block">
-                <div className="bn-date-card-kw-label">키워드</div>
+                <div className="bn-date-card-section-label">키워드</div>
                 <div className="bn-date-card-keywords">
                   {(latestReport.keywords ?? []).map(kw => (
                     <span key={kw.tag} className="bn-date-card-kw">{kw.tag}</span>
