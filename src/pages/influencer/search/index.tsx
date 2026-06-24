@@ -127,6 +127,23 @@ interface Influencer  {
   source_phase_id?: string | null
   tiers?: { rank: string; label: string; category: string } | null
 }
+
+function tierSortIndex(rank: string | null | undefined): number {
+  const idx = DB_TIERS.indexOf(rank ?? '')
+  return idx === -1 ? DB_TIERS.length : idx
+}
+
+function influencerDisplaySortKey(inf: Influencer): string {
+  return (inf.display_name?.trim() || inf.handle || '').toLowerCase()
+}
+
+function compareInfluencersByTierAndName(a: Influencer, b: Influencer): number {
+  const tierDiff = tierSortIndex(a.tiers?.rank) - tierSortIndex(b.tiers?.rank)
+  if (tierDiff !== 0) return tierDiff
+  const nameDiff = influencerDisplaySortKey(a).localeCompare(influencerDisplaySortKey(b), 'ko', { sensitivity: 'base' })
+  if (nameDiff !== 0) return nameDiff
+  return a.handle.localeCompare(b.handle, 'ko', { sensitivity: 'base' })
+}
 interface ApifyCreator {
   handle: string; displayName: string; email: string; followers: number
   following: number; ratio: string; totalLikes: number; videoCount: number
@@ -727,7 +744,7 @@ export default function Listup() {
     let list = influencers
     if (currentDbTab !== '전체') list = list.filter(inf => inf.tiers?.rank === currentDbTab)
     if (dateFrom) list = list.filter(inf => matchesKstDate(inf.created_at, dateFrom))
-    return [...list].sort((a, b) => (a.contacted ? 1 : 0) - (b.contacted ? 1 : 0))
+    return [...list].sort(compareInfluencersByTierAndName)
   }
 
   function renderDbTable() {
