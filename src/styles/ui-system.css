@@ -446,12 +446,6 @@
   flex-wrap: wrap;
 }
 
-.modal-actions .modal-btn-cancel,
-.modal-actions .modal-btn-confirm,
-.modal-footer .ui-btn {
-  /* sizes already set on ui-btn */
-}
-
 /* Monitoring review modal */
 .mon-review-modal {
   display: flex;
