@@ -634,7 +634,7 @@ export default function Outreach() {
       {/* ── Banner ── */}
       <div style={{ background: 'var(--blue-lt)', border: '1px solid rgba(159,186,197,.4)', borderRadius: 14, padding: '18px 24px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>인플루언서 컨택 관리</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>인플루언서 컨택 리스트업</h1>
           <p style={{ fontSize: 13, color: '#555' }}>컨택 차수와 상태를 관리하고 일괄 발송합니다.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

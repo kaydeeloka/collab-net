@@ -22,6 +22,9 @@ function StatCell({ html }: StatSnippet) {
 
 const SPINNER_HTML = '<div class="fstat"><div class="fstat-val"><span class="spinner spinner--sm"></span></div><div class="fstat-lbl">로딩 중</div></div>'
 const DB_TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
+const INFLUENCER_CONTACT_SENT_STATUSES = ['yes', 'reply', 'negotiate', 'accept', 'reject']
+const INFLUENCER_CONTACT_REPLIED_STATUSES = ['reply', 'negotiate']
+const INFLUENCER_SEARCH_TARGET = 1000
 
 function calcDday(target: Date): string {
   const now   = new Date()
@@ -49,28 +52,31 @@ export default function Dashboard() {
   const [newsKeywords,   setNewsKeywords]   = useState<BeautyNewsKeyword[]>([])
 
   const loadListupStats = useCallback(async () => {
-    if (!activeDbId) return
+    const phaseId = viewPhaseId ?? activeDbId
+    if (!phaseId) return
     try {
       const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-        supabase.from('influencers').select('status').eq('phase_id', activeDbId),
-        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', activeDbId),
+        supabase.from('influencers').select('status, contacted').eq('phase_id', phaseId),
+        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', phaseId),
       ])
-      const total   = infData?.length ?? 0
-      const sent    = infData?.filter(r => r.status === 'yes').length ?? 0
-      const replied = infData?.filter(r => r.status === 'reply').length ?? 0
+      const contacted = (infData ?? []).filter(r => r.contacted)
+      const contactTotal = contacted.length
+      const total = infData?.length ?? 0
+      const sent = contacted.filter(r => INFLUENCER_CONTACT_SENT_STATUSES.includes(r.status)).length
+      const replied = contacted.filter(r => INFLUENCER_CONTACT_REPLIED_STATUSES.includes(r.status)).length
       const confirmed = confirmedCount ?? 0
       const recruitPct = Math.round(confirmed / 50 * 100)
       const bar = (pct: number, color: string) =>
         `<div style="width:100%;height:4px;background:#e5e7eb;border-radius:99px;margin-top:5px;overflow:hidden">` +
         `<div style="height:100%;width:${Math.min(pct,100)}%;background:${color};border-radius:99px;transition:width .4s"></div></div>`
       setStatsListup(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}명</span></div><div class="fstat-lbl">발송 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${contactTotal}명</span></div><div class="fstat-lbl">발송 성과율</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${recruitPct}%</div><div class="fstat-lbl">모집 완료</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${total}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${INFLUENCER_SEARCH_TARGET}명</span></div><div class="fstat-lbl">서치 완료</div></div>` +
         `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
       )
     } catch (e: unknown) { setStatsListup(statError((e as Error).message)) }
-  }, [activeDbId])
+  }, [viewPhaseId, activeDbId])
 
   const loadOutreachStats = useCallback(async () => {
     if (!activeDbId) return

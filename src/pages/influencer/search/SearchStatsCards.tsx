@@ -13,7 +13,7 @@ const SUFFIX_STYLE = { fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 } a
 
 export interface SearchDashStats {
   total: number
-  sent: number
+  contacted: number
   confirmed: number
   tiers: { rank: string; total: number }[]
 }
@@ -45,7 +45,7 @@ export function SearchStatsCards({ dashStats, phaseLabel }: { dashStats: SearchD
         variant="metric"
         align="left"
         label="컨택 예정"
-        value={dashStats.sent}
+        value={dashStats.contacted}
         valueColor="var(--yellow-text)"
         valueSuffix={<span style={SUFFIX_STYLE}> / {dashStats.total}</span>}
       />

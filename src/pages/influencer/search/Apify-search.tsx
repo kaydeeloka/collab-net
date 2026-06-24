@@ -203,7 +203,7 @@ export default function Listup() {
   const [bulkLoading, setBulkLoading] = useState(false)
 
   // Dashboard stats
-  const [dashStats, setDashStats] = useState<{ total: number; sent: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
+  const [dashStats, setDashStats] = useState<{ total: number; contacted: number; confirmed: number; tiers: { rank: string; total: number }[] } | null>(null)
 
   // Load config once on mount
   useEffect(() => {
@@ -232,20 +232,20 @@ export default function Listup() {
   async function loadDashStats() {
     if (!viewPhaseId) return
     const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-      supabase.from('influencers').select('status, tiers(rank)').eq('phase_id', viewPhaseId),
+      supabase.from('influencers').select('contacted, tiers(rank)').eq('phase_id', viewPhaseId),
       supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId),
     ])
     if (!infData) return
-    let total = 0, sent = 0
+    let total = 0, contacted = 0
     const tierCounts: Record<string, number> = {}
-    for (const r of infData as unknown as { status: string; tiers?: { rank: string } | null }[]) {
+    for (const r of infData as unknown as { contacted: boolean; tiers?: { rank: string } | null }[]) {
       total++
-      if (['yes', 'reply', 'negotiate', 'accept'].includes(r.status)) sent++
+      if (r.contacted) contacted++
       const rank = r.tiers?.rank
       if (rank) tierCounts[rank] = (tierCounts[rank] ?? 0) + 1
     }
     const tierStats = DB_TIERS.map(rank => ({ rank, total: tierCounts[rank] ?? 0 }))
-    setDashStats({ total, sent, confirmed: confirmedCount ?? 0, tiers: tierStats })
+    setDashStats({ total, contacted, confirmed: confirmedCount ?? 0, tiers: tierStats })
   }
 
   // Reload stats when phase (차수) changes
