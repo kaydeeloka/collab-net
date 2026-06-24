@@ -70,7 +70,7 @@ export default function Dashboard() {
         `<div style="width:100%;height:4px;background:#e5e7eb;border-radius:99px;margin-top:5px;overflow:hidden">` +
         `<div style="height:100%;width:${Math.min(pct,100)}%;background:${color};border-radius:99px;transition:width .4s"></div></div>`
       setStatsListup(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${contactTotal}명</span></div><div class="fstat-lbl">발송 성과율</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${contactTotal}명</span></div><div class="fstat-lbl">발송 완료</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${total}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${INFLUENCER_SEARCH_TARGET}명</span></div><div class="fstat-lbl">서치 완료</div></div>` +
         `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
