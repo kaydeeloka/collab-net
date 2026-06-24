@@ -126,7 +126,7 @@ export default function Dashboard() {
 
   const emptyMonitoringHtml =
     `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 0명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
-    `<div class="fstat"><div class="fstat-val">0</div><div class="fstat-lbl">브랜드 리뷰</div></div>` +
+    `<div class="fstat"><div class="fstat-val">0</div><div class="fstat-lbl">브랜드별 리뷰</div></div>` +
     `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
 
   const loadMonitoringStats = useCallback(async () => {
@@ -171,11 +171,14 @@ export default function Dashboard() {
         const b = (r.brand || '').toLowerCase()
         if (b) brandCounts[b] = (brandCounts[b] || 0) + 1
       })
-      const brandTotal  = Object.values(brandCounts).reduce((a, b) => a + b, 0)
+      const brandReviewCount = Object.entries(brandCounts).reduce(
+        (sum, [key, count]) => (key === 'mimuse' ? sum : sum + count),
+        0,
+      )
       const mimuseCount = brandCounts['mimuse'] || 0
       setStatsMonitoring(
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${totalReviews}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${reviewInfluencers}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
-        `<div class="fstat"><div class="fstat-val">${brandTotal}</div><div class="fstat-lbl">브랜드 리뷰</div></div>` +
+        `<div class="fstat"><div class="fstat-val">${brandReviewCount}</div><div class="fstat-lbl">브랜드별 리뷰</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mimuseCount}</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
       )
     } catch (e: unknown) { setStatsMonitoring(statError((e as Error).message)) }
