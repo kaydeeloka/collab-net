@@ -31,6 +31,7 @@ function CardIconWrap({ children, soft }: { children: ReactNode; soft?: boolean 
 
 import {
   fetchEmailRecipients,
+  recipientInitial,
   selectedRecipientEmails,
   setAllEmailRecipientsSelected,
   setEmailRecipientSelected,
@@ -495,54 +496,71 @@ export default function BeautyNews() {
         )}
 
         {recipients.length > 0 && (
-          <label className="bn-rcpt-select-all">
-            <input
-              type="checkbox"
-              checked={recipients.length > 0 && selectedRcpt.size === recipients.length}
-              onChange={e => { void toggleAllRecipients(e.target.checked) }}
-            />
-            전체 선택
-          </label>
+          <div className="bn-recipients-box">
+            <div className="bn-recipients-toolbar">
+              <label className="bn-rcpt-select-all">
+                <input
+                  type="checkbox"
+                  checked={selectedRcpt.size === recipients.length}
+                  onChange={e => { void toggleAllRecipients(e.target.checked) }}
+                />
+                전체 선택
+              </label>
+            </div>
+
+            <div className="bn-recipients">
+              {recipients.map(r => (
+                <div key={r.email}>
+                  {editingEmail === r.email ? (
+                    <div className="bn-rcpt-form" style={{ margin: 0 }}>
+                      <input className="bn-rcpt-input" placeholder="이름 (선택)" value={editName} onChange={e => setEditName(e.target.value)} />
+                      <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveEdit(r.email)} />
+                      <div className="bn-rcpt-form-btns">
+                        <button className="bn-rcpt-save" onClick={() => saveEdit(r.email)} disabled={rcptSaving || !editEmail.trim()}>저장</button>
+                        <button className="bn-rcpt-cancel" onClick={() => setEditingEmail(null)}>취소</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`bn-rcpt-row${selectedRcpt.has(r.email) ? ' bn-rcpt-row--selected' : ''}`}>
+                      <label className="bn-rcpt-label">
+                        <input
+                          type="checkbox"
+                          className="bn-rcpt-check"
+                          checked={selectedRcpt.has(r.email)}
+                          onChange={e => { void toggleRecipient(r.email, e.target.checked) }}
+                        />
+                        <span className="bn-rcpt-avatar" aria-hidden>{recipientInitial(r)}</span>
+                        <div className="bn-rcpt-info">
+                          {r.name ? (
+                            <>
+                              <div className="bn-rcpt-name">{r.name}</div>
+                              <div className="bn-rcpt-email">{r.email}</div>
+                            </>
+                          ) : (
+                            <div className="bn-rcpt-name bn-rcpt-name--solo">{r.email}</div>
+                          )}
+                        </div>
+                      </label>
+                      <div className="bn-rcpt-actions">
+                        <button type="button" className="bn-rcpt-icon-btn" onClick={() => startEdit(r)} title="수정">
+                          <Pencil size={13} strokeWidth={2.2} />
+                        </button>
+                        <button type="button" className="bn-rcpt-icon-btn bn-rcpt-icon-btn--danger" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">
+                          <Trash2 size={13} strokeWidth={2.2} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        <div className="bn-recipients">
-          {recipients.length === 0 && !showAddForm && <div className="bn-email-none">수신자 없음 — + 버튼으로 추가하세요</div>}
-          {recipients.map(r => (
-            <div key={r.email}>
-              {editingEmail === r.email ? (
-                <div className="bn-rcpt-form" style={{ margin: '4px 0' }}>
-                  <input className="bn-rcpt-input" placeholder="이름 (선택)" value={editName} onChange={e => setEditName(e.target.value)} />
-                  <input className="bn-rcpt-input" placeholder="이메일 *" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveEdit(r.email)} />
-                  <div className="bn-rcpt-form-btns">
-                    <button className="bn-rcpt-save" onClick={() => saveEdit(r.email)} disabled={rcptSaving || !editEmail.trim()}>저장</button>
-                    <button className="bn-rcpt-cancel" onClick={() => setEditingEmail(null)}>취소</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bn-rcpt-row">
-                  <label className="bn-rcpt-label">
-                    <input type="checkbox" checked={selectedRcpt.has(r.email)}
-                      onChange={e => { void toggleRecipient(r.email, e.target.checked) }}
-                    />
-                    <div className="bn-rcpt-info">
-                      {r.name && <div className="bn-rcpt-name">{r.name}</div>}
-                      <div className="bn-rcpt-email">{r.email}</div>
-                    </div>
-                  </label>
-                  <div className="bn-rcpt-actions">
-                    <button type="button" className="bn-rcpt-icon-btn" onClick={() => startEdit(r)} title="수정">
-                      <Pencil size={13} strokeWidth={2.2} />
-                    </button>
-                    <button type="button" className="bn-rcpt-icon-btn bn-rcpt-icon-btn--danger" onClick={() => showConfirm(`${r.email} 을(를) 삭제하시겠습니까?`, () => { void deleteRecipient(r.email) })} title="삭제">
-                      <Trash2 size={13} strokeWidth={2.2} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        {recipients.length === 0 && !showAddForm && (
+          <div className="bn-email-none">수신자 없음 — + 버튼으로 추가하세요</div>
+        )}
 
         {emailStatus && (
           <div className="bn-email-status" style={{ color: emailStatus.startsWith('완료') ? '#4caf50' : emailStatus.startsWith('오류') ? '#f44336' : undefined }}>

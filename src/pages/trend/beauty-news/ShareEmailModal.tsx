@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { gasPost } from '@/lib/api'
 import {
   fetchEmailRecipients,
+  recipientInitial,
   selectedRecipientEmails,
   setAllEmailRecipientsSelected,
   setEmailRecipientSelected,
@@ -134,33 +135,46 @@ export default function ShareEmailModal({
       )}
 
       {!loading && recipients.length > 0 && (
-        <>
-          <label className="bn-rcpt-select-all" style={{ marginBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={selectedRcpt.size === recipients.length}
-              onChange={e => { void toggleAllRecipients(e.target.checked) }}
-            />
-            전체 선택 ({selectedRcpt.size}/{recipients.length}명)
-          </label>
-          <div className="bn-recipients" style={{ maxHeight: 280, overflowY: 'auto' }}>
+        <div className="bn-recipients-box bn-recipients-box--modal">
+          <div className="bn-recipients-toolbar">
+            <label className="bn-rcpt-select-all">
+              <input
+                type="checkbox"
+                checked={selectedRcpt.size === recipients.length}
+                onChange={e => { void toggleAllRecipients(e.target.checked) }}
+              />
+              전체 선택
+            </label>
+          </div>
+          <div className="bn-recipients">
             {recipients.map(r => (
-              <div key={r.email} className="bn-rcpt-row">
+              <div
+                key={r.email}
+                className={`bn-rcpt-row${selectedRcpt.has(r.email) ? ' bn-rcpt-row--selected' : ''}`}
+              >
                 <label className="bn-rcpt-label">
                   <input
                     type="checkbox"
+                    className="bn-rcpt-check"
                     checked={selectedRcpt.has(r.email)}
                     onChange={e => { void toggleRecipient(r.email, e.target.checked) }}
                   />
+                  <span className="bn-rcpt-avatar" aria-hidden>{recipientInitial(r)}</span>
                   <div className="bn-rcpt-info">
-                    {r.name && <div className="bn-rcpt-name">{r.name}</div>}
-                    <div className="bn-rcpt-email">{r.email}</div>
+                    {r.name ? (
+                      <>
+                        <div className="bn-rcpt-name">{r.name}</div>
+                        <div className="bn-rcpt-email">{r.email}</div>
+                      </>
+                    ) : (
+                      <div className="bn-rcpt-name bn-rcpt-name--solo">{r.email}</div>
+                    )}
                   </div>
                 </label>
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {status && (

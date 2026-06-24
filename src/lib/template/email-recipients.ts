@@ -22,6 +22,11 @@ export function selectedRecipientEmails(recipients: EmailRecipient[]): Set<strin
   return new Set(recipients.filter(r => r.selected).map(r => r.email))
 }
 
+export function recipientInitial(recipient: Pick<EmailRecipient, 'name' | 'email'>): string {
+  const source = recipient.name?.trim() || recipient.email.split('@')[0] || '?'
+  return source.charAt(0).toUpperCase()
+}
+
 export async function setEmailRecipientSelected(email: string, selected: boolean) {
   await supabase.from('email_recipients').update({ selected }).eq('email', email)
 }

@@ -272,7 +272,7 @@ export default function Dashboard() {
             ) : (
               <span className="page-hero-eyebrow">Live</span>
             )}
-            <span className="page-hero-eyebrow">K-Beauty Creator Seeding</span>
+            <span className="page-hero-eyebrow">K-Beauty US Creator Seeding</span>
           </div>
           <div className="page-hero-brand">
             <img src="/img/logo-black.svg" alt="Mi Muse" className="page-hero-logo" />
