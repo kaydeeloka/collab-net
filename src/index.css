@@ -1274,6 +1274,9 @@ td {
   width: 16px; height: 16px; border-width: 2px;
   margin: 0; display: inline-block; vertical-align: middle;
 }
+.spinner--lg {
+  width: 48px; height: 48px; border-width: 4px;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─────────────────────────────────────

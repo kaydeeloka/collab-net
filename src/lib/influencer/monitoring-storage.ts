@@ -12,6 +12,8 @@ export interface MonitoringAssets {
   thumbnail_source_url: string | null
   thumbnail_path:       string | null
   video_path:           string | null
+  cover_url:            string | null
+  video_url:            string | null
 }
 
 /** `{phaseId}/{monitoringRowId}.jpg` */
@@ -32,7 +34,7 @@ export function monitoringThumbnailPublicUrl(storagePath: string) {
 export function resolveMonitoringThumbnailUrl(assets: MonitoringAssets | null | undefined) {
   if (!assets) return null
   if (assets.thumbnail_path) return monitoringThumbnailPublicUrl(assets.thumbnail_path)
-  return assets.thumbnail_source_url
+  return assets.cover_url || assets.thumbnail_source_url
 }
 
 export async function createMonitoringVideoSignedUrl(storagePath: string) {

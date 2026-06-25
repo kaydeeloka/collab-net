@@ -58,7 +58,15 @@ export function buildBrandKwsFromRows(
   if (mimuseRow?.keywords?.length) state.mimuse = mimuseRow.keywords
 
   for (const brand of confirmedBrands) {
-    const row = rows.find(r => r.brand === brand.key && r.phase_id)
+    const keyLower = brand.key.toLowerCase()
+    const nameLower = brand.name.toLowerCase()
+    const row = rows.find(r => r.phase_id && (
+      r.brand === brand.key ||
+      r.brand === nameLower ||
+      (Array.isArray(r.keywords) && r.keywords.some(kw =>
+        kw.toLowerCase() === keyLower || kw.toLowerCase() === nameLower
+      ))
+    ))
     state.byBrand[brand.key] = row?.keywords?.length
       ? row.keywords
       : defaultBrandKeywords(brand.name)

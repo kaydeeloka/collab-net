@@ -126,6 +126,8 @@ function saveMonitoringKeywords(body) {
     if (Array.isArray(kws)) payloads.push({ phase_id: phaseId, brand: brand, keywords: kws });
   });
   if (payloads.length) {
+    // Delete stale rows first (handles brand key changes from manual entry vs confirmed_brands)
+    supabaseRequest('/rest/v1/monitoring_keywords?phase_id=eq.' + phaseId + '&brand=neq.mimuse', { method: 'delete' });
     var res = supabaseUpsert('monitoring_keywords', payloads, 'phase_id,brand');
     if (!res.ok) return { ok: false, error: 'Supabase upsert failed: HTTP ' + res.status };
   }
@@ -602,6 +604,199 @@ function debugMonitoringSetup() {
   }
 }
 
+// ── Metadata update via truefetch/tiktok-video-downloader ────
+
+var META_ACTOR = 'scrape-creators~best-tiktok-video-scraper';
+
+function updateVideoMetadata(body) {
+  var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
+  if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
+
+  var inputRows = Array.isArray(body.rows) ? body.rows : [];
+  var tiktokRows = inputRows.filter(function(r) {
+    return r.review_link && r.review_link.indexOf('tiktok.com') !== -1;
+  });
+  if (!tiktokRows.length) return { error: 'TikTok URL이 없습니다.' };
+
+  // Build videoId → row map for matching results back (URL format: /video/{id})
+  var rowByVideoId = {};
+  tiktokRows.forEach(function(row) {
+    var m = (row.review_link || '').match(/\/video\/(\d+)/);
+    if (m) rowByVideoId[m[1]] = row;
+  });
+
+  var startRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/acts/' + META_ACTOR + '/runs?token=' + token,
+    {
+      method     : 'post',
+      contentType: 'application/json',
+      payload    : JSON.stringify({
+        videos               : tiktokRows.map(function(r) { return r.review_link; }),
+        shouldGetTranscript  : false,
+        shouldDownloadVideos : false,
+        shouldDownloadCovers : false,
+      }),
+      muteHttpExceptions: true,
+    }
+  );
+  var startData = (JSON.parse(startRes.getContentText()) || {}).data;
+  if (!startData) return { error: 'Apify 실행 시작 실패: ' + startRes.getContentText().slice(0, 200) };
+
+  var runId     = startData.id;
+  var datasetId = startData.defaultDatasetId;
+  var status    = startData.status;
+  var tries     = 0;
+
+  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED' && tries < 18) {
+    Utilities.sleep(10000);
+    var pollData = (JSON.parse(UrlFetchApp.fetch(
+      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+      { muteHttpExceptions: true }
+    ).getContentText()) || {}).data || {};
+    status    = pollData.status           || status;
+    datasetId = pollData.defaultDatasetId || datasetId;
+    tries++;
+  }
+
+  if (status !== 'SUCCEEDED') return { error: 'Apify 실행 실패 (상태: ' + status + ')' };
+
+  var items = JSON.parse(UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500',
+    { muteHttpExceptions: true }
+  ).getContentText());
+  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
+
+  var cfg     = supabaseConfig();
+  var sbUrl   = cfg.url;
+  var now     = new Date().toISOString();
+  var updated = 0;
+
+  items.forEach(function(item) {
+    var row = rowByVideoId[String(item.id)];
+    if (!row) return;
+    var patchRes = UrlFetchApp.fetch(
+      sbUrl + '/rest/v1/monitoring?id=eq.' + row.id,
+      {
+        method : 'patch',
+        headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
+        payload: JSON.stringify({
+          views   : item.playCount    || 0,
+          likes   : item.likeCount    || 0,
+          comments: item.commentCount || 0,
+          updated : now,
+        }),
+        muteHttpExceptions: true,
+      }
+    );
+    if (patchRes.getResponseCode() < 300) updated++;
+  });
+
+  return {
+    ok     : true,
+    updated: updated,
+    message: updated + '개 영상 메타데이터 업데이트 완료 (TikTok ' + tiktokRows.length + '개 대상)',
+  };
+}
+
+// ── Download cover + video URLs via scrape-creators actor ─────
+
+function downloadVideoAssets(body) {
+  var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
+  if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
+
+  var inputRows = Array.isArray(body.rows) ? body.rows : [];
+  var tiktokRows = inputRows.filter(function(r) {
+    return r.review_link && r.review_link.indexOf('tiktok.com') !== -1;
+  });
+  if (!tiktokRows.length) return { error: 'TikTok URL이 없습니다.' };
+
+  var rowByVideoId = {};
+  tiktokRows.forEach(function(row) {
+    var m = (row.review_link || '').match(/\/video\/(\d+)/);
+    if (m) rowByVideoId[m[1]] = row;
+  });
+
+  var startRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/acts/' + META_ACTOR + '/runs?token=' + token,
+    {
+      method     : 'post',
+      contentType: 'application/json',
+      payload    : JSON.stringify({
+        videos               : tiktokRows.map(function(r) { return r.review_link; }),
+        shouldGetTranscript  : false,
+        shouldDownloadVideos : true,
+        shouldDownloadCovers : true,
+      }),
+      muteHttpExceptions: true,
+    }
+  );
+  var startData = (JSON.parse(startRes.getContentText()) || {}).data;
+  if (!startData) return { error: 'Apify 실행 시작 실패: ' + startRes.getContentText().slice(0, 200) };
+
+  var runId     = startData.id;
+  var datasetId = startData.defaultDatasetId;
+  var status    = startData.status;
+  var tries     = 0;
+
+  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED' && tries < 30) {
+    Utilities.sleep(10000);
+    var pollData = (JSON.parse(UrlFetchApp.fetch(
+      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
+      { muteHttpExceptions: true }
+    ).getContentText()) || {}).data || {};
+    status    = pollData.status           || status;
+    datasetId = pollData.defaultDatasetId || datasetId;
+    tries++;
+  }
+
+  if (status !== 'SUCCEEDED') return { error: 'Apify 실행 실패 (상태: ' + status + ')' };
+
+  var items = JSON.parse(UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500',
+    { muteHttpExceptions: true }
+  ).getContentText());
+  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
+
+  var cfg     = supabaseConfig();
+  var sbUrl   = cfg.url;
+  var now     = new Date().toISOString();
+  var updated = 0;
+
+  items.forEach(function(item) {
+    var row = rowByVideoId[String(item.id)];
+    if (!row) return;
+    var coverUrl = item.downloadCoverUrl || item.thumbnail || null;
+    var videoUrl = item.downloadUrl || item.videoUrl || null;
+    if (!coverUrl && !videoUrl) return;
+
+    var res = UrlFetchApp.fetch(
+      sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
+      {
+        method : 'POST',
+        headers: Object.assign({}, supabaseHeaders(), {
+          'Content-Type': 'application/json',
+          Prefer        : 'resolution=merge-duplicates',
+        }),
+        payload           : JSON.stringify({
+          monitoring_id: row.id,
+          cover_url    : coverUrl,
+          video_url    : videoUrl,
+          updated_at   : now,
+        }),
+        muteHttpExceptions: true,
+      }
+    );
+    if (res.getResponseCode() < 300) updated++;
+    else Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
+  });
+
+  return {
+    ok     : true,
+    updated: updated,
+    message: updated + '개 영상 저장 완료 (TikTok ' + tiktokRows.length + '개 대상)',
+  };
+}
+
 // ── Router ────────────────────────────────────────────────────
 
 function routeMonitoring(action, p, body) {
@@ -614,6 +809,8 @@ function routeMonitoring(action, p, body) {
     case 'checkMonitoringRun'      : return checkMonitoringRun();
     case 'resetMonitoringRun'      : return resetMonitoringRun();
     case 'processApifyRunById'     : return processApifyRunById((body || {}).runId || '', (body || {}).phaseId);
+    case 'updateVideoMetadata'     : return updateVideoMetadata(body || {});
+    case 'downloadVideoAssets'     : return downloadVideoAssets(body || {});
     default                        : return null;
   }
 }

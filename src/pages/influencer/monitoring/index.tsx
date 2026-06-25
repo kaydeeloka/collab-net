@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Copy, ExternalLink } from 'lucide-react'
+import { Copy, Download, ExternalLink, Film, RefreshCw } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
@@ -211,6 +212,10 @@ export default function Monitoring() {
   const [statusFilter,     setStatusFilter]     = useState('all')
   const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | null>(null)
   const [openListFilter,   setOpenListFilter]   = useState<'platform' | 'brand' | null>(null)
+  const [metaUpdating,     setMetaUpdating]     = useState(false)
+  const [metaModal,        setMetaModal]        = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
+  const [assetDownloading, setAssetDownloading] = useState(false)
+  const [assetModal,       setAssetModal]       = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
 
   useEffect(() => { setUploadPage(1) }, [searchQuery, uploadFilter, platformFilter, brandFilter, statusFilter])
   useEffect(() => { setListPage(1) }, [activeTab, listPlatformFilter, listBrandFilter])
@@ -234,6 +239,8 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     thumbnail_source_url: row.thumbnail_source_url ?? null,
     thumbnail_path:       row.thumbnail_path ?? null,
     video_path:           row.video_path ?? null,
+    cover_url:            row.cover_url ?? null,
+    video_url:            row.video_url ?? null,
   }
 }
 
@@ -296,7 +303,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     try {
       const monitoringSelect = `
         id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-        monitoring_assets(thumbnail_source_url, thumbnail_path, video_path),
+        monitoring_assets(thumbnail_source_url, thumbnail_path, video_path, cover_url, video_url),
         influencer_platform_id,
         influencer_platform!monitoring_influencer_platform_id_fkey(
           platform, handle,
@@ -392,7 +399,19 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         name: b.brand_name,
       }))
       setConfirmedBrands(confirmed)
-      setBrandKws(buildBrandKwsFromRows(kwsRes.data || [], confirmed))
+      const rows = kwsRes.data || []
+      const state = buildBrandKwsFromRows(rows, confirmed)
+      setBrandKws(state)
+
+      // Auto-sync: if any confirmed brand has no row keyed by brand.key (derived from confirmed_brands),
+      // save via GAS (service role key) so RLS doesn't block the write and rows get the correct brand key
+      const hasMismatch = confirmed.length > 0 && confirmed.some(b =>
+        !rows.some(r => r.phase_id && r.brand === b.key)
+      )
+      if (hasMismatch) {
+        await gasPost<{ ok?: boolean }>({ action: 'saveMonitoringKeywords', phaseId: viewPhaseId, brandKeywords: state })
+          .catch(e => console.error('keyword auto-sync error:', e))
+      }
     } catch (e) {
       console.error('loadKeywords error:', e)
     }
@@ -402,30 +421,11 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     if (!viewPhaseId) return
     setKwSaving(true)
     try {
-      const { data: mimuseRow } = await supabase.from('monitoring_keywords')
-        .select('id')
-        .eq('brand', MIMUSE_BRAND)
-        .is('phase_id', null)
-        .maybeSingle()
-
-      if (mimuseRow?.id) {
-        await supabase.from('monitoring_keywords').update({ keywords: next.mimuse || [] }).eq('id', mimuseRow.id)
-      } else {
-        await supabase.from('monitoring_keywords').insert({
-          brand: MIMUSE_BRAND,
-          phase_id: null,
-          keywords: next.mimuse || [],
-        })
-      }
-
-      const upserts = Object.entries(next.byBrand || {}).map(([brand, keywords]) => ({
-        phase_id: viewPhaseId,
-        brand,
-        keywords,
-      }))
-      if (upserts.length) {
-        await supabase.from('monitoring_keywords').upsert(upserts, { onConflict: 'phase_id,brand' })
-      }
+      await gasPost<{ ok?: boolean; error?: string }>({
+        action: 'saveMonitoringKeywords',
+        phaseId: viewPhaseId,
+        brandKeywords: next,
+      })
     } catch (e) {
       console.error('saveKeywords error:', e)
     }
@@ -473,9 +473,16 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   function brandColorForKey(key: string): string {
     const normalized = key.toLowerCase()
     if (normalized === MIMUSE_BRAND) return MIMUSE_COLOR
-    const idx = confirmedBrands.findIndex(b => b.key === normalized)
+    // exact key match
+    let idx = confirmedBrands.findIndex(b => b.key === normalized)
+    // fall back to name match (e.g. stored 'nesh' vs brand name 'Nesh')
+    if (idx < 0) idx = confirmedBrands.findIndex(b => b.name.toLowerCase() === normalized)
+    // fall back to keyword match (e.g. if 'nesh' is a keyword for 네쉬 brand)
+    if (idx < 0) idx = confirmedBrands.findIndex(b =>
+      (brandKws.byBrand[b.key] || []).some(kw => kw.toLowerCase() === normalized)
+    )
     if (idx >= 0) return BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
-    return 'var(--gray-4)'
+    return '#94a3b8'
   }
 
   function groupKey(r: MonRow): string {
@@ -670,6 +677,58 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   async function resetScrape() {
     try { await gasPost({ action: 'resetMonitoringRun' }) } catch { /* ignore */ }
     stopPolling(); setRunPending(false); setScrapeMsg('')
+  }
+
+  async function handleUpdateMetadata(targetRows: MonRow[]) {
+    const tiktokRows = targetRows.filter(r => r.review_link?.includes('tiktok.com'))
+    if (!tiktokRows.length) {
+      showToast('업데이트할 TikTok URL이 없습니다', 'info')
+      return
+    }
+    setMetaUpdating(true)
+    setMetaModal({ open: true, urlCount: tiktokRows.length, status: 'running' })
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
+        action: 'updateVideoMetadata',
+        rows: tiktokRows.map(row => ({ id: row.id, review_link: row.review_link })),
+      })
+      if (r.error) {
+        setMetaModal(m => ({ ...m, status: 'done', message: '오류: ' + r.error }))
+        return
+      }
+      setMetaModal(m => ({ ...m, status: 'done', updated: r.updated ?? 0, message: r.message }))
+      await loadMonitoring()
+    } catch (e: unknown) {
+      setMetaModal(m => ({ ...m, status: 'done', message: '오류: ' + (e as Error).message }))
+    } finally {
+      setMetaUpdating(false)
+    }
+  }
+
+  async function handleDownloadAssets(targetRows: MonRow[]) {
+    const tiktokRows = targetRows.filter(r => r.review_link?.includes('tiktok.com'))
+    if (!tiktokRows.length) {
+      showToast('다운로드할 TikTok URL이 없습니다', 'info')
+      return
+    }
+    setAssetDownloading(true)
+    setAssetModal({ open: true, urlCount: tiktokRows.length, status: 'running' })
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
+        action: 'downloadVideoAssets',
+        rows: tiktokRows.map(row => ({ id: row.id, review_link: row.review_link })),
+      })
+      if (r.error) {
+        setAssetModal(m => ({ ...m, status: 'done', message: '오류: ' + r.error }))
+        return
+      }
+      setAssetModal(m => ({ ...m, status: 'done', updated: r.updated ?? 0, message: r.message }))
+      await loadMonitoring()
+    } catch (e: unknown) {
+      setAssetModal(m => ({ ...m, status: 'done', message: '오류: ' + (e as Error).message }))
+    } finally {
+      setAssetDownloading(false)
+    }
   }
 
   async function processManualRun() {
@@ -929,12 +988,11 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
             </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: MIMUSE_COLOR, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               {(brandKws.mimuse || []).map(kw => (
                 <span key={kw} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 2,
+                  display: 'inline-flex', alignItems: 'center',
                   fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
                   background: MIMUSE_COLOR + '18', color: MIMUSE_COLOR,
                   border: `1px solid ${MIMUSE_COLOR}44`,
@@ -943,42 +1001,25 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                 </span>
               ))}
             </div>
+            {confirmedBrands.map((brand, idx) => {
+              const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+              const kws = brandKws.byBrand[brand.key] || []
+              if (!kws.length) return null
+              return (
+                <div key={brand.key} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {kws.map(kw => (
+                    <span key={kw} style={{
+                      display: 'inline-flex', alignItems: 'center',
+                      fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                      background: c + '18', color: c, border: `1px solid ${c}44`,
+                    }}>
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )
+            })}
           </div>
-
-          {confirmedBrands.length > 0 && (
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드 (페이즈 확정)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {confirmedBrands.map((brand, idx) => {
-                const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
-                const kws = brandKws.byBrand[brand.key] || []
-                if (!kws.length) return null
-                return (
-                  <div key={brand.key}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: c, marginBottom: 4 }}>{brand.name}</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {kws.map(kw => (
-                        <span key={kw} style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 2,
-                          fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                          background: c + '18', color: c, border: `1px solid ${c}44`,
-                        }}>
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          )}
-          {confirmedBrands.length === 0 && (
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>이 페이즈에 확정 브랜드가 없습니다.</div>
-          </div>
-          )}
         </div>
       </div>
 
@@ -1008,8 +1049,41 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           : uploadedRows.length === 0
             ? '필터 결과가 없습니다.'
             : ''
+        function downloadListExcel() {
+          const wsData = [
+            ['no.', '플랫폼', '인플루언서명', '업로드일', '조회수', '좋아요 수', '댓글 수', '리뷰 링크', '브랜드', '감지된 키워드'],
+            ...uploadedRows.map((r, i) => [
+              i + 1,
+              r.platform || '',
+              r.display_name || r.handle || '',
+              r.date ? fmtDate(r.date) : '',
+              r.views ?? '',
+              r.likes ?? '',
+              r.comments ?? '',
+              r.review_link || '',
+              r.brand || '',
+              r.keywords || '',
+            ]),
+          ]
+          const ws = XLSX.utils.aoa_to_sheet(wsData)
+          const wb = XLSX.utils.book_new()
+          XLSX.utils.book_append_sheet(wb, ws, '리뷰 리스트')
+          XLSX.writeFile(wb, `리뷰리스트_${new Date().toISOString().slice(0, 10)}.xlsx`)
+        }
+
         return (
           <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+            <button className="cfg-btn" onClick={() => { void handleDownloadAssets(uploadedRows) }}
+              disabled={assetDownloading || uploadedRows.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              {assetDownloading ? <Spinner sm /> : <Film size={13} />}영상 다운로드
+            </button>
+            <button className="cfg-btn" onClick={downloadListExcel} disabled={uploadedRows.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Download size={13} />엑셀 다운로드
+            </button>
+          </div>
           <div className="table-wrap">
             <table>
               <thead>
@@ -1027,7 +1101,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   </th>
                   <th style={thBase}>인플루언서명</th>
                   <th style={thBase}>업로드일</th>
-                  <th style={{ ...thBase, minWidth: 300 }}>리뷰 링크</th>
+                  <th style={{ ...thBase, textAlign: 'right' }}>조회수</th>
+                  <th style={{ ...thBase, textAlign: 'right' }}>좋아요 수</th>
+                  <th style={{ ...thBase, textAlign: 'right' }}>댓글 수</th>
+                  <th style={{ ...thBase, minWidth: 180 }}>리뷰 링크</th>
                   <th style={{ ...thBase, width: 72, textAlign: 'center' }}>썸네일</th>
                   <th style={{ ...thBase, width: 72, textAlign: 'center' }}>영상</th>
                   <th style={thBase}>
@@ -1040,11 +1117,12 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                       onOpenChange={open => setOpenListFilter(open ? 'brand' : null)}
                     />
                   </th>
+                  <th style={thBase}>감지된 키워드</th>
                 </tr>
               </thead>
               <tbody>
                 {uploadedRows.length === 0
-                  ? <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
+                  ? <tr><td colSpan={12} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
                       const link     = r.review_link || ''
@@ -1073,6 +1151,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                             </div>
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
+                          <td style={{ fontSize: 12, textAlign: 'right', color: r.views ? 'var(--gray-7)' : 'var(--gray-3)' }}>{r.views ? fmtNum(r.views) : '—'}</td>
+                          <td style={{ fontSize: 12, textAlign: 'right', color: r.likes ? 'var(--gray-7)' : 'var(--gray-3)' }}>{r.likes ? fmtNum(r.likes) : '—'}</td>
+                          <td style={{ fontSize: 12, textAlign: 'right', color: r.comments ? 'var(--gray-7)' : 'var(--gray-3)' }}>{r.comments ? fmtNum(r.comments) : '—'}</td>
                           <td style={{ whiteSpace: 'normal', verticalAlign: 'middle' }}>
                             <ReviewLinkBox link={link} onCopy={() => copyReviewLink(link)} compact />
                           </td>
@@ -1092,11 +1173,31 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                             })()}
                           </td>
                           <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-6)' }}>
-                            {r.assets?.video_path
-                              ? <span style={{ fontWeight: 600, color: '#065f46' }}>저장됨</span>
-                              : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                            {r.assets?.video_url
+                              ? <a href={r.assets.video_url} target="_blank" rel="noopener" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 600, color: '#065f46', textDecoration: 'none' }}><ExternalLink size={11} />보기</a>
+                              : r.assets?.video_path
+                                ? <span style={{ fontWeight: 600, color: '#065f46' }}>저장됨</span>
+                                : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                           </td>
-                          <td>{brandBadge(r.brand)}</td>
+                          <td>{(() => {
+                            if (!r.brand) return <span style={{ color: 'var(--gray-3)' }}>—</span>
+                            const c = brandColorForKey(r.brand.toLowerCase())
+                            return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44` }}>{r.brand}</span>
+                          })()}</td>
+                          <td>
+                            {r.keywords ? (
+                              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                {r.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
+                                  const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                                  const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
+                                  const c = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
+                                  return (
+                                    <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
+                                  )
+                                })}
+                              </div>
+                            ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                          </td>
                         </tr>
                       )
                     })}
@@ -1123,6 +1224,16 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         >
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 320 }} />
+          <button
+            type="button"
+            className="cfg-btn cfg-btn--ghost"
+            style={{ marginLeft: 'auto' }}
+            disabled={metaUpdating || reviewRows.length === 0}
+            onClick={() => { void handleUpdateMetadata(reviewRows) }}
+          >
+            {metaUpdating ? <Spinner sm /> : <RefreshCw size={13} />}
+            {metaUpdating ? '업데이트 중…' : '메타데이터 업데이트'}
+          </button>
         </FilterSegmentBar>
 
         {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
@@ -1336,7 +1447,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                                     {r.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
                                       const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
                                       const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                                      const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+                                      const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
                                       return (
                                         <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                                       )
@@ -1447,6 +1558,82 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         </div>
       </Modal>
 
+      {/* ── Metadata Update Modal ── */}
+      <Modal
+        open={metaModal.open}
+        onClose={() => setMetaModal(m => ({ ...m, open: false }))}
+        title="메타데이터 업데이트"
+      >
+        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+          {metaModal.status === 'running' ? (
+            <>
+              <Spinner lg />
+              <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
+                TikTok 영상 <strong>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>Apify 실행 중, 잠시 기다려 주세요.</div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>
+                {metaModal.message?.startsWith('오류') ? '❌' : '✅'}
+              </div>
+              {!metaModal.message?.startsWith('오류') && (
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-8)', marginBottom: 6 }}>
+                  {metaModal.updated ?? 0} / {metaModal.urlCount}
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: 'var(--gray-6)' }}>
+                {metaModal.message || '완료'}
+              </div>
+            </>
+          )}
+        </div>
+        {metaModal.status === 'done' && (
+          <div className="modal-actions">
+            <button className="modal-btn-confirm" onClick={() => setMetaModal(m => ({ ...m, open: false }))}>확인</button>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Asset Download Modal ── */}
+      <Modal
+        open={assetModal.open}
+        onClose={() => setAssetModal(m => ({ ...m, open: false }))}
+        title="영상 다운로드"
+      >
+        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+          {assetModal.status === 'running' ? (
+            <>
+              <Spinner lg />
+              <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
+                TikTok 영상 <strong>{assetModal.urlCount}개</strong> 다운로드 중…
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>썸네일 및 영상 URL 수집 중, 잠시 기다려 주세요.</div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>
+                {assetModal.message?.startsWith('오류') ? '❌' : '✅'}
+              </div>
+              {!assetModal.message?.startsWith('오류') && (
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-8)', marginBottom: 6 }}>
+                  {assetModal.updated ?? 0} / {assetModal.urlCount}
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: 'var(--gray-6)' }}>
+                {assetModal.message || '완료'}
+              </div>
+            </>
+          )}
+        </div>
+        {assetModal.status === 'done' && (
+          <div className="modal-actions">
+            <button className="modal-btn-confirm" onClick={() => setAssetModal(m => ({ ...m, open: false }))}>확인</button>
+          </div>
+        )}
+      </Modal>
+
       {/* ── Review View / Edit Modal ── */}
       <Modal
         open={!!modalRow}
@@ -1508,7 +1695,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                         {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
                           const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
                           const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+                          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
                           return (
                             <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                           )

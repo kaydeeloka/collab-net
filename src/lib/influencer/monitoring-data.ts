@@ -7,6 +7,8 @@ export interface MonitoringAssets {
   thumbnail_source_url: string | null
   thumbnail_path:       string | null
   video_path:           string | null
+  cover_url:            string | null
+  video_url:            string | null
 }
 
 export interface MonitoringRow {
@@ -162,6 +164,8 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     thumbnail_source_url: row.thumbnail_source_url ?? null,
     thumbnail_path:       row.thumbnail_path ?? null,
     video_path:           row.video_path ?? null,
+    cover_url:            row.cover_url ?? null,
+    video_url:            row.video_url ?? null,
   }
 }
 
@@ -230,7 +234,7 @@ function sortGroupRows(group: MonitoringRow[]): MonitoringRow[] {
 export async function loadMonitoringData(phaseId: string): Promise<{ rows: MonitoringRow[]; confirmedCount: number }> {
   const monitoringSelect = `
     id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-    monitoring_assets(thumbnail_source_url, thumbnail_path, video_path),
+    monitoring_assets(thumbnail_source_url, thumbnail_path, video_path, cover_url, video_url),
     influencer_platform_id,
     influencer_platform!monitoring_influencer_platform_id_fkey(
       platform, handle,
