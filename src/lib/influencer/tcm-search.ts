@@ -1,7 +1,15 @@
 export const TCM_KEYWORD_MAX = 5
 export const TCM_PER_KEYWORD_TARGET_WARN = 10
 export const TCM_TARGET_MIN = 10
-export const TCM_TARGET_MAX = 120
+export const TCM_TARGET_MAX = 100 // UI cap — how many to save per search
+export const TCM_APIFY_SCRAPE_MAX = 200 // GAS cap per search — not the UI target
+
+export const TCM_POOL_BUFFER_NANO  = 6
+export const TCM_POOL_BUFFER_MICRO = 2.5
+
+export function tcmPoolBuffer(maxFollowers: number): number {
+  return maxFollowers <= 10000 ? TCM_POOL_BUFFER_NANO : TCM_POOL_BUFFER_MICRO
+}
 
 export function tcmTargetLimitMessage() {
   return `목표 인플루언서 수는 ${TCM_TARGET_MIN}~${TCM_TARGET_MAX}명까지 설정할 수 있습니다`

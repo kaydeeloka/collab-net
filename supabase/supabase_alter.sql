@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS confirmed_brands (
   production_cost  TEXT,
   received         BOOLEAN     NOT NULL DEFAULT FALSE,
   notes            TEXT,
-  archive_meta     TEXT,
+  archive_memo     TEXT,
   archive_desc     TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
@@ -937,24 +937,25 @@ END $$;
 -- ============================================================
 --  confirmed brand archive — assets + storage
 -- ============================================================
--- confirmed_brands.archive_meta — memo for 자료 아카이브 page only (not notes / season collection)
-ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS archive_meta TEXT;
+-- confirmed_brands.archive_memo — memo for 자료 아카이브 page only (not notes / season collection)
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS archive_memo TEXT;
 
--- migrate legacy archive memo rows into confirmed_brands (safe to re-run)
-UPDATE confirmed_brands cb
-SET archive_meta = m.archive_memo
-FROM confirmed_brand_archive_meta m
-WHERE m.confirmed_brand_id = cb.id
-  AND (cb.archive_meta IS NULL OR BTRIM(cb.archive_meta) = '')
-  AND m.archive_memo IS NOT NULL
-  AND BTRIM(m.archive_memo) <> '';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'confirmed_brands' AND column_name = 'archive_meta'
+  ) THEN
+    UPDATE confirmed_brands
+    SET archive_memo = archive_meta
+    WHERE (archive_memo IS NULL OR BTRIM(archive_memo) = '')
+      AND archive_meta IS NOT NULL
+      AND BTRIM(archive_meta) <> '';
+    ALTER TABLE confirmed_brands DROP COLUMN archive_meta;
+  END IF;
+END $$;
 
--- legacy table — superseded by confirmed_brands.archive_meta
-CREATE TABLE IF NOT EXISTS confirmed_brand_archive_meta (
-  confirmed_brand_id UUID PRIMARY KEY REFERENCES confirmed_brands(id) ON DELETE CASCADE,
-  archive_memo       TEXT,
-  updated_at         TIMESTAMPTZ DEFAULT NOW()
-);
+DROP TABLE IF EXISTS confirmed_brand_archive_meta CASCADE;
 
 CREATE TABLE IF NOT EXISTS confirmed_brand_assets (
   id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -974,10 +975,7 @@ CREATE INDEX IF NOT EXISTS idx_confirmed_brand_assets_brand
 CREATE INDEX IF NOT EXISTS idx_confirmed_brand_assets_brand_cat
   ON confirmed_brand_assets(confirmed_brand_id, category);
 
-ALTER TABLE confirmed_brand_archive_meta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_brand_assets ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all_confirmed_brand_archive_meta" ON confirmed_brand_archive_meta;
-CREATE POLICY "allow_all_confirmed_brand_archive_meta" ON confirmed_brand_archive_meta FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS "allow_all_confirmed_brand_assets" ON confirmed_brand_assets;
 CREATE POLICY "allow_all_confirmed_brand_assets" ON confirmed_brand_assets FOR ALL USING (true) WITH CHECK (true);
 
@@ -1223,3 +1221,87 @@ END $$;
 ALTER TABLE confirmed_brand_assets DROP CONSTRAINT IF EXISTS confirmed_brand_assets_category_check;
 ALTER TABLE confirmed_brand_assets ADD CONSTRAINT confirmed_brand_assets_category_check
   CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover'));
+
+-- monitoring_assets — thumbnail + video storage (1:1 with monitoring row)
+CREATE TABLE IF NOT EXISTS monitoring_assets (
+  id                   UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  monitoring_id        UUID        NOT NULL UNIQUE REFERENCES monitoring(id) ON DELETE CASCADE,
+  thumbnail_source_url TEXT,
+  thumbnail_path       TEXT,
+  video_path           TEXT,
+  created_at           TIMESTAMPTZ DEFAULT now(),
+  updated_at           TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_monitoring_assets_monitoring ON monitoring_assets(monitoring_id);
+
+ALTER TABLE monitoring_assets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "allow_all_monitoring_assets" ON monitoring_assets;
+CREATE POLICY "allow_all_monitoring_assets" ON monitoring_assets
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- migrate legacy columns on monitoring (if added earlier)
+INSERT INTO monitoring_assets (monitoring_id, thumbnail_source_url, video_path)
+SELECT m.id, m.thumbnail_url, m.video_file_url
+FROM monitoring m
+WHERE (m.thumbnail_url IS NOT NULL OR m.video_file_url IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM monitoring_assets a WHERE a.monitoring_id = m.id)
+ON CONFLICT (monitoring_id) DO UPDATE SET
+  thumbnail_source_url = COALESCE(EXCLUDED.thumbnail_source_url, monitoring_assets.thumbnail_source_url),
+  video_path           = COALESCE(EXCLUDED.video_path, monitoring_assets.video_path),
+  updated_at           = now();
+
+ALTER TABLE monitoring DROP COLUMN IF EXISTS thumbnail_url;
+ALTER TABLE monitoring DROP COLUMN IF EXISTS video_file_url;
+
+-- monitoring assets — thumbnails (public) + videos (private MP4)
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES
+  ('monitoring-thumbnails', 'monitoring-thumbnails', true, 5242880),
+  ('monitoring-videos', 'monitoring-videos', false, 104857600)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit;
+
+DROP POLICY IF EXISTS "monitoring_thumbnails_storage_all" ON storage.objects;
+CREATE POLICY "monitoring_thumbnails_storage_all" ON storage.objects
+  FOR ALL USING (bucket_id = 'monitoring-thumbnails')
+  WITH CHECK (bucket_id = 'monitoring-thumbnails');
+
+DROP POLICY IF EXISTS "monitoring_videos_storage_all" ON storage.objects;
+CREATE POLICY "monitoring_videos_storage_all" ON storage.objects
+  FOR ALL USING (bucket_id = 'monitoring-videos')
+  WITH CHECK (bucket_id = 'monitoring-videos');
+
+-- ============================================================
+--  monitoring_keywords — phase-scoped brand keywords
+--  mimuse: phase_id NULL (global). Brand rows: one per confirmed brand per phase.
+-- ============================================================
+ALTER TABLE monitoring_keywords ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES phases(id) ON DELETE CASCADE;
+
+ALTER TABLE monitoring_keywords DROP CONSTRAINT IF EXISTS monitoring_keywords_brand_key;
+
+DELETE FROM monitoring_keywords WHERE brand = 'brands';
+
+UPDATE monitoring_keywords SET phase_id = NULL WHERE brand = 'mimuse';
+
+UPDATE monitoring_keywords mk
+SET phase_id = (SELECT id FROM phases ORDER BY created_at LIMIT 1)
+WHERE mk.phase_id IS NULL AND mk.brand <> 'mimuse'
+  AND EXISTS (SELECT 1 FROM phases);
+
+DROP INDEX IF EXISTS uk_monitoring_keywords_mimuse;
+CREATE UNIQUE INDEX uk_monitoring_keywords_mimuse
+  ON monitoring_keywords (brand) WHERE phase_id IS NULL AND brand = 'mimuse';
+
+DROP INDEX IF EXISTS uk_monitoring_keywords_phase_brand;
+CREATE UNIQUE INDEX uk_monitoring_keywords_phase_brand
+  ON monitoring_keywords (phase_id, brand) WHERE phase_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_monitoring_keywords_phase ON monitoring_keywords(phase_id);
+
+INSERT INTO monitoring_keywords (brand, phase_id, keywords)
+SELECT 'mimuse', NULL, ARRAY['mimuse', '미뮤즈']
+WHERE NOT EXISTS (
+  SELECT 1 FROM monitoring_keywords WHERE brand = 'mimuse' AND phase_id IS NULL
+);

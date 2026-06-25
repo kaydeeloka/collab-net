@@ -14,22 +14,24 @@ import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/influencer/content-platforms'
+import type { MonitoringAssets } from '@/lib/influencer/monitoring-data'
+import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
+import {
+  MIMUSE_BRAND,
+  MIMUSE_COLOR,
+  type BrandKwsState,
+  type ConfirmedBrandKw,
+  brandKeywordIndex,
+  buildBrandKwsFromRows,
+  emptyBrandKws,
+  isMimuseKeyword,
+  monitoringBrandKey,
+} from '@/lib/influencer/monitoring-keywords'
 
 const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
 const MONITORING_LIST_PATH = '/influencer/monitoring-list'
 
-const BRANDS = ['mimuse', 'aesthen', 'joodoc', 'nesh', 'varuza'] as const
-type Brand = typeof BRANDS[number]
-
 const BRANDS_KW_COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#f97316', '#06b6d4', '#3b82f6', '#e11d48']
-
-const BRAND_COLORS: Record<Brand, string> = {
-  mimuse:  '#3b82f6',
-  aesthen: '#8b5cf6',
-  joodoc:  '#ec4899',
-  nesh:    '#f59e0b',
-  varuza:  '#10b981',
-}
 
 const MEDIA_OPTIONS   = ['photo', 'video']
 const CONTENT_OPTIONS = ['review video', 'unboxing', 'other']
@@ -54,6 +56,7 @@ interface MonRow {
   brand:                   string | null
   repost:                  string | null  // from confirmed_influencers (read-only)
   review_link:             string | null
+  assets:                  MonitoringAssets | null
   views:                   number
   likes:                   number
   comments:                number
@@ -147,8 +150,8 @@ function InfluencerAvatar({ url, label, size = 36 }: { url?: string | null; labe
 
 function brandBadge(brand: string | null) {
   if (!brand) return '—'
-  const key = brand.toLowerCase() as Brand
-  const color = BRAND_COLORS[key] || 'var(--gray-4)'
+  const key = brand.toLowerCase()
+  const color = key === MIMUSE_BRAND ? MIMUSE_COLOR : 'var(--gray-6)'
   return (
     <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: color + '18', color, border: `1px solid ${color}44` }}>
       {brand}
@@ -170,14 +173,12 @@ export default function Monitoring() {
   const [confirmedCount, setConfirmedCount] = useState(0)
   const [loading,        setLoading]        = useState(true)
 
-  const [brandKws,      setBrandKws]      = useState<Record<string, string[]>>({
-    mimuse: ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty'],
-    brands: ['aesthen', 'joodoc', 'nesh', 'varuza'],
-  })
-  const [showKwModal,   setShowKwModal]   = useState(false)
-  const [newMimuseKw,   setNewMimuseKw]  = useState('')
-  const [newBrandsKw,   setNewBrandsKw]  = useState('')
-  const [kwSaving,      setKwSaving]     = useState(false)
+  const [brandKws,         setBrandKws]         = useState<BrandKwsState>(emptyBrandKws())
+  const [confirmedBrands,  setConfirmedBrands]  = useState<ConfirmedBrandKw[]>([])
+  const [showKwModal,      setShowKwModal]      = useState(false)
+  const [newMimuseKw,      setNewMimuseKw]      = useState('')
+  const [newBrandKwByKey,  setNewBrandKwByKey]  = useState<Record<string, string>>({})
+  const [kwSaving,         setKwSaving]         = useState(false)
 
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeMsg,     setScrapeMsg]     = useState('')
@@ -224,6 +225,17 @@ export default function Monitoring() {
     }
   }, [viewPhaseId, phaseLoading])
 
+function mapMonitoringAssets(raw: any): MonitoringAssets | null {
+  if (!raw) return null
+  const row = Array.isArray(raw) ? raw[0] : raw
+  if (!row) return null
+  return {
+    thumbnail_source_url: row.thumbnail_source_url ?? null,
+    thumbnail_path:       row.thumbnail_path ?? null,
+    video_path:           row.video_path ?? null,
+  }
+}
+
   function mapMonitoringRecord(m: any): MonRow {
     const ip = m.influencer_platform
     const ci = ip?.confirmed_influencers
@@ -242,6 +254,7 @@ export default function Monitoring() {
       brand:                   m.brand,
       repost:                  ci?.repost || null,
       review_link:             m.review_link,
+      assets:                  mapMonitoringAssets(m.monitoring_assets),
       views:                   m.views    || 0,
       likes:                   m.likes    || 0,
       comments:                m.comments || 0,
@@ -266,6 +279,7 @@ export default function Monitoring() {
       brand:                   null,
       repost:                  ci.repost ?? null,
       review_link:             null,
+      assets:                  null,
       views:                   0,
       likes:                   0,
       comments:                0,
@@ -281,6 +295,7 @@ export default function Monitoring() {
     try {
       const monitoringSelect = `
         id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
+        monitoring_assets(thumbnail_source_url, thumbnail_path, video_path),
         influencer_platform_id,
         influencer_platform!monitoring_influencer_platform_id_fkey(
           platform, handle,
@@ -364,51 +379,102 @@ export default function Monitoring() {
   }
 
   async function loadKeywords() {
+    if (!viewPhaseId) return
     try {
-      const { data } = await supabase
-        .from('monitoring_keywords')
-        .select('brand, keywords')
-        .in('brand', ['mimuse', 'brands'])
-      if (!data?.length) return
-      const mimuseRow = data.find(r => r.brand === 'mimuse')
-      const brandsRow = data.find(r => r.brand === 'brands')
-      setBrandKws({
-        mimuse: mimuseRow?.keywords?.length ? mimuseRow.keywords : brandKws.mimuse,
-        brands: brandsRow?.keywords?.length ? brandsRow.keywords : brandKws.brands,
-      })
-    } catch {
-      // keep defaults
+      const [brandsRes, kwsRes] = await Promise.all([
+        supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+        supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
+          .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
+      ])
+      const confirmed: ConfirmedBrandKw[] = (brandsRes.data || []).map(b => ({
+        key: monitoringBrandKey(b.brand_name),
+        name: b.brand_name,
+      }))
+      setConfirmedBrands(confirmed)
+      setBrandKws(buildBrandKwsFromRows(kwsRes.data || [], confirmed))
+    } catch (e) {
+      console.error('loadKeywords error:', e)
     }
   }
 
-  async function saveKeywords(next: Record<string, string[]>) {
+  async function saveKeywords(next: BrandKwsState) {
+    if (!viewPhaseId) return
     setKwSaving(true)
     try {
-      await supabase.from('monitoring_keywords').upsert([
-        { brand: 'mimuse', keywords: next.mimuse || [] },
-        { brand: 'brands', keywords: next.brands || [] },
-      ], { onConflict: 'brand' })
-    } catch {
-      // silently fail
+      const { data: mimuseRow } = await supabase.from('monitoring_keywords')
+        .select('id')
+        .eq('brand', MIMUSE_BRAND)
+        .is('phase_id', null)
+        .maybeSingle()
+
+      if (mimuseRow?.id) {
+        await supabase.from('monitoring_keywords').update({ keywords: next.mimuse || [] }).eq('id', mimuseRow.id)
+      } else {
+        await supabase.from('monitoring_keywords').insert({
+          brand: MIMUSE_BRAND,
+          phase_id: null,
+          keywords: next.mimuse || [],
+        })
+      }
+
+      const upserts = Object.entries(next.byBrand || {}).map(([brand, keywords]) => ({
+        phase_id: viewPhaseId,
+        brand,
+        keywords,
+      }))
+      if (upserts.length) {
+        await supabase.from('monitoring_keywords').upsert(upserts, { onConflict: 'phase_id,brand' })
+      }
+    } catch (e) {
+      console.error('saveKeywords error:', e)
     }
     setKwSaving(false)
   }
 
-  function addKeyword(brand: string, kw: string, clear: () => void) {
+  function addKeyword(brandKey: string, kw: string, clear: () => void) {
     const trimmed = kw.trim()
     if (!trimmed) { clear(); return }
-    const current = brandKws[brand] || []
-    if (current.includes(trimmed)) { clear(); return }
-    const next = { ...brandKws, [brand]: [...current, trimmed] }
+    let next: BrandKwsState
+    if (brandKey === MIMUSE_BRAND) {
+      const current = brandKws.mimuse || []
+      if (current.includes(trimmed)) { clear(); return }
+      next = { ...brandKws, mimuse: [...current, trimmed] }
+    } else {
+      const current = brandKws.byBrand[brandKey] || []
+      if (current.includes(trimmed)) { clear(); return }
+      next = {
+        ...brandKws,
+        byBrand: { ...brandKws.byBrand, [brandKey]: [...current, trimmed] },
+      }
+    }
     setBrandKws(next)
     clear()
     saveKeywords(next)
   }
 
-  function removeKeyword(brand: string, kw: string) {
-    const next = { ...brandKws, [brand]: (brandKws[brand] || []).filter(k => k !== kw) }
+  function removeKeyword(brandKey: string, kw: string) {
+    let next: BrandKwsState
+    if (brandKey === MIMUSE_BRAND) {
+      next = { ...brandKws, mimuse: (brandKws.mimuse || []).filter(k => k !== kw) }
+    } else {
+      next = {
+        ...brandKws,
+        byBrand: {
+          ...brandKws.byBrand,
+          [brandKey]: (brandKws.byBrand[brandKey] || []).filter(k => k !== kw),
+        },
+      }
+    }
     setBrandKws(next)
     saveKeywords(next)
+  }
+
+  function brandColorForKey(key: string): string {
+    const normalized = key.toLowerCase()
+    if (normalized === MIMUSE_BRAND) return MIMUSE_COLOR
+    const idx = confirmedBrands.findIndex(b => b.key === normalized)
+    if (idx >= 0) return BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+    return 'var(--gray-4)'
   }
 
   function groupKey(r: MonRow): string {
@@ -475,10 +541,9 @@ export default function Monitoring() {
     return (
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-          const kwLow    = kw.toLowerCase()
-          const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
-          const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
-          const c        = isMimuse ? BRAND_COLORS.mimuse : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+          const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+          const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
+          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
           return (
             <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
           )
@@ -580,9 +645,16 @@ export default function Monitoring() {
   }, [runPending])
 
   async function startScrape() {
+    if (!viewPhaseId) {
+      setScrapeMsg('오류: 페이즈를 선택하세요.')
+      return
+    }
     setScrapeLoading(true); setScrapeMsg('')
     try {
-      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; profiles?: number; handles?: string[] }>({ action: 'runMonitoringScrape' })
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; profiles?: number; handles?: string[] }>({
+        action: 'runMonitoringScrape',
+        phaseId: viewPhaseId,
+      })
       if (r.error) { setScrapeMsg('오류: ' + r.error); return }
       const handleList = r.handles?.length ? ` (${r.handles.join(', ')})` : ''
       setScrapeMsg((r.message || '') + handleList + ' — 자동으로 결과를 확인합니다.')
@@ -602,9 +674,17 @@ export default function Monitoring() {
   async function processManualRun() {
     const id = manualRunId.trim()
     if (!id) return
+    if (!viewPhaseId) {
+      setManualMsg('오류: 페이즈를 선택하세요.')
+      return
+    }
     setManualLoading(true); setManualMsg('')
     try {
-      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; matched?: number }>({ action: 'processApifyRunById', runId: id })
+      const r = await gasPost<{ ok?: boolean; error?: string; message?: string; matched?: number }>({
+        action: 'processApifyRunById',
+        runId: id,
+        phaseId: viewPhaseId,
+      })
       if (r.error) { setManualMsg('오류: ' + r.error) }
       else { setManualMsg(r.message || '완료'); await loadMonitoring() }
     } catch (e: unknown) {
@@ -687,7 +767,8 @@ export default function Monitoring() {
 
   const BRAND_FILTER_OPTIONS = [
     { value: 'all', label: '전체' },
-    ...BRANDS.map(b => ({ value: b, label: b })),
+    { value: MIMUSE_BRAND, label: 'MiMuse' },
+    ...confirmedBrands.map(b => ({ value: b.key, label: b.name })),
   ]
 
   const STATUS_FILTER_OPTIONS = [
@@ -773,7 +854,7 @@ export default function Monitoring() {
           valueColor="var(--blue-dk)"
           caption={(
             <>
-              <span style={{ color: BRAND_COLORS.mimuse, fontWeight: 700 }}>MiMuse</span>
+              <span style={{ color: MIMUSE_COLOR, fontWeight: 700 }}>MiMuse</span>
               <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{mimuseReviewCount}</strong>
               <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
               <span style={{ color: 'var(--gray-6)', fontWeight: 700 }}>브랜드별</span>
@@ -821,7 +902,7 @@ export default function Monitoring() {
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>브랜드 횟수</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { key: 'mimuse', label: 'MiMuse', count: mimuseReviewCount, color: BRAND_COLORS.mimuse },
+              { key: 'mimuse', label: 'MiMuse', count: mimuseReviewCount, color: MIMUSE_COLOR },
               { key: 'brand', label: '브랜드별', count: brandReviewCount, color: '#64748b' },
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -848,14 +929,14 @@ export default function Monitoring() {
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: BRAND_COLORS.mimuse, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: MIMUSE_COLOR, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse</div>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               {(brandKws.mimuse || []).map(kw => (
                 <span key={kw} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 2,
                   fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                  background: BRAND_COLORS.mimuse + '18', color: BRAND_COLORS.mimuse,
-                  border: `1px solid ${BRAND_COLORS.mimuse}44`,
+                  background: MIMUSE_COLOR + '18', color: MIMUSE_COLOR,
+                  border: `1px solid ${MIMUSE_COLOR}44`,
                 }}>
                   {kw}
                 </span>
@@ -863,23 +944,40 @@ export default function Monitoring() {
             </div>
           </div>
 
+          {confirmedBrands.length > 0 && (
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드</div>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-              {(brandKws.brands || []).map((kw, idx) => {
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드 (페이즈 확정)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {confirmedBrands.map((brand, idx) => {
                 const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+                const kws = brandKws.byBrand[brand.key] || []
+                if (!kws.length) return null
                 return (
-                  <span key={kw} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 2,
-                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                    background: c + '18', color: c, border: `1px solid ${c}44`,
-                  }}>
-                    {kw}
-                  </span>
+                  <div key={brand.key}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: c, marginBottom: 4 }}>{brand.name}</div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {kws.map(kw => (
+                        <span key={kw} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 2,
+                          fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                          background: c + '18', color: c, border: `1px solid ${c}44`,
+                        }}>
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )
               })}
             </div>
           </div>
+          )}
+          {confirmedBrands.length === 0 && (
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>이 페이즈에 확정 브랜드가 없습니다.</div>
+          </div>
+          )}
         </div>
       </div>
 
@@ -929,9 +1027,11 @@ export default function Monitoring() {
                   <th style={thBase}>인플루언서명</th>
                   <th style={thBase}>업로드일</th>
                   <th style={{ ...thBase, minWidth: 300 }}>리뷰 링크</th>
+                  <th style={{ ...thBase, width: 72, textAlign: 'center' }}>썸네일</th>
+                  <th style={{ ...thBase, width: 72, textAlign: 'center' }}>영상</th>
                   <th style={thBase}>
                     <HeaderFilterMenu
-                      label="brand"
+                      label="브랜드"
                       value={listBrandFilter}
                       options={BRAND_FILTER_OPTIONS}
                       onChange={setListBrandFilter}
@@ -943,7 +1043,7 @@ export default function Monitoring() {
               </thead>
               <tbody>
                 {uploadedRows.length === 0
-                  ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
+                  ? <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
                       const link     = r.review_link || ''
@@ -974,6 +1074,26 @@ export default function Monitoring() {
                           <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
                           <td style={{ whiteSpace: 'normal', verticalAlign: 'middle' }}>
                             <ReviewLinkBox link={link} onCopy={() => copyReviewLink(link)} compact />
+                          </td>
+                          <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                            {(() => {
+                              const thumb = resolveMonitoringThumbnailUrl(r.assets)
+                              if (thumb) {
+                                return (
+                                  <img
+                                    src={thumb}
+                                    alt=""
+                                    style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--gray-2)' }}
+                                  />
+                                )
+                              }
+                              return <span style={{ color: 'var(--gray-3)' }}>—</span>
+                            })()}
+                          </td>
+                          <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-6)' }}>
+                            {r.assets?.video_path
+                              ? <span style={{ fontWeight: 600, color: '#065f46' }}>저장됨</span>
+                              : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                           </td>
                           <td>{brandBadge(r.brand)}</td>
                         </tr>
@@ -1060,7 +1180,7 @@ export default function Monitoring() {
                     <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
                     <th style={thBase}>
                       <HeaderFilterMenu
-                        label="account"
+                        label="플랫폼"
                         value={platformFilter}
                         options={PLATFORM_FILTER_OPTIONS}
                         onChange={setPlatformFilter}
@@ -1068,12 +1188,12 @@ export default function Monitoring() {
                         onOpenChange={open => setOpenFilter(open ? 'platform' : null)}
                       />
                     </th>
-                    <th style={thBase}>date</th>
-                    <th style={thBase}>media</th>
-                    <th style={thBase}>content</th>
+                    <th style={thBase}>업로드일</th>
+                    <th style={thBase}>미디어</th>
+                    <th style={thBase}>콘텐츠</th>
                     <th style={thBase}>
                       <HeaderFilterMenu
-                        label="brand"
+                        label="브랜드"
                         value={brandFilter}
                         options={BRAND_FILTER_OPTIONS}
                         onChange={setBrandFilter}
@@ -1083,7 +1203,7 @@ export default function Monitoring() {
                     </th>
                     <th style={thBase}>
                       <HeaderFilterMenu
-                        label="review link"
+                        label="리뷰 링크"
                         value={statusFilter}
                         options={STATUS_FILTER_OPTIONS}
                         onChange={setStatusFilter}
@@ -1127,7 +1247,7 @@ export default function Monitoring() {
                         const link     = r.review_link || ''
                         const hasLink  = !!link.startsWith('http')
                         const rowBrand = (r.brand || '').toLowerCase()
-                        const rowColor = BRAND_COLORS[rowBrand as Brand] || 'var(--gray-4)'
+                        const rowColor = brandColorForKey(rowBrand)
                         const rowStyle = isLast ? groupBorderStyle : {}
 
                         return (
@@ -1220,10 +1340,9 @@ export default function Monitoring() {
                               {r.keywords
                                 ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                     {r.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                                      const kwLow    = kw.toLowerCase()
-                                      const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
-                                      const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
-                                      const c        = isMimuse ? BRAND_COLORS.mimuse : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+                                      const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                                      const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
+                                      const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
                                       return (
                                         <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                                       )
@@ -1263,56 +1382,69 @@ export default function Monitoring() {
       {/* ── Keyword Edit Modal ── */}
       <Modal open={showKwModal} onClose={() => setShowKwModal(false)} title="키워드 설정">
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: BRAND_COLORS.mimuse, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: MIMUSE_COLOR, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse (전 페이즈 공통)</div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
             {(brandKws.mimuse || []).map(kw => (
               <span key={kw} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 2,
                 fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                background: BRAND_COLORS.mimuse + '18', color: BRAND_COLORS.mimuse,
-                border: `1px solid ${BRAND_COLORS.mimuse}44`,
+                background: MIMUSE_COLOR + '18', color: MIMUSE_COLOR,
+                border: `1px solid ${MIMUSE_COLOR}44`,
               }}>
                 {kw}
-                <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword('mimuse', kw))}
-                  style={{ background: 'none', border: 'none', color: BRAND_COLORS.mimuse, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+                <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword(MIMUSE_BRAND, kw))}
+                  style={{ background: 'none', border: 'none', color: MIMUSE_COLOR, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
               </span>
             ))}
             <span style={{ display: 'inline-flex', gap: 4 }}>
               <input className="modal-input" placeholder="키워드 추가" value={newMimuseKw}
                 onChange={e => setNewMimuseKw(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw('')) } }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(MIMUSE_BRAND, newMimuseKw, () => setNewMimuseKw('')) } }}
                 style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
-              <button className="cfg-btn" onClick={() => addKeyword('mimuse', newMimuseKw, () => setNewMimuseKw(''))}>+</button>
+              <button className="cfg-btn" onClick={() => addKeyword(MIMUSE_BRAND, newMimuseKw, () => setNewMimuseKw(''))}>+</button>
             </span>
           </div>
         </div>
 
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>브랜드</div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            {(brandKws.brands || []).map((kw, idx) => {
-              const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
-              return (
-                <span key={kw} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 2,
-                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                  background: c + '18', color: c, border: `1px solid ${c}44`,
-                }}>
-                  {kw}
-                  <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword('brands', kw))}
-                    style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+        {confirmedBrands.length > 0 ? confirmedBrands.map((brand, idx) => {
+          const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
+          const kws = brandKws.byBrand[brand.key] || []
+          const draft = newBrandKwByKey[brand.key] || ''
+          return (
+            <div key={brand.key} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: c, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>{brand.name}</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                {kws.map(kw => (
+                  <span key={kw} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 2,
+                    fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                    background: c + '18', color: c, border: `1px solid ${c}44`,
+                  }}>
+                    {kw}
+                    <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword(brand.key, kw))}
+                      style={{ background: 'none', border: 'none', color: c, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
+                  </span>
+                ))}
+                <span style={{ display: 'inline-flex', gap: 4 }}>
+                  <input className="modal-input" placeholder="키워드 추가" value={draft}
+                    onChange={e => setNewBrandKwByKey(prev => ({ ...prev, [brand.key]: e.target.value }))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addKeyword(brand.key, draft, () => setNewBrandKwByKey(prev => ({ ...prev, [brand.key]: '' })))
+                      }
+                    }}
+                    style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
+                  <button className="cfg-btn" onClick={() => addKeyword(brand.key, draft, () => setNewBrandKwByKey(prev => ({ ...prev, [brand.key]: '' })))}>+</button>
                 </span>
-              )
-            })}
-            <span style={{ display: 'inline-flex', gap: 4 }}>
-              <input className="modal-input" placeholder="키워드 추가" value={newBrandsKw}
-                onChange={e => setNewBrandsKw(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword('brands', newBrandsKw, () => setNewBrandsKw('')) } }}
-                style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
-              <button className="cfg-btn" onClick={() => addKeyword('brands', newBrandsKw, () => setNewBrandsKw(''))}>+</button>
-            </span>
+              </div>
+            </div>
+          )
+        }) : (
+          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--gray-5)' }}>
+            이 페이즈에 확정 브랜드가 없습니다. 브랜드 확정 후 키워드를 설정할 수 있습니다.
           </div>
-        </div>
+        )}
 
         {kwSaving && <div className="modal-status">저장 중…</div>}
 
@@ -1380,10 +1512,9 @@ export default function Monitoring() {
                     ? (
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                          const kwLow    = kw.toLowerCase()
-                          const isMimuse = (brandKws.mimuse || []).some(k => k.toLowerCase() === kwLow)
-                          const brandIdx = (brandKws.brands || []).findIndex(k => k.toLowerCase() === kwLow)
-                          const c        = isMimuse ? BRAND_COLORS.mimuse : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+                          const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                          const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
+                          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
                           return (
                             <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                           )
@@ -1418,7 +1549,8 @@ export default function Monitoring() {
                   <select className="modal-input" value={editForm.brand}
                     onChange={e => setEditForm(f => f ? { ...f, brand: e.target.value } : f)}>
                     <option value="">—</option>
-                    {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                    <option value={MIMUSE_BRAND}>MiMuse</option>
+                    {confirmedBrands.map(b => <option key={b.key} value={b.key}>{b.name}</option>)}
                   </select>
                 </div>
                 <div>

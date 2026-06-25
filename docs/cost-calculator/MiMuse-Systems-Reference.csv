@@ -1,0 +1,16 @@
+System,Type,Actor / API ID,Used by (page),GAS action / access,Script property / env,Cost model
+Apify,Actor,automation-lab~tiktok-profile-scraper,/influencer/search,tcmRunSearch,APIFY_TOKEN,~$50–100 one-time (10–20 runs × 1000 pool)
+Apify,Actor,clockworks~tiktok-profile-scraper,/influencer/monitoring,runMonitoringScrape,APIFY_TOKEN,~$25–35/mo max (manual · up to 30 daily clicks)
+Apify,Actor,truefetch~tiktok-video-downloader,Planned — MP4 archive,—,APIFY_TOKEN,$0.25/video download · $0.05/video metadata
+TikTok,API,TikTok Creator Marketplace (TCM),/influencer/search,tcmRunSearch,"TIKTOK_ACCESS_TOKEN, TIKTOK_APP_ID, TIKTOK_SECRET_KEY",Business access (no per-call in code)
+Supabase,Database + Storage,Postgres + Storage buckets,All app pages,Direct client + GAS,"VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, SUPABASE_PROJECT_URL, SUPABASE_KEY",Pro ~$25/mo
+Google Apps Script,Backend API,Web App deploy,All integrations,gasGet / gasPost,GAS deployment URL in src/lib/api.ts,Free (quotas)
+Microsoft Graph,Email API,Outlook Mail,/influencer/contact,sendOutreachEmail,"OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_TENANT_ID",Microsoft 365 org plan
+Microsoft Graph,Email API,Outlook Mail,/brand/contact,sendOutreachEmail,Same as Outlook,Microsoft 365 org plan
+Microsoft Graph,Email API,Outlook drafts,/trend/tiktok,getAllTrendDrafts,Same as Outlook,Microsoft 365 org plan
+Microsoft Graph,Email API,Outlook send,/trend/beauty-news,sendWeeklyBeautyNewsEmail,Same as Outlook,Microsoft 365 org plan
+17track,API,v2.4,/kit/ems,syncAllEmsTracking,TRACK17_API_KEY,Annual API plan
+Google Sheets,Import,SpreadsheetApp,Beauty news workflow,importBeautyNewsFromSheet,BEAUTY_NEWS_SHEET_ID,Free
+Korea Post,Link only,epost.go.kr,/kit/ems,Browser link only,—,Free
+17track website,Link only,t.17track.net,/kit/ems,Browser link only,—,Free
+Vercel,Hosting,Static SPA,Production deploy,—,—,Free tier or low cost

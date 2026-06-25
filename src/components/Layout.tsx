@@ -70,6 +70,10 @@ const GROUPS: SideGroup[] = [
   },
 ]
 
+function isDashboardHome(pathname: string) {
+  return pathname === '/' || pathname.startsWith('/home/')
+}
+
 function getActiveGroup(pathname: string) {
   if (pathname === '/' || pathname.startsWith('/home/')) return 'HOME'
   const matches = GROUPS.filter(g => g.prefix !== '/' && pathname.startsWith(g.prefix))
@@ -222,6 +226,7 @@ export default function Layout() {
   const activeGroup = GROUPS.find(g => g.label === activeLabel)
 
   const stickyGroup = useMemo((): StickyBarGroup | null => {
+    if (isDashboardHome(pathname)) return null
     if (!activeGroup) return null
     if (activeGroup.label !== 'ARCHIVE') return activeGroup
     if (!isArchiveDetailPath(pathname)) return null

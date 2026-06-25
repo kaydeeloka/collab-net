@@ -13,14 +13,17 @@ const GAS_MAX_MS       = 5.75 * 60 * 1000; // hard cap — Google Apps Script ~6
 const TCM_TIMEOUT_MS   = 2 * 60 * 1000;   // TCM discover only (independent clock)
 const APIFY_TIMEOUT_MS = 5 * 60 * 1000;   // max Apify wait (clamped to remaining GAS time)
 const APIFY_MIN_TIMEOUT_SEC = 300;        // Apify actor default is often 300s — too short for large runs
-const APIFY_BATCH_SIZE = 50;              // profiles per Apify run — avoids actor OOM
-const APIFY_SCRAPE_MAX = 120;             // max profiles queued for Apify per search
+const APIFY_BATCH_SIZE = 200;             // profiles per Apify run — empirically stable to ~200 (timeouts ~250+)
+const APIFY_SCRAPE_MAX = 200;             // max profiles sent to Apify (ceil(UI target × buffer), capped here)
 const APIFY_RUN_MEMORY_MB = 4096;         // 4 GB per run (Apify default is often 512–1024)
+const TCM_TARGET_MIN    = 10;
+const TCM_TARGET_MAX    = 100;            // UI / request cap — not the Apify scrape cap
 
-// TCM pool + Apify queue = ceil(target × buffer)
-function _tcmSearchBuffer_(minF, maxF) {
-  if (maxF <= 10000) return 6; // nano (e.g. 3K–10K) — sparse pool, needs more oversampling
-  return 3;                  // micro+ (e.g. 10K–50K, 60K–100K)
+// TCM discover pool = UI target × poolBuffer (nano needs ×6 — sparse pool, heavy email/dedup loss).
+// Apify scrape is capped separately at APIFY_SCRAPE_MAX (200) — poolBuffer does not multiply Apify cost.
+function _tcmPoolBuffer_(minF, maxF) {
+  if (maxF <= 10000) return 6; // nano (3K–10K) — e.g. target 100 → TCM pool 600, ~30% yield before filters
+  return 2.5;                // micro+ (10K–50K, 60K–100K)
 }
 
 function _tcmCfg() {
@@ -255,7 +258,7 @@ function _apifyFetchDataset(datasetId, token) {
   return Array.isArray(items) ? items : [];
 }
 
-/** Scrape handles in small batches — single large runs OOM on automation-lab profile scraper. */
+/** Scrape handles in batches (default 200/run — safe below actor timeout ceiling ~250). */
 function _apifyScrapeProfilesBatched(handles, token, deadline, requireEmail) {
   var merged = {};
   var noEmail = 0;
@@ -393,7 +396,8 @@ function tcmRunSearch(params) {
 
     const accountId = _tcmGetAccountId(cfg);
     const tierRank  = params.tierRank;
-    const target    = parseInt(params.targetCount) || 20;
+    const targetRaw = parseInt(params.targetCount) || 20;
+    const target    = Math.min(TCM_TARGET_MAX, Math.max(TCM_TARGET_MIN, targetRaw));
 
     if (!tierRank) return { error: '티어를 선택하세요.' };
 
@@ -413,8 +417,8 @@ function tcmRunSearch(params) {
     const maxRatioDec   = (parseFloat(params.maxRatio) || 70) / 100;
     const requireEmail  = params.requireEmail !== false;
     const countryCode   = _tcmCountryCode(params.proxyCountry || params.country);
-    const buffer        = _tcmSearchBuffer_(minF, maxF);
-    const collect       = Math.ceil(target * buffer);
+    const poolBuffer    = _tcmPoolBuffer_(minF, maxF);
+    const collect       = Math.ceil(target * poolBuffer);
     const perKeywordTarget = Math.max(1, Math.ceil(target / kws.length));
     const runStart      = Date.now();
     const gasLimit      = runStart + GAS_MAX_MS;
@@ -426,11 +430,11 @@ function tcmRunSearch(params) {
     const lastError = collected.lastError;
 
     const existingSet = _buildHandleSet_(params.existingHandles);
-    const scrapeLimit = Math.min(Math.ceil(target * buffer), APIFY_SCRAPE_MAX);
+    const scrapeLimit = Math.min(Math.ceil(target * poolBuffer), APIFY_SCRAPE_MAX);
 
     const stats = {
       poolSize      : Object.keys(pool).length,
-      buffer        : buffer,
+      buffer        : poolBuffer,
       collectTarget : collect,
       scrapeLimit   : scrapeLimit,
       apifyBatchSize: APIFY_BATCH_SIZE,

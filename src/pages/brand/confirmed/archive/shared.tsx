@@ -24,7 +24,7 @@ export interface ConfirmedBrand {
   brand_name:   string
   product:      string | null
   received:     boolean
-  archive_meta?: string | null
+  archive_memo?: string | null
 }
 
 export interface BrandAsset {

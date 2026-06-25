@@ -3,6 +3,12 @@ import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket
 
 export const MON_SCRAPE_LIMIT = 50
 
+export interface MonitoringAssets {
+  thumbnail_source_url: string | null
+  thumbnail_path:       string | null
+  video_path:           string | null
+}
+
 export interface MonitoringRow {
   id:                      string
   influencer_platform_id:  string | null
@@ -18,6 +24,7 @@ export interface MonitoringRow {
   brand:                   string | null
   repost:                  string | null
   review_link:             string | null
+  assets:                  MonitoringAssets | null
   views:                   number
   likes:                   number
   comments:                number
@@ -147,6 +154,17 @@ function buildTopPosts(reviewRows: MonitoringRow[]): TopPostRow[] {
     })
 }
 
+function mapMonitoringAssets(raw: any): MonitoringAssets | null {
+  if (!raw) return null
+  const row = Array.isArray(raw) ? raw[0] : raw
+  if (!row) return null
+  return {
+    thumbnail_source_url: row.thumbnail_source_url ?? null,
+    thumbnail_path:       row.thumbnail_path ?? null,
+    video_path:           row.video_path ?? null,
+  }
+}
+
 function mapMonitoringRecord(m: any): MonitoringRow {
   const ip = m.influencer_platform
   const ci = ip?.confirmed_influencers
@@ -165,6 +183,7 @@ function mapMonitoringRecord(m: any): MonitoringRow {
     brand:                   m.brand,
     repost:                  ci?.repost || null,
     review_link:             m.review_link,
+    assets:                  mapMonitoringAssets(m.monitoring_assets),
     views:                   m.views    || 0,
     likes:                   m.likes    || 0,
     comments:                m.comments || 0,
@@ -189,6 +208,7 @@ function buildPlaceholder(ci: any, ip: { id: string; platform: string; handle: s
     brand:                   null,
     repost:                  ci.repost ?? null,
     review_link:             null,
+    assets:                  null,
     views:                   0,
     likes:                   0,
     comments:                 0,
@@ -210,6 +230,7 @@ function sortGroupRows(group: MonitoringRow[]): MonitoringRow[] {
 export async function loadMonitoringData(phaseId: string): Promise<{ rows: MonitoringRow[]; confirmedCount: number }> {
   const monitoringSelect = `
     id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
+    monitoring_assets(thumbnail_source_url, thumbnail_path, video_path),
     influencer_platform_id,
     influencer_platform!monitoring_influencer_platform_id_fkey(
       platform, handle,

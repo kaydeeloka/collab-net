@@ -2,18 +2,24 @@
 //  Tab: 인플루언서 모니터링
 //  All data lives in Supabase — no Google Sheets dependency.
 //  Keywords: monitoring_keywords table (same source as dashboard)
+//  Storage (run supabase/monitoring_assets_bucket.sql once):
+//    monitoring-thumbnails — public JPG (→ monitoring_assets.thumbnail_path)
+//    monitoring-videos     — private MP4 (→ monitoring_assets.video_path)
 // ============================================================
 
 function _emptyMonitoringKeywords() {
-  return { mimuse: [], brands: [] };
+  return { mimuse: [], byBrand: {} };
 }
 
 function _keywordsFromRows(rows) {
   var result = _emptyMonitoringKeywords();
   if (!Array.isArray(rows)) return result;
   rows.forEach(function(row) {
-    if (row.brand && Array.isArray(row.keywords)) {
-      result[row.brand] = row.keywords;
+    if (!row.brand || !Array.isArray(row.keywords)) return;
+    if (row.brand === 'mimuse' && !row.phase_id) {
+      result.mimuse = row.keywords;
+    } else if (row.phase_id) {
+      result.byBrand[row.brand] = row.keywords;
     }
   });
   return result;
@@ -66,11 +72,17 @@ function getMonitoringData() {
 
 // ── Keywords ─────────────────────────────────────────────────
 
-function getMonitoringKeywords() {
+function getMonitoringKeywords(phaseId) {
   try {
-    var rows = supabaseGet('/rest/v1/monitoring_keywords?select=brand,keywords&order=brand');
+    var q = '/rest/v1/monitoring_keywords?select=brand,keywords,phase_id&order=brand';
+    if (phaseId) {
+      q += '&or=(and(phase_id.is.null,brand.eq.mimuse),phase_id.eq.' + phaseId + ')';
+    } else {
+      q += '&phase_id=is.null';
+    }
+    var rows = supabaseGet(q);
     var result = _keywordsFromRows(rows);
-    Logger.log('키워드 Supabase 로드: ' + Object.keys(result).join(', '));
+    Logger.log('키워드 Supabase 로드 (phase=' + (phaseId || 'global') + '): mimuse=' + result.mimuse.length + ', brands=' + Object.keys(result.byBrand).length);
     return result;
   } catch (e) {
     Logger.log('getMonitoringKeywords Supabase 오류: ' + e);
@@ -78,30 +90,55 @@ function getMonitoringKeywords() {
   }
 }
 
-function resetMonitoringKeywords() {
-  return { ok: true, keywords: getMonitoringKeywords() };
+function resetMonitoringKeywords(body) {
+  return { ok: true, keywords: getMonitoringKeywords((body || {}).phaseId) };
 }
 
-function saveMonitoringKeywords(brandKeywords) {
+function saveMonitoringKeywords(body) {
+  body = body || {};
+  var phaseId = (body.phaseId || '').toString().trim();
+  var brandKeywords = body.brandKeywords || body.keywords || {};
   if (!brandKeywords || typeof brandKeywords !== 'object') {
     return { ok: false, error: 'keywords object required' };
   }
-  var payloads = [];
-  Object.keys(brandKeywords).forEach(function(brand) {
-    var kws = brandKeywords[brand];
-    if (Array.isArray(kws)) payloads.push({ brand: brand, keywords: kws });
-  });
-  if (!payloads.length) return { ok: false, error: 'no keywords to save' };
 
-  var res = supabaseUpsert('monitoring_keywords', payloads, 'brand');
-  if (!res.ok) return { ok: false, error: 'Supabase upsert failed: HTTP ' + res.status };
-  return { ok: true, keywords: getMonitoringKeywords() };
+  var mimuseKws = brandKeywords.mimuse;
+  if (Array.isArray(mimuseKws)) {
+    var mimuseRows = supabaseGet('/rest/v1/monitoring_keywords?select=id&brand=eq.mimuse&phase_id=is.null&limit=1');
+    if (Array.isArray(mimuseRows) && mimuseRows.length) {
+      supabasePatch('monitoring_keywords', 'id=eq.' + mimuseRows[0].id, { keywords: mimuseKws });
+    } else {
+      supabaseRequest('/rest/v1/monitoring_keywords', {
+        method: 'post',
+        payload: { brand: 'mimuse', phase_id: null, keywords: mimuseKws },
+      });
+    }
+  }
+
+  if (!phaseId) {
+    return { ok: true, keywords: getMonitoringKeywords() };
+  }
+
+  var byBrand = brandKeywords.byBrand || {};
+  var payloads = [];
+  Object.keys(byBrand).forEach(function(brand) {
+    var kws = byBrand[brand];
+    if (Array.isArray(kws)) payloads.push({ phase_id: phaseId, brand: brand, keywords: kws });
+  });
+  if (payloads.length) {
+    var res = supabaseUpsert('monitoring_keywords', payloads, 'phase_id,brand');
+    if (!res.ok) return { ok: false, error: 'Supabase upsert failed: HTTP ' + res.status };
+  }
+  return { ok: true, keywords: getMonitoringKeywords(phaseId) };
 }
 
-function _getAllKeywordsFlat() {
-  const brandKws = getMonitoringKeywords();
-  if (Array.isArray(brandKws)) return brandKws;
-  return Object.values(brandKws).reduce(function(a, b) { return a.concat(b); }, []);
+function _getAllKeywordsFlat(phaseId) {
+  var brandKws = getMonitoringKeywords(phaseId);
+  var flat = (brandKws.mimuse || []).slice();
+  Object.keys(brandKws.byBrand || {}).forEach(function(brand) {
+    flat = flat.concat(brandKws.byBrand[brand] || []);
+  });
+  return flat;
 }
 
 // ── Apify Scrape ─────────────────────────────────────────────
@@ -109,6 +146,23 @@ function _getAllKeywordsFlat() {
 const MON_ACTOR        = 'clockworks~tiktok-profile-scraper';
 const MON_SCRAPE_LIMIT = 50;
 const MON_VIDEOS_PER   = 50;
+const MON_LOOKBACK_DAYS = 7;
+
+// 실행 버튼 클릭일 = MON_START (today KST), MON_END = 7일 전 → Apify: newer than END, older than START
+function _monitoringScrapeDateRange_() {
+  var tz = 'Asia/Seoul';
+  var today = new Date();
+  var monStart = Utilities.formatDate(today, tz, 'yyyy-MM-dd');
+  var older = new Date(today.getTime() - MON_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  var monEnd = Utilities.formatDate(older, tz, 'yyyy-MM-dd');
+  return {
+    monStartDate       : monStart,
+    monEndDate         : monEnd,
+    onlyPostsNewerThan : monEnd,
+    onlyPostsOlderThan : monStart,
+    periodLabel        : monEnd + ' ~ ' + monStart + ' (최근 ' + MON_LOOKBACK_DAYS + '일)',
+  };
+}
 
 // Read TikTok handles from Supabase influencer_platform table.
 function _getTikTokInfluencers(limit) {
@@ -144,21 +198,23 @@ function _getTikTokInfluencers(limit) {
   }
 }
 
-// Start Apify scrape.
-// Date range is read from Script Properties: MON_START_DATE / MON_END_DATE (YYYY-MM-DD).
-function runMonitoringScrape() {
+// Start Apify scrape. Date range = click day (MON_START) back to 7 days before (MON_END).
+function runMonitoringScrape(body) {
+  body = body || {};
+  var phaseId = (body.phaseId || '').toString().trim();
+  if (!phaseId) return { error: 'phaseId가 필요합니다. 페이즈를 선택한 뒤 다시 실행하세요.' };
+
   const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 Script Properties에 설정되지 않았습니다.' };
 
   const handles = _getTikTokInfluencers(MON_SCRAPE_LIMIT);
   if (handles.length === 0) return { error: 'Supabase influencer_platform에 유효한 TikTok 핸들이 없습니다.' };
 
-  const props     = PropertiesService.getScriptProperties();
-  const startDate = props.getProperty('MON_START_DATE') || '2026-02-20';
-  const endDate   = props.getProperty('MON_END_DATE')   || '2026-04-23';
+  const props = PropertiesService.getScriptProperties();
+  const range = _monitoringScrapeDateRange_();
 
   Logger.log('스크래핑 대상 핸들: ' + handles.join(', '));
-  Logger.log('기간: ' + (startDate || '제한없음') + ' ~ ' + (endDate || '제한없음'));
+  Logger.log('기간: ' + range.periodLabel);
 
   const payload = {
     profiles             : handles,
@@ -167,10 +223,10 @@ function runMonitoringScrape() {
     sortVideosBy         : 'Latest',
     shouldDownloadVideos : false,
     shouldDownloadCovers : false,
-    excludePinnedPosts   : false,
+    excludePinnedPosts   : true,
   };
-  if (startDate) payload.onlyPostsNewerThan = startDate;
-  if (endDate)   payload.onlyPostsOlderThan = endDate;
+  payload.onlyPostsNewerThan = range.onlyPostsNewerThan;
+  payload.onlyPostsOlderThan = range.onlyPostsOlderThan;
 
   try {
     const res = UrlFetchApp.fetch(
@@ -188,16 +244,19 @@ function runMonitoringScrape() {
     const runId     = json.data.id;
     const datasetId = json.data.defaultDatasetId;
 
-    props.setProperty('MON_RUN_ID',     runId);
-    props.setProperty('MON_DATASET_ID', datasetId);
-    props.setProperty('MON_RUN_DATE',   new Date().toISOString());
+    props.setProperty('MON_RUN_ID',      runId);
+    props.setProperty('MON_DATASET_ID',  datasetId);
+    props.setProperty('MON_RUN_DATE',    new Date().toISOString());
+    props.setProperty('MON_START_DATE',  range.monStartDate);
+    props.setProperty('MON_END_DATE',    range.monEndDate);
+    props.setProperty('MON_PHASE_ID',    phaseId);
 
-    const period = (startDate || '제한없음') + ' ~ ' + (endDate || '제한없음');
-    Logger.log('모니터링 실행 시작: ' + runId + ' (' + handles.length + '개 프로필, ' + period + ')');
+    Logger.log('모니터링 실행 시작: ' + runId + ' (' + handles.length + '개 프로필, ' + range.periodLabel + ')');
     return {
-      ok     : true, runId: runId,
+      ok      : true, runId: runId,
       profiles: handles.length, handles: handles,
-      message: handles.length + '개 TikTok 프로필 스크래핑 시작 (' + period + ')',
+      period  : range.periodLabel,
+      message : handles.length + '개 TikTok 프로필 스크래핑 시작 (' + range.periodLabel + ')',
     };
   } catch (e) {
     return { error: e.toString() };
@@ -239,7 +298,8 @@ function checkMonitoringRun() {
 }
 
 function _writeMonitoringResults(token, datasetId) {
-  const keywords = _getAllKeywordsFlat().map(function(k) { return k.toLowerCase(); });
+  var phaseId = PropertiesService.getScriptProperties().getProperty('MON_PHASE_ID') || '';
+  const keywords = _getAllKeywordsFlat(phaseId).map(function(k) { return k.toLowerCase(); });
   const runDate  = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
 
   try {
@@ -280,7 +340,7 @@ function _writeMonitoringResults(token, datasetId) {
       return { error: 'SUPABASE_PROJECT_URL / SUPABASE_KEY가 설정되지 않아 결과를 저장할 수 없습니다.' };
     }
 
-    const updated = _writeToSupabase(url, key, videosByHandle, keywords, itemText, runDate);
+    const updated = _writeToSupabase(url, key, videosByHandle, keywords, itemText, runDate, phaseId);
 
     Logger.log('업데이트된 행: ' + updated + '개');
     return {
@@ -306,8 +366,18 @@ function _itemUniqueId(item) {
   ).toString().toLowerCase();
 }
 
+function _videoThumbnailUrl(video) {
+  var meta = video.videoMeta || {};
+  var url = (
+    meta.coverUrl || meta.originalCoverUrl ||
+    video['videoMeta.coverUrl'] || video['videoMeta.originalCoverUrl'] ||
+    ''
+  ).toString().trim();
+  return url || null;
+}
+
 // Write Apify results to Supabase monitoring table.
-function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate) {
+function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate, phaseId) {
   const mapRes = UrlFetchApp.fetch(
     sbUrl + '/rest/v1/influencer_platform?select=id,handle,platform',
     { headers: supabaseHeaders(), muteHttpExceptions: true }
@@ -335,11 +405,13 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
       else if (video.createTime) videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
 
       const videoUrl   = video.webVideoUrl || video.videoUrl || '';
+      const thumbUrl   = _videoThumbnailUrl(video);
       const s          = video.stats || {};
       const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
 
       const payload = JSON.stringify({
         influencer_platform_id: platformId,
+        phase_id   : phaseId || null,
         date       : videoDate || null,
         media      : 'video',
         review_link: videoUrl  || null,
@@ -356,18 +428,49 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
           method : 'POST',
           headers: Object.assign({}, supabaseHeaders(), {
             'Content-Type': 'application/json',
-            Prefer        : 'resolution=merge-duplicates',
+            Prefer        : 'resolution=merge-duplicates,return=representation',
           }),
           payload           : payload,
           muteHttpExceptions: true,
         }
       );
-      if (insRes.getResponseCode() < 300) inserted++;
-      else Logger.log('Supabase insert 오류 (' + handle + '): ' + insRes.getContentText());
+      if (insRes.getResponseCode() < 300) {
+        inserted++;
+        if (thumbUrl) {
+          var rows = JSON.parse(insRes.getContentText());
+          var monId = Array.isArray(rows) && rows[0] ? rows[0].id : null;
+          if (monId) _upsertMonitoringAssets_(sbUrl, monId, thumbUrl);
+        }
+      } else {
+        Logger.log('Supabase insert 오류 (' + handle + '): ' + insRes.getContentText());
+      }
     });
   });
 
   return inserted;
+}
+
+function _upsertMonitoringAssets_(sbUrl, monitoringId, thumbnailSourceUrl) {
+  var assetPayload = JSON.stringify({
+    monitoring_id        : monitoringId,
+    thumbnail_source_url : thumbnailSourceUrl || null,
+    updated_at           : new Date().toISOString(),
+  });
+  var res = UrlFetchApp.fetch(
+    sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
+    {
+      method : 'POST',
+      headers: Object.assign({}, supabaseHeaders(), {
+        'Content-Type': 'application/json',
+        Prefer        : 'resolution=merge-duplicates',
+      }),
+      payload           : assetPayload,
+      muteHttpExceptions: true,
+    }
+  );
+  if (res.getResponseCode() >= 300) {
+    Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
+  }
 }
 
 function _clearRunProps() {
@@ -376,6 +479,7 @@ function _clearRunProps() {
   props.deleteProperty('MON_DATASET_ID');
   props.deleteProperty('MON_START_DATE');
   props.deleteProperty('MON_END_DATE');
+  props.deleteProperty('MON_PHASE_ID');
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -401,10 +505,12 @@ function resetMonitoringRun() {
 }
 
 // Process a previously-completed Apify run by ID.
-function processApifyRunById(runId) {
+function processApifyRunById(runId, phaseId) {
   const token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
   if (!runId)  return { error: 'runId가 필요합니다.' };
+  phaseId = (phaseId || '').toString().trim();
+  if (!phaseId) return { error: 'phaseId가 필요합니다.' };
 
   try {
     const statusRes = UrlFetchApp.fetch(
@@ -416,6 +522,7 @@ function processApifyRunById(runId) {
     if (runData.status !== 'SUCCEEDED') {
       return { error: 'Run 상태가 SUCCEEDED가 아닙니다 (현재 상태: ' + runData.status + ')' };
     }
+    PropertiesService.getScriptProperties().setProperty('MON_PHASE_ID', phaseId);
     return _writeMonitoringResults(token, runData.defaultDatasetId);
   } catch (e) {
     return { error: e.toString() };
@@ -500,13 +607,13 @@ function debugMonitoringSetup() {
 function routeMonitoring(action, p, body) {
   switch (action) {
     case 'getMonitoringData'       : return getMonitoringData();
-    case 'getMonitoringKeywords'   : return getMonitoringKeywords();
-    case 'saveMonitoringKeywords'  : return saveMonitoringKeywords((body || {}).brandKeywords || (body || {}).keywords || {});
-    case 'resetMonitoringKeywords' : return resetMonitoringKeywords();
-    case 'runMonitoringScrape'     : return runMonitoringScrape();
+    case 'getMonitoringKeywords'   : return getMonitoringKeywords((body || {}).phaseId);
+    case 'saveMonitoringKeywords'  : return saveMonitoringKeywords(body || {});
+    case 'resetMonitoringKeywords' : return resetMonitoringKeywords(body || {});
+    case 'runMonitoringScrape'     : return runMonitoringScrape(body || {});
     case 'checkMonitoringRun'      : return checkMonitoringRun();
     case 'resetMonitoringRun'      : return resetMonitoringRun();
-    case 'processApifyRunById'     : return processApifyRunById((body || {}).runId || '');
+    case 'processApifyRunById'     : return processApifyRunById((body || {}).runId || '', (body || {}).phaseId);
     default                        : return null;
   }
 }

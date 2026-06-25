@@ -59,7 +59,7 @@ export default function BrandArchiveDetail() {
     setLoading(true)
     const { data, error } = await supabase
       .from('confirmed_brands')
-      .select('id, brand_name, product, received, archive_meta')
+      .select('id, brand_name, product, received, archive_memo')
       .eq('phase_id', selectedPhaseId)
       .order('brand_name')
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -89,13 +89,17 @@ export default function BrandArchiveDetail() {
   }, [loading, brands.length, brand, navigate])
 
   useEffect(() => {
-    if (brandId) loadAssets(brandId)
-    else { setAssets([]); setArchiveMemo(''); setLogoUrl(null) }
+    if (brandId) void loadAssets(brandId)
+    else {
+      setAssets([])
+      setArchiveMemo('')
+      setLogoUrl(null)
+    }
   }, [brandId, loadAssets])
 
   useEffect(() => {
-    setArchiveMemo(brand?.archive_meta ?? '')
-  }, [brand?.id, brand?.archive_meta])
+    setArchiveMemo(brand?.archive_memo ?? '')
+  }, [brand?.id, brand?.archive_memo])
 
   const logoAsset = assets.find(a => a.category === 'logo')
 
@@ -275,10 +279,10 @@ export default function BrandArchiveDetail() {
     memoTimer.current = setTimeout(async () => {
       const { error } = await supabase
         .from('confirmed_brands')
-        .update({ archive_meta: value || null })
+        .update({ archive_memo: value || null })
         .eq('id', brandId)
       if (error) showToast(error.message, 'error')
-      else setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_meta: value || null } : b))
+      else setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_memo: value || null } : b))
     }, 700)
   }
 
@@ -293,13 +297,13 @@ export default function BrandArchiveDetail() {
     try {
       const { error } = await supabase
         .from('confirmed_brands')
-        .update({ archive_meta: archiveMemo || null })
+        .update({ archive_memo: archiveMemo || null })
         .eq('id', brandId)
       if (error) {
         showToast(error.message, 'error')
         return
       }
-      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_meta: archiveMemo || null } : b))
+      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_memo: archiveMemo || null } : b))
       setEditMode(false)
       showToast('저장되었습니다', 'success')
     } finally {

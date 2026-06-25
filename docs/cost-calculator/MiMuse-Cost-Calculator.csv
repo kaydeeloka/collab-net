@@ -1,0 +1,28 @@
+MiMuse Apify Cost Estimate,,,
+,,,
+── PER VIDEO / PER RUN (truefetch = per video · not per batch) ──,#,Actor,Unit price,Example (50 videos)
+1. Listup,automation-lab~tiktok-profile-scraper,~$4-6 per UI click (1 Apify run),—
+2. Monitoring,clockworks~tiktok-profile-scraper,~$0.8-1.2 per UI click,—
+3. Video Download (MP4),truefetch~tiktok-video-downloader,$0.25 per video,50 × $0.25 = $12.50
+4. Metadata only,truefetch~tiktok-video-downloader,$0.05 per video,50 × $0.05 = $2.50
+,,,※ monitoring already returns metadata — row 4 often not needed
+,,,
+── LISTUP: 1000 POOL (ONE-TIME) ──,Value,Unit,Formula
+Pool target,1000,influencers,
+Max saved per UI run,100,influencers,
+$/run,5,USD,edit after 1 test run
+Runs (best),10,runs,=1000÷100
+Runs (realistic),15-20,runs,email · dedup · nano
+Total (best),50,USD,=10×$/run
+Total (realistic),75-100,USD,=15–20×$/run
+,,,
+── MONTHLY (MANUAL · pay for what you use) ──,Videos/mo,Unit price,Est. total
+2. Monitoring,up to 30 clicks/mo,~$1/click,~$10 - $30
+3. Video Download,50 matched reviews,× $0.25/video,~$12.50
+4. Metadata (optional),50 videos,× $0.05/video,~$2.50 (skip if using monitoring)
+MONTHLY TOTAL (②③),,,~$23 - $43
+,,,
+── FIXED (MONTHLY) ──,Est. Cost (USD),Notes,
+Supabase Pro,~$25,DB + Storage,
+17track API,~$4,EMS tracking,
+Stack monthly (no listup),,~$52 - $72,Monthly Apify + Supabase + 17track,

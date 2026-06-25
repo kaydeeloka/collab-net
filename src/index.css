@@ -2797,11 +2797,18 @@ button.brand-archive-card.bn-archive-brand-card {
 }
 .listup-search-bar__target {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   font-size: 12px;
   color: var(--gray-5);
-  white-space: nowrap;
+}
+.listup-search-bar__hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 11px;
+  color: var(--gray-4);
+  line-height: 1.35;
 }
 .listup-search-bar__target input {
   width: 72px;
