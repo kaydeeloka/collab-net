@@ -102,6 +102,26 @@
 
 .season-collection__kit-head {
   margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.season-collection__kit-edit-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--gray-5);
+}
+
+.season-collection__kit-edit-hint a {
+  font-weight: 600;
+  color: var(--teal-dk);
+  text-decoration: none;
+}
+
+.season-collection__kit-edit-hint a:hover {
+  text-decoration: underline;
 }
 
 .season-collection__kit-heading {
@@ -660,7 +680,7 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  margin: 8px 0;
+  margin: 0;
 }
 
 .season-collection__divider-line {
@@ -676,6 +696,14 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gray-5);
+}
+
+.season-collection__divider-label--archive {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--teal-dk);
 }
 
 .season-collection__post-overview {

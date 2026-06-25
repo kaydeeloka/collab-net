@@ -960,7 +960,7 @@ DROP TABLE IF EXISTS confirmed_brand_archive_meta CASCADE;
 CREATE TABLE IF NOT EXISTS confirmed_brand_assets (
   id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   confirmed_brand_id UUID        NOT NULL REFERENCES confirmed_brands(id) ON DELETE CASCADE,
-  category           TEXT        NOT NULL CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover')),
+  category           TEXT        NOT NULL CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'sales_channel')),
   file_name          TEXT        NOT NULL,
   storage_path       TEXT        NOT NULL UNIQUE,
   file_size          INTEGER,
@@ -1217,7 +1217,7 @@ BEGIN
   END IF;
 END $$;
 
--- confirmed_brand_assets — season collection product cover (separate from product_main)
+-- confirmed_brand_assets — season collection used product_cover (deprecated; now uses product_main)
 ALTER TABLE confirmed_brand_assets DROP CONSTRAINT IF EXISTS confirmed_brand_assets_category_check;
 ALTER TABLE confirmed_brand_assets ADD CONSTRAINT confirmed_brand_assets_category_check
   CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover'));
@@ -1342,3 +1342,43 @@ CREATE POLICY "allow_all_design_archive_folders" ON design_archive_folders
 DROP POLICY IF EXISTS "allow_all_design_archive_files" ON design_archive_files;
 CREATE POLICY "allow_all_design_archive_files" ON design_archive_files
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+--  confirmed_brands — archive field renames (자료 아카이브)
+-- ============================================================
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'confirmed_brands' AND column_name = 'archive_memo'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'confirmed_brands' AND column_name = 'archive_notes'
+  ) THEN
+    ALTER TABLE confirmed_brands RENAME COLUMN archive_memo TO archive_notes;
+  END IF;
+END $$;
+
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS archive_notes TEXT;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'confirmed_brands' AND column_name = 'archive_desc'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'confirmed_brands' AND column_name = 'description_en'
+  ) THEN
+    ALTER TABLE confirmed_brands RENAME COLUMN archive_desc TO description_en;
+  END IF;
+END $$;
+
+ALTER TABLE confirmed_brands ADD COLUMN IF NOT EXISTS description_en TEXT;
+
+-- confirmed_brand_assets — 판매처 (link in label + image file); drop deprecated product_cover
+DELETE FROM confirmed_brand_assets WHERE category = 'product_cover';
+
+ALTER TABLE confirmed_brand_assets DROP CONSTRAINT IF EXISTS confirmed_brand_assets_category_check;
+ALTER TABLE confirmed_brand_assets ADD CONSTRAINT confirmed_brand_assets_category_check
+  CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'sales_channel'));

@@ -415,8 +415,8 @@ CREATE TABLE confirmed_brands (
   received         BOOLEAN     NOT NULL DEFAULT false,
   notes            TEXT,
   created_at       TIMESTAMPTZ DEFAULT now(),
-  archive_memo     TEXT,
-  archive_desc     TEXT,
+  archive_notes    TEXT,
+  description_en   TEXT,
   product_en       TEXT
 );
 
@@ -426,7 +426,7 @@ CREATE TABLE confirmed_brand_assets (
   id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   confirmed_brand_id UUID        NOT NULL REFERENCES confirmed_brands(id) ON DELETE CASCADE,
   category           TEXT        NOT NULL CHECK (category IN (
-    'logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'product_cover'
+    'logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'sales_channel'
   )),
   file_name          TEXT        NOT NULL,
   storage_path       TEXT        NOT NULL UNIQUE,

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
-import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, ZoomIn, ZoomOut, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, Trash2, Upload, ZoomIn, ZoomOut, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 
@@ -13,18 +13,23 @@ export const CATEGORIES = [
   { key: 'product_sub',   label: '제품 이미지 (서브)',    hint: '서브 사진 (복수)', viewHint: '권장 크기: 800px × 800px', accept: 'image/*',                                 single: false },
   { key: 'cutout',        label: '제품 누끼',             hint: '누끼 PNG 등',     viewHint: '권장 크기: 800px × 800px',  accept: 'image/*',                                 single: false },
   { key: 'ingredients',   label: '전성분표',              hint: 'PDF / Excel / 이미지', viewHint: 'PDF / Excel / 이미지', accept: '.pdf,.xlsx,.xls,.xlsm,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel', single: false },
+  { key: 'sales_channel', label: '판매처',                hint: '링크 또는 이미지', viewHint: '판매처 링크 또는 이미지', accept: 'image/*', single: false },
 ] as const
 
 export type CategoryKey = typeof CATEGORIES[number]['key']
 
 export const VIEW_TOP_ROW: CategoryKey[] = ['logo', 'product_main', 'product_sub', 'cutout']
 
+export const ASSET_GRID_CATEGORIES = CATEGORIES.filter(c => c.key !== 'sales_channel')
+
 export interface ConfirmedBrand {
   id:           string
   brand_name:   string
   product:      string | null
   received:     boolean
-  archive_memo?: string | null
+  archive_notes?: string | null
+  description_en?: string | null
+  product_en?:  string | null
 }
 
 export interface BrandAsset {
@@ -719,14 +724,14 @@ export const PANEL: CSSProperties = {
   overflow: 'hidden',
 }
 
-export function ArchiveMemoPanel({
+export function ArchiveNotesPanel({
   editMode,
-  archiveMemo,
+  archiveNotes,
   onSave,
   layout = 'sidebar',
 }: {
   editMode: boolean
-  archiveMemo: string
+  archiveNotes: string
   onSave: (v: string) => void
   layout?: 'sidebar' | 'top'
 }) {
@@ -737,19 +742,19 @@ export function ArchiveMemoPanel({
       <section className="brand-archive-memo">
         <div className="brand-archive-memo__label">
           <FileText size={14} />
-          기타 메모
+          메모
         </div>
         {editMode ? (
           <textarea
             className="cfg-input brand-archive-memo__textarea"
-            value={archiveMemo}
+            value={archiveNotes}
             onChange={e => onSave(e.target.value)}
             placeholder="링크, 요청사항, 참고사항 등"
             rows={4}
           />
         ) : (
-          <div className={`brand-archive-memo__content${archiveMemo ? '' : ' is-empty'}`}>
-            {archiveMemo || '메모 없음'}
+          <div className={`brand-archive-memo__content${archiveNotes ? '' : ' is-empty'}`}>
+            {archiveNotes || '메모 없음'}
           </div>
         )}
       </section>
@@ -767,12 +772,12 @@ export function ArchiveMemoPanel({
     }}>
       <div className="brand-archive-memo__label">
         <FileText size={14} />
-        기타 메모
+        메모
       </div>
       {editMode ? (
         <textarea
           className="cfg-input"
-          value={archiveMemo}
+          value={archiveNotes}
           onChange={e => onSave(e.target.value)}
           placeholder="링크, 요청사항, 참고사항 등"
           rows={8}
@@ -782,10 +787,282 @@ export function ArchiveMemoPanel({
           }}
         />
       ) : (
-        <div className={`brand-archive-memo__content${archiveMemo ? '' : ' is-empty'}`}>
-          {archiveMemo || '메모 없음'}
+        <div className={`brand-archive-memo__content${archiveNotes ? '' : ' is-empty'}`}>
+          {archiveNotes || '메모 없음'}
         </div>
       )}
     </aside>
+  )
+}
+
+export function ArchiveProductFields({
+  editMode,
+  productEn,
+  descriptionEn,
+  archiveNotes,
+  onProductEnChange,
+  onDescriptionEnChange,
+  onArchiveNotesChange,
+}: {
+  editMode: boolean
+  productEn: string
+  descriptionEn: string
+  archiveNotes: string
+  onProductEnChange: (v: string) => void
+  onDescriptionEnChange: (v: string) => void
+  onArchiveNotesChange: (v: string) => void
+}) {
+  if (!editMode) return null
+
+  return (
+    <section className="brand-archive-product-fields">
+      <div className="brand-archive-product-fields__grid">
+        <div className="brand-archive-product-fields__field">
+          <label className="brand-archive-product-fields__label">제품 영문명</label>
+          <input
+            type="text"
+            className="cfg-input"
+            value={productEn}
+            onChange={e => onProductEnChange(e.target.value)}
+            placeholder="Product name in English"
+          />
+        </div>
+        <div className="brand-archive-product-fields__field brand-archive-product-fields__field--wide">
+          <label className="brand-archive-product-fields__label">제품 설명</label>
+          <textarea
+            className="cfg-input brand-archive-memo__textarea"
+            value={descriptionEn}
+            onChange={e => onDescriptionEnChange(e.target.value)}
+            placeholder="제품 설명 (영문, 시즌 컬렉션에 표시)"
+            rows={5}
+          />
+        </div>
+        <div className="brand-archive-product-fields__field brand-archive-product-fields__field--full">
+          <label className="brand-archive-product-fields__label">메모</label>
+          <textarea
+            className="cfg-input brand-archive-memo__textarea"
+            value={archiveNotes}
+            onChange={e => onArchiveNotesChange(e.target.value)}
+            placeholder="링크, 요청사항, 참고사항 등"
+            rows={4}
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export function ArchiveProductPreview({
+  brandName,
+  productKo,
+  productEn,
+  descriptionEn,
+  archiveNotes,
+  logoUrl,
+  productMainUrl,
+}: {
+  brandName: string
+  productKo: string | null
+  productEn: string
+  descriptionEn: string
+  archiveNotes: string
+  logoUrl: string | null
+  productMainUrl: string | null
+}) {
+  const productKoTrim = productKo?.trim() || ''
+  const productEnTrim = productEn.trim()
+  const primaryTitle = productEnTrim || productKoTrim || brandName
+  const desc = descriptionEn.trim() || '설명 없음'
+  const brandInitial = brandName.trim().charAt(0) || '?'
+
+  return (
+    <article className="brand-archive-product-preview">
+      <div className="brand-archive-product-preview__media">
+        {productMainUrl ? (
+          <img src={productMainUrl} alt={primaryTitle} />
+        ) : (
+          <span className="brand-archive-product-preview__placeholder">대표 이미지 없음</span>
+        )}
+      </div>
+      <div className="brand-archive-product-preview__copy">
+        <div className="brand-archive-product-preview__brand-block">
+          <span className="brand-archive-product-preview__brand">{brandName}</span>
+          {logoUrl ? (
+            <img src={logoUrl} alt={brandName} className="brand-archive-product-preview__logo" />
+          ) : (
+            <span className="brand-archive-product-preview__logo-fallback" aria-hidden>{brandInitial}</span>
+          )}
+        </div>
+        {productKoTrim && (
+          <p className="brand-archive-product-preview__title-sub">{productKoTrim}</p>
+        )}
+        <h2 className="brand-archive-product-preview__title">{primaryTitle}</h2>
+        <p className={`brand-archive-product-preview__desc${descriptionEn.trim() ? '' : ' is-empty'}`}>{desc}</p>
+        <div className="brand-archive-product-preview__memo">
+          <span className="brand-archive-product-preview__memo-label">메모</span>
+          <p className={`brand-archive-product-preview__memo-text${archiveNotes.trim() ? '' : ' is-empty'}`}>
+            {archiveNotes.trim() || '메모 없음'}
+          </p>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+export function isSalesLinkOnly(asset: BrandAsset) {
+  return asset.mime_type === 'application/x-sales-link' || asset.storage_path.endsWith('.link')
+}
+
+export function SalesChannelPanel({
+  assets,
+  editMode,
+  uploading,
+  onAddLink,
+  onAddImage,
+  onDelete,
+  onLinkChange,
+  onDownload,
+}: {
+  assets: BrandAsset[]
+  editMode: boolean
+  uploading: boolean
+  onAddLink: (url: string) => void
+  onAddImage: (url: string, file: File) => void
+  onDelete: (asset: BrandAsset) => void
+  onLinkChange: (asset: BrandAsset, url: string) => void
+  onDownload: (asset: BrandAsset) => void
+}) {
+  const cat = CATEGORIES.find(c => c.key === 'sales_channel')!
+  const [draftUrl, setDraftUrl] = useState('')
+
+  function tryAddLink() {
+    const url = draftUrl.trim()
+    if (!url) return
+    onAddLink(url)
+    setDraftUrl('')
+  }
+
+  return (
+    <section className="brand-archive-asset-slot brand-archive-asset-slot--wide brand-archive-sales">
+      <ViewCategoryHeader label={cat.label} viewHint={cat.viewHint} />
+      {assets.length === 0 && !editMode ? (
+        <ViewEmptyPlaceholder />
+      ) : (
+        <div className="brand-archive-sales__list">
+          {assets.map(asset => {
+            const linkOnly = isSalesLinkOnly(asset)
+            const url = asset.label?.trim() || ''
+            const hasImage = !linkOnly
+            return (
+              <div key={asset.id} className="brand-archive-sales__item">
+                <div className="brand-archive-sales__media">
+                  {hasImage ? (
+                    <AssetPreview asset={asset} variant="thumb" />
+                  ) : (
+                    <div className="brand-archive-sales__link-only">
+                      <ExternalLink size={28} color="var(--blue-dk)" />
+                    </div>
+                  )}
+                </div>
+                <div className="brand-archive-sales__meta">
+                  {editMode ? (
+                    <input
+                      type="url"
+                      className="cfg-input"
+                      value={asset.label ?? ''}
+                      onChange={e => onLinkChange(asset, e.target.value)}
+                      placeholder="판매처 링크 (https://)"
+                    />
+                  ) : url ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="brand-archive-sales__link">
+                      <ExternalLink size={12} />
+                      {url}
+                    </a>
+                  ) : hasImage ? (
+                    <span className="brand-archive-sales__link brand-archive-sales__link--empty">이미지만 등록됨</span>
+                  ) : null}
+                  {hasImage && (
+                    <div className="brand-archive-asset-footer__name">{asset.file_name}</div>
+                  )}
+                </div>
+                <div className="brand-archive-sales__actions">
+                  {hasImage && (
+                    <button type="button" className="cfg-btn cfg-btn--ghost" title="다운로드" onClick={() => onDownload(asset)}>
+                      <Download size={12} />
+                    </button>
+                  )}
+                  {!editMode && url && (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="cfg-btn cfg-btn--ghost" title="링크 열기">
+                      <ExternalLink size={12} />
+                    </a>
+                  )}
+                  {editMode && (
+                    <button type="button" className="cfg-btn cfg-btn--ghost" title="삭제" onClick={() => onDelete(asset)}>
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {editMode && (
+        <div className="brand-archive-sales__add">
+          <input
+            type="url"
+            className="cfg-input"
+            value={draftUrl}
+            onChange={e => setDraftUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); tryAddLink() } }}
+            placeholder="판매처 링크 또는 이미지"
+          />
+          <button
+            type="button"
+            className="cfg-btn cfg-btn--ghost"
+            disabled={uploading || !draftUrl.trim()}
+            onClick={tryAddLink}
+          >
+            <ExternalLink size={13} />
+            링크 추가
+          </button>
+          <label className="cfg-btn" style={{ cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+            <Upload size={13} />
+            {uploading ? '업로드 중…' : '이미지 추가'}
+            <input
+              type="file"
+              accept={cat.accept}
+              style={{ display: 'none' }}
+              disabled={uploading}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  onAddImage(draftUrl.trim(), file)
+                  setDraftUrl('')
+                }
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** @deprecated use ArchiveNotesPanel */
+export function ArchiveMemoPanel(props: {
+  editMode: boolean
+  archiveMemo: string
+  onSave: (v: string) => void
+  layout?: 'sidebar' | 'top'
+}) {
+  return (
+    <ArchiveNotesPanel
+      editMode={props.editMode}
+      archiveNotes={props.archiveMemo}
+      onSave={props.onSave}
+      layout={props.layout}
+    />
   )
 }

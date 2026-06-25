@@ -9,6 +9,7 @@ import Spinner from '@/components/Spinner'
 import {
   BUCKET,
   CATEGORIES,
+  ASSET_GRID_CATEGORIES,
   VIEW_TOP_ROW,
   buildStoragePath,
   formatBytes,
@@ -21,10 +22,13 @@ import {
   ViewCategoryHeader,
   ViewAssetFooter,
   ViewEmptyPlaceholder,
-  ArchiveMemoPanel,
+  ArchiveProductFields,
+  ArchiveProductPreview,
+  SalesChannelPanel,
   getSignedUrl,
   isWordAsset,
   isWordUploadFile,
+  isSalesLinkOnly,
   type ConfirmedBrand,
   type BrandAsset,
   type CategoryKey,
@@ -43,13 +47,18 @@ export default function BrandArchiveDetail() {
 
   const [assets, setAssets] = useState<BrandAsset[]>([])
   const [assetsLoading, setAssetsLoading] = useState(false)
-  const [archiveMemo, setArchiveMemo] = useState('')
+  const [archiveNotes, setArchiveNotes] = useState('')
+  const [productEn, setProductEn] = useState('')
+  const [descriptionEn, setDescriptionEn] = useState('')
   const [uploadingCat, setUploadingCat] = useState<CategoryKey | null>(null)
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [saving, setSaving] = useState(false)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [productMainUrl, setProductMainUrl] = useState<string | null>(null)
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null)
   const memoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const textSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const linkSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const brand = brandFromSlug(brands, slug)
   const brandId = brand?.id ?? null
@@ -59,7 +68,7 @@ export default function BrandArchiveDetail() {
     setLoading(true)
     const { data, error } = await supabase
       .from('confirmed_brands')
-      .select('id, brand_name, product, received, archive_memo')
+      .select('id, brand_name, product, received, archive_notes, description_en, product_en')
       .eq('phase_id', selectedPhaseId)
       .order('brand_name')
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
@@ -92,16 +101,22 @@ export default function BrandArchiveDetail() {
     if (brandId) void loadAssets(brandId)
     else {
       setAssets([])
-      setArchiveMemo('')
+      setArchiveNotes('')
+      setProductEn('')
+      setDescriptionEn('')
       setLogoUrl(null)
+      setProductMainUrl(null)
     }
   }, [brandId, loadAssets])
 
   useEffect(() => {
-    setArchiveMemo(brand?.archive_memo ?? '')
-  }, [brand?.id, brand?.archive_memo])
+    setArchiveNotes(brand?.archive_notes ?? '')
+    setProductEn(brand?.product_en ?? '')
+    setDescriptionEn(brand?.description_en ?? '')
+  }, [brand?.id, brand?.archive_notes, brand?.product_en, brand?.description_en])
 
   const logoAsset = assets.find(a => a.category === 'logo')
+  const productMainAsset = assets.find(a => a.category === 'product_main')
 
   useEffect(() => {
     let cancelled = false
@@ -126,10 +141,27 @@ export default function BrandArchiveDetail() {
     return () => { cancelled = true }
   }, [logoAsset?.id, logoAsset?.storage_path, logoAsset?.file_name, logoAsset?.mime_type])
 
+  useEffect(() => {
+    let cancelled = false
+
+    if (!productMainAsset) {
+      setProductMainUrl(null)
+      return
+    }
+
+    getSignedUrl(productMainAsset.storage_path).then(({ url }) => {
+      if (!cancelled) setProductMainUrl(url)
+    })
+
+    return () => { cancelled = true }
+  }, [productMainAsset?.id, productMainAsset?.storage_path])
+
   async function deleteAsset(asset: BrandAsset, silent = false) {
-    const { error: storageErr } = await supabase.storage.from(BUCKET).remove([asset.storage_path])
-    if (storageErr && !storageErr.message.includes('Not found')) {
-      showToast(storageErr.message, 'error')
+    if (!isSalesLinkOnly(asset)) {
+      const { error: storageErr } = await supabase.storage.from(BUCKET).remove([asset.storage_path])
+      if (storageErr && !storageErr.message.includes('Not found')) {
+        showToast(storageErr.message, 'error')
+      }
     }
     const { error } = await supabase.from('confirmed_brand_assets').delete().eq('id', asset.id)
     if (error) { showToast(error.message, 'error'); return false }
@@ -139,6 +171,12 @@ export default function BrandArchiveDetail() {
   }
 
   async function downloadAsset(asset: BrandAsset) {
+    if (isSalesLinkOnly(asset)) {
+      const url = asset.label?.trim()
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      else showToast('다운로드할 파일이 없습니다', 'error')
+      return
+    }
     const { data, error } = await supabase.storage.from(BUCKET).download(asset.storage_path)
     if (error || !data) {
       showToast(error?.message?.includes('Invalid key')
@@ -168,6 +206,7 @@ export default function BrandArchiveDetail() {
 
         for (let index = 0; index < catAssets.length; index += 1) {
           const asset = catAssets[index]
+          if (isSalesLinkOnly(asset)) continue
           const { data, error } = await supabase.storage.from(BUCKET).download(asset.storage_path)
           if (error || !data) {
             failed += 1
@@ -272,18 +311,124 @@ export default function BrandArchiveDetail() {
     }
   }
 
-  function saveMemo(value: string) {
-    if (!brandId || !editMode) return
-    setArchiveMemo(value)
-    if (memoTimer.current) clearTimeout(memoTimer.current)
-    memoTimer.current = setTimeout(async () => {
+  async function addSalesChannelLink(url: string) {
+    if (!brandId || !selectedPhaseId) return
+    const trimmed = url.trim()
+    if (!trimmed) {
+      showToast('판매처 링크를 입력하세요', 'error')
+      return
+    }
+    setUploadingCat('sales_channel')
+    try {
+      const token = crypto.randomUUID()
+      const path = `${selectedPhaseId}/${brandId}/sales_channel/link_${token}.link`
+      const sortOrder = assets.filter(a => a.category === 'sales_channel').length
+      const { data: row, error: insErr } = await supabase
+        .from('confirmed_brand_assets')
+        .insert({
+          confirmed_brand_id: brandId,
+          category: 'sales_channel',
+          file_name: trimmed,
+          storage_path: path,
+          file_size: 0,
+          mime_type: 'application/x-sales-link',
+          label: trimmed,
+          sort_order: sortOrder,
+        })
+        .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
+        .single()
+
+      if (insErr) {
+        showToast(insErr.message, 'error')
+        return
+      }
+      setAssets(prev => [...prev, row as BrandAsset])
+      showToast('판매처 링크가 추가되었습니다', 'success')
+    } finally {
+      setUploadingCat(null)
+    }
+  }
+
+  async function uploadSalesChannel(url: string, file: File) {
+    if (!brandId || !selectedPhaseId) return
+    setUploadingCat('sales_channel')
+    try {
+      const path = buildStoragePath(selectedPhaseId, brandId, 'sales_channel', file.name, 0)
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || undefined,
+      })
+      if (upErr) { showToast(upErr.message, 'error'); return }
+
+      const sortOrder = assets.filter(a => a.category === 'sales_channel').length
+      const { data: row, error: insErr } = await supabase
+        .from('confirmed_brand_assets')
+        .insert({
+          confirmed_brand_id: brandId,
+          category: 'sales_channel',
+          file_name: file.name,
+          storage_path: path,
+          file_size: file.size,
+          mime_type: file.type || null,
+          label: url || null,
+          sort_order: sortOrder,
+        })
+        .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
+        .single()
+
+      if (insErr) {
+        await supabase.storage.from(BUCKET).remove([path])
+        showToast(insErr.message, 'error')
+        return
+      }
+      setAssets(prev => [...prev, row as BrandAsset])
+      showToast('판매처 이미지가 추가되었습니다', 'success')
+    } finally {
+      setUploadingCat(null)
+    }
+  }
+
+  function saveSalesChannelLink(asset: BrandAsset, url: string) {
+    if (!editMode) return
+    setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, label: url || null } : a))
+    const existing = linkSaveTimers.current.get(asset.id)
+    if (existing) clearTimeout(existing)
+    linkSaveTimers.current.set(asset.id, setTimeout(async () => {
       const { error } = await supabase
-        .from('confirmed_brands')
-        .update({ archive_memo: value || null })
-        .eq('id', brandId)
+        .from('confirmed_brand_assets')
+        .update({ label: url.trim() || null })
+        .eq('id', asset.id)
       if (error) showToast(error.message, 'error')
-      else setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_memo: value || null } : b))
+    }, 700))
+  }
+
+  function saveTextFields(patch: {
+    archive_notes?: string
+    product_en?: string
+    description_en?: string
+  }) {
+    if (!brandId || !editMode) return
+    if (patch.archive_notes !== undefined) setArchiveNotes(patch.archive_notes)
+    if (patch.product_en !== undefined) setProductEn(patch.product_en)
+    if (patch.description_en !== undefined) setDescriptionEn(patch.description_en)
+
+    if (textSaveTimer.current) clearTimeout(textSaveTimer.current)
+    textSaveTimer.current = setTimeout(async () => {
+      const update: Record<string, string | null> = {}
+      if (patch.archive_notes !== undefined) update.archive_notes = patch.archive_notes || null
+      if (patch.product_en !== undefined) update.product_en = patch.product_en || null
+      if (patch.description_en !== undefined) update.description_en = patch.description_en || null
+      const { error } = await supabase.from('confirmed_brands').update(update).eq('id', brandId)
+      if (error) showToast(error.message, 'error')
+      else {
+        setBrands(prev => prev.map(b => b.id === brandId ? { ...b, ...update } : b))
+      }
     }, 700)
+  }
+
+  function saveNotes(value: string) {
+    saveTextFields({ archive_notes: value })
   }
 
   async function handleSave() {
@@ -294,16 +439,28 @@ export default function BrandArchiveDetail() {
     }
     setSaving(true)
     if (memoTimer.current) clearTimeout(memoTimer.current)
+    if (textSaveTimer.current) clearTimeout(textSaveTimer.current)
+    for (const timer of linkSaveTimers.current.values()) clearTimeout(timer)
+    linkSaveTimers.current.clear()
     try {
       const { error } = await supabase
         .from('confirmed_brands')
-        .update({ archive_memo: archiveMemo || null })
+        .update({
+          archive_notes: archiveNotes || null,
+          product_en: productEn || null,
+          description_en: descriptionEn || null,
+        })
         .eq('id', brandId)
       if (error) {
         showToast(error.message, 'error')
         return
       }
-      setBrands(prev => prev.map(b => b.id === brandId ? { ...b, archive_memo: archiveMemo || null } : b))
+      setBrands(prev => prev.map(b => b.id === brandId ? {
+        ...b,
+        archive_notes: archiveNotes || null,
+        product_en: productEn || null,
+        description_en: descriptionEn || null,
+      } : b))
       setEditMode(false)
       showToast('저장되었습니다', 'success')
     } finally {
@@ -346,6 +503,7 @@ export default function BrandArchiveDetail() {
   if (!brand) return null
 
   function renderViewAssets() {
+    const salesAssets = assetsFor('sales_channel')
     return (
       <div className="brand-archive-assets">
         <div className="brand-archive-asset-grid">
@@ -393,14 +551,25 @@ export default function BrandArchiveDetail() {
             </div>
           )
         })}
+        <SalesChannelPanel
+          assets={salesAssets}
+          editMode={false}
+          uploading={false}
+          onAddLink={() => {}}
+          onAddImage={() => {}}
+          onDelete={() => {}}
+          onLinkChange={() => {}}
+          onDownload={downloadAsset}
+        />
       </div>
     )
   }
 
   function renderEditAssets() {
+    const salesAssets = assetsFor('sales_channel')
     return (
       <div className="brand-archive-assets">
-        {CATEGORIES.map(cat => {
+        {ASSET_GRID_CATEGORIES.map(cat => {
           const catAssets = assetsFor(cat.key)
           const busy = uploadingCat === cat.key
           return (
@@ -456,6 +625,18 @@ export default function BrandArchiveDetail() {
             </section>
           )
         })}
+        <SalesChannelPanel
+          assets={salesAssets}
+          editMode
+          uploading={uploadingCat === 'sales_channel'}
+          onAddLink={url => { void addSalesChannelLink(url) }}
+          onAddImage={(url, file) => { void uploadSalesChannel(url, file) }}
+          onDelete={asset => {
+            showConfirm(`"${asset.label || asset.file_name}" 삭제할까요?`, () => { void deleteAsset(asset) })
+          }}
+          onLinkChange={saveSalesChannelLink}
+          onDownload={downloadAsset}
+        />
         <div className="brand-archive-save-bar">
           <button
             type="button"
@@ -470,20 +651,6 @@ export default function BrandArchiveDetail() {
       </div>
     )
   }
-
-  const brandInitial = brand.brand_name.trim().charAt(0) || '?'
-
-  const brandBar = (
-    <div className="brand-archive-detail__brand-bar">
-      <div className={`brand-archive-detail__avatar${logoUrl ? ' brand-archive-detail__avatar--logo' : ''}`}>
-        {logoUrl ? <img src={logoUrl} alt={brand.brand_name} /> : brandInitial}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div className="brand-archive-detail__name">{brand.brand_name}</div>
-        <div className="brand-archive-detail__product">{brand.product || '제품명 없음'}</div>
-      </div>
-    </div>
-  )
 
   return (
     <div className="brand-archive-detail">
@@ -511,18 +678,31 @@ export default function BrandArchiveDetail() {
 
       {assetsLoading ? (
         <div className="brand-archive-detail__body">
-          {!editMode && brandBar}
           <div style={{ display: 'flex', justifyContent: 'center', padding: 56 }}><Spinner /></div>
         </div>
       ) : (
         <div className="brand-archive-detail__body">
-          {!editMode && brandBar}
-          <ArchiveMemoPanel
-            layout="top"
-            editMode={editMode}
-            archiveMemo={archiveMemo}
-            onSave={saveMemo}
-          />
+          {editMode ? (
+            <ArchiveProductFields
+              editMode
+              productEn={productEn}
+              descriptionEn={descriptionEn}
+              archiveNotes={archiveNotes}
+              onProductEnChange={v => saveTextFields({ product_en: v })}
+              onDescriptionEnChange={v => saveTextFields({ description_en: v })}
+              onArchiveNotesChange={saveNotes}
+            />
+          ) : (
+            <ArchiveProductPreview
+              brandName={brand.brand_name}
+              productKo={brand.product}
+              productEn={productEn}
+              descriptionEn={descriptionEn}
+              archiveNotes={archiveNotes}
+              logoUrl={logoUrl}
+              productMainUrl={productMainUrl}
+            />
+          )}
           <div className="brand-archive-download-bar">
             <div className="brand-archive-download-bar__line" />
             <button
