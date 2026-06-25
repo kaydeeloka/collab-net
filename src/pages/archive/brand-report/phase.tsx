@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ExternalLink, Pencil, Save, Trash2, Upload } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Download, ExternalLink, FileText, Pencil, Presentation, Save, Trash2, Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -19,8 +19,14 @@ import { getSeasonCollectionKitComposition } from './season-collection-kit-compo
 import SeasonCollectionOverview from './SeasonCollectionOverview'
 import SeasonCollectionKitComposition from './SeasonCollectionKitComposition'
 import SeasonCollectionContentPerformance from './SeasonCollectionContentPerformance'
+import SeasonReviewHighlights from './SeasonReviewHighlights'
+import SeasonBrandMentions from './SeasonBrandMentions'
+import SeasonNextStep from './SeasonNextStep'
+import SeasonContact from './SeasonContact'
 import SeasonReportCover from './SeasonReportCover'
 import { getReportCoverTitle } from './report-cover'
+import { getSeasonNextStep } from './season-collection-next-step'
+import { REPORT_CONTACT } from './report-theme'
 import {
   loadStorageImageUrl,
   removeCollectionImg,
@@ -123,6 +129,168 @@ export default function ArchiveBrandReportPhase() {
   const [activeTab, setActiveTab] = useState<'website' | 'report'>('website')
   const [uploadingHero, setUploadingHero] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [downloadOpen, setDownloadOpen] = useState(false)
+  const downloadRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!downloadOpen) return
+    function handleClick(e: MouseEvent) {
+      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
+        setDownloadOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [downloadOpen])
+
+  function handleDownloadPdf() {
+    setDownloadOpen(false)
+    window.print()
+  }
+
+  async function handleDownloadPpt() {
+    setDownloadOpen(false)
+    try {
+      const { default: PptxGenJS } = await import('pptxgenjs')
+      const pptx = new PptxGenJS()
+      pptx.layout = 'LAYOUT_16x9'
+
+      const TEAL_DK = '648085'
+      const TEAL_LT = 'BED6DE'
+      const INK = '040000'
+      const SURFACE = 'F8F6F6'
+
+      const coverSlide = pptx.addSlide()
+      coverSlide.background = { color: SURFACE }
+      coverSlide.addText('MI MUSE', {
+        x: 0.8, y: 0.5, w: 8.4, h: 0.3,
+        fontSize: 10, color: TEAL_DK, charSpacing: 3,
+      })
+      coverSlide.addText(reportCoverTitle, {
+        x: 0.8, y: 1.4, w: 8.4, h: 2.5,
+        fontSize: 30, bold: true, color: INK, breakLine: true,
+      })
+      coverSlide.addText('MI MUSE — BEAUTY SEEDING PROJECT', {
+        x: 0.8, y: 4.8, w: 8.4, h: 0.3,
+        fontSize: 9, color: TEAL_DK, charSpacing: 2,
+      })
+
+      const overviewSlide = pptx.addSlide()
+      overviewSlide.background = { color: SURFACE }
+      overviewSlide.addText(overview.heading, {
+        x: 0.5, y: 0.3, w: 9, h: 0.6,
+        fontSize: 20, bold: true, color: INK,
+      })
+      overview.fields.forEach((field, i) => {
+        const y = 1.1 + i * 0.7
+        overviewSlide.addText(field.label ?? '', {
+          x: 0.5, y, w: 2.3, h: 0.5,
+          fontSize: 10, bold: true, color: TEAL_DK,
+          fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
+        })
+        overviewSlide.addText(field.value + (field.sub ? `\n${field.sub}` : ''), {
+          x: 2.9, y, w: 6.6, h: 0.5,
+          fontSize: 10, color: INK, valign: 'middle', breakLine: true,
+        })
+      })
+
+      const kitSlide = pptx.addSlide()
+      kitSlide.background = { color: SURFACE }
+      kitSlide.addText(kitComposition.title, {
+        x: 0.5, y: 0.3, w: 9, h: 0.6,
+        fontSize: 20, bold: true, color: INK,
+      })
+      kitSlide.addText(kitComposition.conceptHeading, {
+        x: 0.5, y: 1.1, w: 9, h: 0.38,
+        fontSize: 11, bold: true, color: TEAL_DK,
+        fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
+      })
+      kitComposition.conceptParagraphs.forEach((para, i) => {
+        kitSlide.addText(para, {
+          x: 0.5, y: 1.62 + i * 0.42, w: 9, h: 0.38,
+          fontSize: 10, color: INK,
+        })
+      })
+      const compY = 1.62 + kitComposition.conceptParagraphs.length * 0.42 + 0.3
+      kitSlide.addText(kitComposition.brandComponents.heading, {
+        x: 0.5, y: compY, w: 4.3, h: 0.35,
+        fontSize: 10, bold: true, color: TEAL_DK,
+      })
+      kitComposition.brandComponents.items.forEach((item, i) => {
+        kitSlide.addText(`• ${item}`, {
+          x: 0.5, y: compY + 0.4 + i * 0.35, w: 4.3, h: 0.3,
+          fontSize: 10, color: INK,
+        })
+      })
+      kitSlide.addText(kitComposition.museComponents.heading, {
+        x: 5.2, y: compY, w: 4.3, h: 0.35,
+        fontSize: 10, bold: true, color: TEAL_DK,
+      })
+      kitComposition.museComponents.items.forEach((item, i) => {
+        kitSlide.addText(`• ${item}`, {
+          x: 5.2, y: compY + 0.4 + i * 0.35, w: 4.3, h: 0.3,
+          fontSize: 10, color: INK,
+        })
+      })
+
+      const nextStepData = getSeasonNextStep(phase?.name ?? '')
+      const nextSlide = pptx.addSlide()
+      nextSlide.background = { color: SURFACE }
+      nextSlide.addText('NEXT STEP', {
+        x: 0.5, y: 0.3, w: 9, h: 0.3,
+        fontSize: 10, color: TEAL_DK, charSpacing: 2,
+      })
+      nextSlide.addText(nextStepData.title, {
+        x: 0.5, y: 0.62, w: 9, h: 0.6,
+        fontSize: 20, bold: true, color: INK,
+      })
+      nextStepData.fields.forEach((field, i) => {
+        const x = 0.5 + i * 3.05
+        nextSlide.addText(field.label, {
+          x, y: 1.4, w: 2.9, h: 0.35,
+          fontSize: 10, bold: true, color: TEAL_DK,
+          fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
+        })
+        nextSlide.addText(field.value + (field.sub ? `\n${field.sub}` : ''), {
+          x, y: 1.8, w: 2.9, h: 0.6,
+          fontSize: 11, color: INK, breakLine: true,
+        })
+      })
+      nextStepData.strategies.forEach((block, i) => {
+        const x = 0.5 + i * 3.05
+        nextSlide.addText(block.heading, {
+          x, y: 2.7, w: 2.9, h: 0.35,
+          fontSize: 11, bold: true, color: INK,
+        })
+        block.items.forEach((item, j) => {
+          nextSlide.addText(`• ${item}`, {
+            x, y: 3.1 + j * 0.5, w: 2.9, h: 0.5,
+            fontSize: 9, color: INK, valign: 'top',
+          })
+        })
+      })
+
+      const contactSlide = pptx.addSlide()
+      contactSlide.background = { color: SURFACE }
+      contactSlide.addText('CONTACT', {
+        x: 0.5, y: 2.1, w: 9, h: 0.4,
+        fontSize: 12, color: TEAL_DK, charSpacing: 3, align: 'center',
+      })
+      contactSlide.addText(REPORT_CONTACT.email, {
+        x: 0.5, y: 2.6, w: 9, h: 0.8,
+        fontSize: 24, bold: true, color: INK, align: 'center',
+      })
+      contactSlide.addText('E.O.D', {
+        x: 0.5, y: 3.6, w: 9, h: 0.4,
+        fontSize: 11, color: TEAL_DK, charSpacing: 3, align: 'center',
+      })
+
+      await pptx.writeFile({ fileName: `${phase?.name ?? '시즌'}_결과리포트.pptx` })
+      showToast('PPT 다운로드가 완료되었습니다', 'success')
+    } catch {
+      showToast('PPT 생성 중 오류가 발생했습니다', 'error')
+    }
+  }
 
   const reloadBrands = useCallback(async () => {
     if (!resolvedPhaseId) {
@@ -357,6 +525,7 @@ export default function ArchiveBrandReportPhase() {
   )
   const kitComposition = getSeasonCollectionKitComposition(phase.name)
   const reportCoverTitle = getReportCoverTitle(phase.name, phase.started_at, phase.ended_at)
+  const nextStep = getSeasonNextStep(phase.name)
   const contentLoading = brandsLoading || heroLoading
 
   return (
@@ -517,17 +686,71 @@ export default function ArchiveBrandReportPhase() {
 
               </div>
             ) : (
-              <div className="season-report">
-                <SeasonReportCover title={reportCoverTitle} />
+              <>
+                <div className="season-report__controls">
+                  <button
+                    type="button"
+                    className="cfg-btn cfg-btn--ghost"
+                    onClick={() => showToast('편집 기능은 준비 중입니다', 'info')}
+                  >
+                    <Pencil size={13} />
+                    편집
+                  </button>
+                  <div className="season-report__download-wrap" ref={downloadRef}>
+                    <button
+                      type="button"
+                      className="cfg-btn cfg-btn--ghost"
+                      onClick={() => setDownloadOpen(o => !o)}
+                    >
+                      <Download size={13} />
+                      다운로드
+                    </button>
+                    {downloadOpen && (
+                      <div className="season-report__download-menu">
+                        <button
+                          type="button"
+                          className="season-report__download-item"
+                          onClick={handleDownloadPdf}
+                        >
+                          <FileText size={13} />
+                          PDF
+                        </button>
+                        <button
+                          type="button"
+                          className="season-report__download-item"
+                          onClick={() => { void handleDownloadPpt() }}
+                        >
+                          <Presentation size={13} />
+                          PPT
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="season-report">
+                  <SeasonReportCover title={reportCoverTitle} />
 
-                <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
+                  <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
 
-                <SeasonCollectionKitComposition composition={kitComposition} />
+                  <SeasonCollectionKitComposition composition={kitComposition} />
 
-                {resolvedPhaseId && (
-                  <SeasonCollectionContentPerformance phaseId={resolvedPhaseId} />
-                )}
-              </div>
+                  {resolvedPhaseId && (
+                    <SeasonCollectionContentPerformance phaseId={resolvedPhaseId} />
+                  )}
+
+                  {resolvedPhaseId && (
+                    <SeasonReviewHighlights phaseId={resolvedPhaseId} />
+                  )}
+
+                  {resolvedPhaseId && (
+                    <SeasonBrandMentions phaseId={resolvedPhaseId} />
+                  )}
+
+                  <SeasonNextStep data={nextStep} />
+
+                  <SeasonContact />
+                </div>
+              </>
             )}
           </div>
         </>

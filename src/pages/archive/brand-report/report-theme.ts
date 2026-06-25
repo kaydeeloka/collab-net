@@ -13,6 +13,10 @@ export const REPORT_ASSETS = {
   logo: '/report/logo-04.png',
 } as const
 
+export const REPORT_CONTACT = {
+  email: 'beautyproject@cranecomm.com',
+} as const
+
 export const REPORT_FONTS = {
   /** Hangul — 나눔휴먼 */
   ko: "'Report KO', 'NanumHuman', sans-serif",
