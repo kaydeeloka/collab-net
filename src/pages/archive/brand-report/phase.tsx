@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, ExternalLink, Pencil, Save, Trash2, Upload } from 'lucide-react'
+import { ExternalLink, Pencil, Save, Trash2, Upload } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -365,40 +365,6 @@ export default function ArchiveBrandReportPhase() {
         <PageHeroBannerContent
           title={`${phase.name} 시즌 컬렉션`}
           description={formatPhasePeriod(phase.started_at, phase.ended_at)}
-          actions={activeTab === 'website' ? (
-            <>
-              {editMode ? (
-                <>
-                  <button
-                    type="button"
-                    className="cfg-btn cfg-btn--ghost"
-                    disabled={isBusy}
-                    onClick={cancelEditMode}
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    className="cfg-btn"
-                    disabled={isBusy}
-                    onClick={() => { void handleSaveEdit() }}
-                  >
-                    <Save size={13} />
-                    {saving ? '저장 중…' : '저장'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="cfg-btn cfg-btn--ghost"
-                  onClick={startEditMode}
-                >
-                  <Pencil size={13} />
-                  편집
-                </button>
-              )}
-            </>
-          ) : undefined}
         />
       </PageHeroBanner>
 
@@ -419,6 +385,38 @@ export default function ArchiveBrandReportPhase() {
           <div className="ftab-content">
             {activeTab === 'website' ? (
               <div className={`season-collection${editMode ? ' season-collection--edit' : ''}`}>
+                <div className="season-collection__edit-controls">
+                  {editMode ? (
+                    <>
+                      <button
+                        type="button"
+                        className="cfg-btn cfg-btn--ghost"
+                        disabled={isBusy}
+                        onClick={cancelEditMode}
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        className="cfg-btn"
+                        disabled={isBusy}
+                        onClick={() => { void handleSaveEdit() }}
+                      >
+                        <Save size={13} />
+                        {saving ? '저장 중…' : '저장'}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="cfg-btn cfg-btn--ghost"
+                      onClick={startEditMode}
+                    >
+                      <Pencil size={13} />
+                      편집
+                    </button>
+                  )}
+                </div>
                 <section className="season-collection__hero">
             <div className={`season-collection__hero-media${editMode ? ' season-collection__media-edit' : ''}`}>
               {heroUrl ? (
@@ -485,12 +483,6 @@ export default function ArchiveBrandReportPhase() {
                   ))}
                 </div>
               )}
-              {!editMode && (
-                <button type="button" className="season-collection__download" disabled title="곧 제공 예정">
-                  Download Report
-                  <ArrowRight size={14} />
-                </button>
-              )}
             </div>
           </section>
 
@@ -499,11 +491,11 @@ export default function ArchiveBrandReportPhase() {
               <div className="season-collection__kit-head">
                 <h2 className="season-collection__kit-heading">{copy.kitHeading}</h2>
                 {editMode && (
-                  <p className="season-collection__kit-edit-hint">
+                  <span className="season-collection__kit-edit-hint">
                     브랜드별 제품 정보는{' '}
                     <Link to="/brand/confirmed/archive">자료 아카이브</Link>
                     에서 수정할 수 있습니다.
-                  </p>
+                  </span>
                 )}
               </div>
               <div className="season-collection__products">
