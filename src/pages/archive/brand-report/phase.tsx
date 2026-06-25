@@ -10,6 +10,7 @@ import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBann
 import { PAGE_HERO_DEFAULT_BG } from '@/components/page-hero-banner.constants'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './season-collection.css'
+import './season-report.css'
 import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
 import { getSeasonCollectionCopy, conceptTitleFromProjectConcept, splitArchiveParagraphs } from './season-collection-content'
 import { getSeasonCollectionOverview } from './season-collection-overview'
@@ -17,6 +18,8 @@ import { getSeasonCollectionKitComposition } from './season-collection-kit-compo
 import SeasonCollectionOverview from './SeasonCollectionOverview'
 import SeasonCollectionKitComposition from './SeasonCollectionKitComposition'
 import SeasonCollectionContentPerformance from './SeasonCollectionContentPerformance'
+import SeasonReportCover from './SeasonReportCover'
+import { getReportCoverTitle } from './report-cover'
 import {
   loadStorageImageUrl,
   removeBrandCover,
@@ -455,6 +458,7 @@ export default function ArchiveBrandReportPhase() {
     brands.map(b => b.brandName),
   )
   const kitComposition = getSeasonCollectionKitComposition(phase.name)
+  const reportCoverTitle = getReportCoverTitle(phase.name, phase.started_at, phase.ended_at)
   const contentLoading = brandsLoading || heroLoading
 
   return (
@@ -611,11 +615,13 @@ export default function ArchiveBrandReportPhase() {
 
           <div className="season-collection__divider">
             <span className="season-collection__divider-line" aria-hidden />
-            <span className="season-collection__divider-label">Overview</span>
+            <span className="season-collection__divider-label season-collection__divider-label--report">리포트 작성</span>
             <span className="season-collection__divider-line" aria-hidden />
           </div>
 
-          <div className="season-collection__post-overview">
+          <div className="season-report">
+            <SeasonReportCover title={reportCoverTitle} />
+
             <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
 
             <SeasonCollectionKitComposition composition={kitComposition} />

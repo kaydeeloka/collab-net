@@ -1,4 +1,5 @@
 import type { SeasonCollectionKitCompositionData } from './season-collection-kit-composition'
+import SeasonReportSlide from './SeasonReportSlide'
 
 interface Props {
   composition: SeasonCollectionKitCompositionData
@@ -8,8 +9,8 @@ export default function SeasonCollectionKitComposition({ composition }: Props) {
   const imageUrl = composition.imageUrl ?? null
 
   return (
-    <section className="season-kit-composition">
-      <h2 className="season-kit-composition__title">{composition.title}</h2>
+    <SeasonReportSlide eyebrow="OVERVIEW" title={composition.title}>
+      <section className="season-kit-composition">
 
       <div className="season-kit-composition__top">
         <div className="season-kit-composition__visual">
@@ -49,6 +50,7 @@ export default function SeasonCollectionKitComposition({ composition }: Props) {
           </ul>
         </div>
       </div>
-    </section>
+      </section>
+    </SeasonReportSlide>
   )
 }

@@ -1029,7 +1029,7 @@ ALTER TABLE influencers ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 --  dedupe_confirmed_phase — server-side dedupe for 확정 인플루언서
 --  Replaces client-side N+1 loops; call via supabase.rpc()
 -- ============================================================
-CREATE OR REPLACE FUNCTION dedupe_confirmed_phase(p_phase_id UUID)
+CREATE OR REPLACE FUNCTION public.dedupe_confirmed_phase(p_phase_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1169,7 +1169,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION dedupe_confirmed_phase(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.dedupe_confirmed_phase(UUID) TO anon, authenticated;
 
 -- influencers — contacted flag (list membership, separate from outreach status)
 ALTER TABLE influencers ADD COLUMN IF NOT EXISTS contacted BOOLEAN NOT NULL DEFAULT FALSE;

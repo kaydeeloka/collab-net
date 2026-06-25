@@ -1,0 +1,475 @@
+/* ── Brand report fonts (나눔휴먼 KO · 모노플렉스 KR EN) ── */
+
+@font-face {
+  font-family: 'Report EN';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-kr@1.0/MonoplexKR-Regular.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Report EN';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-kr@1.0/MonoplexKR-Bold.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Report KO';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2501-1@1.1/NanumHumanTTFRegular.woff2') format('woff2');
+  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: 'Report KO';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2501-1@1.1/NanumHumanTTFBold.woff2') format('woff2');
+  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
+}
+
+/* ── Report section shell (리포트 작성) ── */
+
+.season-report {
+  --report-ink: #040000;
+  --report-teal-dk: #648085;
+  --report-teal: #9FBAC5;
+  --report-teal-lt: #BED6DE;
+  --report-surface-md: #E0DFDC;
+  --report-surface: #F8F6F6;
+  --report-white: #F8F6F6;
+
+  font-family: 'Report KO', 'Report EN', 'NanumHuman', 'Monoplex KR', sans-serif;
+  color: var(--report-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 0;
+  background: transparent;
+}
+
+.season-collection__divider-label--report {
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--report-teal-dk);
+}
+
+/* ── Slide frame — stacked pages, each slide is #F8F6F6 (not white) ── */
+
+.season-report__slide {
+  padding: 28px 32px 32px;
+  background: #F8F6F6;
+  border: 1px solid var(--report-surface-md);
+  border-radius: var(--r-md);
+  box-shadow: 0 2px 12px rgba(4, 0, 0, 0.04);
+}
+
+/* Cover slide (page 1) */
+.season-report__slide--cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  aspect-ratio: 16 / 9;
+  min-height: 360px;
+  max-height: 520px;
+  padding: 44px 48px 56px;
+}
+
+.season-report__cover-logo {
+  width: clamp(120px, 14vw, 168px);
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 32px;
+}
+
+.season-report__cover-title {
+  margin: 0;
+  max-width: min(720px, 90%);
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: clamp(26px, 3.2vw, 38px);
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
+  color: var(--report-ink);
+}
+
+.season-report__cover-footer {
+  position: absolute;
+  left: 48px;
+  bottom: 36px;
+  margin: 0;
+  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--report-teal-dk);
+}
+
+.season-report__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.season-report__head-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.season-report__eyebrow {
+  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--report-teal-dk);
+}
+
+.season-report__title {
+  margin: 0;
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--report-ink);
+}
+
+.season-report__logo {
+  width: 88px;
+  height: auto;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.season-report__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--report-teal-dk);
+  background: var(--report-teal-lt);
+  border: 1px solid var(--report-teal);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+/* ── Overview slide ── */
+
+.season-report .season-overview {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.season-report .season-overview__head {
+  display: none;
+}
+
+.season-report .season-overview__body {
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: 28px;
+}
+
+.season-report .season-overview__visual {
+  min-height: 220px;
+  padding: 16px;
+  background: var(--report-surface);
+  border: 1px solid var(--report-surface-md);
+  border-radius: var(--r-md);
+}
+
+.season-report .season-overview__fields {
+  gap: 14px;
+}
+
+.season-report .season-overview__field {
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.season-report .season-overview__field-label {
+  padding: 6px 12px;
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--report-teal-dk);
+  background: var(--report-teal-lt);
+  border: 1px solid var(--report-teal);
+}
+
+.season-report .season-overview__field-value {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--report-ink);
+}
+
+.season-report .season-overview__field-value > span:first-child {
+  font-weight: 600;
+}
+
+.season-report .season-overview__field-sub {
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-overview__timeline {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-overview__timeline-heading {
+  display: inline-flex;
+  margin: 0 0 20px;
+  padding: 6px 14px;
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--report-teal-dk);
+  background: var(--report-teal-lt);
+  border: 1px solid var(--report-teal);
+  border-radius: var(--r-pill);
+}
+
+.season-report .season-overview__timeline-track::before {
+  background: var(--report-teal-lt);
+}
+
+.season-report .season-overview__timeline-period {
+  font-family: 'Report EN', 'Monoplex KR', monospace;
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-overview__timeline-dot {
+  border-color: var(--report-teal);
+  background: var(--report-white);
+}
+
+.season-report .season-overview__timeline-list {
+  color: var(--report-ink);
+}
+
+/* ── Kit composition slide ── */
+
+.season-report .season-kit-composition {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.season-report .season-kit-composition__title {
+  display: none;
+}
+
+.season-report .season-kit-composition__top {
+  gap: 28px;
+  margin-bottom: 24px;
+}
+
+.season-report .season-kit-composition__visual {
+  min-height: 260px;
+  background: var(--report-surface);
+  border: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-kit-composition__concept-heading {
+  display: inline-flex;
+  margin-bottom: 14px;
+  padding: 6px 14px;
+  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--report-teal-dk);
+  background: var(--report-teal-lt);
+  border: 1px solid var(--report-teal);
+  border-radius: var(--r-pill);
+}
+
+.season-report .season-kit-composition__concept-copy p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--report-ink);
+}
+
+.season-report .season-kit-composition__bottom {
+  gap: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-kit-composition__block {
+  background: var(--report-surface);
+  border: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-kit-composition__block-heading {
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  color: var(--report-ink);
+}
+
+.season-report .season-kit-composition__list {
+  color: var(--report-ink);
+}
+
+/* ── Content performance slide ── */
+
+.season-report .season-content-performance {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.season-report .season-content-performance__title {
+  display: none;
+}
+
+.season-report .season-content-performance__card {
+  background: var(--report-surface);
+  border: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-content-performance__card-label {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 5px 12px;
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--report-teal-dk);
+  background: var(--report-teal-lt);
+  border: 1px solid var(--report-teal);
+  border-radius: var(--r-pill);
+}
+
+.season-report .season-content-performance__card-value {
+  color: var(--report-ink);
+}
+
+.season-report .season-content-performance__card-value span {
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-content-performance__progress {
+  background: var(--report-surface-md);
+}
+
+.season-report .season-content-performance__progress-bar {
+  background: var(--report-teal-dk);
+}
+
+.season-report .season-content-performance__card-caption {
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-content-performance__engagement dt {
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-content-performance__engagement dd {
+  color: var(--report-ink);
+}
+
+.season-report .season-content-performance__detail {
+  border-top-color: var(--report-surface-md);
+}
+
+.season-report .season-content-performance__panel {
+  background: var(--report-surface);
+  border: 1px solid var(--report-surface-md);
+}
+
+.season-report .season-content-performance__panel-title {
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+}
+
+.season-report .season-content-performance__row {
+  border-bottom-color: var(--report-surface-md);
+  color: var(--report-ink);
+}
+
+.season-report .season-content-performance__row--head {
+  color: var(--report-teal-dk);
+}
+
+.season-report .season-content-performance__top-item {
+  background: var(--report-white);
+  border-color: var(--report-surface-md);
+}
+
+.season-report .season-content-performance__footer {
+  border-top-color: var(--report-surface-md);
+}
+
+.season-report .season-content-performance__link {
+  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  color: var(--report-ink);
+  border-color: var(--report-ink);
+}
+
+.season-report .season-content-performance__link:hover {
+  background: var(--report-surface);
+}
+
+@media (max-width: 1100px) {
+  .season-report__slide {
+    padding: 22px 20px 24px;
+  }
+
+  .season-report__slide--cover {
+    padding: 32px 28px 48px;
+    min-height: 300px;
+  }
+
+  .season-report__cover-footer {
+    left: 28px;
+    bottom: 28px;
+  }
+
+  .season-report__logo {
+    width: 72px;
+  }
+}
+
+@media (max-width: 640px) {
+  .season-report__head {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
+
+  .season-report .season-overview__field {
+    grid-template-columns: 1fr;
+  }
+}

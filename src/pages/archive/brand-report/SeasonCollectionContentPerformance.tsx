@@ -9,6 +9,7 @@ import {
   type ContentReport,
 } from '@/lib/influencer/monitoring-data'
 import { platformBadgeClass, platformBadgeStyle } from '@/lib/influencer/content-platforms'
+import SeasonReportSlide from './SeasonReportSlide'
 
 interface Props {
   phaseId: string
@@ -45,8 +46,8 @@ export default function SeasonCollectionContentPerformance({ phaseId }: Props) {
   const summary = report?.summary
 
   return (
-    <section className="season-content-performance">
-      <h2 className="season-content-performance__title">콘텐츠 성과</h2>
+    <SeasonReportSlide eyebrow="Content Performance" title="콘텐츠 성과">
+      <section className="season-content-performance">
 
       {loading ? (
         <div className="season-content-performance__loading">
@@ -172,6 +173,7 @@ export default function SeasonCollectionContentPerformance({ phaseId }: Props) {
           </div>
         </>
       )}
-    </section>
+      </section>
+    </SeasonReportSlide>
   )
 }

@@ -403,12 +403,21 @@ export type DedupePhaseResult = {
   error?: string
 }
 
-/** Server-side dedupe via Supabase RPC (single round-trip). */
+function isDedupeRpcMissing(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === 'PGRST202' ||
+    /dedupe_confirmed_phase/i.test(error.message ?? '') ||
+    /schema cache/i.test(error.message ?? '')
+  )
+}
+
+/** Server-side dedupe via Supabase RPC (single round-trip). Falls back to client-side if RPC is not deployed. */
 export async function dedupeConfirmedPhaseViaDb(phaseId: string): Promise<DedupePhaseResult> {
   if (!phaseId) return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false }
 
   const { data, error } = await supabase.rpc('dedupe_confirmed_phase', { p_phase_id: phaseId })
   if (error) {
+    if (isDedupeRpcMissing(error)) return dedupeConfirmedPhaseData(phaseId)
     return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false, error: error.message }
   }
 

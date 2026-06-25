@@ -1,4 +1,5 @@
 import type { SeasonCollectionOverviewData } from './season-collection-overview'
+import SeasonReportSlide from './SeasonReportSlide'
 
 interface Props {
   overview: SeasonCollectionOverviewData
@@ -7,10 +8,8 @@ interface Props {
 
 export default function SeasonCollectionOverview({ overview, kitImageUrl }: Props) {
   return (
-    <section className="season-overview">
-      <div className="season-overview__head">
-        <h2 className="season-overview__title">{overview.heading}</h2>
-      </div>
+    <SeasonReportSlide eyebrow="OVERVIEW" title={overview.heading}>
+      <section className="season-overview">
 
       <div className="season-overview__body">
         <div className="season-overview__visual">
@@ -56,6 +55,7 @@ export default function SeasonCollectionOverview({ overview, kitImageUrl }: Prop
           </div>
         </div>
       )}
-    </section>
+      </section>
+    </SeasonReportSlide>
   )
 }
