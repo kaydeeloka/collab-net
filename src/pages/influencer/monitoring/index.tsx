@@ -12,6 +12,7 @@ import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, platformBucket } from '@/lib/influencer/content-platforms'
 import type { MonitoringAssets } from '@/lib/influencer/monitoring-data'
@@ -1112,24 +1113,17 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
       {/* Upload tab */}
       {activeTab === 'upload' && <>
-        <div className="filters" style={{ marginBottom: 16 }}>
-          <div className="filter-segment" role="group" aria-label="업로드 필터">
-            <span className="filter-segment-label">업로드</span>
-            {UPLOAD_FILTER_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                data-value={opt.value}
-                className={`filter-segment-btn${uploadFilter === opt.value ? ' active' : ''}`}
-                onClick={() => setUploadFilter(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        <FilterSegmentBar
+          label="업로드"
+          ariaLabel="업로드 필터"
+          value={uploadFilter}
+          onChange={setUploadFilter}
+          style={{ marginBottom: 16 }}
+          options={UPLOAD_FILTER_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+        >
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 320 }} />
-        </div>
+        </FilterSegmentBar>
 
         {loading && <div className="loader"><Spinner />데이터 불러오는 중...</div>}
 

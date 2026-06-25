@@ -46,6 +46,7 @@ import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { EmailTemplatePreviewModal } from '@/components/EmailTemplatePreview'
+import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import {
   coerceContactCount,
   contactCountStyle,
@@ -223,6 +224,7 @@ export default function Outreach() {
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
+  const [bulkMarking,     setBulkMarking]     = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
 
@@ -386,6 +388,18 @@ export default function Outreach() {
     await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
   }, [updateField])
 
+  const recordSendAfterEmail = useCallback(async (inf: Influencer, sentAt: string) => {
+    const { data: fresh, error: readErr } = await supabase
+      .from('influencers')
+      .select('contact_count')
+      .eq('id', inf.id)
+      .single()
+    if (readErr) { showToast(readErr.message, 'error'); return false }
+    const nextCount = nextContactCountAfterSend(fresh?.contact_count)
+    await updateField(inf.id, { contact_count: nextCount, status: 'yes', last_contact_at: sentAt })
+    return true
+  }, [updateField, showToast])
+
   const applyDeliveryBounces = useCallback(async (
     items: Array<{ id: string; email: string; label: string; since?: string | null }>,
     options?: { bulk?: boolean },
@@ -516,10 +530,43 @@ export default function Outreach() {
     })
     .sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
-  const allFilteredSelected = isBulkAllSelected(checkedIds, influencers.map(r => r.id))
+  const allFilteredSelected = isBulkAllSelected(checkedIds, filtered.map(r => r.id))
+
+  const requestBulkMarkComplete = useCallback(() => {
+    const keys = Array.from(checkedIds)
+    if (!keys.length) {
+      showToast('선택한 항목이 없습니다', 'error')
+      return
+    }
+    const targets = filtered.filter(r => keys.includes(r.id) && r.status === 'target')
+    if (!targets.length) {
+      showToast('컨택 예정 상태인 선택 항목이 없습니다', 'error')
+      return
+    }
+    showConfirm(
+      `선택한 ${targets.length}명을 발송 완료로 표시하시겠습니까?\n(Outlook 등 외부에서 발송한 경우 수동 반영)`,
+      async () => {
+        setBulkMarking(true)
+        try {
+          const sentAt = supabaseNow()
+          let updated = 0
+          for (const inf of targets) {
+            const ok = await recordSendAfterEmail(inf, sentAt)
+            if (ok) updated++
+          }
+          setCheckedIds(new Set())
+          await loadInfluencers()
+          showToast(`${updated}명 발송 완료로 반영`, 'success')
+        } finally {
+          setBulkMarking(false)
+        }
+      },
+      { confirmLabel: '완료 처리', confirmColor: 'var(--blue-dk)' },
+    )
+  }, [checkedIds, filtered, showConfirm, showToast, loadInfluencers, recordSendAfterEmail])
 
   const toggleSelectAllFiltered = useCallback(() => {
-    const { next, truncated } = toggleBulkAllFiltered(checkedIds, influencers.map(r => r.id))
+    const { next, truncated } = toggleBulkAllFiltered(checkedIds, filtered.map(r => r.id))
     setCheckedIds(next)
     if (truncated) showToast(bulkSendLimitMessage(), 'error')
   }, [checkedIds, filtered, showToast])
@@ -584,7 +631,6 @@ export default function Outreach() {
     }
   }, [checkedIds, filtered, sendOutreachToInfluencer, applyDeliveryBounces, loadInfluencers, showToast])
 
-  const sentCount      = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
   const repliedCount   = influencers.filter(r => ['reply','negotiate'].includes(r.status)).length
   const acceptCount    = influencers.filter(r => r.status === 'accept').length
   const negotiateCount = influencers.filter(r => r.status === 'negotiate').length
@@ -594,8 +640,8 @@ export default function Outreach() {
     return { tier: t, count: all.length, sent }
   })
 
-  const sentPct = influencers.length > 0 ? Math.round(sentCount / influencers.length * 100) : 0
-  const replyPct  = sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0
+  const sentForReply = influencers.filter(r => ['yes','reply','negotiate','accept','reject'].includes(r.status)).length
+  const replyPct = sentForReply > 0 ? Math.round(repliedCount / sentForReply * 100) : 0
 
   const thBase: React.CSSProperties = {
     padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700,
@@ -633,7 +679,7 @@ export default function Outreach() {
       {/* ── Stats ── */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <StatCards className="stat-cards--tall" columns="2fr 1fr 1fr 1fr" style={{ marginBottom: 28 }}>
+        <StatCards className="stat-cards--tall" columns="2fr 1fr 1fr" style={{ marginBottom: 28 }}>
           <StatCard
             variant="metric"
             align="left"
@@ -653,15 +699,6 @@ export default function Outreach() {
                 })}
               </>
             )}
-          />
-          <StatCard
-            variant="metric"
-            align="left"
-            label="발송 성과율"
-            value={sentCount}
-            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {influencers.length} 발송됨</span>}
-            progress={influencers.length > 0 ? Math.min(sentCount / influencers.length * 100, 100) : 0}
-            footer={`${sentPct}% 완료`}
           />
           <StatCard
             highlight
@@ -686,31 +723,17 @@ export default function Outreach() {
       )}
 
       {/* ── Filter bar ── */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Tier buttons */}
-        {['전체', ...TIERS].map(t => {
-          const active = activeTier === t
-          const color = t === '전체' ? '#64748b' : (TIER_COLOR[t] ?? '#64748b')
-          return (
-            <button key={t} onClick={() => { setActiveTier(t); setPage(1) }}
-              style={{
-                padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                border: `2px solid ${active ? color : 'transparent'}`,
-                background: active ? color : 'var(--gray-1)',
-                color: active ? '#fff' : 'var(--gray-5)',
-                transition: 'all .15s',
-              }}>
-              {t}
-              {t !== '전체' && (
-                <span style={{ marginLeft: 5, opacity: 0.8, fontSize: 11 }}>
-                  {influencers.filter(r => r.tiers?.rank === t).length}
-                </span>
-              )}
-            </button>
-          )
-        })}
-
-      </div>
+      <FilterSegmentBar
+        label="순위"
+        ariaLabel="티어 필터"
+        value={activeTier}
+        onChange={v => { setActiveTier(v); setPage(1) }}
+        style={{ marginBottom: 16 }}
+        options={[
+          { value: '전체', label: '전체' },
+          ...TIERS.map(t => ({ value: t, label: t })),
+        ]}
+      />
 
       {/* ── Table ── */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
@@ -748,8 +771,14 @@ export default function Outreach() {
           }
           actions={
             <>
-              <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)}>
-                미리보기
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={bulkMarking || checkedIds.size === 0}
+                onClick={requestBulkMarkComplete}
+                title="컨택 예정 항목만 발송 완료로 표시 (외부 발송 수동 반영)"
+              >
+                {bulkMarking ? '처리 중…' : '일괄 완료'}
               </Button>
               <Button
                 variant="primary"
@@ -786,6 +815,9 @@ export default function Outreach() {
             onChange={setBulkTplIdx}
             options={templates}
           />
+          <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
+            미리보기
+          </Button>
         </TableActionBar>
         {loading
           ? <div style={{ padding: '60px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}><Spinner /><span style={{ fontSize: 13, color: 'var(--gray-5)' }}>데이터 불러오는 중...</span></div>

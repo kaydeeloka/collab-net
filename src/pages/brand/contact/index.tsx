@@ -35,6 +35,7 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
+import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact/contact-count'
 
@@ -565,11 +566,9 @@ export default function BrandContact() {
     }
   }, [checkedIds, filtered, recordSendAfterEmail, applyDeliveryBounces, load, showToast])
 
-  const sentCount    = rows.filter(r => r.send_count > 0).length
   const repliedCount = rows.filter(r => ['reply', 'positive', 'negative', 'accept'].includes(r.status)).length
-
-  const sentPct   = rows.length > 0 ? Math.round(sentCount / rows.length * 100) : 0
-  const replyPct  = sentCount > 0 ? Math.round(repliedCount / sentCount * 100) : 0
+  const sentForReply = rows.filter(r => r.send_count > 0).length
+  const replyPct = sentForReply > 0 ? Math.round(repliedCount / sentForReply * 100) : 0
 
   const thBase: React.CSSProperties = {
     padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700,
@@ -607,7 +606,7 @@ export default function BrandContact() {
       {/* Stats */}
       {loading && <div className="loader"><Spinner /></div>}
       {!loading && (
-        <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 28 }}>
+        <StatCards className="stat-cards--tall" columns="1fr 1fr" style={{ marginBottom: 28 }}>
           <StatCard
             variant="metric"
             align="left"
@@ -629,15 +628,6 @@ export default function BrandContact() {
             )}
           />
           <StatCard
-            variant="metric"
-            align="left"
-            label="발송 성과율"
-            value={sentCount}
-            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>/ {rows.length} 발송됨</span>}
-            progress={rows.length > 0 ? Math.min(sentCount / rows.length * 100, 100) : 0}
-            footer={`${sentPct}% 완료`}
-          />
-          <StatCard
             highlight
             variant="metric"
             align="left"
@@ -651,21 +641,14 @@ export default function BrandContact() {
       )}
 
       {/* Filter bar */}
-      <div className="filters" style={{ marginBottom: 16 }}>
-        <div className="filter-segment" role="group" aria-label="유형 필터">
-          <span className="filter-segment-label">유형</span>
-          {TYPE_FILTER_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              data-value={opt.value}
-              className={`filter-segment-btn${activeType === opt.value ? ' active' : ''}`}
-              onClick={() => { setActiveType(opt.value); setPage(1) }}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+      <FilterSegmentBar
+        label="유형"
+        ariaLabel="유형 필터"
+        value={activeType}
+        onChange={v => { setActiveType(v); setPage(1) }}
+        style={{ marginBottom: 16 }}
+        options={TYPE_FILTER_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+      >
         <input
           type="text"
           placeholder="브랜드명, 담당자, 이메일 검색..."
@@ -673,7 +656,7 @@ export default function BrandContact() {
           onChange={e => setSearchQuery(e.target.value)}
           style={{ flex: 1, minWidth: 180, maxWidth: 320 }}
         />
-      </div>
+      </FilterSegmentBar>
 
       {/* Table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)' }}>
