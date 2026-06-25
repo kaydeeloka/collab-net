@@ -47,6 +47,7 @@ import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { EmailTemplatePreviewModal } from '@/components/EmailTemplatePreview'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
+import { DbTableRowSelect, DbTableSelectAll, dbTableRowClass } from '@/components/DbTableSelect'
 import {
   coerceContactCount,
   contactCountStyle,
@@ -752,7 +753,7 @@ export default function Outreach() {
               >
                 {allFilteredSelected ? '전체 해제' : '전체 선택'}
               </button>
-              {checkedIds.size > 0 && (
+              {checkedIds.size > 0 && !allFilteredSelected && (
                 <button
                   type="button"
                   className="table-action-bar__clear-selection"
@@ -827,16 +828,17 @@ export default function Outreach() {
                 <thead>
                   <tr>
                     {/* Checkbox */}
-                    <th style={{ ...thBase, width: 36, padding: '9px 8px', textAlign: 'center' }}>
-                      <input type="checkbox"
-                        title="현재 페이지 전체 선택"
+                    <th style={{ ...thBase, width: 40, padding: '9px 8px', textAlign: 'center' }}>
+                      <DbTableSelectAll
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(r.id))}
-                        onChange={e => setCheckedIds(prev => {
+                        indeterminate={pg.pageItems.some(r => checkedIds.has(r.id)) && !pg.pageItems.every(r => checkedIds.has(r.id))}
+                        onChange={checked => {
                           const pageIds = pg.pageItems.map(r => r.id)
-                          const { next, rejected } = tryToggleBulkPage(prev, pageIds, e.target.checked)
+                          const { next, rejected } = tryToggleBulkPage(checkedIds, pageIds, checked)
                           if (rejected) showToast(bulkSendLimitMessage(), 'error')
-                          return next
-                        })} />
+                          setCheckedIds(next)
+                        }}
+                      />
                     </th>
                     {/* 이름 */}
                     <th style={{ ...thBase, minWidth: 180 }}>이름</th>
@@ -929,7 +931,7 @@ export default function Outreach() {
                       컨택 대상으로 설정된 인플루언서가 없습니다.
                     </td></tr>
                   )}
-                  {pg.pageItems.map(inf => {
+                  {pg.pageItems.map((inf, i) => {
                     const status     = inf.status || 'target'
                     const count      = inf.contact_count ?? 0
                     const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['target']
@@ -938,14 +940,17 @@ export default function Outreach() {
                     const contactDateLabel = formatShortContactDate(inf.last_contact_at)
                     const replyDateLabel = formatShortContactDate(inf.last_reply_at)
                     return (
-                      <tr key={inf.id} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: tc ? `3px solid ${tc}` : undefined, height: 48 }}>
-                        {/* Checkbox */}
+                      <tr key={inf.id} className={dbTableRowClass(checkedIds.has(inf.id))} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: tc ? `3px solid ${tc}` : undefined, height: 48 }}>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <input type="checkbox" checked={checkedIds.has(inf.id)} onChange={e => {
-                            const { next, rejected } = tryToggleBulkSelection(checkedIds, inf.id, e.target.checked)
-                            if (rejected) showToast(bulkSendLimitMessage(), 'error')
-                            setCheckedIds(next)
-                          }} />
+                          <DbTableRowSelect
+                            rowNumber={i + 1}
+                            checked={checkedIds.has(inf.id)}
+                            onChange={checked => {
+                              const { next, rejected } = tryToggleBulkSelection(checkedIds, inf.id, checked)
+                              if (rejected) showToast(bulkSendLimitMessage(), 'error')
+                              setCheckedIds(next)
+                            }}
+                          />
                         </td>
                         {/* 이름 + 핸들 */}
                         <td style={{ padding: '0 12px', verticalAlign: 'middle' }}>

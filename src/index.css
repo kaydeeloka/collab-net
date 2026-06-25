@@ -585,14 +585,14 @@ a { text-decoration: none; }
 }
 
 .table-action-bar__select-all.is-active {
-  background: var(--teal-dk);
-  border-color: var(--teal-dk);
-  color: #fff;
+  background: #fef0f0;
+  border-color: #f5c0c0;
+  color: var(--red);
 }
 
 .table-action-bar__select-all.is-active:hover:not(:disabled) {
-  background: #4a6b6b;
-  border-color: #4a6b6b;
+  background: #fde8e8;
+  border-color: #ef9a9a;
 }
 
 .table-action-bar__clear-selection {

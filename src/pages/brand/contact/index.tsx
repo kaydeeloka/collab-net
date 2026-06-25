@@ -36,6 +36,7 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
+import { DbTableRowSelect, DbTableSelectAll, dbTableRowClass } from '@/components/DbTableSelect'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact/contact-count'
 
@@ -675,7 +676,7 @@ export default function BrandContact() {
               >
                 {allFilteredSelected ? '전체 해제' : '전체 선택'}
               </button>
-              {checkedIds.size > 0 && (
+              {checkedIds.size > 0 && !allFilteredSelected && (
                 <button
                   type="button"
                   className="table-action-bar__clear-selection"
@@ -751,16 +752,17 @@ export default function BrandContact() {
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
-                    <th style={{ ...thBase, width: 36, padding: '9px 8px', textAlign: 'center' }}>
-                      <input type="checkbox"
-                        title="현재 페이지 전체 선택"
+                    <th style={{ ...thBase, width: 40, padding: '9px 8px', textAlign: 'center' }}>
+                      <DbTableSelectAll
                         checked={pg.pageItems.length > 0 && pg.pageItems.every(r => checkedIds.has(rowKey(r)))}
-                        onChange={e => setCheckedIds(prev => {
+                        indeterminate={pg.pageItems.some(r => checkedIds.has(rowKey(r))) && !pg.pageItems.every(r => checkedIds.has(rowKey(r)))}
+                        onChange={checked => {
                           const pageIds = pg.pageItems.map(rowKey)
-                          const { next, rejected } = tryToggleBulkPage(prev, pageIds, e.target.checked)
+                          const { next, rejected } = tryToggleBulkPage(checkedIds, pageIds, checked)
                           if (rejected) showToast(bulkSendLimitMessage(), 'error')
-                          return next
-                        })} />
+                          setCheckedIds(next)
+                        }}
+                      />
                     </th>
                     <th style={{ ...thBase, minWidth: 160 }}>브랜드</th>
                     <th style={{ ...thBase, minWidth: 110 }}>성명</th>
@@ -801,7 +803,7 @@ export default function BrandContact() {
                         : '검색 결과가 없습니다.'}
                     </td></tr>
                   )}
-                  {pg.pageItems.map(row => {
+                  {pg.pageItems.map((row, i) => {
                     const status = row.status ?? ''
                     const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['']
                     const typeColor = row.source === 'general' ? TYPE_COLOR['일반'] : TYPE_COLOR['퍼스널']
@@ -810,13 +812,17 @@ export default function BrandContact() {
                     const contactDateLabel = formatShortContactDate(row.last_contact_at)
                     const replyDateLabel = formatShortContactDate(row.last_reply_at)
                     return (
-                      <tr key={key} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, minHeight: 48 }}>
+                      <tr key={key} className={dbTableRowClass(checkedIds.has(key))} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, minHeight: 48 }}>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <input type="checkbox" checked={checkedIds.has(key)} onChange={e => {
-                            const { next, rejected } = tryToggleBulkSelection(checkedIds, key, e.target.checked)
-                            if (rejected) showToast(bulkSendLimitMessage(), 'error')
-                            setCheckedIds(next)
-                          }} />
+                          <DbTableRowSelect
+                            rowNumber={i + 1}
+                            checked={checkedIds.has(key)}
+                            onChange={checked => {
+                              const { next, rejected } = tryToggleBulkSelection(checkedIds, key, checked)
+                              if (rejected) showToast(bulkSendLimitMessage(), 'error')
+                              setCheckedIds(next)
+                            }}
+                          />
                         </td>
                         <td style={{ padding: '0 12px', verticalAlign: 'middle' }}>
                           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>{row.brand || '—'}</div>
