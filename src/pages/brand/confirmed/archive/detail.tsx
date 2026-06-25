@@ -383,7 +383,48 @@ export default function BrandArchiveDetail() {
         return
       }
       setAssets(prev => [...prev, row as BrandAsset])
-      showToast('판매처 이미지가 추가되었습니다', 'success')
+      showToast('판매처가 추가되었습니다', 'success')
+    } finally {
+      setUploadingCat(null)
+    }
+  }
+
+  async function attachSalesChannelImage(asset: BrandAsset, file: File) {
+    if (!brandId || !selectedPhaseId) return
+    setUploadingCat('sales_channel')
+    try {
+      const path = buildStoragePath(selectedPhaseId, brandId, 'sales_channel', file.name, 0)
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type || undefined,
+      })
+      if (upErr) { showToast(upErr.message, 'error'); return }
+
+      const hadImage = !isSalesLinkOnly(asset)
+      const oldPath = asset.storage_path
+      const { data: row, error: updErr } = await supabase
+        .from('confirmed_brand_assets')
+        .update({
+          file_name: file.name,
+          storage_path: path,
+          file_size: file.size,
+          mime_type: file.type || null,
+        })
+        .eq('id', asset.id)
+        .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
+        .single()
+
+      if (updErr) {
+        await supabase.storage.from(BUCKET).remove([path])
+        showToast(updErr.message, 'error')
+        return
+      }
+      if (hadImage && oldPath && oldPath !== path) {
+        await supabase.storage.from(BUCKET).remove([oldPath])
+      }
+      setAssets(prev => prev.map(a => a.id === asset.id ? row as BrandAsset : a))
+      showToast('판매처 이미지가 업데이트되었습니다', 'success')
     } finally {
       setUploadingCat(null)
     }
@@ -503,7 +544,6 @@ export default function BrandArchiveDetail() {
   if (!brand) return null
 
   function renderViewAssets() {
-    const salesAssets = assetsFor('sales_channel')
     return (
       <div className="brand-archive-assets">
         <div className="brand-archive-asset-grid">
@@ -551,22 +591,11 @@ export default function BrandArchiveDetail() {
             </div>
           )
         })}
-        <SalesChannelPanel
-          assets={salesAssets}
-          editMode={false}
-          uploading={false}
-          onAddLink={() => {}}
-          onAddImage={() => {}}
-          onDelete={() => {}}
-          onLinkChange={() => {}}
-          onDownload={downloadAsset}
-        />
       </div>
     )
   }
 
   function renderEditAssets() {
-    const salesAssets = assetsFor('sales_channel')
     return (
       <div className="brand-archive-assets">
         {ASSET_GRID_CATEGORIES.map(cat => {
@@ -625,18 +654,6 @@ export default function BrandArchiveDetail() {
             </section>
           )
         })}
-        <SalesChannelPanel
-          assets={salesAssets}
-          editMode
-          uploading={uploadingCat === 'sales_channel'}
-          onAddLink={url => { void addSalesChannelLink(url) }}
-          onAddImage={(url, file) => { void uploadSalesChannel(url, file) }}
-          onDelete={asset => {
-            showConfirm(`"${asset.label || asset.file_name}" 삭제할까요?`, () => { void deleteAsset(asset) })
-          }}
-          onLinkChange={saveSalesChannelLink}
-          onDownload={downloadAsset}
-        />
         <div className="brand-archive-save-bar">
           <button
             type="button"
@@ -683,25 +700,53 @@ export default function BrandArchiveDetail() {
       ) : (
         <div className="brand-archive-detail__body">
           {editMode ? (
-            <ArchiveProductFields
-              editMode
-              productEn={productEn}
-              descriptionEn={descriptionEn}
-              archiveNotes={archiveNotes}
-              onProductEnChange={v => saveTextFields({ product_en: v })}
-              onDescriptionEnChange={v => saveTextFields({ description_en: v })}
-              onArchiveNotesChange={saveNotes}
-            />
+            <div className="brand-archive-view-top">
+              <ArchiveProductFields
+                editMode
+                productEn={productEn}
+                descriptionEn={descriptionEn}
+                archiveNotes={archiveNotes}
+                onProductEnChange={v => saveTextFields({ product_en: v })}
+                onDescriptionEnChange={v => saveTextFields({ description_en: v })}
+                onArchiveNotesChange={saveNotes}
+              />
+              <SalesChannelPanel
+                assets={assetsFor('sales_channel')}
+                editMode
+                uploading={uploadingCat === 'sales_channel'}
+                onAddLink={url => { void addSalesChannelLink(url) }}
+                onAddImage={(url, file) => { void uploadSalesChannel(url, file) }}
+                onAttachImage={(asset, file) => { void attachSalesChannelImage(asset, file) }}
+                onDelete={asset => {
+                  showConfirm(`"${asset.label || asset.file_name}" 삭제할까요?`, () => { void deleteAsset(asset) })
+                }}
+                onLinkChange={saveSalesChannelLink}
+                onDownload={downloadAsset}
+              />
+            </div>
           ) : (
-            <ArchiveProductPreview
-              brandName={brand.brand_name}
-              productKo={brand.product}
-              productEn={productEn}
-              descriptionEn={descriptionEn}
-              archiveNotes={archiveNotes}
-              logoUrl={logoUrl}
-              productMainUrl={productMainUrl}
-            />
+            <div className="brand-archive-view-top">
+              <ArchiveProductPreview
+                brandName={brand.brand_name}
+                productKo={brand.product}
+                productEn={productEn}
+                descriptionEn={descriptionEn}
+                archiveNotes={archiveNotes}
+                logoUrl={logoUrl}
+                productMainUrl={productMainUrl}
+              />
+              <SalesChannelPanel
+                assets={assetsFor('sales_channel')}
+                editMode={false}
+                uploading={false}
+                onAddLink={() => {}}
+                onAddImage={() => {}}
+                onAttachImage={() => {}}
+                onDelete={() => {}}
+                onLinkChange={() => {}}
+                onDownload={downloadAsset}
+              />
+            </div>
           )}
           <div className="brand-archive-download-bar">
             <div className="brand-archive-download-bar__line" />

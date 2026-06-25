@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
+import QRCode from 'qrcode'
 import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, Trash2, Upload, ZoomIn, ZoomOut, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
@@ -13,7 +14,7 @@ export const CATEGORIES = [
   { key: 'product_sub',   label: '제품 이미지 (서브)',    hint: '서브 사진 (복수)', viewHint: '권장 크기: 800px × 800px', accept: 'image/*',                                 single: false },
   { key: 'cutout',        label: '제품 누끼',             hint: '누끼 PNG 등',     viewHint: '권장 크기: 800px × 800px',  accept: 'image/*',                                 single: false },
   { key: 'ingredients',   label: '전성분표',              hint: 'PDF / Excel / 이미지', viewHint: 'PDF / Excel / 이미지', accept: '.pdf,.xlsx,.xls,.xlsm,image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel', single: false },
-  { key: 'sales_channel', label: '판매처',                hint: '링크 또는 이미지', viewHint: '판매처 링크 또는 이미지', accept: 'image/*', single: false },
+  { key: 'sales_channel', label: '판매처',                hint: '링크 + 이미지',    viewHint: '판매처 링크 (QR 코드) · 이미지', accept: 'image/*', single: true },
 ] as const
 
 export type CategoryKey = typeof CATEGORIES[number]['key']
@@ -852,6 +853,12 @@ export function ArchiveProductFields({
   )
 }
 
+export function brandLogoDisplayScale(brandName: string): number {
+  const trimmed = brandName.trim()
+  if (/^(varuza|바루자|바루쟈)$/i.test(trimmed)) return 1.4
+  return 1
+}
+
 export function ArchiveProductPreview({
   brandName,
   productKo,
@@ -874,6 +881,7 @@ export function ArchiveProductPreview({
   const primaryTitle = productEnTrim || productKoTrim || brandName
   const desc = descriptionEn.trim() || '설명 없음'
   const brandInitial = brandName.trim().charAt(0) || '?'
+  const logoScale = brandLogoDisplayScale(brandName)
 
   return (
     <article className="brand-archive-product-preview">
@@ -888,7 +896,12 @@ export function ArchiveProductPreview({
         <div className="brand-archive-product-preview__brand-block">
           <span className="brand-archive-product-preview__brand">{brandName}</span>
           {logoUrl ? (
-            <img src={logoUrl} alt={brandName} className="brand-archive-product-preview__logo" />
+            <div
+              className="brand-archive-product-preview__logo-wrap"
+              style={{ '--logo-scale': logoScale } as CSSProperties}
+            >
+              <img src={logoUrl} alt={brandName} className="brand-archive-product-preview__logo" />
+            </div>
           ) : (
             <span className="brand-archive-product-preview__logo-fallback" aria-hidden>{brandInitial}</span>
           )}
@@ -913,12 +926,47 @@ export function isSalesLinkOnly(asset: BrandAsset) {
   return asset.mime_type === 'application/x-sales-link' || asset.storage_path.endsWith('.link')
 }
 
+function SalesQrCode({ url, downloadName }: { url: string; downloadName?: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    QRCode.toDataURL(url, { width: 320, margin: 1, errorCorrectionLevel: 'M' })
+      .then(d => { if (!cancelled) setDataUrl(d) })
+      .catch(() => { if (!cancelled) setDataUrl(null) })
+    return () => { cancelled = true }
+  }, [url])
+
+  if (!dataUrl) return null
+
+  function downloadPng() {
+    if (!dataUrl) return
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = `${(downloadName || 'sales-qr').replace(/[<>:"/\\|?*]+/g, '').trim() || 'sales-qr'}.png`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
+  return (
+    <div className="brand-archive-sales__qr">
+      <img src={dataUrl} alt="판매처 QR 코드" className="brand-archive-sales__qr-img" />
+      <button type="button" className="cfg-btn cfg-btn--ghost brand-archive-sales__qr-dl" onClick={downloadPng}>
+        <Download size={12} />
+        QR 다운로드
+      </button>
+    </div>
+  )
+}
+
 export function SalesChannelPanel({
   assets,
   editMode,
   uploading,
   onAddLink,
   onAddImage,
+  onAttachImage,
   onDelete,
   onLinkChange,
   onDownload,
@@ -928,18 +976,26 @@ export function SalesChannelPanel({
   uploading: boolean
   onAddLink: (url: string) => void
   onAddImage: (url: string, file: File) => void
+  onAttachImage: (asset: BrandAsset, file: File) => void
   onDelete: (asset: BrandAsset) => void
   onLinkChange: (asset: BrandAsset, url: string) => void
   onDownload: (asset: BrandAsset) => void
 }) {
   const cat = CATEGORIES.find(c => c.key === 'sales_channel')!
   const [draftUrl, setDraftUrl] = useState('')
+  const [draftFile, setDraftFile] = useState<File | null>(null)
 
-  function tryAddLink() {
+  function tryAdd() {
     const url = draftUrl.trim()
-    if (!url) return
-    onAddLink(url)
+    if (draftFile) {
+      onAddImage(url, draftFile)
+    } else if (url) {
+      onAddLink(url)
+    } else {
+      return
+    }
     setDraftUrl('')
+    setDraftFile(null)
   }
 
   return (
@@ -950,22 +1006,13 @@ export function SalesChannelPanel({
       ) : (
         <div className="brand-archive-sales__list">
           {assets.map(asset => {
-            const linkOnly = isSalesLinkOnly(asset)
             const url = asset.label?.trim() || ''
-            const hasImage = !linkOnly
+            const hasImage = !isSalesLinkOnly(asset)
             return (
               <div key={asset.id} className="brand-archive-sales__item">
-                <div className="brand-archive-sales__media">
-                  {hasImage ? (
-                    <AssetPreview asset={asset} variant="thumb" />
-                  ) : (
-                    <div className="brand-archive-sales__link-only">
-                      <ExternalLink size={28} color="var(--blue-dk)" />
-                    </div>
-                  )}
-                </div>
-                <div className="brand-archive-sales__meta">
-                  {editMode ? (
+                {/* link (top) */}
+                {editMode ? (
+                  <div className="brand-archive-sales__edit-row">
                     <input
                       type="url"
                       className="cfg-input"
@@ -973,77 +1020,119 @@ export function SalesChannelPanel({
                       onChange={e => onLinkChange(asset, e.target.value)}
                       placeholder="판매처 링크 (https://)"
                     />
-                  ) : url ? (
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="brand-archive-sales__link">
-                      <ExternalLink size={12} />
-                      {url}
-                    </a>
-                  ) : hasImage ? (
-                    <span className="brand-archive-sales__link brand-archive-sales__link--empty">이미지만 등록됨</span>
-                  ) : null}
-                  {hasImage && (
-                    <div className="brand-archive-asset-footer__name">{asset.file_name}</div>
-                  )}
-                </div>
-                <div className="brand-archive-sales__actions">
-                  {hasImage && (
-                    <button type="button" className="cfg-btn cfg-btn--ghost" title="다운로드" onClick={() => onDownload(asset)}>
-                      <Download size={12} />
-                    </button>
-                  )}
-                  {!editMode && url && (
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="cfg-btn cfg-btn--ghost" title="링크 열기">
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                  {editMode && (
+                    {hasImage && (
+                      <button type="button" className="cfg-btn cfg-btn--ghost" title="이미지 다운로드" onClick={() => onDownload(asset)}>
+                        <Download size={12} />
+                      </button>
+                    )}
                     <button type="button" className="cfg-btn cfg-btn--ghost" title="삭제" onClick={() => onDelete(asset)}>
                       <Trash2 size={12} />
                     </button>
-                  )}
-                </div>
+                  </div>
+                ) : url ? (
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="brand-archive-sales__link">
+                    <ExternalLink size={12} />
+                    {url}
+                  </a>
+                ) : null}
+
+                {/* QR (middle) */}
+                {url && <SalesQrCode url={url} downloadName="sales-qr" />}
+
+                {/* image (bottom) */}
+                {hasImage ? (
+                  <div className="brand-archive-sales__media">
+                    <AssetPreview asset={asset} variant="thumb" />
+                    {editMode && (
+                      <label className="brand-archive-sales__media-edit" title="이미지 변경">
+                        <Upload size={13} />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          disabled={uploading}
+                          onChange={e => {
+                            const file = e.target.files?.[0]
+                            if (file) onAttachImage(asset, file)
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                ) : editMode ? (
+                  <div className="brand-archive-sales__media">
+                    <label className="brand-archive-sales__media-add" title="이미지 추가">
+                      <Upload size={20} color="var(--gray-5)" />
+                      <span>이미지 추가</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        disabled={uploading}
+                        onChange={e => {
+                          const file = e.target.files?.[0]
+                          if (file) onAttachImage(asset, file)
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
             )
           })}
         </div>
       )}
-      {editMode && (
+      {editMode && assets.length === 0 && (
         <div className="brand-archive-sales__add">
           <input
             type="url"
             className="cfg-input"
             value={draftUrl}
             onChange={e => setDraftUrl(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); tryAddLink() } }}
-            placeholder="판매처 링크 또는 이미지"
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); tryAdd() } }}
+            placeholder="판매처 링크 (https://)"
           />
-          <button
-            type="button"
-            className="cfg-btn cfg-btn--ghost"
-            disabled={uploading || !draftUrl.trim()}
-            onClick={tryAddLink}
+          <label
+            className={`brand-archive-sales__add-box${draftFile ? ' has-file' : ''}`}
+            style={{ cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 }}
           >
-            <ExternalLink size={13} />
-            링크 추가
-          </button>
-          <label className="cfg-btn" style={{ cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
-            <Upload size={13} />
-            {uploading ? '업로드 중…' : '이미지 추가'}
+            <Upload size={20} color="var(--gray-5)" />
+            <span>{draftFile ? draftFile.name : '이미지 선택 (선택사항)'}</span>
             <input
               type="file"
-              accept={cat.accept}
+              accept="image/*"
               style={{ display: 'none' }}
               disabled={uploading}
               onChange={e => {
                 const file = e.target.files?.[0]
-                if (file) {
-                  onAddImage(draftUrl.trim(), file)
-                  setDraftUrl('')
-                }
+                if (file) setDraftFile(file)
                 e.target.value = ''
               }}
             />
           </label>
+          <div className="brand-archive-sales__add-actions">
+            {draftFile && (
+              <button
+                type="button"
+                className="cfg-btn cfg-btn--ghost"
+                title="선택한 이미지 취소"
+                onClick={() => setDraftFile(null)}
+              >
+                <X size={13} />
+                이미지 취소
+              </button>
+            )}
+            <button
+              type="button"
+              className="cfg-btn"
+              disabled={uploading || (!draftUrl.trim() && !draftFile)}
+              onClick={tryAdd}
+            >
+              {uploading ? '추가 중…' : '추가'}
+            </button>
+          </div>
         </div>
       )}
     </section>
