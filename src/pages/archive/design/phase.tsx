@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react'
-import { formatKstShortDate } from '@/lib/kst-time'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './design-archive.css'
 import { loadDesignAssetUrls } from './design-archive-images'
+import { getDesignArchiveHeroDescription } from './design-archive-copy'
 import { designArchiveTitle } from './design-slug'
-import { splitArchiveParagraphs } from '../brand-report/season-collection-content'
+import DesignArchiveFolders from './DesignArchiveFolders'
 import { useArchivePhase } from '../use-archive-phase'
-
-function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
-  const start = formatKstShortDate(startedAt)
-  const end = formatKstShortDate(endedAt)
-  if (start && end) return `${start} – ${end}`
-  if (start) return `${start} –`
-  if (end) return `– ${end}`
-  return '기간 미설정'
-}
 
 const ASSET_SECTIONS = [
   { key: 'kitBox' as const, label: '키트 박스', sub: 'Kit box exterior & unboxing design' },
@@ -55,15 +46,7 @@ export default function ArchiveDesignPhase() {
   }
 
   const title = designArchiveTitle(phase)
-  const period = formatPhasePeriod(phase.started_at, phase.ended_at)
-  const descParagraphs = (() => {
-    const fromArchive = splitArchiveParagraphs(phase.design_archive_desc)
-    if (fromArchive.length) return fromArchive
-
-    const fromConcept = splitArchiveParagraphs(phase.project_concept)
-    if (fromConcept.length <= 1) return []
-    return fromConcept.slice(1)
-  })()
+  const heroDescription = getDesignArchiveHeroDescription(phase.design_archive_desc)
   const assetMap = {
     kitBox: assets.kitBox,
     collectionCard: assets.collectionCard,
@@ -72,23 +55,10 @@ export default function ArchiveDesignPhase() {
 
   return (
     <div className="page page--fill">
-      <PageHeroBanner className="design-archive-hero">
+      <PageHeroBanner>
         <PageHeroBannerContent
           title={title}
-          description={(
-            <div className="design-archive-hero__copy">
-              <p className="design-archive-hero__period">{period}</p>
-              {descParagraphs.length ? (
-                descParagraphs.map((p, i) => (
-                  <p key={i} className="design-archive-hero__desc">{p}</p>
-                ))
-              ) : (
-                <p className="design-archive-hero__desc">
-                  {phase.name} 시즌 키트 디자인 테마 및 시각 아이덴티티 아카이브입니다.
-                </p>
-              )}
-            </div>
-          )}
+          description={heroDescription}
         />
       </PageHeroBanner>
 
@@ -113,6 +83,8 @@ export default function ArchiveDesignPhase() {
             ))}
           </div>
         </section>
+
+        <DesignArchiveFolders phaseId={phase.id} />
       </div>
     </div>
   )

@@ -12,6 +12,7 @@ export interface FilterSegmentBarProps {
   options: FilterSegmentOption[]
   onChange: (value: string) => void
   children?: React.ReactNode
+  leading?: React.ReactNode
   className?: string
   style?: React.CSSProperties
 }
@@ -22,12 +23,14 @@ export function FilterSegmentBar({
   value,
   options,
   onChange,
+  leading,
   children,
   className = '',
   style,
 }: FilterSegmentBarProps) {
   return (
     <div className={`filters${className ? ` ${className}` : ''}`} style={style}>
+      {leading}
       <div className="filter-segment" role="group" aria-label={ariaLabel ?? label}>
         <span className="filter-segment-label">{label}</span>
         {options.map(opt => (

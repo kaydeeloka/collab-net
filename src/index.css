@@ -970,6 +970,111 @@ thead th {
   overflow: visible;
   vertical-align: top;
 }
+
+/* DB table — numbered row selection */
+.db-table-select-all {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--blue-dk);
+}
+.db-row-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.db-row-select__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.db-row-select__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--gray-3);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-5);
+  line-height: 1;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+  user-select: none;
+}
+.db-row-select:hover .db-row-select__box {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(159, 186, 197, 0.35);
+}
+.db-row-select--checked .db-row-select__box,
+.db-row-select__input:checked + .db-row-select__box {
+  background: var(--blue-dk);
+  border-color: var(--blue-dk);
+  color: #fff;
+  box-shadow: none;
+}
+.db-row-select--checked:hover .db-row-select__box,
+.db-row-select__input:checked + .db-row-select__box:hover {
+  background: var(--blue-dk);
+  border-color: var(--blue);
+  filter: brightness(0.92);
+}
+.db-select-all-btn {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid var(--gray-3);
+  background: #fff;
+  color: var(--gray-7);
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+.db-select-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.db-select-all-btn--clear {
+  border-color: #f5c0c0;
+  background: #fef0f0;
+  color: var(--red);
+}
+.db-select-all-btn--clear:hover:not(:disabled) {
+  background: #fde8e8;
+  border-color: #ef9a9a;
+}
+.db-table-row--selected,
+.db-table-row--selected:hover,
+tbody tr.db-table-row--selected,
+tbody tr.db-table-row--selected:hover,
+tbody tr.db-table-row--selected td {
+  background: var(--blue-lt) !important;
+}
+.db-table-row--contacted,
+.db-table-row--contacted:hover,
+tbody tr.db-table-row--contacted,
+tbody tr.db-table-row--contacted td {
+  background: #f0fdf4 !important;
+}
+tbody tr.db-table-row--contacted:hover:not(.db-table-row--selected),
+tbody tr.db-table-row--contacted:hover:not(.db-table-row--selected) td {
+  background: #dcfce7 !important;
+}
+.db-table-row:hover:not(.db-table-row--selected):not(.db-table-row--contacted) {
+  background: var(--gray-1);
+}
+
 .table-filter-menu {
   background: #fff;
   border: 1px solid var(--gray-3);

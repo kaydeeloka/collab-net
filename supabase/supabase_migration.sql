@@ -441,6 +441,32 @@ CREATE INDEX idx_confirmed_brand_assets_brand_cat
   ON confirmed_brand_assets(confirmed_brand_id, category);
 
 -- ============================================================
+--  Design archive — user folders + files per phase
+-- ============================================================
+CREATE TABLE design_archive_folders (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  phase_id    UUID        NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+  name        TEXT        NOT NULL,
+  sort_order  INTEGER     DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_design_archive_folders_phase ON design_archive_folders(phase_id);
+
+CREATE TABLE design_archive_files (
+  id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  folder_id     UUID        NOT NULL REFERENCES design_archive_folders(id) ON DELETE CASCADE,
+  file_name     TEXT        NOT NULL,
+  storage_path  TEXT        NOT NULL UNIQUE,
+  file_size     INTEGER,
+  mime_type     TEXT,
+  sort_order    INTEGER     DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_design_archive_files_folder ON design_archive_files(folder_id);
+
+-- ============================================================
 --  Storage Buckets
 -- ============================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
@@ -491,6 +517,8 @@ ALTER TABLE brand_general         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE brand_personal        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_brands      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_brand_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE design_archive_folders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE design_archive_files   ENABLE ROW LEVEL SECURITY;
 
 DO $$ DECLARE tbl TEXT;
 BEGIN
@@ -498,7 +526,8 @@ BEGIN
     'phases','tiers','app_config','email_templates','influencers','outreach_messages',
     'confirmed_influencers','influencer_platform','ems_tracking','ems_reshipments',
     'monitoring','monitoring_assets','monitoring_keywords','beauty_news_archives',
-    'email_recipients','brand_general','brand_personal','confirmed_brands','confirmed_brand_assets'
+    'email_recipients','brand_general','brand_personal','confirmed_brands','confirmed_brand_assets',
+    'design_archive_folders','design_archive_files'
   ]
   LOOP
     EXECUTE format(

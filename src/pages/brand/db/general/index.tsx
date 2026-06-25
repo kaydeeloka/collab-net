@@ -7,6 +7,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
+import { DbTableRowSelect, DbTableSelectAll, DbSelectAllButton, dbTableRowClass } from '@/components/DbTableSelect'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
 
 const PAGE_SIZE = 25
@@ -199,6 +200,19 @@ export default function BrandDbGeneral() {
     return a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
   })
   const pg = paginate(sorted, page)
+  const allFilteredSelected = sorted.length > 0 && sorted.every(r => selected.has(r.id))
+
+  function toggleSelectAllFiltered() {
+    if (allFilteredSelected) {
+      setSelected(prev => {
+        const next = new Set(prev)
+        sorted.forEach(r => next.delete(r.id))
+        return next
+      })
+    } else {
+      setSelected(prev => new Set([...prev, ...sorted.map(r => r.id)]))
+    }
+  }
 
   // Shared text field renderer (excludes email which is handled separately)
   const formField = (
@@ -285,12 +299,17 @@ export default function BrandDbGeneral() {
           style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
         />
         <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+        <DbSelectAllButton
+          allSelected={allFilteredSelected}
+          disabled={sorted.length === 0}
+          onClick={toggleSelectAllFiltered}
+        />
         {selected.size > 0 && (
           <button
             onClick={bulkMarkContacted}
             disabled={bulkLoading}
             style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
-            {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}개)`}
+            {bulkLoading ? '처리 중...' : `일괄 컨택 (${selected.size}개)`}
           </button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -308,7 +327,7 @@ export default function BrandDbGeneral() {
         <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 180px)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1080 }}>
             <colgroup>
-              <col style={{ width: 36 }} />
+              <col style={{ width: 40 }} />
               <col style={{ width: 160 }} />
               <col style={{ width: 210 }} />
               <col style={{ width: 140 }} />
@@ -321,14 +340,13 @@ export default function BrandDbGeneral() {
             <thead>
               <tr className="table-head-row">
                 <th style={{ padding: '10px 8px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
+                  <DbTableSelectAll
                     checked={pg.pageItems.length > 0 && pg.pageItems.every(r => selected.has(r.id))}
-                    onChange={e => {
-                      if (e.target.checked) setSelected(prev => new Set([...prev, ...pg.pageItems.map(r => r.id)]))
+                    indeterminate={pg.pageItems.some(r => selected.has(r.id)) && !pg.pageItems.every(r => selected.has(r.id))}
+                    onChange={checked => {
+                      if (checked) setSelected(prev => new Set([...prev, ...pg.pageItems.map(r => r.id)]))
                       else setSelected(prev => { const next = new Set(prev); pg.pageItems.forEach(r => next.delete(r.id)); return next })
                     }}
-                    style={{ cursor: 'pointer', width: 14, height: 14 }}
                   />
                 </th>
                 {['브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
@@ -343,24 +361,22 @@ export default function BrandDbGeneral() {
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
-              ) : pg.pageItems.map((r) => (
+              ) : pg.pageItems.map((r, i) => (
                 <tr key={r.id} onClick={() => openView(r)}
-                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer', background: selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : undefined }}
-                  onMouseEnter={e => (e.currentTarget.style.background = selected.has(r.id) ? '#dbeafe' : r.contacted ? '#dcfce7' : 'var(--gray-1)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = selected.has(r.id) ? '#eff6ff' : r.contacted ? '#f0fdf4' : '')}>
+                  className={dbTableRowClass(selected.has(r.id), r.contacted)}
+                  style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer' }}>
                   <td style={{ textAlign: 'center', padding: '0 8px', height: 50 }} onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
+                    <DbTableRowSelect
+                      rowNumber={i + 1}
                       checked={selected.has(r.id)}
-                      onChange={e => {
+                      onChange={checked => {
                         setSelected(prev => {
                           const next = new Set(prev)
-                          if (e.target.checked) next.add(r.id)
+                          if (checked) next.add(r.id)
                           else next.delete(r.id)
                           return next
                         })
                       }}
-                      style={{ cursor: 'pointer', width: 14, height: 14 }}
                     />
                   </td>
                   <td style={{ padding: '0 12px', fontWeight: 700, fontSize: 13, color: 'var(--gray-8)' }}>

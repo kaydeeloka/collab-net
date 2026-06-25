@@ -116,10 +116,13 @@ export async function loadDesignArchiveFiles(folderId: string): Promise<DesignAr
   }
 
   const withUrls = await Promise.all(
-    data.map(async row => ({
-      ...(row as DesignArchiveFile),
-      imageUrl: await getSignedUrl(row.storage_path),
-    })),
+    data.map(async row => {
+      const signed = await getSignedUrl(row.storage_path)
+      return {
+        ...(row as DesignArchiveFile),
+        imageUrl: signed.url,
+      }
+    }),
   )
   return withUrls
 }
@@ -171,7 +174,7 @@ export async function uploadDesignArchiveFiles(
 
     uploaded.push({
       ...(row as DesignArchiveFile),
-      imageUrl: await getSignedUrl(row.storage_path),
+      imageUrl: (await getSignedUrl(row.storage_path)).url,
     })
   }
 

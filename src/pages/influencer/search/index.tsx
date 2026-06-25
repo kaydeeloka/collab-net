@@ -10,6 +10,8 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
+import { DbTableRowSelect, DbTableSelectAll, DbSelectAllButton, dbTableRowClass } from '@/components/DbTableSelect'
+import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import { PageTabs } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import {
@@ -141,6 +143,7 @@ function influencerDisplaySortKey(inf: Influencer): string {
 }
 
 function compareInfluencersByTierAndName(a: Influencer, b: Influencer): number {
+  if (a.contacted !== b.contacted) return a.contacted ? 1 : -1
   const tierDiff = tierSortIndex(a.tiers?.rank) - tierSortIndex(b.tiers?.rank)
   if (tierDiff !== 0) return tierDiff
   const nameDiff = influencerDisplaySortKey(a).localeCompare(influencerDisplaySortKey(b), 'ko', { sensitivity: 'base' })
@@ -756,43 +759,58 @@ export default function Listup() {
     const safePage   = Math.min(dbPage, totalPages)
     const startIdx   = (safePage - 1) * DB_PAGE_SIZE
     const rows       = filtered.slice(startIdx, startIdx + DB_PAGE_SIZE)
+    const allFilteredSelected = filtered.length > 0 && filtered.every(r => selected.has(r.id))
+
+    function toggleSelectAllFiltered() {
+      if (allFilteredSelected) {
+        setSelected(prev => {
+          const next = new Set(prev)
+          filtered.forEach(r => next.delete(r.id))
+          return next
+        })
+      } else {
+        setSelected(prev => new Set([...prev, ...filtered.map(r => r.id)]))
+      }
+    }
 
     return (
       <div>
-        {/* Tier filter dropdown + date range */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
-            value={currentDbTab}
-            onChange={e => { setCurrentDbTab(e.target.value); setDbPage(1) }}
-            style={{
-              padding: '6px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8,
-              border: `2px solid ${TIER_COLOR[currentDbTab] ?? 'var(--gray-3)'}`,
-              color: TIER_COLOR[currentDbTab] ?? 'var(--gray-7)',
-              background: '#fff', cursor: 'pointer', outline: 'none',
-            }}>
-            <option value="전체">전체</option>
-            {DB_TIERS.map(rank => <option key={rank} value={rank}>{rank}</option>)}
-          </select>
+        <FilterSegmentBar
+          label="순위"
+          ariaLabel="티어 필터"
+          value={currentDbTab}
+          onChange={v => { setCurrentDbTab(v); setDbPage(1) }}
+          style={{ marginBottom: 12 }}
+          leading={(
+            <DbSelectAllButton
+              allSelected={allFilteredSelected}
+              disabled={filtered.length === 0}
+              onClick={toggleSelectAllFiltered}
+            />
+          )}
+          options={[
+            { value: '전체', label: '전체' },
+            ...DB_TIERS.map(rank => ({ value: rank, label: rank })),
+          ]}
+        >
           <span style={{ fontSize: 13, color: 'var(--gray-5)' }}>
-            표시: <strong style={{ color: 'var(--yellow-text)' }}>{getFilteredInfluencers().length}</strong>개
+            표시: <strong style={{ color: 'var(--yellow-text)' }}>{filtered.length}</strong>개
           </span>
-
-          {/* Bulk action — shown when rows are selected */}
           {selected.size > 0 && (
             <button
+              type="button"
               onClick={bulkMarkTarget}
               disabled={bulkLoading}
               style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              {bulkLoading ? '처리 중...' : `일괄 컨택 예정 (${selected.size}명)`}
+              {bulkLoading ? '처리 중...' : `일괄 컨택 (${selected.size}명)`}
             </button>
           )}
-
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 600 }}>추가일</span>
             <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDbPage(1) }}
               style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--gray-3)', outline: 'none' }} />
             {dateFrom && (
-              <button onClick={() => setDateFrom('')}
+              <button type="button" onClick={() => setDateFrom('')}
                 style={{ fontSize: 11, color: 'var(--gray-5)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}>
                 ✕
               </button>
@@ -810,23 +828,25 @@ export default function Listup() {
               이전 차수 불러오기
             </button>
             <button
+              type="button"
               onClick={() => navigate('/influencer/contact')}
               style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--teal-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               컨택 페이지 →
             </button>
           </div>
-        </div>
+        </FilterSegmentBar>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th style={{ width: 36 }}>
-                  <input type="checkbox"
+                <th style={{ width: 40 }}>
+                  <DbTableSelectAll
                     checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
-                    onChange={e => {
+                    indeterminate={rows.some(r => selected.has(r.id)) && !rows.every(r => selected.has(r.id))}
+                    onChange={checked => {
                       setSelected(prev => {
                         const next = new Set(prev)
-                        rows.forEach(r => e.target.checked ? next.add(r.id) : next.delete(r.id))
+                        rows.forEach(r => checked ? next.add(r.id) : next.delete(r.id))
                         return next
                       })
                     }}
@@ -840,19 +860,21 @@ export default function Listup() {
             <tbody>
               {rows.length === 0
                 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--gray-5)' }}>데이터가 없습니다</td></tr>
-                : rows.map(inf => {
+                : rows.map((inf, i) => {
                   const tc = inf.tiers?.rank ? TIER_COLOR[inf.tiers.rank] : undefined
                   return (
-                    <tr key={inf.id} style={{
-                      ...(tc ? { borderLeft: `3px solid ${tc}` } : {}),
-                      background: inf.contacted ? '#f0fdf4' : undefined,
-                    }}>
+                    <tr
+                      key={inf.id}
+                      className={dbTableRowClass(selected.has(inf.id), inf.contacted)}
+                      style={tc ? { borderLeft: `3px solid ${tc}` } : undefined}
+                    >
                       <td style={{ textAlign: 'center' }}>
-                        <input type="checkbox"
+                        <DbTableRowSelect
+                          rowNumber={i + 1}
                           checked={selected.has(inf.id)}
-                          onChange={e => setSelected(prev => {
+                          onChange={checked => setSelected(prev => {
                             const next = new Set(prev)
-                            e.target.checked ? next.add(inf.id) : next.delete(inf.id)
+                            checked ? next.add(inf.id) : next.delete(inf.id)
                             return next
                           })}
                         />
