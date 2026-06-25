@@ -450,6 +450,160 @@ function _fetchLatestFromSender(token, email) {
   return null;
 }
 
+// Earliest outbound message per recipient (To / CC / BCC) — sent items, client-side sort.
+function _normalizeEmail(v) {
+  return String(v || '').trim().toLowerCase();
+}
+
+function _msgHasRecipient(msg, email) {
+  var key = _normalizeEmail(email);
+  if (!key || !msg) return false;
+  var lists = [msg.toRecipients, msg.ccRecipients, msg.bccRecipients];
+  for (var i = 0; i < lists.length; i++) {
+    var recips = lists[i] || [];
+    for (var j = 0; j < recips.length; j++) {
+      var addr = _normalizeEmail(((recips[j] || {}).emailAddress || {}).address);
+      if (addr === key) return true;
+    }
+  }
+  return false;
+}
+
+function _earlierSendEntry(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return _toMs(a.sentAt) <= _toMs(b.sentAt) ? a : b;
+}
+
+function _fetchEarliestSentTo(token, email, since) {
+  const safeEmail = (email || '').trim().replace(/'/g, "''");
+  const lookupEmail = _normalizeEmail(email);
+  if (!safeEmail || !lookupEmail) return null;
+
+  function _pickEarliestAfterSince(msgs) {
+    var list = (msgs || []).slice();
+    if (!list.length) return null;
+    var sinceMs = _toMs(since);
+    if (!isNaN(sinceMs)) {
+      list = list.filter(function(msg) {
+        var sentMs = _toMs(msg.sentDateTime);
+        return !isNaN(sentMs) && sentMs >= sinceMs - 2000;
+      });
+      if (!list.length) return null;
+    }
+    list.sort(function(a, b) {
+      return _toMs(a.sentDateTime) - _toMs(b.sentDateTime);
+    });
+    return list[0];
+  }
+
+  function _entryFromMsg(msg) {
+    if (!msg) return null;
+    const sent = msg.sentDateTime || '';
+    return {
+      messageId: msg.id || '',
+      subject: msg.subject || '',
+      date: sent ? sent.split('T')[0] : '',
+      sentAt: sent,
+    };
+  }
+
+  function _tryFromMessages(msgs) {
+    return _entryFromMsg(_pickEarliestAfterSince(msgs));
+  }
+
+  const select = '&$select=id,sentDateTime,subject,toRecipients,ccRecipients,bccRecipients';
+  const headers = { 'Authorization': 'Bearer ' + token };
+
+  function _fetchByFilter(filterExpr) {
+    var url = GRAPH_BASE + '/me/mailFolders/sentitems/messages'
+      + '?$filter=' + encodeURIComponent(filterExpr)
+      + select
+      + '&$top=50';
+    var res = UrlFetchApp.fetch(url, { headers: headers, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return null;
+    return _tryFromMessages(JSON.parse(res.getContentText()).value);
+  }
+
+  var earliest = null;
+
+  // 1) To / CC / BCC combined filter
+  var combinedFilter = "toRecipients/any(t:t/emailAddress/address eq '" + safeEmail + "')"
+    + " or ccRecipients/any(t:t/emailAddress/address eq '" + safeEmail + "')"
+    + " or bccRecipients/any(t:t/emailAddress/address eq '" + safeEmail + "')";
+  earliest = _earlierSendEntry(earliest, _fetchByFilter(combinedFilter));
+
+  // 2) Per-field filters (some tenants reject OR on collection filters)
+  var recipientFields = ['toRecipients', 'ccRecipients', 'bccRecipients'];
+  for (var f = 0; f < recipientFields.length; f++) {
+    var fieldFilter = recipientFields[f] + "/any(r:r/emailAddress/address eq '" + safeEmail + "')";
+    earliest = _earlierSendEntry(earliest, _fetchByFilter(fieldFilter));
+  }
+
+  // 3) $search fallback (mainly To; needs ConsistencyLevel)
+  var searchUrl = GRAPH_BASE + '/me/mailFolders/sentitems/messages?$search='
+    + encodeURIComponent('"to:' + safeEmail + '"')
+    + select
+    + '&$top=50';
+  var res = UrlFetchApp.fetch(searchUrl, {
+    headers: Object.assign({}, headers, { 'ConsistencyLevel': 'eventual' }),
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() === 200) {
+    earliest = _earlierSendEntry(earliest, _tryFromMessages(JSON.parse(res.getContentText()).value));
+  }
+
+  // 4) Scan recent sent mail — catches BCC when Graph filters miss hidden recipients
+  var scanUrl = GRAPH_BASE + '/me/mailFolders/sentitems/messages' + select + '&$top=100';
+  var sinceMs = _toMs(since);
+  if (!isNaN(sinceMs)) {
+    var sinceIso = new Date(sinceMs).toISOString();
+    scanUrl = GRAPH_BASE + '/me/mailFolders/sentitems/messages'
+      + '?$filter=' + encodeURIComponent('sentDateTime ge ' + sinceIso)
+      + select
+      + '&$top=100';
+  }
+  res = UrlFetchApp.fetch(scanUrl, { headers: headers, muteHttpExceptions: true });
+  if (res.getResponseCode() === 200) {
+    var scanned = (JSON.parse(res.getContentText()).value || []).filter(function(msg) {
+      return _msgHasRecipient(msg, lookupEmail);
+    });
+    earliest = _earlierSendEntry(earliest, _tryFromMessages(scanned));
+  }
+
+  return earliest;
+}
+
+function syncOutlookSends(items) {
+  if (!items || !items.length) return { ok: true, sends: [] };
+  try {
+    const token = getOutlookAccessToken();
+    if (!token) return { ok: false, error: 'Outlook token missing' };
+
+    const sends = [];
+    for (var i = 0; i < items.length; i++) {
+      const item = items[i];
+      const key = (item.email || '').trim().toLowerCase();
+      if (!key) continue;
+
+      const entry = _fetchEarliestSentTo(token, key, item.since);
+      if (!entry || !entry.sentAt) continue;
+
+      sends.push({
+        email: item.email,
+        subject: entry.subject,
+        date: entry.date,
+        sentAt: entry.sentAt,
+        messageId: entry.messageId,
+      });
+    }
+
+    return { ok: true, sends };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
 function syncOutlookReplies(items) {
   if (!items || !items.length) return { ok: true, replies: [] };
   try {
@@ -654,6 +808,7 @@ function routeOutlook(action, p, body) {
     case 'resetEmailSignatureToDefault': return resetEmailSignatureToDefault();
     case 'setOutreachSignatureLogoUrl': return setOutreachSignatureLogoUrl(b);
     case 'syncOutlookReplies': return syncOutlookReplies(b.items || []);
+    case 'syncOutlookSends': return syncOutlookSends(b.items || []);
     case 'syncOutlookDeliveryFailures': return syncOutlookDeliveryFailures(b.items || []);
     case 'markOutlookMessagesRead': return markOutlookMessagesRead(b.messageIds || []);
     default: return null;

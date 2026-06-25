@@ -45,6 +45,7 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
 import { Button, StatCard, StatCards } from '@/components/ui'
+import { EmailTemplatePreviewModal } from '@/components/EmailTemplatePreview'
 import {
   coerceContactCount,
   contactCountStyle,
@@ -104,31 +105,6 @@ interface Influencer {
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
-
-const DUMMY_VALUES: Record<string, { value: string; color: string }> = {
-  '{{이름}}':   { value: 'MiMuse Creator',    color: '#a07800' },
-  '{{핸들}}':   { value: '@mimuse_creator',    color: '#0369a1' },
-  '{{이메일}}': { value: 'creator@mimuse.com', color: '#b45309' },
-  '{{팔로워}}': { value: '42,800',             color: '#065f46' },
-  '{{조회수}}': { value: '18,500',             color: '#be123c' },
-}
-function renderWithDummy(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
-  let remaining = text; let key = 0
-  while (remaining.length > 0) {
-    let earliest = -1, earliestTag = ''
-    for (const tag of Object.keys(DUMMY_VALUES)) {
-      const idx = remaining.indexOf(tag)
-      if (idx !== -1 && (earliest === -1 || idx < earliest)) { earliest = idx; earliestTag = tag }
-    }
-    if (earliest === -1) { parts.push(remaining); break }
-    if (earliest > 0) parts.push(remaining.slice(0, earliest))
-    const d = DUMMY_VALUES[earliestTag]
-    parts.push(<span key={key++} style={{ background: d.color + '18', color: d.color, fontWeight: 700, borderRadius: 4, padding: '0 3px', fontSize: '0.95em' }}>{d.value}</span>)
-    remaining = remaining.slice(earliest + earliestTag.length)
-  }
-  return parts
-}
 
 function applyPlaceholders(text: string, inf: Influencer | null) {
   if (!inf) return text
@@ -1034,58 +1010,41 @@ export default function Outreach() {
         }
       </div>
 
-      {/* ── 미리보기 모달 ── */}
-      {showBulkPreview && (() => {
-        const tpl = templates[bulkTplIdx]
-        return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={() => setShowBulkPreview(false)}>
-            <div style={{ background: '#fff', borderRadius: 16, width: 560, maxWidth: '90vw', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--gray-2)' }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>미리보기 — {tpl?.name}</span>
-                <button onClick={() => setShowBulkPreview(false)}
-                  style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: 'var(--gray-2)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-              </div>
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                <div style={{ background: 'var(--gray-1)', padding: '12px 20px', borderBottom: '1px solid var(--gray-2)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 3 }}>보내는 사람 · MiMuse Team &lt;beautyproject@cranecomm.com&gt;</div>
-                  <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 8 }}>
-                    받는 사람 · <span style={{ color: DUMMY_VALUES['{{이름}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이름}}'].value}</span>
-                    {' <'}<span style={{ color: DUMMY_VALUES['{{이메일}}'].color, fontWeight: 700 }}>{DUMMY_VALUES['{{이메일}}'].value}</span>{'>'}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)' }}>{renderWithDummy(tpl?.title || '(제목 없음)')}</div>
-                </div>
-                <div style={{ padding: '24px 20px', fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
-                  {tpl?.body ? renderWithDummy(tpl.body) : <span style={{ color: 'var(--gray-4)' }}>본문 없음</span>}
-                </div>
-              </div>
-              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--gray-2)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setShowBulkPreview(false)}
-                    style={{ padding: '6px 14px', background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>닫기</button>
-                  <button disabled={checkedIds.size === 0 || checkedIds.size > BULK_SEND_MAX}
-                    onClick={() => {
-                      setShowBulkPreview(false)
-                      const tpl2 = templates[bulkTplIdx]
-                      if (!tpl2) return
-                      if (checkedIds.size > BULK_SEND_MAX) {
-                        showToast(bulkSendLimitMessage(), 'error')
-                        return
-                      }
-                      showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
-                        await executeBulkSend(tpl2)
-                      }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
-                    }}
-                    style={{ padding: '6px 14px', background: checkedIds.size === 0 ? 'var(--gray-3)' : 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
-                    {checkedIds.size > 0 ? `${checkedIds.size}명 일괄 발송` : '일괄 발송'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      <EmailTemplatePreviewModal
+        open={showBulkPreview}
+        onClose={() => setShowBulkPreview(false)}
+        templateName={templates[bulkTplIdx]?.name}
+        title={templates[bulkTplIdx]?.title ?? ''}
+        body={templates[bulkTplIdx]?.body ?? ''}
+        domain="influencer"
+        footer={(
+          <>
+            <button type="button" onClick={() => setShowBulkPreview(false)}
+              style={{ padding: '6px 14px', background: 'var(--gray-1)', color: 'var(--gray-6)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              닫기
+            </button>
+            <button
+              type="button"
+              disabled={checkedIds.size === 0 || checkedIds.size > BULK_SEND_MAX}
+              onClick={() => {
+                setShowBulkPreview(false)
+                const tpl2 = templates[bulkTplIdx]
+                if (!tpl2) return
+                if (checkedIds.size > BULK_SEND_MAX) {
+                  showToast(bulkSendLimitMessage(), 'error')
+                  return
+                }
+                showConfirm(bulkSendConfirmMessage(checkedIds.size, tpl2), async () => {
+                  await executeBulkSend(tpl2)
+                }, { confirmLabel: '발송', confirmColor: 'var(--blue-dk)' })
+              }}
+              style={{ padding: '6px 14px', background: checkedIds.size === 0 ? 'var(--gray-3)' : 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: checkedIds.size === 0 ? 'default' : 'pointer', opacity: checkedIds.size === 0 ? 0.5 : 1 }}
+            >
+              {checkedIds.size > 0 ? `${checkedIds.size}명 일괄 발송` : '일괄 발송'}
+            </button>
+          </>
+        )}
+      />
 
       <BulkSendProgressModal
         open={bulkSendModal !== null}

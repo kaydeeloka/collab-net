@@ -19,55 +19,12 @@ import {
   getSelectedText,
   insertMarkdownLink,
   insertMarkdownBold,
-  renderEmailBodyPreview,
 } from '@/lib/template/email-body-format'
+import { EmailTemplatePreviewPanel } from '@/components/EmailTemplatePreview'
 import { formatKstDateTime } from '@/lib/utils'
 import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/template/email-signature-sync'
 
 const LOGO_SYNC_KEY = 'outreach-logo-supabase-v3'
-
-function renderWithDummy(
-  text: string,
-  dummyValues: Record<string, { value: string; color: string }>,
-): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
-  let remaining = text
-  let key = 0
-  while (remaining.length > 0) {
-    let earliest = -1
-    let earliestTag = ''
-    for (const tag of Object.keys(dummyValues)) {
-      const idx = remaining.indexOf(tag)
-      if (idx !== -1 && (earliest === -1 || idx < earliest)) {
-        earliest = idx
-        earliestTag = tag
-      }
-    }
-    if (earliest === -1) {
-      parts.push(remaining)
-      break
-    }
-    if (earliest > 0) parts.push(remaining.slice(0, earliest))
-    const d = dummyValues[earliestTag]
-    parts.push(
-      <span
-        key={key++}
-        style={{
-          background: d.color + '18',
-          color: d.color,
-          fontWeight: 700,
-          borderRadius: 4,
-          padding: '0 3px',
-          fontSize: '0.95em',
-        }}
-      >
-        {d.value}
-      </span>,
-    )
-    remaining = remaining.slice(earliest + earliestTag.length)
-  }
-  return parts
-}
 
 function insertAtCursor(
   el: HTMLInputElement | HTMLTextAreaElement | null,
@@ -170,52 +127,6 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
 
   function previewCategoryStyle(cat: string) {
     return config.categoryColors[cat] ?? config.categoryColors['기타']
-  }
-
-  function renderEmailPreview(previewTitle: string, previewBody: string) {
-    return (
-      <div
-        style={{
-          background: 'var(--gray-1)',
-          borderRadius: 10,
-          padding: '14px 18px',
-          border: '1px solid var(--gray-2)',
-        }}
-      >
-        <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>
-          {config.previewSender}
-        </div>
-        {previewTitle ? (
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
-            {renderWithDummy(previewTitle, config.dummyValues)}
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: 'var(--gray-4)', marginBottom: 10, fontStyle: 'italic' }}>
-            (제목 없음)
-          </div>
-        )}
-        {previewBody ? (
-          <div
-            style={{
-              fontSize: 13,
-              color: 'var(--gray-7)',
-              lineHeight: 1.9,
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {renderEmailBodyPreview(previewBody, config.dummyValues)}
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: 'var(--gray-4)', fontStyle: 'italic' }}>본문 없음</div>
-        )}
-        {signature && (
-          <div
-            style={{ marginTop: 16, fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.6 }}
-            dangerouslySetInnerHTML={{ __html: signature }}
-          />
-        )}
-      </div>
-    )
   }
 
   function wrapBold() {
@@ -539,7 +450,13 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
                 </button>
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {renderEmailPreview(title, body)}
+                <EmailTemplatePreviewPanel
+                  title={title}
+                  body={body}
+                  domain={domain}
+                  layout="card"
+                  signatureHtml={signature}
+                />
               </div>
             </>
           ) : (
@@ -947,7 +864,13 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
         title="미리보기"
         size="lg"
       >
-        {renderEmailPreview(title, body)}
+        <EmailTemplatePreviewPanel
+          title={title}
+          body={body}
+          domain={domain}
+          layout="card"
+          signatureHtml={signature}
+        />
       </Modal>
 
       <ConfirmToast state={confirmToast.state} onHide={confirmToast.hide} />

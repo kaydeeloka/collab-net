@@ -39,29 +39,7 @@ import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact/contact-count'
 
 import { fetchEmailTemplates, type EmailTemplate } from '@/lib/template/email-templates'
-
-const DUMMY: Record<string, { value: string; color: string }> = {
-  '{{브랜드명}}': { value: 'AmorePacific', color: '#a07800' },
-  '{{담당자}}':   { value: '김민지',        color: '#0369a1' },
-  '{{직함}}':     { value: '마케팅 팀장',    color: '#065f46' },
-}
-
-function renderWithDummy(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []; let remaining = text; let key = 0
-  while (remaining.length > 0) {
-    let earliest = -1, earliestTag = ''
-    for (const tag of Object.keys(DUMMY)) {
-      const idx = remaining.indexOf(tag)
-      if (idx !== -1 && (earliest === -1 || idx < earliest)) { earliest = idx; earliestTag = tag }
-    }
-    if (earliest === -1) { parts.push(remaining); break }
-    if (earliest > 0) parts.push(remaining.slice(0, earliest))
-    const d = DUMMY[earliestTag]
-    parts.push(<span key={key++} style={{ background: d.color + '18', color: d.color, fontWeight: 700, borderRadius: 4, padding: '0 3px', fontSize: '0.95em' }}>{d.value}</span>)
-    remaining = remaining.slice(earliest + earliestTag.length)
-  }
-  return parts
-}
+import { EmailTemplatePreviewModal } from '@/components/EmailTemplatePreview'
 
 function applyPlaceholders(text: string, row: { brand: string; name: string | null; position: string | null }) {
   return text
@@ -71,6 +49,11 @@ function applyPlaceholders(text: string, row: { brand: string; name: string | nu
 }
 
 const TYPES = ['일반', '퍼스널']
+const TYPE_FILTER_OPTIONS = [
+  { value: '전체', label: '전체' },
+  { value: '일반', label: '일반' },
+  { value: '퍼스널', label: '퍼스널' },
+]
 const TYPE_COLOR: Record<string, string> = {
   '일반':   '#3b82f6',
   '퍼스널': '#ec4899',
@@ -88,6 +71,7 @@ const STATUS_OPTIONS = [
   { value: 'accept',   label: '확정',     bg: '#bbf7d0', color: '#14532d' },
 ]
 const STATUS_STYLE = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, { bg: s.bg, color: s.color }]))
+const STATUS_FILTER_ALL = 'all'
 
 interface BrandRow {
   id:          string
@@ -111,6 +95,15 @@ const PAGE_SIZE = 25
 function bulkSendConfirmMessage(count: number, tpl: { name: string; title: string }) {
   return `${count}건에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.title || '(제목 없음)'}`
 }
+function rowMatchesSearch(row: BrandRow, query: string) {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const hay = [row.brand, row.name, row.position, row.email, row.phone, row.website, row.notes]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return hay.includes(q)
+}
 function paginate<T>(items: T[], page: number) {
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -127,18 +120,18 @@ export default function BrandContact() {
   const [loading, setLoading] = useState(true)
 
   const [activeType,       setActiveType]       = useState('전체')
-  const [statusFilter,     setStatusFilter]     = useState('')
+  const [searchQuery,      setSearchQuery]      = useState('')
+  const [statusFilter,     setStatusFilter]     = useState(STATUS_FILTER_ALL)
   const [showStatusFilter, setShowStatusFilter] = useState(false)
-  const [filterDropdownPos, setFilterDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const [page,             setPage]             = useState(1)
   const statusFilterRef = useRef<HTMLDivElement>(null)
-  const filterBtnRef    = useRef<HTMLButtonElement>(null)
 
   const [checkedIds,      setCheckedIds]      = useState<Set<string>>(new Set())
   const [bulkSending,     setBulkSending]     = useState(false)
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
+  const [bulkMarking,     setBulkMarking]     = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
@@ -204,12 +197,21 @@ export default function BrandContact() {
   }, [selectedPhaseId])
 
   useEffect(() => {
+    setPage(1)
+  }, [searchQuery, activeType, statusFilter])
+
+  useEffect(() => {
     if (!showStatusFilter) return
+    const closeOnScroll = () => setShowStatusFilter(false)
     const handler = (e: MouseEvent) => {
       if (statusFilterRef.current && !statusFilterRef.current.contains(e.target as Node)) setShowStatusFilter(false)
     }
+    window.addEventListener('scroll', closeOnScroll, true)
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    return () => {
+      window.removeEventListener('scroll', closeOnScroll, true)
+      document.removeEventListener('mousedown', handler)
+    }
   }, [showStatusFilter])
 
   const recordSendAfterEmail = useCallback(async (row: BrandRow, sentAt: string) => {
@@ -408,11 +410,45 @@ export default function BrandContact() {
   const filtered = rows.filter(r => {
     if (activeType === '일반'   && r.source !== 'general')  return false
     if (activeType === '퍼스널' && r.source !== 'personal') return false
-    if (statusFilter && r.status !== statusFilter) return false
+    if (statusFilter !== STATUS_FILTER_ALL && r.status !== statusFilter) return false
+    if (!rowMatchesSearch(r, searchQuery)) return false
     return true
   }).sort((a, b) => compareByRecentReply(a, b))
   const pg = paginate(filtered, page)
   const allFilteredSelected = isBulkAllSelected(checkedIds, filtered.map(rowKey))
+
+  const requestBulkMarkComplete = useCallback(() => {
+    const keys = Array.from(checkedIds)
+    if (!keys.length) {
+      showToast('선택한 항목이 없습니다', 'error')
+      return
+    }
+    const targets = filtered.filter(r => keys.includes(rowKey(r)) && (r.status ?? '') === '')
+    if (!targets.length) {
+      showToast('컨택 예정 상태인 선택 항목이 없습니다', 'error')
+      return
+    }
+    showConfirm(
+      `선택한 ${targets.length}건을 첫발송 완료로 표시하시겠습니까?\n(Outlook 등 외부에서 발송한 경우 수동 반영)`,
+      async () => {
+        setBulkMarking(true)
+        try {
+          const sentAt = supabaseNow()
+          let updated = 0
+          for (const row of targets) {
+            const ok = await recordSendAfterEmail(row, sentAt)
+            if (ok) updated++
+          }
+          setCheckedIds(new Set())
+          await load()
+          showToast(`${updated}건 첫발송 완료로 반영`, 'success')
+        } finally {
+          setBulkMarking(false)
+        }
+      },
+      { confirmLabel: '완료 처리', confirmColor: 'var(--blue-dk)' },
+    )
+  }, [checkedIds, filtered, showConfirm, showToast, load, recordSendAfterEmail])
 
   const toggleSelectAllFiltered = useCallback(() => {
     const { next, truncated } = toggleBulkAllFiltered(checkedIds, filtered.map(rowKey))
@@ -615,32 +651,32 @@ export default function BrandContact() {
       )}
 
       {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['전체', ...TYPES].map(t => {
-          const active = activeType === t
-          const color = t === '전체' ? '#64748b' : (TYPE_COLOR[t] ?? '#64748b')
-          return (
-            <button key={t} onClick={() => { setActiveType(t); setPage(1) }}
-              style={{
-                padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                border: `2px solid ${active ? color : 'transparent'}`,
-                background: active ? color : 'var(--gray-1)',
-                color: active ? '#fff' : 'var(--gray-5)',
-                transition: 'all .15s',
-              }}>
-              {t}
-              {t !== '전체' && (
-                <span style={{ marginLeft: 5, opacity: 0.8, fontSize: 11 }}>
-                  {rows.filter(r => t === '일반' ? r.source === 'general' : r.source === 'personal').length}
-                </span>
-              )}
+      <div className="filters" style={{ marginBottom: 16 }}>
+        <div className="filter-segment" role="group" aria-label="유형 필터">
+          <span className="filter-segment-label">유형</span>
+          {TYPE_FILTER_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              data-value={opt.value}
+              className={`filter-segment-btn${activeType === opt.value ? ' active' : ''}`}
+              onClick={() => { setActiveType(opt.value); setPage(1) }}
+            >
+              {opt.label}
             </button>
-          )
-        })}
+          ))}
+        </div>
+        <input
+          type="text"
+          placeholder="브랜드명, 담당자, 이메일 검색..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          style={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+        />
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)' }}>
 
         <TableActionBar
           selectedCount={checkedIds.size}
@@ -675,8 +711,14 @@ export default function BrandContact() {
           }
           actions={
             <>
-              <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
-                미리보기
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={bulkMarking || checkedIds.size === 0}
+                onClick={requestBulkMarkComplete}
+                title="컨택 예정 항목만 첫발송 완료로 표시 (외부 발송 수동 반영)"
+              >
+                {bulkMarking ? '처리 중…' : '일괄 완료'}
               </Button>
               <Button
                 variant="primary"
@@ -714,6 +756,9 @@ export default function BrandContact() {
             options={templates}
             emptyLabel="템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요"
           />
+          <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
+            미리보기
+          </Button>
         </TableActionBar>
 
         {loading
@@ -739,19 +784,25 @@ export default function BrandContact() {
                     <th style={{ ...thBase, minWidth: 90 }}>직급</th>
                     <th style={{ ...thBase, minWidth: 180 }}>이메일</th>
                     <th style={{ ...thBase, minWidth: 140 }}>
-                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div ref={statusFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
                         <span>상태</span>
-                        <button ref={filterBtnRef}
-                          onClick={() => {
-                            if (!showStatusFilter && filterBtnRef.current) {
-                              const r = filterBtnRef.current.getBoundingClientRect()
-                              setFilterDropdownPos({ top: r.bottom + 4, left: r.left })
-                            }
-                            setShowStatusFilter(p => !p)
-                          }}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: statusFilter ? (STATUS_STYLE[statusFilter]?.color ?? '#64748b') : 'transparent', color: statusFilter ? '#fff' : 'var(--gray-4)', cursor: 'pointer', padding: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowStatusFilter(p => !p)}
+                          title="상태 필터"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: statusFilter !== STATUS_FILTER_ALL ? (STATUS_STYLE[statusFilter]?.color ?? '#64748b') : 'transparent', color: statusFilter !== STATUS_FILTER_ALL ? '#fff' : 'var(--gray-4)', cursor: 'pointer', padding: 0 }}>
                           <ListFilter size={13} />
                         </button>
+                        {showStatusFilter && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 140, marginTop: 4 }}>
+                            {[{ value: STATUS_FILTER_ALL, label: '전체' }, ...STATUS_OPTIONS].map(o => (
+                              <button key={o.value || '__pending__'} type="button" onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false); setPage(1) }}
+                                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.bg) ?? '#f1f5f9') : 'transparent', color: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.color) ?? 'var(--gray-7)') : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </th>
                     <th style={{ ...thBase, minWidth: 110 }}>마지막 컨택 날짜</th>
@@ -762,7 +813,9 @@ export default function BrandContact() {
                 <tbody>
                   {pg.pageItems.length === 0 && (
                     <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
-                      컨택 대상으로 설정된 브랜드가 없습니다.
+                      {rows.length === 0
+                        ? '컨택 대상으로 설정된 브랜드가 없습니다.'
+                        : '검색 결과가 없습니다.'}
                     </td></tr>
                   )}
                   {pg.pageItems.map(row => {
@@ -858,45 +911,14 @@ export default function BrandContact() {
         }
       </div>
 
-      {/* Status filter dropdown — fixed position to escape overflow container */}
-      {showStatusFilter && filterDropdownPos && (
-        <div ref={statusFilterRef}
-          style={{ position: 'fixed', top: filterDropdownPos.top, left: filterDropdownPos.left, zIndex: 9999, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 140 }}>
-          {[{ value: '', label: '전체' }, ...STATUS_OPTIONS.filter(o => o.value !== '')].map(o => (
-            <button key={o.value} onClick={() => { setStatusFilter(o.value); setShowStatusFilter(false); setPage(1) }}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: statusFilter === o.value ? 700 : 500, background: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.bg) ?? '#f1f5f9') : 'transparent', color: statusFilter === o.value ? ((STATUS_STYLE[o.value]?.color) ?? 'var(--gray-7)') : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Bulk Preview Modal */}
-      {showBulkPreview && templates[bulkTplIdx] && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setShowBulkPreview(false)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 28, maxWidth: 580, width: '90%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gray-8)' }}>템플릿 미리보기</div>
-              <button onClick={() => setShowBulkPreview(false)}
-                style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--gray-5)', lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-5)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px' }}>
-              {templates[bulkTplIdx].name}
-            </div>
-            <div style={{ background: 'var(--gray-1)', borderRadius: 10, padding: '14px 18px', border: '1px solid var(--gray-2)' }}>
-              <div style={{ fontSize: 10, color: 'var(--gray-4)', marginBottom: 6 }}>보내는 사람 · MiMuse Team</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', marginBottom: 10 }}>
-                {renderWithDummy(templates[bulkTplIdx].title)}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>
-                {renderWithDummy(templates[bulkTplIdx].body)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EmailTemplatePreviewModal
+        open={showBulkPreview && !!templates[bulkTplIdx]}
+        onClose={() => setShowBulkPreview(false)}
+        templateName={templates[bulkTplIdx]?.name}
+        title={templates[bulkTplIdx]?.title ?? ''}
+        body={templates[bulkTplIdx]?.body ?? ''}
+        domain="brand"
+      />
 
       <BulkSendProgressModal
         open={bulkSendModal !== null}
