@@ -429,6 +429,9 @@ export default function Listup() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
 
+  const [sheetUpdating, setSheetUpdating] = useState(false)
+  const [sheetUrl,      setSheetUrl]      = useState<string | null>(null)
+
   const [showImportModal, setShowImportModal] = useState(false)
   const [importPhaseId, setImportPhaseId] = useState('')
   const [importTier, setImportTier] = useState('전체')
@@ -753,6 +756,24 @@ export default function Listup() {
     return [...list].sort(compareInfluencersByTierAndName)
   }
 
+  async function handleUpdateInfluencerSheet() {
+    if (!viewPhaseId) { showToast('페이즈를 선택하세요.', 'error'); return }
+    setSheetUpdating(true)
+    try {
+      const r = await gasPost<{ ok?: boolean; error?: string; url?: string; count?: number; message?: string }>({
+        action: 'updateInfluencerSheet',
+        phaseId: viewPhaseId,
+      })
+      if (r.error) { showToast('오류: ' + r.error, 'error'); return }
+      setSheetUrl(r.url ?? null)
+      showToast(r.message || '시트 업데이트 완료', 'success')
+    } catch (e: unknown) {
+      showToast('오류: ' + (e as Error).message, 'error')
+    } finally {
+      setSheetUpdating(false)
+    }
+  }
+
   function renderDbTable() {
     const filtered = getFilteredInfluencers()
     const totalPages = Math.max(1, Math.ceil(filtered.length / DB_PAGE_SIZE))
@@ -870,7 +891,7 @@ export default function Listup() {
                     >
                       <td style={{ textAlign: 'center' }}>
                         <DbTableRowSelect
-                          rowNumber={i + 1}
+                          rowNumber={startIdx + i + 1}
                           checked={selected.has(inf.id)}
                           onChange={checked => setSelected(prev => {
                             const next = new Set(prev)
@@ -941,7 +962,12 @@ export default function Listup() {
           description="Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다."
           actions={(
             <>
-              <button className="page-banner-btn page-banner-btn--secondary" onClick={() => switchTab('database')}>인플루언서 DB</button>
+              {sheetUrl
+                ? <a href={sheetUrl} target="_blank" rel="noopener" className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>시트 열기</a>
+                : <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { void handleUpdateInfluencerSheet() }} disabled={sheetUpdating}>
+                    {sheetUpdating ? '업데이트 중…' : '시트 업데이트'}
+                  </button>
+              }
               <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setDbLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침</button>
             </>
           )}

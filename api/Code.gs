@@ -19,6 +19,7 @@ const FEATURE_ROUTERS = [
   routeTrend,
   routeBeautyNews,
   routeEms,
+  routeSheets,
 ];
 
 function _dispatch(action, p, body) {
