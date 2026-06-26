@@ -6,11 +6,20 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
+import HeaderFilterMenu, { type HeaderFilterOption } from '@/components/HeaderFilterMenu'
 import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
 import { DbTableRowSelect, DbTableSelectAll, DbSelectAllButton, dbTableRowClass } from '@/components/DbTableSelect'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
+import { FormTwoColumn } from '@/components/FormTwoColumn'
 
 const PAGE_SIZE = 25
+
+const CONTACT_FILTER_OPTIONS: HeaderFilterOption[] = [
+  { value: 'all',  label: '전체' },
+  { value: 'has',  label: '담당자 있음' },
+  { value: 'none', label: '담당자 없음' },
+]
+
 function paginate<T>(items: T[], page: number) {
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -70,6 +79,8 @@ export default function BrandDbGeneral() {
   const [page,     setPage]     = useState(1)
   const [selected,     setSelected]     = useState<Set<string>>(new Set())
   const [bulkLoading,  setBulkLoading]  = useState(false)
+  const [contactFilter, setContactFilter] = useState('all')
+  const [openFilter,    setOpenFilter]    = useState<'contact' | null>(null)
 
   // add modal
   const [showAdd,  setShowAdd]  = useState(false)
@@ -225,9 +236,11 @@ export default function BrandDbGeneral() {
   }
 
   const filtered = rows.filter(r => {
+    if (contactFilter === 'has'  && !r.contact_name) return false
+    if (contactFilter === 'none' && r.contact_name)  return false
     if (!search) return true
     const q = search.toLowerCase()
-    return [r.brand_name, r.company, r.telephone, r.website, r.product_category, ...(r.email ?? [])]
+    return [r.brand_name, r.company, r.telephone, r.website, r.product_category, r.contact_name, ...(r.email ?? [])]
       .some(v => (v ?? '').toLowerCase().includes(q))
   })
   const sorted = [...filtered].sort((a, b) => {
@@ -401,6 +414,7 @@ export default function BrandDbGeneral() {
             <colgroup>
               <col style={{ width: 40 }} />
               <col style={{ width: 160 }} />
+              <col style={{ width: 130 }} />
               <col style={{ width: 210 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 130 }} />
@@ -421,7 +435,18 @@ export default function BrandDbGeneral() {
                     }}
                   />
                 </th>
-                {['브랜드명', '이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>브랜드명</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>
+                  <HeaderFilterMenu
+                    label="담당자"
+                    value={contactFilter}
+                    options={CONTACT_FILTER_OPTIONS}
+                    onChange={v => { setContactFilter(v); setPage(1) }}
+                    open={openFilter === 'contact'}
+                    onOpenChange={open => setOpenFilter(open ? 'contact' : null)}
+                  />
+                </th>
+                {['이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left' }}>
                     {h}
                   </th>
@@ -430,9 +455,9 @@ export default function BrandDbGeneral() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
               ) : pg.pageItems.map((r, i) => (
                 <tr key={r.id} onClick={() => openView(r)}
                   className={dbTableRowClass(selected.has(r.id), r.contacted)}
@@ -463,6 +488,16 @@ export default function BrandDbGeneral() {
                         </span>
                       )}
                     </div>
+                  </td>
+                  <td style={{ padding: '0 12px', fontSize: 12 }}>
+                    {r.contact_name ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</span>
+                        {(r.department || r.position) && (
+                          <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>{[r.department, r.position].filter(Boolean).join(' · ')}</span>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
                   <td style={{ padding: '0 12px', fontSize: 12 }}>
                     {r.email?.length ? (
@@ -516,31 +551,36 @@ export default function BrandDbGeneral() {
       </div>
 
       {/* ── Add Modal ── */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="브랜드 DB 추가">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-          {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
-          {emailListEditor(addForm, setAddForm, true)}
-          {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('회사 명', 'company', addForm, setAddForm, { placeholder: '회사명 입력' })}
-            {formField('내선번호', 'telephone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
-          </div>
-          {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품' })}
-          {overseasToggle(addForm, setAddForm)}
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>담당자 정보 (선택)</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('성명', 'contact_name', addForm, setAddForm)}
-            {formField('부서', 'department', addForm, setAddForm)}
-            {formField('직급', 'position', addForm, setAddForm)}
-            {formField('개인 전화번호', 'personal_phone', addForm, setAddForm, { type: 'tel' })}
-          </div>
-          {personalEmailListEditor(addForm, setAddForm)}
-          {formField('대표 메일', 'rep_email', addForm, setAddForm, { type: 'email' })}
-        </div>
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="브랜드 DB 추가" size="lg">
+        <FormTwoColumn
+          left={{
+            title: '브랜드 정보',
+            children: (
+              <>
+                {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
+                {emailListEditor(addForm, setAddForm, true)}
+                {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
+                {formField('회사 명', 'company', addForm, setAddForm, { placeholder: '회사명 입력' })}
+                {formField('내선번호', 'telephone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
+                {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품' })}
+                {overseasToggle(addForm, setAddForm)}
+              </>
+            ),
+          }}
+          right={{
+            title: '담당자 정보 (선택)',
+            children: (
+              <>
+                {formField('성명', 'contact_name', addForm, setAddForm)}
+                {formField('부서', 'department', addForm, setAddForm)}
+                {formField('직급', 'position', addForm, setAddForm)}
+                {formField('개인 전화번호', 'personal_phone', addForm, setAddForm, { type: 'tel' })}
+                {personalEmailListEditor(addForm, setAddForm)}
+                {formField('대표 메일', 'rep_email', addForm, setAddForm, { type: 'email' })}
+              </>
+            ),
+          }}
+        />
         <div className="modal-actions" style={{ marginTop: 20 }}>
           <button className="modal-btn-cancel" onClick={() => setShowAdd(false)}>취소</button>
           <button className="modal-btn-confirm" onClick={addBrand}
@@ -666,31 +706,36 @@ export default function BrandDbGeneral() {
       )}
 
       {/* ── Edit Modal ── */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 편집">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-          {formField('브랜드 명', 'brand_name', editForm, setEditForm, { required: true })}
-          {emailListEditor(editForm, setEditForm, true)}
-          {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('회사 명', 'company', editForm, setEditForm)}
-            {formField('내선번호', 'telephone', editForm, setEditForm)}
-          </div>
-          {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm)}
-          {overseasToggle(editForm, setEditForm)}
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>담당자 정보 (선택)</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {formField('성명', 'contact_name', editForm, setEditForm)}
-            {formField('부서', 'department', editForm, setEditForm)}
-            {formField('직급', 'position', editForm, setEditForm)}
-            {formField('개인 전화번호', 'personal_phone', editForm, setEditForm, { type: 'tel' })}
-          </div>
-          {personalEmailListEditor(editForm, setEditForm)}
-          {formField('대표 메일', 'rep_email', editForm, setEditForm, { type: 'email' })}
-        </div>
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 편집" size="lg">
+        <FormTwoColumn
+          left={{
+            title: '브랜드 정보',
+            children: (
+              <>
+                {formField('브랜드 명', 'brand_name', editForm, setEditForm, { required: true })}
+                {emailListEditor(editForm, setEditForm, true)}
+                {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
+                {formField('회사 명', 'company', editForm, setEditForm)}
+                {formField('내선번호', 'telephone', editForm, setEditForm)}
+                {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm)}
+                {overseasToggle(editForm, setEditForm)}
+              </>
+            ),
+          }}
+          right={{
+            title: '담당자 정보 (선택)',
+            children: (
+              <>
+                {formField('성명', 'contact_name', editForm, setEditForm)}
+                {formField('부서', 'department', editForm, setEditForm)}
+                {formField('직급', 'position', editForm, setEditForm)}
+                {formField('개인 전화번호', 'personal_phone', editForm, setEditForm, { type: 'tel' })}
+                {personalEmailListEditor(editForm, setEditForm)}
+                {formField('대표 메일', 'rep_email', editForm, setEditForm, { type: 'email' })}
+              </>
+            ),
+          }}
+        />
         <div className="modal-actions" style={{ marginTop: 20 }}>
           <button className="modal-btn-cancel" onClick={() => setShowEdit(false)}>취소</button>
           <button className="modal-btn-confirm" onClick={saveEdit}

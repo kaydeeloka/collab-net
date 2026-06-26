@@ -9,6 +9,7 @@ import Pagination from '@/components/Pagination'
 import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
 import { DbTableRowSelect, DbTableSelectAll, DbSelectAllButton, dbTableRowClass } from '@/components/DbTableSelect'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
+import { FormTwoColumn } from '@/components/FormTwoColumn'
 
 const PAGE_SIZE = 25
 function paginate<T>(items: T[], page: number) {
@@ -319,27 +320,34 @@ export default function BrandDbPersonal() {
   )
 
   const modalFields = (form: Form, setForm: (f: Form) => void) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>필수 입력</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {field('브랜드 명', 'brand_name',   form, setForm, { required: true })}
-        {field('성명',      'contact_name', form, setForm, { required: true })}
-      </div>
-      {emailListEditor(form, setForm, true)}
-      {field('홈페이지', 'website', form, setForm, { required: true, placeholder: 'https://' })}
-
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '6px 0 2px' }}>선택 입력</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {field('회사명',             'company',          form, setForm)}
-        {field('부서',               'department',       form, setForm)}
-        {field('직급',               'position',         form, setForm)}
-        {field('개인 전화번호',      'personal_phone',   form, setForm, { type: 'tel' })}
-        {field('내선 번호',          'telephone',        form, setForm)}
-        {field('대표 메일',          'rep_email',        form, setForm, { type: 'email' })}
-        {field('판매 제품 카테고리', 'product_category', form, setForm)}
-      </div>
-      {overseasBtn(form, setForm)}
-    </div>
+    <FormTwoColumn
+      left={{
+        title: '필수 입력',
+        children: (
+          <>
+            {field('브랜드 명', 'brand_name',   form, setForm, { required: true })}
+            {field('성명',      'contact_name', form, setForm, { required: true })}
+            {emailListEditor(form, setForm, true)}
+            {field('홈페이지', 'website', form, setForm, { required: true, placeholder: 'https://' })}
+          </>
+        ),
+      }}
+      right={{
+        title: '선택 입력',
+        children: (
+          <>
+            {field('회사명',             'company',          form, setForm)}
+            {field('부서',               'department',       form, setForm)}
+            {field('직급',               'position',         form, setForm)}
+            {field('개인 전화번호',      'personal_phone',   form, setForm, { type: 'tel' })}
+            {field('내선 번호',          'telephone',        form, setForm)}
+            {field('대표 메일',          'rep_email',        form, setForm, { type: 'email' })}
+            {field('판매 제품 카테고리', 'product_category', form, setForm)}
+            {overseasBtn(form, setForm)}
+          </>
+        ),
+      }}
+    />
   )
 
   return (
@@ -492,7 +500,7 @@ export default function BrandDbPersonal() {
       </div>
 
       {/* Add Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="퍼스널 브랜드 DB 추가">
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="퍼스널 브랜드 DB 추가" size="lg">
         {modalFields(addForm, setAddForm)}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
           <button onClick={() => setShowAdd(false)}
@@ -606,7 +614,7 @@ export default function BrandDbPersonal() {
       )}
 
       {/* Edit Modal */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 수정">
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 수정" size="lg">
         {modalFields(editForm, setEditForm)}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
           <button onClick={() => setShowEdit(false)}
