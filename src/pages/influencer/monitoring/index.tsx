@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { BarChart2, Copy, Download, ExternalLink, FileText, Hash, Link2, RefreshCw, Video } from 'lucide-react'
+import { BarChart2, Copy, Download, ExternalLink, FileText, Hash, Link2, Plus, RefreshCw, Video } from 'lucide-react'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
 import * as XLSX from 'xlsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -573,8 +573,62 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   }
 
   function cancelEditing() {
+    if (modalRow && isNewUnsavedRow(modalRow)) {
+      const remaining = modalGroupRows.filter(r => r.id !== modalRow.id)
+      setModalGroupRows(remaining)
+      setModalRow(remaining[0] ?? null)
+      if (!remaining[0]) { closeModal(); return }
+    }
     setModalEditing(false)
     setEditForm(null)
+  }
+
+  function isNewUnsavedRow(r: MonRow): boolean {
+    return r.id.startsWith('placeholder-new-') && !rows.some(row => row.id === r.id)
+  }
+
+  function addNewReview() {
+    if (!modalRow) return
+    const base = modalRow
+    const newRow: MonRow = {
+      id:                      `placeholder-new-${Date.now()}`,
+      influencer_platform_id:  base.influencer_platform_id,
+      confirmed_influencer_id: base.confirmed_influencer_id,
+      seq:                     base.seq,
+      platform:                base.platform,
+      handle:                  base.handle,
+      display_name:            base.display_name,
+      avatar_url:              base.avatar_url,
+      date:                    null,
+      media:                   null,
+      content:                 null,
+      brand:                   null,
+      repost:                  base.repost,
+      review_link:             null,
+      assets:                  null,
+      views:                   0,
+      likes:                   0,
+      comments:                0,
+      keywords:                null,
+      updated:                 null,
+      isPlaceholder:           true,
+    }
+    setModalGroupRows(prev => [newRow, ...prev])
+    setModalRow(newRow)
+    setModalEditing(true)
+    setEditForm(rowToEditForm(newRow))
+  }
+
+  async function deleteReview(r: MonRow) {
+    try {
+      const { error } = await supabase.from('monitoring').delete().eq('id', r.id)
+      if (error) throw error
+      showToast('삭제되었습니다', 'success')
+      closeModal()
+      await loadMonitoring()
+    } catch (e: unknown) {
+      showToast('삭제에 실패했습니다: ' + (e as Error).message, 'error')
+    }
   }
 
   async function saveEdit() {
@@ -600,7 +654,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           .single()
         if (error) throw error
         const updated = { ...modalRow, ...payload, id: data.id, isPlaceholder: false }
-        setRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
+        setRows(prev => prev.some(r => r.id === modalRow.id)
+          ? prev.map(r => r.id === modalRow.id ? updated : r)
+          : [updated, ...prev])
         setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
         setModalRow(updated)
       } else {
@@ -614,6 +670,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
       setEditForm(null)
     } catch (e: unknown) {
       console.error('saveEdit error:', e)
+      showToast('저장에 실패했습니다: ' + (e as Error).message, 'error')
     }
     setEditSaving(false)
   }
@@ -793,9 +850,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   const filteredRows = rows.filter(r => {
     if (brandFilter !== 'all' && (r.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false
-    const hasLink = !!r.review_link?.startsWith('http')
-    if (statusFilter === 'matched' && !hasLink) return false
-    if (statusFilter === 'pending' && hasLink) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (![r.handle, r.display_name, r.brand, r.keywords, r.review_link].join(' ').toLowerCase().includes(q)) return false
@@ -1657,6 +1711,12 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   <div style={{ fontSize: 12, color: 'var(--gray-5)', marginTop: 2 }}>@{modalRow.handle.replace(/^@/, '')}</div>
                 )}
               </div>
+              {!modalEditing && (
+                <button className="modal-btn-cancel" onClick={addNewReview}
+                  style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Plus size={14} />새 리뷰 추가
+                </button>
+              )}
             </div>
 
             {modalGroupRows.length > 1 && (
@@ -1670,6 +1730,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   {modalGroupRows.map((row, i) => (
                     <option key={row.id} value={row.id}>
                       Review {i + 1}
+                      {isNewUnsavedRow(row) ? ' · 새 항목' : ''}
                       {row.brand ? ` · ${confirmedBrands.find(b => b.key === row.brand!.toLowerCase())?.name || row.brand}` : ''}
                       {row.date ? ` · ${fmtDate(row.date)}` : ''}
                     </option>
@@ -1776,20 +1837,28 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               </div>
             )}
 
-            <div className="modal-actions">
-              {!modalEditing ? (
-                <>
-                  <button className="modal-btn-cancel" onClick={closeModal}>닫기</button>
-                  <button className="modal-btn-confirm" onClick={() => startEditing()}>편집</button>
-                </>
-              ) : (
-                <>
-                  <button className="modal-btn-cancel" onClick={cancelEditing}>취소</button>
-                  <button className="modal-btn-confirm" onClick={saveEdit} disabled={editSaving}>
-                    {editSaving ? '저장 중...' : '저장'}
-                  </button>
-                </>
-              )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22 }}>
+              {!modalEditing && !isPlaceholderRow(modalRow) ? (
+                <button type="button" className="modal-btn-cancel" style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                  onClick={() => showConfirm('이 리뷰를 삭제하시겠습니까?', () => { void deleteReview(modalRow) })}>
+                  삭제
+                </button>
+              ) : <span />}
+              <div className="modal-actions" style={{ marginTop: 0 }}>
+                {!modalEditing ? (
+                  <>
+                    <button className="modal-btn-cancel" onClick={closeModal}>닫기</button>
+                    <button className="modal-btn-confirm" onClick={() => startEditing()}>편집</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="modal-btn-cancel" onClick={cancelEditing}>취소</button>
+                    <button className="modal-btn-confirm" onClick={saveEdit} disabled={editSaving}>
+                      {editSaving ? '저장 중...' : '저장'}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}

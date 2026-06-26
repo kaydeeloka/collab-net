@@ -478,10 +478,8 @@ export default function Ems() {
                               <td>
                                 <div style={{ fontWeight: 600, fontSize: 13 }}>{row.display_name || row.handle || '—'}</div>
                                 {row.handle && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 1 }}>@{row.handle}</div>}
-                                <div style={{ fontSize: 11, marginTop: 3 }}>
-                                  {row.email
-                                    ? <a href={`mailto:${row.email}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--blue-dk)' }}>{row.email}</a>
-                                    : <span style={{ color: 'var(--gray-4)' }}>—</span>}
+                                <div style={{ fontSize: 11, marginTop: 3, color: row.email ? 'var(--gray-6)' : 'var(--gray-4)' }}>
+                                  {row.email || '—'}
                                 </div>
                               </td>
 
