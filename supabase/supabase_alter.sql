@@ -1382,3 +1382,15 @@ DELETE FROM confirmed_brand_assets WHERE category = 'product_cover';
 ALTER TABLE confirmed_brand_assets DROP CONSTRAINT IF EXISTS confirmed_brand_assets_category_check;
 ALTER TABLE confirmed_brand_assets ADD CONSTRAINT confirmed_brand_assets_category_check
   CHECK (category IN ('logo', 'product_main', 'product_sub', 'cutout', 'ingredients', 'sales_channel'));
+
+-- ============================================================
+--  brand_general — 담당자 정보 (same shape as brand_personal)
+--  General brands start with no named contact; staff fills these
+--  in once the brand replies and provides a contact person.
+-- ============================================================
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS contact_name   TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS department     TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS position       TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_email TEXT[];
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_phone TEXT;
+ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS rep_email      TEXT;
