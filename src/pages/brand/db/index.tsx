@@ -69,12 +69,12 @@ export default function BrandDb() {
           actions={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {sheetUrl && (
-                <a href={sheetUrl} target="_blank" rel="noopener" className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>
+                <a href={sheetUrl} target="_blank" rel="noopener" className="page-banner-btn page-banner-btn--green" style={{ textDecoration: 'none' }}>
                   시트 열기
                 </a>
               )}
               <button
-                className="page-banner-btn"
+                className="page-banner-btn page-banner-btn--secondary"
                 onClick={() => { void handleUpdateBrandSheet() }}
                 disabled={sheetUpdating || !selectedPhaseId}>
                 {sheetUpdating ? '업데이트 중…' : '시트 업데이트'}

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Copy, Download, ExternalLink, RefreshCw, Video } from 'lucide-react'
+import { BarChart2, Copy, Download, ExternalLink, FileText, Hash, Link2, RefreshCw, Video } from 'lucide-react'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 import * as XLSX from 'xlsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -150,13 +151,10 @@ function InfluencerAvatar({ url, label, size = 36 }: { url?: string | null; labe
   )
 }
 
-function brandBadge(brand: string | null) {
-  if (!brand) return '—'
-  const key = brand.toLowerCase()
-  const color = key === MIMUSE_BRAND ? MIMUSE_COLOR : 'var(--gray-6)'
+function brandBadge(label: string, color: string) {
   return (
     <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, background: color + '18', color, border: `1px solid ${color}44` }}>
-      {brand}
+      {label}
     </span>
   )
 }
@@ -1647,7 +1645,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                   {modalRow.platform && <PlatformBadge platform={modalRow.platform} />}
-                  {modalRow.brand && brandBadge(modalRow.brand)}
+                  {modalRow.brand && brandBadge(
+                    confirmedBrands.find(b => b.key === modalRow.brand!.toLowerCase())?.name || modalRow.brand,
+                    brandColorForKey(modalRow.brand)
+                  )}
                 </div>
                 {modalRow.display_name && (
                   <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gray-8)' }}>{modalRow.display_name}</div>
@@ -1669,7 +1670,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   {modalGroupRows.map((row, i) => (
                     <option key={row.id} value={row.id}>
                       Review {i + 1}
-                      {row.brand ? ` · ${row.brand}` : ''}
+                      {row.brand ? ` · ${confirmedBrands.find(b => b.key === row.brand!.toLowerCase())?.name || row.brand}` : ''}
                       {row.date ? ` · ${fmtDate(row.date)}` : ''}
                     </option>
                   ))}
@@ -1678,45 +1679,48 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
             )}
 
             {!modalEditing ? (
-              <>
-                <div className="mon-review-modal__grid">
-                  <ViewField label="업로드일">{fmtDate(modalRow.date)}</ViewField>
-                  <ViewField label="미디어">{modalRow.media || '—'}</ViewField>
-                  <ViewField label="콘텐츠">{modalRow.content || '—'}</ViewField>
-                  <ViewField label="모니터링 실행일">{modalRow.updated ? fmtDate(modalRow.updated) : '—'}</ViewField>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <ReportCard icon={<FileText size={16} />} title="리뷰 정보">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <ReportStat label="업로드일" value={fmtDate(modalRow.date)} />
+                      <ReportStat label="미디어" value={modalRow.media || '—'} />
+                      <ReportStat label="콘텐츠" value={modalRow.content || '—'} />
+                    </div>
+                  </ReportCard>
+
+                  <ReportCard icon={<Hash size={16} />} title="감지된 키워드">
+                    {modalRow.keywords
+                      ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
+                            const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                            const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
+                            const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
+                            return (
+                              <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
+                            )
+                          })}
+                        </div>
+                      )
+                      : <span style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</span>}
+                  </ReportCard>
                 </div>
 
-                <div className="mon-review-modal__section">
-                  <div className="mon-review-modal__section-label">감지된 키워드</div>
-                  {modalRow.keywords
-                    ? (
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                          const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
-                          const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
-                          return (
-                            <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
-                          )
-                        })}
-                      </div>
-                    )
-                    : <span style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</span>}
-                </div>
+                <ReportCard icon={<BarChart2 size={16} />} title="참여 지표">
+                  <div className="mon-review-modal__stats">
+                    <ModalStat label="조회수" value={modalRow.views ? fmtNum(modalRow.views) : '—'} />
+                    <ModalStat label="좋아요 수" value={modalRow.likes ? fmtNum(modalRow.likes) : '—'} />
+                    <ModalStat label="댓글 수" value={modalRow.comments ? fmtNum(modalRow.comments) : '—'} />
+                  </div>
+                </ReportCard>
 
-                <div className="mon-review-modal__section">
-                  <div className="mon-review-modal__section-label">리뷰 링크</div>
+                <ReportCard icon={<Link2 size={16} />} title="리뷰 링크">
                   {modalRow.review_link?.startsWith('http')
                     ? <ReviewLinkBox link={modalRow.review_link} onCopy={() => copyReviewLink(modalRow.review_link!)} />
                     : <span style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</span>}
-                </div>
-
-                <div className="mon-review-modal__stats">
-                  <ModalStat label="조회수" value={modalRow.views ? fmtNum(modalRow.views) : '—'} />
-                  <ModalStat label="좋아요 수" value={modalRow.likes ? fmtNum(modalRow.likes) : '—'} />
-                  <ModalStat label="댓글 수" value={modalRow.comments ? fmtNum(modalRow.comments) : '—'} />
-                </div>
-              </>
+                </ReportCard>
+              </div>
             ) : editForm && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
                 <div>

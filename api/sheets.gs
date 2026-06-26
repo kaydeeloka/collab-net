@@ -43,13 +43,14 @@ function updateInfluencerSheet(body) {
 
     var ss = _getOrCreateSpreadsheet('INFLUENCER_SPREADSHEET_ID', 'MiMuse 인플루언서 DB');
 
-    var headers = ['No.', '이름', '핸들', '티어', '카테고리', '팔로워', '팔로잉', '팔로잉 비율', '좋아요', '영상 수', '참여율(%)', '이메일'];
+    var headers = ['No.', '이름', '핸들', '이메일', '티어', '카테고리', '팔로워', '팔로잉', '팔로잉 비율', '좋아요', '영상 수', '참여율(%)'];
     var sheetRows = rows.map(function(r, i) {
       var tier = r.tiers || {};
       return [
         i + 1,
         r.display_name || '',
         r.handle || '',
+        r.email || '',
         tier.rank || '',
         tier.label || '',
         r.followers || 0,
@@ -58,7 +59,6 @@ function updateInfluencerSheet(body) {
         r.total_likes || 0,
         r.video_count || 0,
         r.engagement_rate || 0,
-        r.email || '',
       ];
     });
 
