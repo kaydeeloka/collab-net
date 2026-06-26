@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Copy, Download, ExternalLink, Film, RefreshCw } from 'lucide-react'
+import { Copy, Download, ExternalLink, RefreshCw, Video } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -1073,14 +1073,14 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
         return (
           <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, margin: '8px 0' }}>
             <button className="cfg-btn" onClick={() => { void handleDownloadAssets(uploadedRows) }}
               disabled={assetDownloading || uploadedRows.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              {assetDownloading ? <Spinner sm /> : <Film size={13} />}영상 다운로드
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              {assetDownloading ? <Spinner sm /> : <Video size={13} />}영상 다운로드
             </button>
             <button className="cfg-btn" onClick={downloadListExcel} disabled={uploadedRows.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Download size={13} />엑셀 다운로드
             </button>
           </div>
@@ -1091,7 +1091,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
                   <th style={thBase}>
                     <HeaderFilterMenu
-                      label="플랫폼"
+                      label="인플루언서"
                       value={listPlatformFilter}
                       options={PLATFORM_FILTER_OPTIONS}
                       onChange={setListPlatformFilter}
@@ -1099,7 +1099,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                       onOpenChange={open => setOpenListFilter(open ? 'platform' : null)}
                     />
                   </th>
-                  <th style={thBase}>인플루언서명</th>
                   <th style={thBase}>업로드일</th>
                   <th style={{ ...thBase, textAlign: 'right' }}>조회수</th>
                   <th style={{ ...thBase, textAlign: 'right' }}>좋아요 수</th>
@@ -1122,7 +1121,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               </thead>
               <tbody>
                 {uploadedRows.length === 0
-                  ? <tr><td colSpan={12} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
+                  ? <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
                       const link     = r.review_link || ''
@@ -1135,18 +1134,18 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                         <tr key={r.id}>
                           <td style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center' }}>{listStartIdx + i + 1}</td>
                           <td>
-                            <PlatformBadge platform={r.platform} />
-                          </td>
-                          <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <InfluencerAvatar url={r.avatar_url} label={r.display_name || account} size={32} />
                               <div>
-                            {r.display_name && (
-                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)' }}>{r.display_name}</div>
-                            )}
-                            {profileUrl
-                              ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
-                              : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account || '—'}</span>}
+                                <div style={{ marginBottom: 3 }}>
+                                  <PlatformBadge platform={r.platform} />
+                                </div>
+                                {r.display_name && (
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-7)' }}>{r.display_name}</div>
+                                )}
+                                {profileUrl
+                                  ? <a href={profileUrl} target="_blank" rel="noopener" style={{ fontSize: 11, color: 'var(--gray-5)', textDecoration: 'none' }}>@{account}</a>
+                                  : <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>{account || '—'}</span>}
                               </div>
                             </div>
                           </td>
