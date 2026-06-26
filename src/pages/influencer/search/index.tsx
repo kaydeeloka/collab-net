@@ -962,12 +962,12 @@ export default function Listup() {
           description="Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다."
           actions={(
             <>
-              {sheetUrl
-                ? <a href={sheetUrl} target="_blank" rel="noopener" className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>시트 열기</a>
-                : <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { void handleUpdateInfluencerSheet() }} disabled={sheetUpdating}>
-                    {sheetUpdating ? '업데이트 중…' : '시트 업데이트'}
-                  </button>
-              }
+              {sheetUrl && (
+                <a href={sheetUrl} target="_blank" rel="noopener" className="page-banner-btn page-banner-btn--secondary" style={{ textDecoration: 'none' }}>시트 열기</a>
+              )}
+              <button className="page-banner-btn" onClick={() => { void handleUpdateInfluencerSheet() }} disabled={sheetUpdating}>
+                {sheetUpdating ? '업데이트 중…' : '시트 업데이트'}
+              </button>
               <button className="page-banner-btn page-banner-btn--secondary" onClick={() => { setDbLoaded(false); switchTab('database') }}><span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침</button>
             </>
           )}

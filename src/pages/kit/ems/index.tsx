@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MapPin, Package, StickyNote, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
@@ -6,6 +7,7 @@ import Spinner from '@/components/Spinner'
 import Modal from '@/components/Modal'
 import Pagination from '@/components/Pagination'
 import HeaderFilterMenu, { type HeaderFilterOption } from '@/components/HeaderFilterMenu'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 import { createEmsReship, deleteEmsReship, fetchReshipmentMap } from '@/lib/ems/ems-errors'
 import { formatKstSyncLabel } from '@/lib/kst-time'
 import {
@@ -590,9 +592,8 @@ export default function Ems() {
       )}
 
       {/* View Modal */}
-      <Modal open={showViewModal} onClose={() => setShowViewModal(false)}
-        title={viewRow ? `배송 정보 · ${viewRow.display_name || viewRow.handle}` : ''}
-        titleStyle={{ paddingLeft: 48 }}>
+      <Modal open={showViewModal} onClose={() => setShowViewModal(false)} size="lg"
+        title={viewRow ? `배송 정보 · ${viewRow.display_name || viewRow.handle}` : ''}>
         {viewRow && (() => {
           const badgeColor = getEmsStatusColor(viewRow.status)
           const addrLines  = [
@@ -601,88 +602,77 @@ export default function Ems() {
             viewRow.country,
           ].filter(Boolean)
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* 상태 배지 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 48, marginBottom: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {viewRow.status
                   ? <span style={{ background: badgeColor, color: '#fff', padding: '4px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>{viewRow.status}</span>
                   : <span style={{ color: 'var(--gray-4)', fontSize: 12 }}>—</span>}
                 {viewRow.last_update && <span style={{ fontSize: 11, color: 'var(--gray-5)' }}>마지막 업데이트: {viewRow.last_update}</span>}
               </div>
 
-              {/* 전체 정보 그리드 */}
-              <div style={{ display: 'grid', alignItems: 'center', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', padding: '0 20px 0 48px' }}>
-                {/* col 1: 신청일 */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>신청일</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-8)' }}>{viewRow.registered_date || '—'}</div>
-                </div>
-                {/* col 2: 등기번호 — spans rows 1–2 to sit beside 신청일 + 접수번호 */}
-                <div style={{ gridRow: '1 / 3', gridColumn: 2 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>등기번호</div>
-                  {viewRow.ems_number ? (
-                    <div>
-                      <span
-                        onClick={() => openDetail(viewRow.ems_number!)}
-                        style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline', display: 'inline-block', marginBottom: 6 }}
-                      >{viewRow.ems_number}</span>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <a href={`https://t.17track.net/en#nums=${encodeURIComponent(viewRow.ems_number)}`} target="_blank"
-                          style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
-                        <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${viewRow.ems_number}`} target="_blank"
-                          style={{ fontSize: 11, color: 'var(--gray-5)' }}>↗ 우체국</a>
+              {/* 발송 정보 + 수신자 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <ReportCard icon={<Package size={16} />} title="발송 정보">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <ReportStat label="신청일" value={viewRow.registered_date || '—'} />
+                    <ReportStat label="접수번호" value={
+                      <span style={{ fontFamily: 'monospace' }}>{viewRow.application_number || '—'}</span>
+                    } />
+                    <ReportStat label="등기번호" value={
+                      viewRow.ems_number ? (
+                        <div>
+                          <span
+                            onClick={() => openDetail(viewRow.ems_number!)}
+                            style={{ fontFamily: 'monospace', color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline', display: 'block', marginBottom: 4 }}
+                          >{viewRow.ems_number}</span>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <a href={`https://t.17track.net/en#nums=${encodeURIComponent(viewRow.ems_number)}`} target="_blank"
+                              style={{ fontSize: 11, color: 'var(--blue-dk)', fontWeight: 600 }}>↗ 17track</a>
+                            <a href={`https://service.epost.go.kr/trace.RetrieveEmsRigiTraceList.comm?POST_CODE=${viewRow.ems_number}`} target="_blank"
+                              style={{ fontSize: 11, color: 'var(--gray-5)' }}>↗ 우체국</a>
+                          </div>
+                        </div>
+                      ) : '—'
+                    } />
+                  </div>
+                </ReportCard>
+
+                <ReportCard icon={<User size={16} />} title="수신자 정보">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <ReportStat label="이름" value={
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{viewRow.display_name || viewRow.handle || '—'}</div>
+                        {viewRow.handle && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2 }}>@{viewRow.handle}</div>}
                       </div>
-                    </div>
-                  ) : <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>}
-                </div>
-                {/* col 1: 접수번호 (below 신청일) */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>접수번호</div>
-                  <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)' }}>{viewRow.application_number || '—'}</div>
-                </div>
-
-                {/* col 1: 이름 */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>이름</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-8)', fontWeight: 600 }}>{viewRow.display_name || viewRow.handle || '—'}</div>
-                  {viewRow.handle && <div style={{ fontSize: 11, color: 'var(--gray-5)', marginTop: 2 }}>@{viewRow.handle}</div>}
-                </div>
-                {/* col 2: 이메일 */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>이메일</div>
-                  {viewRow.email
-                    ? <a href={`mailto:${viewRow.email}`} style={{ fontSize: 13, color: 'var(--blue-dk)' }}>{viewRow.email}</a>
-                    : <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>}
-                </div>
-                {/* col 1: 연락처 */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>연락처</div>
-                  <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--gray-8)' }}>{viewRow.phone || '—'}</div>
-                </div>
-                <div />
-
-                {/* 배송 주소 + 비고 */}
-                <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 120px', gap: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>배송 주소</div>
-                    {addrLines.length === 0
-                      ? <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>
-                      : addrLines.map((line, li) => (
-                        <div key={li} style={{ fontSize: 13, color: 'var(--gray-8)', lineHeight: 1.7 }}>{line}</div>
-                      ))}
+                    } />
+                    <ReportStat label="이메일" value={
+                      viewRow.email
+                        ? <a href={`mailto:${viewRow.email}`} style={{ color: 'var(--blue-dk)' }}>{viewRow.email}</a>
+                        : '—'
+                    } />
+                    <ReportStat label="연락처" value={
+                      <span style={{ fontFamily: 'monospace' }}>{viewRow.phone || '—'}</span>
+                    } />
                   </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4 }}>비고</div>
-                    <div style={{
-                      fontSize: 13,
-                      color: viewRow.notes?.trim() ? 'var(--gray-8)' : 'var(--gray-4)',
-                      lineHeight: 1.6,
-                      wordBreak: 'break-word',
-                    }}>
-                      {viewRow.notes?.trim() || '—'}
-                    </div>
+                </ReportCard>
+              </div>
+
+              {/* 배송 주소 + 비고 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <ReportCard icon={<MapPin size={16} />} title="배송 주소">
+                  {addrLines.length === 0
+                    ? <div style={{ fontSize: 13, color: 'var(--gray-4)' }}>—</div>
+                    : addrLines.map((line, li) => (
+                      <div key={li} style={{ fontSize: 13, color: 'var(--gray-7)', lineHeight: 1.7 }}>{line}</div>
+                    ))}
+                </ReportCard>
+
+                <ReportCard icon={<StickyNote size={16} />} title="비고">
+                  <div style={{ fontSize: 13, color: viewRow.notes?.trim() ? 'var(--gray-7)' : 'var(--gray-4)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                    {viewRow.notes?.trim() || '—'}
                   </div>
-                </div>
+                </ReportCard>
               </div>
 
               <div className="modal-actions">
