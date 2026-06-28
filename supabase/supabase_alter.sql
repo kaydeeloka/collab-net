@@ -399,6 +399,54 @@ FROM (VALUES
 JOIN influencers i ON i.handle = d.handle
 WHERE ci.influencer_id = i.id;
 
+-- ============================================================
+--  confirmed_influencers — backfill notes + correct repost from
+--  Google Form answers (matched by influencers.handle, i.e. form's
+--  "Your Account Name"). The bulk update above never wrote `notes`,
+--  and at least one repost value was miscoded:
+--    Creativvely — form answer "I'd prefer to discuss this
+--    separately" was seeded as 'X' (no), should be '▲' (ask first).
+--  repost mapping: "Yes, absolutely!" -> O
+--                  "Yes, but please ask me first..." / "I'd prefer
+--                  to discuss this separately" -> ▲
+--                  decline -> X
+--  "N/A" / "None!" / blank special-requests answers normalized to NULL.
+-- ============================================================
+UPDATE confirmed_influencers ci
+SET
+  repost         = d.repost,
+  phone          = d.phone,
+  address_line_1 = d.address_line_1,
+  address_line_2 = NULLIF(d.address_line_2, ''),
+  city           = d.city,
+  state          = d.state,
+  zip            = d.zip,
+  country        = 'US',
+  notes          = NULLIF(d.notes, '')
+FROM (VALUES
+  ('thatgirlkierstin', 'O', '440-850-1231', '5220 Jaycee Ave',   '',        'Ashtabula',  'OH', '44004', ''),
+  ('lovebylexis',      'O', '972-921-9411', '730 FM 876',        '',        'Waxahachie', 'TX', '75167', 'If you repost my content, can you tag me in the video? If not, that''s completely fine.'),
+  ('itskristv',         '▲', '512-584-4618', '235 Tall Grass Dr', '',        'Georgetown', 'TX', '78628', ''),
+  ('stephssocute',      'O', '209-534-4413', '470 W Wall Rd',     'Apt 121', 'Imperial',   'CA', '92252', ''),
+  ('charity_017',       'O', '662-891-0628', '1180 County Rd 87', '',       'New Albany', 'MS', '38652', ''),
+  ('elssielee',         'O', '626-434-5818', '246 Amberwood Dr',  '',       'Walnut',     'CA', '91789', ''),
+  ('Creativvely',       '▲', '510-905-4672', '128 N Humboldt St', 'Apt 4',  'San Mateo',  'CA', '94401', '')
+) AS d(handle, repost, phone, address_line_1, address_line_2, city, state, zip, notes)
+JOIN influencers i ON LOWER(i.handle) = LOWER(d.handle)
+WHERE ci.influencer_id = i.id;
+
+-- confirmed_influencers — clear phone + address fields for ALL rows, all phases
+-- (e.g. to reset before re-running the Google Form importer)
+UPDATE confirmed_influencers
+SET
+  phone          = NULL,
+  address_line_1 = NULL,
+  address_line_2 = NULL,
+  city           = NULL,
+  state          = NULL,
+  zip            = NULL,
+  country        = NULL;
+
 -- Run this immediately after the INSERT above to sync confirmed_influencers
 INSERT INTO confirmed_influencers (influencer_id, phase_id, email, upload_status)
 SELECT i.id, i.phase_id, i.email, 'Pending'
@@ -1392,5 +1440,6 @@ ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS contact_name   TEXT;
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS department     TEXT;
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS position       TEXT;
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_email TEXT[];
+
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_phone TEXT;
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS rep_email      TEXT;

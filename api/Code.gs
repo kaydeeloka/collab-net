@@ -20,6 +20,7 @@ const FEATURE_ROUTERS = [
   routeBeautyNews,
   routeEms,
   routeSheets,
+  routeConfirmedImport,
 ];
 
 function _dispatch(action, p, body) {

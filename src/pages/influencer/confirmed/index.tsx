@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
+import { FormTwoColumn } from '@/components/FormTwoColumn'
 import { supabase } from '@/lib/supabase'
+import { gasPost } from '@/lib/api'
 import { dedupeConfirmedPhaseViaDb, uniquePlatformAccounts } from '@/lib/influencer/confirm-influencer'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
 import { formatKstSyncLabel } from '@/lib/kst-time'
@@ -19,6 +21,16 @@ const GOOGLE_FORM_URL = ''
 
 type UploadStatus     = 'Pending' | 'Yes' | 'No' | 'all'
 type ReviewLinkFilter = 'all' | 'has' | 'none'
+
+interface ImportFormResult {
+  ok?:             boolean
+  error?:          string
+  message?:        string
+  matchedCount?:   number
+  unmatchedCount?: number
+  unmatched?:      { fullName: string; accountName: string; reason?: string }[]
+  results?:        { handle: string; displayName: string | null; lowConfidence: boolean }[]
+}
 
 interface InfluencerPlatform {
   id:          string | null
@@ -48,6 +60,7 @@ interface InfluencerRef {
 
 interface ConfirmedRow {
   id:                   string
+  influencer_id:        string | null
   seq:                  number | null
   email:                string | null
   upload_status:        string
@@ -95,6 +108,7 @@ function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand
 }
 
 const EMPTY_FORM = {
+  displayName: '',
   phone: '', repost: '', notes: '',
   addr1: '', addr2: '', city: '', state: '', zip: '', country: '',
 }
@@ -345,10 +359,16 @@ export default function Confirmed() {
   const [viewRow,  setViewRow]  = useState<ConfirmedRow | null>(null)
   const [showEdit, setShowEdit] = useState(false)
   const [editId,       setEditId]       = useState('')
+  const [editInfluencerId, setEditInfluencerId] = useState<string | null>(null)
   const [editForm,     setEditForm]     = useState(EMPTY_FORM)
   const [editPlatforms, setEditPlatforms] = useState<InfluencerPlatform[]>([])
   const originalPlatformIds = useRef<string[]>([])
   const [saving, setSaving] = useState(false)
+
+  const [showImport, setShowImport] = useState(false)
+  const [importUrl,  setImportUrl]  = useState('')
+  const [importing,  setImporting]  = useState(false)
+  const [importResult, setImportResult] = useState<ImportFormResult | null>(null)
 
   useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
 
@@ -356,7 +376,7 @@ export default function Confirmed() {
     const { data, error } = await supabase
       .from('confirmed_influencers')
       .select(`
-        id, seq, email, upload_status, repost, review_link, notes, form_submitted,
+        id, influencer_id, seq, email, upload_status, repost, review_link, notes, form_submitted,
         phone, address_line_1, address_line_2, city, state, zip, country,
         influencer_platform(
           id, platform, handle, followers, profile_url,
@@ -377,6 +397,7 @@ export default function Confirmed() {
       const ems = (r.ems_tracking || [])[0] || {}
       return {
         id:             r.id,
+        influencer_id:  r.influencer_id ?? null,
         seq:            r.seq ?? null,
         email:          r.email,
         upload_status:  r.upload_status ?? 'Pending',
@@ -490,7 +511,9 @@ export default function Confirmed() {
 
   function openEdit(r: ConfirmedRow) {
     setEditId(r.id)
+    setEditInfluencerId(r.influencer_id)
     setEditForm({
+      displayName: r.influencers?.display_name || r.display_name || '',
       phone:       r.phone          || '',
       repost:      r.repost         || '',
       notes:       r.notes          || '',
@@ -522,6 +545,27 @@ export default function Confirmed() {
     }))
   }
 
+  async function handleImportForm() {
+    if (!importUrl.trim()) { showToast('구글 시트 링크를 입력하세요.', 'error'); return }
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const r = await gasPost<ImportFormResult>({
+        action: 'importConfirmedInfluencerForm',
+        sheetUrl: importUrl.trim(),
+        phaseId: viewPhaseId ?? '',
+      })
+      if (r.error) { showToast('오류: ' + r.error, 'error'); return }
+      setImportResult(r)
+      showToast(r.message || '가져오기 완료', 'success')
+      await load()
+    } catch (e: unknown) {
+      showToast('오류: ' + (e as Error).message, 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function saveEdit() {
     setSaving(true)
     try {
@@ -549,6 +593,14 @@ export default function Confirmed() {
       // DELETE removed platforms (silently skip if monitoring FK blocks it)
       for (const id of deletedIds) {
         await supabase.from('influencer_platform').delete().eq('id', id)
+      }
+
+      // Save display name on the linked influencers row
+      if (editInfluencerId) {
+        const { error: nameError } = await supabase.from('influencers')
+          .update({ display_name: editForm.displayName.trim() || null })
+          .eq('id', editInfluencerId)
+        if (nameError) throw nameError
       }
 
       // Save other fields
@@ -703,6 +755,10 @@ export default function Confirmed() {
                   구글폼 보기
                 </a>
               )}
+              <button className="page-banner-btn page-banner-btn--secondary"
+                onClick={() => { setImportUrl(''); setImportResult(null); setShowImport(true) }}>
+                구글폼 데이터 가져오기
+              </button>
               <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>
                 {loading ? <Spinner sm /> : <span style={{ color: 'var(--blue-dk)' }}>↻</span>} 새로고침
               </button>
@@ -775,6 +831,7 @@ export default function Confirmed() {
                 <col style={{ width: '18%' }} />
                 <col style={{ width: 88 }} />
                 <col style={{ width: 88 }} />
+                <col style={{ width: 88 }} />
                 <col style={{ width: 120 }} />
                 <col style={{ width: '24%' }} />
                 <col style={{ width: 110 }} />
@@ -804,6 +861,7 @@ export default function Confirmed() {
                         />
                       </th>
                       <th style={{ ...thBase, textAlign: 'center' }}>구글폼 제출</th>
+                      <th style={{ ...thBase, textAlign: 'center' }}>리포스트</th>
                       <th style={thBase}>
                         <HeaderFilterMenu
                           label="리뷰 링크"
@@ -823,7 +881,7 @@ export default function Confirmed() {
                 {filtered.length === 0
                   ? (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
                         {rows.length === 0 ? '확정된 인플루언서가 없습니다.' : '검색 결과가 없습니다.'}
                       </td>
                     </tr>
@@ -885,6 +943,22 @@ export default function Confirmed() {
                               style={{ width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', border: `1.5px solid ${r.form_submitted ? '#6ee7b7' : '#e2e8f0'}`, background: r.form_submitted ? '#d1fae5' : '#f1f5f9', color: r.form_submitted ? '#065f46' : '#94a3b8', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               {r.form_submitted ? '✓' : '—'}
                             </button>
+                          </td>
+                          <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                            {(() => {
+                              const cfg = r.repost === 'O'
+                                ? { label: 'O', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' }
+                                : r.repost === '▲'
+                                ? { label: '▲', bg: '#fef9c3', color: '#854d0e', border: '#fde047' }
+                                : r.repost === 'X'
+                                ? { label: 'X', bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+                                : { label: '—', bg: '#f1f5f9', color: '#94a3b8', border: '#e2e8f0' }
+                              return (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${cfg.border}`, background: cfg.bg, color: cfg.color, fontWeight: 700, fontSize: 13 }}>
+                                  {cfg.label}
+                                </span>
+                              )
+                            })()}
                           </td>
                           <td style={{ cursor: 'default' }} onClick={e => e.stopPropagation()}>
                             <ReviewLinksCell links={r.review_links} />
@@ -1074,7 +1148,17 @@ export default function Confirmed() {
       })()}
 
       {/* ── Edit Modal ── */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="인플루언서 정보 입력">
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="인플루언서 정보 입력" size="lg">
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>성명</label>
+          <input
+            value={editForm.displayName}
+            onChange={e => setEditForm(prev => ({ ...prev, displayName: e.target.value }))}
+            placeholder="이름"
+            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+          />
+        </div>
+
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '4px 0 10px' }}>플랫폼 계정</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
           {editPlatforms.map((a, i) => (
@@ -1122,55 +1206,116 @@ export default function Confirmed() {
           </button>
         </div>
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '4px 0 10px' }}>연락처</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-          {field('Phone', 'phone', { placeholder: '+1 310-555-0000' })}
-          {selectField('Repost', 'repost', ['O', '▲', 'X'], '선택')}
-        </div>
-        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>리뷰 링크</div>
-          <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
-            리뷰 링크는 <Link to="/influencer/monitoring" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>리뷰 모니터링</Link> 페이지에서 관리합니다.
-          </div>
-        </div>
+        <FormTwoColumn
+          left={{
+            title: '연락처',
+            children: (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {field('Phone', 'phone', { placeholder: '+1 310-555-0000' })}
+                  {selectField('Repost', 'repost', ['O', '▲', 'X'], '선택')}
+                </div>
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>리뷰 링크</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
+                    리뷰 링크는 <Link to="/influencer/monitoring" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>리뷰 모니터링</Link> 페이지에서 관리합니다.
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>비고</label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={e => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="메모..."
+                    rows={3}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}
+                  />
+                </div>
+              </>
+            ),
+          }}
+          right={{
+            title: '배송 주소',
+            children: (
+              <>
+                {field('Address Line 1', 'addr1', { placeholder: 'Street address' })}
+                {field('Address Line 2', 'addr2', { placeholder: 'Apartment, suite, unit (optional)' })}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {field('City', 'city', { placeholder: 'Los Angeles' })}
+                  {field('State / Province', 'state', { placeholder: 'CA' })}
+                  {field('ZIP / Postal Code', 'zip', { placeholder: '90001' })}
+                  {field('Country', 'country', { placeholder: 'United States' })}
+                </div>
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>등기번호 / 배송 상태</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
+                    등기번호 및 배송 상태는 <Link to="/kit/ems" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>EMS 배송 추적</Link> 페이지에서 관리합니다.
+                  </div>
+                </div>
+              </>
+            ),
+          }}
+        />
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>비고</label>
-          <textarea
-            value={editForm.notes}
-            onChange={e => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
-            placeholder="메모..."
-            rows={3}
-            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}
-          />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, alignItems: 'start' }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', margin: '0 0 10px' }}>배송 주소</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {field('Address Line 1', 'addr1', { placeholder: 'Street address' })}
-              {field('Address Line 2', 'addr2', { placeholder: 'Apartment, suite, unit (optional)' })}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {field('City', 'city', { placeholder: 'Los Angeles' })}
-                {field('State / Province', 'state', { placeholder: 'CA' })}
-                {field('ZIP / Postal Code', 'zip', { placeholder: '90001' })}
-                {field('Country', 'country', { placeholder: 'United States' })}
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--gray-1)', border: '1px solid var(--gray-2)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>등기번호 / 배송 상태</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6 }}>
-              등기번호 및 배송 상태는 <Link to="/kit/ems" style={{ color: 'var(--blue-dk)', fontWeight: 600 }}>EMS 배송 추적</Link> 페이지에서 관리합니다.
-            </div>
-          </div>
-        </div>
-
-        <div className="modal-actions">
+        <div className="modal-actions" style={{ marginTop: 16 }}>
           <button className="modal-btn-cancel" onClick={() => setShowEdit(false)}>취소</button>
           <button className="modal-btn-confirm" onClick={saveEdit} disabled={saving}>
             {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Google Form Import Modal ── */}
+      <Modal open={showImport} onClose={() => setShowImport(false)} title="구글 폼 데이터 가져오기" size="lg">
+        <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6, marginBottom: 12 }}>
+          구글 폼 응답 시트 링크를 입력하면 핸들(또는 이름)로 매칭하여 배송 주소·전화번호·리포스트 여부·비고를 자동으로 채워넣습니다.
+          주소 분리는 완벽하지 않을 수 있으니, 가져오기 후 결과를 확인해주세요.
+        </div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>구글 시트 링크</label>
+        <input
+          value={importUrl}
+          onChange={e => setImportUrl(e.target.value)}
+          placeholder="https://docs.google.com/spreadsheets/d/..."
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 16 }}
+        />
+
+        {importResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: '#ecfdf5', border: '1px solid #6ee7b7' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#065f46' }}>매칭됨</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#065f46' }}>{importResult.matchedCount ?? 0}명</div>
+              </div>
+              <div style={{ flex: 1, padding: '10px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b' }}>매칭 실패</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#991b1b' }}>{importResult.unmatchedCount ?? 0}명</div>
+              </div>
+            </div>
+
+            {!!importResult.results?.some(x => x.lowConfidence) && (
+              <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+                ⚠ 일부 항목은 주소/리포스트 답변을 확신할 수 없어 결과를 직접 확인해야 합니다: {' '}
+                {importResult.results.filter(x => x.lowConfidence).map(x => x.displayName || x.handle).join(', ')}
+              </div>
+            )}
+
+            {!!importResult.unmatched?.length && (
+              <div style={{ fontSize: 12, color: 'var(--gray-6)' }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>매칭 실패 목록</div>
+                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
+                  {importResult.unmatched.map((u, i) => (
+                    <li key={i}>{u.fullName || u.accountName} {u.reason ? `— ${u.reason}` : ''}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button className="modal-btn-cancel" onClick={() => setShowImport(false)}>닫기</button>
+          <button className="modal-btn-confirm" onClick={handleImportForm} disabled={importing}>
+            {importing ? '가져오는 중...' : '가져오기'}
           </button>
         </div>
       </Modal>
