@@ -5,7 +5,7 @@ import { PageTabs } from '@/components/ui'
 import Spinner from '@/components/Spinner'
 import { archiveBrandReportPath, archiveBrandSlugFromPath, archiveBrandSlugKey, brandFromArchiveBrandSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
-import { loadSeasonBrands, type SeasonBrandItem } from './load-season-brands'
+import { loadSeasonBrands, type SeasonBrandItem } from '../season/web-archive/load-season-brands'
 import './brand-report.css'
 
 export interface ArchiveBrandReportOutletContext {

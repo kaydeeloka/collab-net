@@ -1,6 +1,6 @@
 import { archiveSectionPath } from '../archive-slug'
-import type { PhaseSlugInput } from '../brand-report/slug'
-import { phaseFromSlug } from '../brand-report/slug'
+import type { PhaseSlugInput } from '../season/slug'
+import { phaseFromSlug } from '../season/slug'
 
 export type { PhaseSlugInput }
 

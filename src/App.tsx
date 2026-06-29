@@ -45,12 +45,13 @@ import EmsData    from './pages/kit/ems-data'
 // ARCHIVE
 import ArchivePicker              from './pages/archive'
 import ArchiveDesignPhase         from './pages/archive/design/phase'
-import ArchiveBrandReportPhase    from './pages/archive/brand-report/phase'
+import ArchiveBrandReportPhase    from './pages/archive/season/phase'
 import ArchiveBrandReportLayout    from './pages/archive/brand-report/layout'
+import ArchiveBrandReportList      from './pages/archive/brand-report/index'
 import ArchiveBrandReportIndex     from './pages/archive/brand-report/report-index'
 import ArchiveBrandReportBrand     from './pages/archive/brand-report/report-brand'
 import { phaseFromDesignSlug }    from './pages/archive/design/design-slug'
-import { phaseFromSlug }          from './pages/archive/brand-report/slug'
+import { phaseFromSlug }          from './pages/archive/season/slug'
 
 function ArchiveRedirectSpinner() {
   return (
@@ -156,7 +157,7 @@ export default function App() {
                 <Route path="/archive/design/:legacySlug" element={<RedirectLegacyDesignPhase />} />
                 <Route path="/archive/season" element={<Navigate to="/archive" replace />} />
                 <Route path="/archive/season/:legacySlug" element={<RedirectLegacySeasonPhase />} />
-                <Route path="/archive/brand-report" element={<Navigate to="/archive" replace />} />
+                <Route path="/archive/brand-report" element={<ArchiveBrandReportList />} />
                 <Route path="/archive/brand-report/:legacySlug" element={<RedirectLegacySeasonPhase />} />
                 <Route path="/archive/overall-report" element={<Navigate to="/archive" replace />} />
 

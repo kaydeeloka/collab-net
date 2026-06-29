@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { BUCKET } from '@/pages/brand/confirmed/archive/shared'
-import { loadStorageImageUrl } from '../brand-report/season-collection-images'
+import { loadStorageImageUrl } from '../season/season-collection-images'
 
 export type DesignAssetCategory = 'theme' | 'kit_box' | 'collection_card' | 'brochure'
 

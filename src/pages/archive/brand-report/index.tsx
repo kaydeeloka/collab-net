@@ -9,11 +9,11 @@ import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import '@/pages/brand/confirmed/archive/archive.css'
-import './season-collection.css'
-import { getSeasonCollectionCopy } from './season-collection-content'
-import { loadStorageImageUrl } from './season-collection-images'
-import { phaseYearKey } from './season-archive-shared'
-import { phaseCollectionPath, type PhaseSlugInput } from './slug'
+import '../season/web-archive/season-collection.css'
+import { getSeasonCollectionCopy } from '../season/season-collection-content'
+import { loadStorageImageUrl } from '../season/season-collection-images'
+import { phaseYearKey } from '../season/season-archive-shared'
+import { phaseCollectionPath, type PhaseSlugInput } from '../season/slug'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)

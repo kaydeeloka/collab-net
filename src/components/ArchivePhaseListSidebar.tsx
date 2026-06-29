@@ -6,8 +6,8 @@ import {
   groupPhasesByYear,
   phaseYearLabel,
   type SeasonArchivePhase,
-} from '@/pages/archive/brand-report/season-archive-shared'
-import { getSeasonCollectionCopy } from '@/pages/archive/brand-report/season-collection-content'
+} from '@/pages/archive/season/season-archive-shared'
+import { getSeasonCollectionCopy } from '@/pages/archive/season/season-collection-content'
 
 function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
   const start = formatKstShortDate(startedAt)
