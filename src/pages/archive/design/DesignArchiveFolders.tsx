@@ -185,14 +185,40 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
   const [downloadingFolderId, setDownloadingFolderId] = useState<string | null>(null)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const [openSubFolderId, setOpenSubFolderId] = useState<string | null>(null)
+  const [subFolders, setSubFolders] = useState<DesignArchiveFolder[]>([])
+  const [subFoldersLoading, setSubFoldersLoading] = useState(false)
+  const [createParentId, setCreateParentId] = useState<string | null>(null)
 
   const openFolder = folders.find(f => f.id === openFolderId) ?? null
+  const openSubFolder = subFolders.find(f => f.id === openSubFolderId) ?? null
+  const activeFolderId = openSubFolderId ?? openFolderId
+
+  const DEFAULT_FOLDER_NAMES = ['박스 목업', '띠지', '컬렉션 카드', '브로슈어'] as const
+  const defaultFolders = DEFAULT_FOLDER_NAMES
+    .map(name => folders.find(f => f.name === name))
+    .filter((f): f is DesignArchiveFolder => !!f)
+  const otherFolders = folders.filter(f => !(DEFAULT_FOLDER_NAMES as readonly string[]).includes(f.name))
 
   const reloadFolders = useCallback(async () => {
     setLoading(true)
-    const rows = await loadDesignArchiveFolders(phaseId)
+    let rows = await loadDesignArchiveFolders(phaseId, null)
+    const existingNames = new Set(rows.map(f => f.name))
+    const missing = (['박스 목업', '띠지', '컬렉션 카드', '브로슈어'] as const).filter(n => !existingNames.has(n))
+    if (missing.length) {
+      const created = await Promise.all(missing.map(name => createDesignArchiveFolder(phaseId, name)))
+      const newFolders = created.flatMap(r => r.folder ? [{ ...r.folder, sub_folder_count: 0 }] : [])
+      rows = [...rows, ...newFolders]
+    }
     setFolders(rows)
     setLoading(false)
+  }, [phaseId])
+
+  const reloadSubFolders = useCallback(async (parentId: string) => {
+    setSubFoldersLoading(true)
+    const rows = await loadDesignArchiveFolders(phaseId, parentId)
+    setSubFolders(rows)
+    setSubFoldersLoading(false)
   }, [phaseId])
 
   const reloadFiles = useCallback(async (folderId: string) => {
@@ -209,57 +235,77 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
   useEffect(() => {
     if (!openFolderId) {
       setFiles([])
+      setSubFolders([])
+      setOpenSubFolderId(null)
       return
     }
-    void reloadFiles(openFolderId)
-  }, [openFolderId, reloadFiles])
+    void reloadSubFolders(openFolderId)
+    if (!openSubFolderId) void reloadFiles(openFolderId)
+  }, [openFolderId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!openSubFolderId) {
+      if (openFolderId) void reloadFiles(openFolderId)
+      return
+    }
+    setFiles([])
+    void reloadFiles(openSubFolderId)
+  }, [openSubFolderId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreateFolder() {
     if (creating) return
     setCreating(true)
-    const { folder, error } = await createDesignArchiveFolder(phaseId, newFolderName)
+    const { folder, error } = await createDesignArchiveFolder(phaseId, newFolderName, createParentId)
     setCreating(false)
     if (error || !folder) {
       showToast(error ?? '폴더 생성 실패', 'error')
       return
     }
-    setFolders(prev => [...prev, folder])
+    if (createParentId) {
+      setSubFolders(prev => [...prev, folder])
+    } else {
+      setFolders(prev => [...prev, folder])
+    }
     setNewFolderName('')
     setCreateOpen(false)
+    setCreateParentId(null)
     showToast('폴더가 생성되었습니다', 'success')
   }
 
   function handleDeleteFolder(folder: DesignArchiveFolder) {
+    const isSubFolder = !!folder.parent_folder_id
     showConfirm(`"${folder.name}" 폴더와 안의 파일을 모두 삭제할까요?`, () => {
       void (async () => {
         const { error } = await deleteDesignArchiveFolder(folder.id)
-        if (error) {
-          showToast(error, 'error')
-          return
+        if (error) { showToast(error, 'error'); return }
+        if (isSubFolder) {
+          setSubFolders(prev => prev.filter(f => f.id !== folder.id))
+          if (openSubFolderId === folder.id) setOpenSubFolderId(null)
+        } else {
+          setFolders(prev => prev.filter(f => f.id !== folder.id))
+          if (openFolderId === folder.id) setOpenFolderId(null)
         }
-        setFolders(prev => prev.filter(f => f.id !== folder.id))
-        if (openFolderId === folder.id) setOpenFolderId(null)
         showToast('폴더가 삭제되었습니다', 'success')
       })()
     })
   }
 
   async function handleUpload(filesList: FileList | null) {
-    if (!openFolderId || !filesList?.length || uploading) return
+    if (!activeFolderId || !filesList?.length || uploading) return
     setUploading(true)
     try {
       const { uploaded, error } = await uploadDesignArchiveFiles(
         phaseId,
-        openFolderId,
+        activeFolderId,
         Array.from(filesList),
       )
       if (uploaded.length) {
         setFiles(prev => [...prev, ...uploaded])
-        setFolders(prev => prev.map(f => (
-          f.id === openFolderId
-            ? { ...f, file_count: (f.file_count ?? 0) + uploaded.length }
-            : f
-        )))
+        if (openSubFolderId) {
+          setSubFolders(prev => prev.map(f => f.id === openSubFolderId ? { ...f, file_count: (f.file_count ?? 0) + uploaded.length } : f))
+        } else if (openFolderId) {
+          setFolders(prev => prev.map(f => f.id === openFolderId ? { ...f, file_count: (f.file_count ?? 0) + uploaded.length } : f))
+        }
         showToast(`${uploaded.length}개 파일 업로드 완료`, 'success')
       }
       if (error) showToast(error, 'error')
@@ -322,7 +368,11 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
     const { error } = await renameDesignArchiveFolder(renamingFolder.id, renameFolderValue)
     setRenamingFolderSaving(false)
     if (error) { showToast(error, 'error'); return }
-    setFolders(prev => prev.map(f => f.id === renamingFolder.id ? { ...f, name: renameFolderValue.trim() } : f))
+    if (renamingFolder.parent_folder_id) {
+      setSubFolders(prev => prev.map(f => f.id === renamingFolder.id ? { ...f, name: renameFolderValue.trim() } : f))
+    } else {
+      setFolders(prev => prev.map(f => f.id === renamingFolder.id ? { ...f, name: renameFolderValue.trim() } : f))
+    }
     setRenamingFolder(null)
     showToast('폴더 이름이 변경되었습니다', 'success')
   }
@@ -364,10 +414,10 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
 
   function handleDrop(toIdx: number) {
     if (dragIdx === null || dragIdx === toIdx) { setDragIdx(null); setDragOverIdx(null); return }
-    const next = [...folders]
+    const next = [...otherFolders]
     const [moved] = next.splice(dragIdx, 1)
     next.splice(toIdx, 0, moved)
-    setFolders(next)
+    setFolders([...defaultFolders, ...next])
     setDragIdx(null)
     setDragOverIdx(null)
     void reorderDesignArchiveFolders(next)
@@ -382,19 +432,38 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
   }
 
   if (openFolder) {
+    const currentName = openSubFolder ? openSubFolder.name : openFolder.name
+    const currentFileCount = files.length
+
     return (
       <section className="design-folders">
         <div className="brand-archive-detail">
           <div className="brand-archive-detail__header">
             <div className="brand-archive-detail__header-row">
-              <button
-                type="button"
-                className="brand-archive-detail__back"
-                onClick={() => setOpenFolderId(null)}
-              >
-                <ArrowLeft size={14} />
-                폴더 목록
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className="brand-archive-detail__back"
+                  onClick={() => { setOpenFolderId(null); setOpenSubFolderId(null) }}
+                >
+                  <ArrowLeft size={14} />
+                  폴더 목록
+                </button>
+                {openSubFolder && (
+                  <>
+                    <span style={{ color: 'var(--gray-5)', fontSize: 13 }}>/</span>
+                    <button
+                      type="button"
+                      className="brand-archive-detail__back"
+                      onClick={() => setOpenSubFolderId(null)}
+                    >
+                      {openFolder.name}
+                    </button>
+                    <span style={{ color: 'var(--gray-5)', fontSize: 13 }}>/</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{openSubFolder.name}</span>
+                  </>
+                )}
+              </div>
               <label className="cfg-btn design-folders__upload-btn">
                 <Upload size={13} />
                 {uploading ? '업로드 중…' : '파일 업로드'}
@@ -413,12 +482,100 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
               <Folder size={18} strokeWidth={1.5} color="var(--teal-dk)" />
-              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{openFolder.name}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-5)' }}>{files.length}개</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{currentName}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-5)' }}>{currentFileCount}개</span>
             </div>
           </div>
 
           <div className="brand-archive-detail__body">
+        {!openSubFolder && (
+          <div className="design-folders__sub-section">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>하위 폴더</span>
+              <button
+                type="button"
+                className="cfg-btn cfg-btn--ghost"
+                style={{ fontSize: 11, padding: '4px 10px' }}
+                onClick={() => { setCreateParentId(openFolderId); setCreateOpen(true) }}
+              >
+                <FolderPlus size={12} />
+                새 폴더
+              </button>
+            </div>
+            {subFoldersLoading ? (
+              <Spinner />
+            ) : subFolders.length === 0 ? (
+              <p style={{ fontSize: 12, color: 'var(--gray-5)', margin: 0 }}>하위 폴더가 없습니다.</p>
+            ) : (
+              <div className="design-folders__sub-list">
+                {subFolders.map(sf => (
+                  <div key={sf.id} className="design-folders__sub-card">
+                    <button
+                      type="button"
+                      className="design-folders__card-open"
+                      onClick={() => setOpenSubFolderId(sf.id)}
+                    >
+                      <div className="design-folders__card-icon-wrap design-folders__card-icon-wrap--sm">
+                        <Folder className="design-folders__folder-icon" size={56} strokeWidth={1.2} />
+                        <span className="design-folders__card-count" style={{ fontSize: 16, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,.2)' }}>{sf.file_count ?? 0}</span>
+                      </div>
+                      {renamingFolder?.id === sf.id ? (
+                        <div className="design-folders__card-rename" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            className="design-folders__rename-input"
+                            value={renameFolderValue}
+                            autoFocus
+                            maxLength={80}
+                            onChange={e => setRenameFolderValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && renameFolderValue.trim()) void handleRenameFolder()
+                              if (e.key === 'Escape') setRenamingFolder(null)
+                            }}
+                          />
+                          <button type="button" className="design-folders__file-action" style={{ opacity: 1, flexShrink: 0 }} disabled={renamingFolderSaving || !renameFolderValue.trim()} onClick={() => { void handleRenameFolder() }}><Check size={12} /></button>
+                          <button type="button" className="design-folders__file-delete" style={{ opacity: 1, flexShrink: 0 }} onClick={() => setRenamingFolder(null)}><X size={12} /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginTop: 4, textAlign: 'center', wordBreak: 'break-word' }}>{sf.name}</span>
+                          <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>{sf.file_count ?? 0}개 파일</span>
+                        </>
+                      )}
+                    </button>
+                    <div className="design-folders__card-actions">
+                      <button
+                        type="button"
+                        className="design-folders__card-action"
+                        aria-label="이름 변경"
+                        onClick={e => { e.stopPropagation(); setRenamingFolder(sf); setRenameFolderValue(sf.name) }}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="design-folders__card-action"
+                        aria-label="다운로드"
+                        disabled={downloadingFolderId === sf.id}
+                        onClick={e => { e.stopPropagation(); void handleDownloadFolder(sf) }}
+                      >
+                        {downloadingFolderId === sf.id ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="design-folders__card-action design-folders__card-action--danger"
+                        aria-label="삭제"
+                        onClick={e => { e.stopPropagation(); handleDeleteFolder(sf) }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {filesLoading ? (
           <div className="design-folders__loading">
             <Spinner />
@@ -569,6 +726,58 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
         })()}
           </div>
         </div>
+
+        <Modal
+          open={createOpen}
+          onClose={() => {
+            if (!creating) {
+              setCreateOpen(false)
+              setNewFolderName('')
+              setCreateParentId(null)
+            }
+          }}
+          title={createParentId ? '새 하위 폴더' : '새 폴더'}
+          footer={(
+            <>
+              <button
+                type="button"
+                className="cfg-btn cfg-btn--ghost"
+                disabled={creating}
+                onClick={() => {
+                  setCreateOpen(false)
+                  setNewFolderName('')
+                  setCreateParentId(null)
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="cfg-btn"
+                disabled={creating || !newFolderName.trim()}
+                onClick={() => { void handleCreateFolder() }}
+              >
+                {creating ? '생성 중…' : '만들기'}
+              </button>
+            </>
+          )}
+        >
+          <label className="design-folders__field">
+            <span>폴더 이름</span>
+            <input
+              type="text"
+              className="cfg-input"
+              value={newFolderName}
+              placeholder="예: 키트 박스 시안"
+              maxLength={80}
+              autoFocus
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newFolderName.trim()) void handleCreateFolder()
+              }}
+            />
+          </label>
+        </Modal>
       </section>
     )
   }
@@ -584,22 +793,93 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
             onClick={() => setCreateOpen(true)}
           >
             <FolderPlus size={13} />
-            폴더 만들기
+           새 폴더
           </button>
         </div>
 
-      {!folders.length ? (
-        <div className="design-folders__empty" style={{ border: 'none', background: 'transparent' }}>
-          <Folder size={28} strokeWidth={1.5} />
-          <p>폴더가 없습니다. 폴더를 만든 뒤 파일을 업로드하세요.</p>
-          <button type="button" className="cfg-btn cfg-btn--ghost" onClick={() => setCreateOpen(true)}>
-            <FolderPlus size={13} />
-            폴더 만들기
-          </button>
+      {defaultFolders.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="design-folders__section-head">
+            <span className="design-folders__section-label">기본 폴더</span>
+            <div className="design-folders__section-rule" />
+          </div>
+          <div className="design-folders__list">
+            {defaultFolders.map(folder => (
+              <article key={folder.id} className="design-folders__card">
+                <button
+                  type="button"
+                  className="design-folders__card-open"
+                  onClick={() => setOpenFolderId(folder.id)}
+                >
+                  <div className="design-folders__card-icon-wrap">
+                    <Folder className="design-folders__folder-icon" size={118} strokeWidth={1.3} />
+                    <span className="design-folders__card-count">{folder.file_count ?? 0}</span>
+                  </div>
+                  {renamingFolder?.id === folder.id ? (
+                    <div className="design-folders__card-rename" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        className="design-folders__rename-input"
+                        value={renameFolderValue}
+                        autoFocus
+                        maxLength={80}
+                        onChange={e => setRenameFolderValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && renameFolderValue.trim()) void handleRenameFolder()
+                          if (e.key === 'Escape') setRenamingFolder(null)
+                        }}
+                      />
+                      <button type="button" className="design-folders__file-action" style={{ opacity: 1, flexShrink: 0 }} disabled={renamingFolderSaving || !renameFolderValue.trim()} onClick={() => { void handleRenameFolder() }}><Check size={12} /></button>
+                      <button type="button" className="design-folders__file-delete" style={{ opacity: 1, flexShrink: 0 }} onClick={() => setRenamingFolder(null)}><X size={12} /></button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="design-folders__card-name">{folder.name}</span>
+                      <span className="design-folders__card-filecount">{folder.file_count ?? 0}개 파일</span>
+                      <span className="design-folders__card-filecount">{folder.sub_folder_count ?? 0}개 하위 폴더</span>
+                    </>
+                  )}
+                </button>
+                <div className="design-folders__card-actions">
+                  <button
+                    type="button"
+                    className="design-folders__card-action"
+                    aria-label="이름 변경"
+                    onClick={e => { e.stopPropagation(); setRenamingFolder(folder); setRenameFolderValue(folder.name) }}
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="design-folders__card-action"
+                    aria-label="다운로드"
+                    disabled={downloadingFolderId === folder.id}
+                    onClick={e => { e.stopPropagation(); void handleDownloadFolder(folder) }}
+                  >
+                    {downloadingFolderId === folder.id ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="design-folders__card-action design-folders__card-action--danger"
+                    aria-label="삭제"
+                    onClick={e => { e.stopPropagation(); handleDeleteFolder(folder) }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
-      ) : (
+      )}
+
+      <div>
+        <div className="design-folders__section-head">
+          <span className="design-folders__section-label">기타</span>
+          <div className="design-folders__section-rule" />
+        </div>
         <div className="design-folders__list">
-          {folders.map((folder, idx) => (
+          {otherFolders.map((folder, idx) => (
             <article
               key={folder.id}
               className={[
@@ -618,7 +898,8 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
                 className="design-folders__card-open"
                 onClick={() => setOpenFolderId(folder.id)}
               >
-                <div className="design-folders__card-folder">
+                <div className="design-folders__card-icon-wrap">
+                  <Folder className="design-folders__folder-icon" size={118} strokeWidth={1.3} />
                   <span className="design-folders__card-count">{folder.file_count ?? 0}</span>
                 </div>
                 {renamingFolder?.id === folder.id ? (
@@ -642,6 +923,7 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
                   <>
                     <span className="design-folders__card-name">{folder.name}</span>
                     <span className="design-folders__card-filecount">{folder.file_count ?? 0}개 파일</span>
+                    <span className="design-folders__card-filecount">{folder.sub_folder_count ?? 0}개 하위 폴더</span>
                   </>
                 )}
               </button>
@@ -678,7 +960,7 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
             <button
               type="button"
               className="design-folders__card-open"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => { setCreateParentId(null); setCreateOpen(true) }}
             >
               <div className="design-folders__add-icon-wrap">
                 <div className="design-folders__add-circle">
@@ -690,7 +972,7 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
             </button>
           </article>
         </div>
-      )}
+      </div>
       </div>
 
       <Modal
@@ -699,9 +981,10 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
           if (!creating) {
             setCreateOpen(false)
             setNewFolderName('')
+            setCreateParentId(null)
           }
         }}
-        title="새 폴더"
+        title={createParentId ? '새 하위 폴더' : '새 폴더'}
         footer={(
           <>
             <button
@@ -711,6 +994,7 @@ export default function DesignArchiveFolders({ phaseId }: Props) {
               onClick={() => {
                 setCreateOpen(false)
                 setNewFolderName('')
+                setCreateParentId(null)
               }}
             >
               취소

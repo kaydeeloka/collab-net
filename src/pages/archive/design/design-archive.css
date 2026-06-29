@@ -191,7 +191,7 @@
 .design-folders__panel > .design-folders__toolbar {
   padding: 16px 0 14px;
   border-bottom: 1px solid var(--surface-md);
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .design-folders__list {
@@ -210,7 +210,7 @@
   border: none;
   box-shadow: none;
   border-radius: var(--r-lg);
-  padding: 10px 6px 6px;
+  padding: 8px 6px 8px;
   transition: background .15s;
 }
 
@@ -222,7 +222,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 5px;
   padding: 0;
   border: none;
   background: transparent;
@@ -230,6 +230,68 @@
   font-family: inherit;
   width: 100%;
   text-align: center;
+}
+
+.design-folders__section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.design-folders__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-5);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+
+.design-folders__section-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--gray-2);
+}
+
+.design-folders__sub-section {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--surface-md);
+}
+
+.design-folders__sub-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.design-folders__sub-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--r-md);
+  transition: background .15s;
+  min-width: 90px;
+}
+
+.design-folders__sub-card .design-folders__card-open {
+  padding: 10px 14px 8px;
+  gap: 4px;
+}
+
+.design-folders__sub-card:hover {
+  background: var(--surface);
+}
+
+.design-folders__sub-card .design-folders__card-actions {
+  top: 4px;
+  right: 4px;
+}
+
+.design-folders__sub-card:hover .design-folders__card-actions {
+  opacity: 1;
 }
 
 .design-folders__card[draggable] {
@@ -247,38 +309,36 @@
   border-radius: var(--r-lg);
 }
 
-.design-folders__card-folder {
+.design-folders__card-icon-wrap {
   position: relative;
-  width: 110px;
-  height: 100px;
-  background: linear-gradient(175deg, #FFD54F 0%, #FFCA28 40%, #FFB300 100%);
-  border-radius: 4px 12px 12px 12px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: 20px;
-  box-shadow: 0 4px 12px rgba(255, 160, 0, .32);
+  margin-top: 8px;
 }
 
-.design-folders__card-folder::before {
-  content: '';
-  position: absolute;
-  top: -17px;
-  left: 0;
-  width: 44px;
-  height: 18px;
-  background: #E8A000;
-  border-radius: 7px 14px 0 0;
+.design-folders__card-icon-wrap--sm {
+  margin-top: 0;
+}
+
+.design-folders__folder-icon {
+  color: #F5C518;
+  fill: #F5C518;
 }
 
 .design-folders__card-count {
-  position: relative;
-  font-size: 26px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 22%;
+  font-size: 24px;
   font-weight: 800;
-  color: rgba(255, 255, 255, .92);
+  color: #fff;
   line-height: 1;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, .2);
   pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .25);
 }
 
 .design-folders__card--add {

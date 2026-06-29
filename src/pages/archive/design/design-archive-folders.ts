@@ -8,6 +8,8 @@ export interface DesignArchiveFolder {
   sort_order: number
   created_at: string
   file_count?: number
+  sub_folder_count?: number
+  parent_folder_id?: string | null
 }
 
 export interface DesignArchiveFile {
@@ -29,13 +31,21 @@ function buildFilePath(phaseId: string, folderId: string, fileName: string, inde
   return `${phaseId}/design/folders/${folderId}/${token}.${ext}`
 }
 
-export async function loadDesignArchiveFolders(phaseId: string): Promise<DesignArchiveFolder[]> {
-  const { data: folders, error } = await supabase
+export async function loadDesignArchiveFolders(phaseId: string, parentId: string | null = null): Promise<DesignArchiveFolder[]> {
+  let query = supabase
     .from('design_archive_folders')
-    .select('id, phase_id, name, sort_order, created_at')
+    .select('id, phase_id, name, sort_order, created_at, parent_folder_id')
     .eq('phase_id', phaseId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
+
+  if (parentId === null) {
+    query = query.is('parent_folder_id', null)
+  } else {
+    query = query.eq('parent_folder_id', parentId)
+  }
+
+  const { data: folders, error } = await query
 
   if (error || !folders?.length) {
     if (error) console.error('loadDesignArchiveFolders:', error.message)
@@ -53,20 +63,37 @@ export async function loadDesignArchiveFolders(phaseId: string): Promise<DesignA
     countByFolder.set(fid, (countByFolder.get(fid) ?? 0) + 1)
   }
 
+  let subCountByFolder = new Map<string, number>()
+  if (parentId === null) {
+    const { data: subRows } = await supabase
+      .from('design_archive_folders')
+      .select('parent_folder_id')
+      .in('parent_folder_id', folders.map(f => f.id))
+    for (const row of subRows ?? []) {
+      const pid = row.parent_folder_id as string
+      subCountByFolder.set(pid, (subCountByFolder.get(pid) ?? 0) + 1)
+    }
+  }
+
   return folders.map(f => ({
     ...f,
     file_count: countByFolder.get(f.id) ?? 0,
+    sub_folder_count: subCountByFolder.get(f.id) ?? 0,
   }))
 }
 
-export async function createDesignArchiveFolder(phaseId: string, name: string) {
+export async function createDesignArchiveFolder(phaseId: string, name: string, parentFolderId?: string | null) {
   const trimmed = name.trim()
   if (!trimmed) return { folder: null, error: '폴더 이름을 입력하세요' }
 
   const { data, error } = await supabase
     .from('design_archive_folders')
-    .insert({ phase_id: phaseId, name: trimmed })
-    .select('id, phase_id, name, sort_order, created_at')
+    .insert({
+      phase_id: phaseId,
+      name: trimmed,
+      ...(parentFolderId ? { parent_folder_id: parentFolderId } : {}),
+    })
+    .select('id, phase_id, name, sort_order, created_at, parent_folder_id')
     .single()
 
   if (error) return { folder: null, error: error.message }
@@ -107,8 +134,7 @@ export async function loadDesignArchiveFiles(folderId: string): Promise<DesignAr
     .from('design_archive_files')
     .select('id, folder_id, file_name, storage_path, file_size, mime_type, sort_order, created_at')
     .eq('folder_id', folderId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true })
+    .order('file_name', { ascending: true })
 
   if (error || !data?.length) {
     if (error) console.error('loadDesignArchiveFiles:', error.message)
