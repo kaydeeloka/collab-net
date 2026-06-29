@@ -1126,11 +1126,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         return (
           <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, margin: '8px 0' }}>
-            <button className="cfg-btn" onClick={() => { void handleDownloadAssets(uploadedRows) }}
-              disabled={assetDownloading || uploadedRows.length === 0}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              {assetDownloading ? <Spinner sm /> : <Video size={13} />}영상 다운로드
-            </button>
             <button className="cfg-btn" onClick={downloadListExcel} disabled={uploadedRows.length === 0}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Download size={13} />엑셀 다운로드
@@ -1156,8 +1151,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   <th style={{ ...thBase, textAlign: 'right' }}>좋아요 수</th>
                   <th style={{ ...thBase, textAlign: 'right' }}>댓글 수</th>
                   <th style={{ ...thBase, minWidth: 180 }}>리뷰 링크</th>
-                  <th style={{ ...thBase, width: 72, textAlign: 'center' }}>썸네일</th>
-                  <th style={{ ...thBase, width: 72, textAlign: 'center' }}>영상</th>
                   <th style={thBase}>
                     <HeaderFilterMenu
                       label="브랜드"
@@ -1173,7 +1166,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               </thead>
               <tbody>
                 {uploadedRows.length === 0
-                  ? <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
+                  ? <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40 }}>{listEmptyMsg}</td></tr>
                   : pagedListRows.map((r, i) => {
                       const account  = (r.handle || '').replace(/^@/, '')
                       const link     = r.review_link || ''
@@ -1207,28 +1200,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                           <td style={{ fontSize: 12, textAlign: 'right', color: r.comments ? 'var(--gray-7)' : 'var(--gray-3)' }}>{r.comments ? fmtNum(r.comments) : '—'}</td>
                           <td style={{ whiteSpace: 'normal', verticalAlign: 'middle' }}>
                             <ReviewLinkBox link={link} onCopy={() => copyReviewLink(link)} compact />
-                          </td>
-                          <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                            {(() => {
-                              const thumb = resolveMonitoringThumbnailUrl(r.assets)
-                              if (thumb) {
-                                return (
-                                  <img
-                                    src={thumb}
-                                    alt=""
-                                    style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--gray-2)' }}
-                                  />
-                                )
-                              }
-                              return <span style={{ color: 'var(--gray-3)' }}>—</span>
-                            })()}
-                          </td>
-                          <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--gray-6)' }}>
-                            {r.assets?.video_url
-                              ? <a href={r.assets.video_url} target="_blank" rel="noopener" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 600, color: '#065f46', textDecoration: 'none' }}><ExternalLink size={11} />보기</a>
-                              : r.assets?.video_path
-                                ? <span style={{ fontWeight: 600, color: '#065f46' }}>저장됨</span>
-                                : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                           </td>
                           <td>{(() => {
                             if (!r.brand) return <span style={{ color: 'var(--gray-3)' }}>—</span>

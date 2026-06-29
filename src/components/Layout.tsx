@@ -60,8 +60,9 @@ const GROUPS: SideGroup[] = [
   {
     label: 'MONITORING', icon: <Activity size={22} />, defaultTo: '/influencer/monitoring', prefix: '/influencer/monitoring',
     children: [
-      { to: '/influencer/monitoring', label: '리뷰 모니터링', activeWhen: p => p === '/influencer/monitoring' || p === '/influencer/monitoring-list' },
-      { to: '/influencer/monitoring-report', label: '콘텐츠 성과', end: true },
+      { to: '/influencer/monitoring', label: '리뷰 모니터링', activeWhen: (p: string) => p === '/influencer/monitoring' || p === '/influencer/monitoring-list' },
+      { to: '/influencer/monitoring/archive', label: '아카이브', end: true },
+      { to: '/influencer/monitoring/report', label: '콘텐츠 성과', end: true },
     ],
   },
   {

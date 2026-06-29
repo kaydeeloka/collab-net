@@ -2946,6 +2946,68 @@ button.brand-archive-card.bn-archive-brand-card {
   color: var(--gray-5);
   font-variant-numeric: tabular-nums;
 }
+.listup-run-id-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--surface-md);
+  flex-wrap: wrap;
+}
+.listup-run-id-bar__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-6);
+  white-space: nowrap;
+}
+.listup-run-id-bar__input {
+  flex: 1;
+  min-width: 160px;
+  max-width: 320px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--surface-md);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  outline: none;
+}
+.listup-run-id-bar__input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, .08);
+}
+.listup-run-id-bar__hint {
+  font-size: 11px;
+  color: var(--gray-4);
+}
+.listup-results-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--surface-md);
+  background: var(--white);
+}
+.listup-results-bar__count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-7);
+}
+.listup-results-bar__meta {
+  font-size: 11px;
+  color: var(--gray-5);
+  font-weight: 400;
+  margin-left: 8px;
+}
+.cfg-btn--blue {
+  background: var(--blue-dk);
+  color: #fff;
+  border-color: var(--blue-dk);
+}
+.cfg-btn--blue:hover { background: var(--blue-dk); opacity: .88; }
+.cfg-btn--blue:disabled { opacity: .45; cursor: not-allowed; }
 .listup-update-btn {
   padding: 9px 20px; background: var(--yellow); color: var(--yellow-text);
   border: 1.5px solid var(--yellow-md); border-radius: var(--r-pill);

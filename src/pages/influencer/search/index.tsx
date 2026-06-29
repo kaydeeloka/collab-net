@@ -283,6 +283,8 @@ export default function Listup() {
   const [searchLiveMs, setSearchLiveMs] = useState(0)
   const existingHandlesRef = useRef<string[]>([])
   const searchStartedAtRef = useRef<number | null>(null)
+  const [apifyManualId, setApifyManualId] = useState('')
+  const [apifyImportLoading, setApifyImportLoading] = useState(false)
 
   useEffect(() => {
     if (!apifyLoading) return
@@ -544,6 +546,35 @@ export default function Listup() {
     }
   }
 
+  async function loadFromRunId() {
+    const id = apifyManualId.trim()
+    if (!id) return
+    const tier = apifyTierIdx !== null ? tiers[apifyTierIdx] : null
+    setApifyImportLoading(true)
+    setApifyResults(null)
+    setApifyFilterStats(null)
+    setApifyCurrentTier(tier)
+    existingHandlesRef.current = []
+    try {
+      await prefetchExistingHandles()
+      const res: { ok?: boolean; creators?: ApifyCreator[]; noEmailSkipped?: number; dedupSkipped?: number; error?: string } =
+        await gasPost({
+          action: 'loadCreatorResults',
+          runId: id,
+          searchFilters: { maxRatio, maxUploadDays, requireEmail, followerMin: 0, followerMax: 0, maxCreators: 500 },
+          filterConditions: filterConds,
+          existingHandles: existingHandlesRef.current,
+        })
+      if (res.error) { showToast('오류: ' + res.error, 'error'); return }
+      setApifyResults(res.creators ?? [])
+      setApifyFilterStats({ noEmailSkipped: res.noEmailSkipped ?? 0, dedupSkipped: res.dedupSkipped ?? 0 })
+    } catch (e: unknown) {
+      showToast('오류: ' + (e as Error).message, 'error')
+    } finally {
+      setApifyImportLoading(false)
+    }
+  }
+
   function switchTab(t: ListupTab) {
     navigate(t === 'database' ? '/influencer/search/db' : '/influencer/search')
     if (t === 'database' && !dbLoaded) loadInfluencers()
@@ -693,11 +724,15 @@ export default function Listup() {
   }
 
   async function saveToSupabase() {
-    if (!apifyResults?.length || !apifyCurrentTier || !viewPhaseId) return
+    if (!apifyResults?.length || !viewPhaseId) return
     setApifyLoading(true)
 
+    const tierQuery = apifyCurrentTier
+      ? supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+
     const [{ data: tierRow }, { data: existing }] = await Promise.all([
-      supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
+      tierQuery,
       supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
     ])
     const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
@@ -1273,7 +1308,7 @@ export default function Listup() {
                     value={targetCreators}
                     min={TCM_TARGET_MIN}
                     max={TCM_TARGET_MAX}
-                    step={10}
+                    step={1}
                     onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
                   />
                 </div>
@@ -1291,52 +1326,93 @@ export default function Listup() {
                 )}
               </div>
 
-            {/* Results */}
-            {apifyResults !== null ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>
+              {/* Run ID import */}
+              <div className="listup-run-id-bar">
+                <span className="listup-run-id-bar__label">Run ID 가져오기</span>
+                <input
+                  type="text"
+                  className="listup-run-id-bar__input"
+                  value={apifyManualId}
+                  placeholder="완료된 Apify Run ID"
+                  onChange={e => setApifyManualId(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && apifyManualId.trim()) void loadFromRunId() }}
+                />
+                <button
+                  className="cfg-btn"
+                  disabled={apifyImportLoading || apifyLoading || !apifyManualId.trim()}
+                  onClick={() => { void loadFromRunId() }}
+                >
+                  {apifyImportLoading ? <Spinner sm /> : '필터 적용'}
+                </button>
+                <span className="listup-run-id-bar__hint">중복 제거 후 신규 크리에이터만 표시</span>
+              </div>
+
+              {/* Empty / loading state inside the config panel */}
+              {apifyResults === null && (
+                <div className="listup-empty-state">
+                  <div className={`listup-empty-icon${apifyLoading ? ' listup-empty-icon--loading' : ''}`}>
+                    {apifyLoading ? <Spinner /> : <Search size={26} strokeWidth={2.2} aria-hidden />}
+                  </div>
+                  <div className="listup-empty-title">
+                    {apifyLoading
+                      ? 'TCM 탐색 중...'
+                      : '티어와 키워드를 선택하고 Find Creators를 누르세요'}
+                  </div>
+                  <div className="listup-empty-desc">
+                    {apifyLoading
+                      ? 'TCM 키워드 탐색 후 프로필 메타데이터를 수집합니다. 수 분 소요될 수 있습니다.'
+                      : '위 표에서 티어를 클릭해 선택하고 Find Creators로 탐색을 시작하세요.'}
+                  </div>
+                </div>
+              )}
+            </div>{/* end Find Creators config panel */}
+
+            {/* Results panel — separate card below config */}
+            {apifyResults !== null && (
+              <div className="listup-search-panel">
+                <div className="listup-results-bar">
+                  <div className="listup-results-bar__count">
                     탐색 결과 <span style={{ color: 'var(--blue-dk)' }}>{apifyResults.length}명</span>
                     {searchResultMeta && (
-                      <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400, marginLeft: 8 }}>
-                        · {searchResultMeta}
-                      </span>
+                      <span className="listup-results-bar__meta">· {searchResultMeta}</span>
                     )}
                   </div>
-                  <button className="cfg-btn" style={{ background: 'var(--blue-dk)', color: '#fff', borderColor: 'var(--blue-dk)' }} disabled={apifyLoading || !apifyResults.length} onClick={saveToSupabase}>
+                  <button className="cfg-btn cfg-btn--blue" disabled={apifyLoading || !apifyResults.length} onClick={saveToSupabase}>
                     DB에 저장
                   </button>
                 </div>
                 {apifyResults.length > 0 ? (
-                <div className="table-wrap">
-                  <table style={{ minWidth: 0 }}>
-                    <thead>
-                      <tr>
-                        <th>크리에이터 이름 + 핸들</th><th>이메일</th>
-                        <th style={{ textAlign: 'right' }}>팔로워</th><th style={{ textAlign: 'right' }}>팔로잉</th><th style={{ textAlign: 'right' }}>팔로잉 비율</th>
-                        <th style={{ textAlign: 'right' }}>영상 수</th><th style={{ textAlign: 'right' }}>참여율 (%)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {apifyResults.map((c, i) => (
-                        <tr key={i}>
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{c.displayName || c.handle}</span>
-                              <a href={`https://www.tiktok.com/@${c.handle}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{c.handle}</a>
-                            </div>
-                          </td>
-                          <td>{c.email ? <a href={`mailto:${c.email}`} style={{ color: '#1558b0', fontSize: 13 }}>{c.email}</a> : <span style={{ color: 'var(--gray-5)' }}>—</span>}</td>
-                          <td className="num">{fmtNum(c.followers)}</td>
-                          <td className="num">{fmtNum(c.following)}</td>
-                          <td className="num">{c.ratio || '—'}</td>
-                          <td className="num">{fmtNum(c.videoCount)}</td>
-                          <td className="num">{c.engRate}%</td>
+                  <div style={{ padding: '16px 18px' }}>
+                  <div className="table-wrap">
+                    <table style={{ minWidth: 0 }}>
+                      <thead>
+                        <tr>
+                          <th>크리에이터 이름 + 핸들</th><th>이메일</th>
+                          <th style={{ textAlign: 'right' }}>팔로워</th><th style={{ textAlign: 'right' }}>팔로잉</th><th style={{ textAlign: 'right' }}>팔로잉 비율</th>
+                          <th style={{ textAlign: 'right' }}>영상 수</th><th style={{ textAlign: 'right' }}>참여율 (%)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {apifyResults.map((c, i) => (
+                          <tr key={i}>
+                            <td>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-8)' }}>{c.displayName || c.handle}</span>
+                                <a href={`https://www.tiktok.com/@${c.handle}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: 'var(--blue-dk)', textDecoration: 'none' }}>@{c.handle}</a>
+                              </div>
+                            </td>
+                            <td>{c.email ? <a href={`mailto:${c.email}`} style={{ color: '#1558b0', fontSize: 13 }}>{c.email}</a> : <span style={{ color: 'var(--gray-5)' }}>—</span>}</td>
+                            <td className="num">{fmtNum(c.followers)}</td>
+                            <td className="num">{fmtNum(c.following)}</td>
+                            <td className="num">{c.ratio || '—'}</td>
+                            <td className="num">{fmtNum(c.videoCount)}</td>
+                            <td className="num">{c.engRate}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  </div>
                 ) : (
                   <div className="listup-empty-state" style={{ padding: '32px 24px' }}>
                     <div className="listup-empty-title">조건에 맞는 크리에이터가 없습니다</div>
@@ -1344,24 +1420,7 @@ export default function Listup() {
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="listup-empty-state">
-                <div className={`listup-empty-icon${apifyLoading ? ' listup-empty-icon--loading' : ''}`}>
-                  {apifyLoading ? <Spinner /> : <Search size={26} strokeWidth={2.2} aria-hidden />}
-                </div>
-                <div className="listup-empty-title">
-                  {apifyLoading
-                    ? 'TCM 탐색 중...'
-                    : '티어와 키워드를 선택하고 Find Creators를 누르세요'}
-                </div>
-                <div className="listup-empty-desc">
-                  {apifyLoading
-                    ? 'TCM 키워드 탐색 후 프로필 메타데이터를 수집합니다. 수 분 소요될 수 있습니다.'
-                    : '위 표에서 티어를 클릭해 선택하고 Find Creators로 탐색을 시작하세요.'}
-                </div>
-              </div>
             )}
-            </div>{/* end Find Creators */}
           </div>
         )}
 

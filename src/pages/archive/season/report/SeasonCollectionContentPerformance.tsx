@@ -166,7 +166,7 @@ export default function SeasonCollectionContentPerformance({ phaseId }: Props) {
           </div>
 
           <div className="season-content-performance__footer">
-            <Link to="/influencer/monitoring-report" className="season-content-performance__link">
+            <Link to="/influencer/monitoring/report" className="season-content-performance__link">
               상세 리포트 보기
               <ArrowRight size={14} />
             </Link>

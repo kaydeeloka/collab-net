@@ -25,7 +25,8 @@ import TiktokTrend from './pages/trend/tiktok'
 import InfluencerTemplate from './pages/influencer/template'
 // INFLUENCER — confirmed
 import InfluencerMonitoring from './pages/influencer/monitoring'
-import InfluencerMonitoringReport from './pages/influencer/monitoring-report'
+import InfluencerMonitoringReport from './pages/influencer/monitoring/report'
+import InfluencerMonitoringArchive from './pages/influencer/monitoring/archive'
 
 // BRAND — db
 import BrandDb         from './pages/brand/db'
@@ -111,9 +112,10 @@ export default function App() {
                 <Route path="/influencer/template"                  element={<InfluencerTemplate />} />
                 <Route path="/influencer/contact"                   element={<Outreach />} />
                 <Route path="/influencer/confirmed"                 element={<Confirmed />} />
-                <Route path="/influencer/monitoring"                  element={<InfluencerMonitoring />} />
-                <Route path="/influencer/monitoring-list"           element={<InfluencerMonitoring />} />
-                <Route path="/influencer/monitoring-report"         element={<InfluencerMonitoringReport />} />
+                <Route path="/influencer/monitoring"                element={<InfluencerMonitoring />} />
+                <Route path="/influencer/monitoring-list"          element={<InfluencerMonitoring />} />
+                <Route path="/influencer/monitoring/report"        element={<InfluencerMonitoringReport />} />
+                <Route path="/influencer/monitoring/archive"       element={<InfluencerMonitoringArchive />} />
 
                 {/* ── BRAND ── */}
                 <Route path="/brand/db" element={<BrandDb />}>
