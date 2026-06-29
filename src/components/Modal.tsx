@@ -70,7 +70,7 @@ export default function Modal({
           </button>
         </div>
         {children}
-        {footer}
+        {footer && <div style={{ marginTop: 20 }}>{footer}</div>}
       </div>
     </div>,
     document.body,

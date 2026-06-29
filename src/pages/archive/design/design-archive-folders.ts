@@ -137,11 +137,6 @@ export async function uploadDesignArchiveFiles(
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
-    if (!file.type.startsWith('image/')) {
-      errors.push(`${file.name}: 이미지 파일만 업로드할 수 있습니다`)
-      continue
-    }
-
     const path = buildFilePath(phaseId, folderId, file.name, i)
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
       cacheControl: '3600',
@@ -179,6 +174,24 @@ export async function uploadDesignArchiveFiles(
   }
 
   return { uploaded, error: errors.length ? errors.join('\n') : null }
+}
+
+export async function renameDesignArchiveFile(fileId: string, newName: string) {
+  const trimmed = newName.trim()
+  if (!trimmed) return { error: '파일 이름을 입력하세요' }
+  const { error } = await supabase.from('design_archive_files').update({ file_name: trimmed }).eq('id', fileId)
+  if (error) return { error: error.message }
+  return { error: null }
+}
+
+export async function reorderDesignArchiveFolders(ordered: DesignArchiveFolder[]) {
+  const results = await Promise.all(
+    ordered.map((f, i) =>
+      supabase.from('design_archive_folders').update({ sort_order: i }).eq('id', f.id)
+    )
+  )
+  const err = results.find(r => r.error)?.error
+  return { error: err?.message ?? null }
 }
 
 export async function deleteDesignArchiveFile(fileId: string, storagePath: string) {
