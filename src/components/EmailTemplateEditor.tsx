@@ -461,312 +461,149 @@ export default function EmailTemplateEditor({ domain }: EmailTemplateEditorProps
             </>
           ) : (
             <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-8)' }}>템플릿 편집</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => setShowPreviewModal(true)}
-                style={{
-                  padding: '6px 14px',
-                  background: 'var(--gray-1)',
-                  color: 'var(--gray-7)',
-                  border: '1px solid var(--gray-3)',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                미리보기
-              </button>
-              <button
-                type="button"
-                onClick={requestDeleteTpl}
-                disabled={templates.length <= 1 || saving}
-                style={{
-                  padding: '6px 14px',
-                  background: '#fff0f0',
-                  color: '#c00',
-                  border: '1px solid #fca5a5',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                삭제
-              </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={saving}
-                style={{
-                  padding: '6px 16px',
-                  background: 'var(--teal-dk)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                }}
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
-            <div>
-              <label
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--gray-5)',
-                  display: 'block',
-                  marginBottom: 4,
-                }}
-              >
-                템플릿명
-              </label>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value.slice(0, 30))}
-                maxLength={30}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: `1px solid ${name.length >= 27 ? '#f59e0b' : 'var(--gray-3)'}`,
-                  borderRadius: 8,
-                  fontSize: 13,
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                }}
-              />
-              <div
-                style={{
-                  fontSize: 10,
-                  color: name.length >= 27 ? '#d97706' : 'var(--gray-4)',
-                  textAlign: 'right',
-                  marginTop: 3,
-                }}
-              >
-                {name.length}/30
-              </div>
-            </div>
-            <div>
-              <label
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'var(--gray-5)',
-                  display: 'block',
-                  marginBottom: 4,
-                }}
-              >
-                카테고리
-              </label>
-              <select
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-                style={{
-                  padding: '8px 10px',
-                  border: `1px solid ${categoryStyle.color}55`,
-                  borderRadius: 8,
-                  fontSize: 12,
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  background: categoryStyle.bg,
-                  color: categoryStyle.color,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {config.categories.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 4,
-              }}
-            >
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 제목</label>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {config.titlePlaceholders.map(p => (
+              {/* ── Edit header ── */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 16, borderBottom: '1px solid var(--gray-2)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-8)', letterSpacing: '-0.01em' }}>템플릿 편집</div>
+                <div style={{ display: 'flex', gap: 6 }}>
                   <button
-                    key={p}
                     type="button"
-                    onClick={() => insertAtCursor(titleRef.current, title, p, setTitle)}
-                    style={{
-                      fontSize: 10,
-                      padding: '2px 8px',
-                      background: 'var(--gray-1)',
-                      border: '1px solid var(--gray-3)',
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      color: 'var(--gray-7)',
-                    }}
+                    onClick={() => setShowPreviewModal(true)}
+                    style={{ padding: '6px 14px', background: '#fff', color: 'var(--gray-7)', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
                   >
-                    {p}
+                    미리보기
                   </button>
-                ))}
-              </div>
-            </div>
-            <input
-              ref={titleRef}
-              value={title}
-              onChange={e => setTitle(e.target.value.slice(0, titleMax))}
-              maxLength={titleMax}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: `1px solid ${title.length >= titleWarnAt ? '#f59e0b' : 'var(--gray-3)'}`,
-                borderRadius: 8,
-                fontSize: 13,
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
-            />
-            <div
-              style={{
-                fontSize: 10,
-                color: title.length >= titleWarnAt ? '#d97706' : 'var(--gray-4)',
-                textAlign: 'right',
-                marginTop: 3,
-              }}
-            >
-              {title.length}/{titleMax}
-            </div>
-          </div>
-
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 4,
-              }}
-            >
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 본문</label>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={wrapBold}
-                  style={{
-                    fontSize: 10,
-                    padding: '2px 8px',
-                    background: 'var(--gray-1)',
-                    border: '1px solid var(--gray-3)',
-                    borderRadius: 5,
-                    cursor: 'pointer',
-                    color: 'var(--gray-7)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontWeight: 700,
-                  }}
-                >
-                  <Bold size={11} />
-                  굵게
-                </button>
-                <button
-                  type="button"
-                  onClick={openLinkModal}
-                  style={{
-                    fontSize: 10,
-                    padding: '2px 8px',
-                    background: '#eff6ff',
-                    border: '1px solid #93c5fd',
-                    borderRadius: 5,
-                    cursor: 'pointer',
-                    color: '#1d4ed8',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontWeight: 600,
-                  }}
-                >
-                  <Link2 size={11} />
-                  링크 삽입
-                </button>
-                {config.bodyPlaceholders.map(p => (
                   <button
-                    key={p}
                     type="button"
-                    onClick={() => insertAtCursor(bodyRef.current, body, p, setBody)}
-                    style={{
-                      fontSize: 10,
-                      padding: '2px 8px',
-                      background: 'var(--gray-1)',
-                      border: '1px solid var(--gray-3)',
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      color: 'var(--gray-7)',
-                    }}
+                    onClick={requestDeleteTpl}
+                    disabled={templates.length <= 1 || saving}
+                    style={{ padding: '6px 14px', background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, cursor: templates.length <= 1 ? 'default' : 'pointer', fontWeight: 600, opacity: templates.length <= 1 ? 0.4 : 1 }}
                   >
-                    {p}
+                    삭제
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={save}
+                    disabled={saving}
+                    style={{ padding: '6px 18px', background: 'var(--blue-dk)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontWeight: 700, opacity: saving ? 0.7 : 1 }}
+                  >
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
               </div>
-            </div>
-            <textarea
-              ref={bodyRef}
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              rows={14}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid var(--gray-3)',
-                borderRadius: 8,
-                fontSize: 13,
-                fontFamily: 'inherit',
-                outline: 'none',
-                resize: 'vertical',
-                lineHeight: 1.7,
-              }}
-            />
-            <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 6, lineHeight: 1.5 }}>
-              굵게: <code style={{ fontSize: 10 }}>**텍스트**</code> 또는 텍스트 선택 후 「굵게」 ·
-              링크: <code style={{ fontSize: 10 }}>[표시 텍스트](URL)</code>
-            </div>
-          </div>
 
-          <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)' }}>이메일 서명</label>
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '4px 10px',
-                  background: '#eff6ff',
-                  color: '#1d4ed8',
-                  border: '1px solid #93c5fd',
-                  borderRadius: 6,
-                  fontWeight: 600,
-                  userSelect: 'none',
-                }}
-              >
-                기본 서명 적용
-              </span>
-            </div>
-            <div
-              style={{ fontSize: 13, lineHeight: 1.6 }}
-              dangerouslySetInnerHTML={{ __html: signature || previewDefaultSignatureHtml() }}
-            />
-          </div>
+              {/* ── Name + Category ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                    템플릿명
+                  </label>
+                  <input
+                    value={name}
+                    onChange={e => setName(e.target.value.slice(0, 30))}
+                    maxLength={30}
+                    style={{ width: '100%', padding: '9px 12px', border: `1px solid ${name.length >= 27 ? '#f59e0b' : 'var(--gray-3)'}`, borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', background: '#fff' }}
+                  />
+                  <div style={{ fontSize: 10, color: name.length >= 27 ? '#d97706' : 'var(--gray-4)', textAlign: 'right', marginTop: 3 }}>
+                    {name.length}/30
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+                    카테고리
+                  </label>
+                  <select
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    style={{ padding: '9px 12px', border: `1px solid ${categoryStyle.color}55`, borderRadius: 8, fontSize: 12, outline: 'none', fontFamily: 'inherit', background: categoryStyle.bg, color: categoryStyle.color, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* ── Subject ── */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>이메일 제목</label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {config.titlePlaceholders.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => insertAtCursor(titleRef.current, title, p, setTitle)}
+                        style={{ fontSize: 10, padding: '2px 10px', background: 'var(--gray-1)', border: '1px solid var(--gray-3)', borderRadius: 20, cursor: 'pointer', color: 'var(--gray-6)', fontWeight: 600 }}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  ref={titleRef}
+                  value={title}
+                  onChange={e => setTitle(e.target.value.slice(0, titleMax))}
+                  maxLength={titleMax}
+                  style={{ width: '100%', padding: '9px 12px', border: `1px solid ${title.length >= titleWarnAt ? '#f59e0b' : 'var(--gray-3)'}`, borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', background: '#fff' }}
+                />
+                <div style={{ fontSize: 10, color: title.length >= titleWarnAt ? '#d97706' : 'var(--gray-4)', textAlign: 'right', marginTop: 3 }}>
+                  {title.length}/{titleMax}
+                </div>
+              </div>
+
+              {/* ── Body ── */}
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.5px' }}>이메일 본문</label>
+                {/* Toolbar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 10px', background: 'var(--gray-0)', border: '1px solid var(--gray-2)', borderBottom: 'none', borderRadius: '8px 8px 0 0', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={wrapBold}
+                    style={{ fontSize: 11, padding: '3px 10px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 6, cursor: 'pointer', color: 'var(--gray-7)', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
+                  >
+                    <Bold size={11} /> 굵게
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openLinkModal}
+                    style={{ fontSize: 11, padding: '3px 10px', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                  >
+                    <Link2 size={11} /> 링크 삽입
+                  </button>
+                  <div style={{ width: 1, height: 16, background: 'var(--gray-2)', margin: '0 3px', flexShrink: 0 }} />
+                  {config.bodyPlaceholders.map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => insertAtCursor(bodyRef.current, body, p, setBody)}
+                      style={{ fontSize: 10, padding: '2px 10px', background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 20, cursor: 'pointer', color: 'var(--gray-6)', fontWeight: 600 }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  ref={bodyRef}
+                  value={body}
+                  onChange={e => setBody(e.target.value)}
+                  rows={14}
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--gray-2)', borderRadius: '0 0 8px 8px', fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', lineHeight: 1.7, background: '#fff' }}
+                />
+                <div style={{ fontSize: 10, color: 'var(--gray-4)', marginTop: 5, lineHeight: 1.6 }}>
+                  굵게: <code style={{ fontSize: 10 }}>**텍스트**</code> 또는 텍스트 선택 후 「굵게」 ·
+                  링크: <code style={{ fontSize: 10 }}>[표시 텍스트](URL)</code>
+                </div>
+              </div>
+
+              {/* ── Signature ── */}
+              <div style={{ borderTop: '1px solid var(--gray-2)', paddingTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px' }}>이메일 서명</label>
+                  <span style={{ fontSize: 10, padding: '3px 10px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 20, fontWeight: 600, userSelect: 'none' }}>
+                    기본 서명 적용
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: signature || previewDefaultSignatureHtml() }} />
+              </div>
             </>
           )}
         </div>

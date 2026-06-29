@@ -1276,13 +1276,6 @@ export default function Listup() {
                     step={10}
                     onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
                   />
-                  <p className="listup-search-bar__hint">
-                    DB 저장 목표 {TCM_TARGET_MAX}명 · TCM pool ×{selectedTier ? tcmPoolBuffer(selectedTier.maxF) : TCM_POOL_BUFFER_MICRO}
-                    {' '}→ Apify 최대 {TCM_APIFY_SCRAPE_MAX}명 스크랩
-                    {selectedTier && selectedTier.maxF <= 10000
-                      ? ' (나노: pool 넓게, Apify는 동일 상한)'
-                      : ''}
-                  </p>
                 </div>
                 <button
                   className="listup-find-btn"
