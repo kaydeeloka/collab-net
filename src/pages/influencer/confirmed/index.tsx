@@ -341,7 +341,7 @@ function emptyPlatform(): InfluencerPlatform {
 }
 
 export default function Confirmed() {
-  const { viewPhaseId } = usePhase()
+  const { viewPhaseId, phases } = usePhase()
   const { showToast, showConfirm } = useToast()
 
   const [rows,    setRows]    = useState<ConfirmedRow[]>([])
@@ -755,10 +755,6 @@ export default function Confirmed() {
                   구글폼 보기
                 </a>
               )}
-              <button className="page-banner-btn page-banner-btn--secondary"
-                onClick={() => { setImportUrl(''); setImportResult(null); setShowImport(true) }}>
-                구글폼 데이터 가져오기
-              </button>
               <button className="page-banner-btn page-banner-btn--secondary" onClick={load}>
                 {loading ? <Spinner sm /> : <span style={{ color: 'var(--blue-dk)' }}>↻</span>} 새로고침
               </button>
@@ -822,6 +818,11 @@ export default function Confirmed() {
           <div className="filters" style={{ marginBottom: 16, marginTop: 12 }}>
             <input type="text" placeholder="이름, 이메일, 핸들로 검색..." value={search} onChange={e => setSearch(e.target.value)}
               style={{ flex: 1, minWidth: 200, maxWidth: 360 }} />
+            <button
+              onClick={() => { setImportUrl(phases.find(p => p.id === viewPhaseId)?.google_sheets_url ?? ''); setImportResult(null); setShowImport(true) }}
+              style={{ marginLeft: 'auto', padding: '5px 12px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 8, border: '1px solid var(--gray-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              구글폼 데이터 가져오기
+            </button>
           </div>
 
           <div className="table-wrap">

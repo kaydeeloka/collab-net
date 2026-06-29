@@ -316,11 +316,7 @@ export default function BrandContact() {
   }, [updateField, showToast])
 
   const syncReplies = useCallback(async () => {
-    const candidates = rows.filter(r => {
-      const email = r.email?.trim()
-      if (!email) return false
-      return r.send_count > 0 || ['yes', 'noreply', 'reply'].includes(r.status)
-    })
+    const candidates = rows.filter(r => !!r.email?.trim())
     if (!candidates.length) {
       showToast('회신 확인할 발송 대상이 없습니다', 'error')
       return
