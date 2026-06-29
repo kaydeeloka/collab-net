@@ -324,52 +324,84 @@ export default function Layout() {
 
       {/* ── Phase Management modal ── */}
       <Modal open={showManage} onClose={() => setShowManage(false)} title="차수 관리">
-        <div style={{ marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>보고 있는 차수</span>
-          <span className="phase-badge-nav" style={{ marginLeft: 8 }}>{phaseBadge}</span>
+        {/* Current view badge */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--gray-0)', border: '1px solid var(--gray-2)', borderRadius: 10, padding: '10px 14px', marginBottom: 18 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-5)' }}>현재 보고 있는 차수</span>
+          <span className="phase-badge-nav">{phaseBadge}</span>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button className="new-phase-btn" onClick={openNewPhaseModal}>
-            + 새 차수 시작
-          </button>
-        </div>
+
+        {/* Phase list */}
         {phaseList.length > 0 && (
-          <>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-5)', marginBottom: 8 }}>차수 목록</div>
-            {phaseList.map(p => (
-              <div key={p.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--gray-2)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-                  {p.id === activePhaseId && (
-                    <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '2px 7px' }}>활성</span>
-                  )}
-                  {p.id === viewPhaseId && p.id !== activePhaseId && (
-                    <span style={{ fontSize: 10, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', borderRadius: 20, padding: '2px 7px' }}>보는 중</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {p.started_at && (
-                    <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>
-                      {formatKstShortDate(p.started_at)} ~ {formatKstShortDate(p.ended_at) ?? '?'}
-                    </span>
-                  )}
-                  <button
-                    style={{ background: 'none', border: 'none', color: 'var(--blue-dk)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                    onClick={() => openEditPhase(p)}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>차수 목록</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {phaseList.map(p => {
+                const isActive  = p.id === activePhaseId
+                const isViewing = p.id === viewPhaseId
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 10,
+                      border: isViewing ? '1.5px solid #bfdbfe' : '1px solid var(--gray-2)',
+                      background: isViewing ? '#f0f7ff' : '#fff',
+                    }}
                   >
-                    수정
-                  </button>
-                  <button
-                    style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                    onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
-                  >
-                    삭제
-                  </button>
-                </div>
-              </div>
-            ))}
-          </>
+                    {/* Name + badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-8)' }}>{p.name}</span>
+                      {isActive && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>활성</span>
+                      )}
+                      {isViewing && !isActive && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8', borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>보는 중</span>
+                      )}
+                    </div>
+                    {/* Date range */}
+                    {p.started_at && (
+                      <span style={{ fontSize: 11, color: 'var(--gray-4)', whiteSpace: 'nowrap' }}>
+                        {formatKstShortDate(p.started_at)} ~ {formatKstShortDate(p.ended_at) ?? '진행 중'}
+                      </span>
+                    )}
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+                      {!isViewing && (
+                        <button
+                          onClick={() => { void switchPhase(p.id); setShowManage(false) }}
+                          style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer' }}
+                        >
+                          보기
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openEditPhase(p)}
+                        style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--gray-3)', background: '#fff', color: 'var(--gray-6)', cursor: 'pointer' }}
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => { setShowManage(false); setDeleteTarget(p.name || ''); setShowDeleteModal(true) }}
+                        style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer' }}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
+
+        {/* New phase */}
+        <button
+          className="new-phase-btn"
+          onClick={openNewPhaseModal}
+          style={{ width: '100%', justifyContent: 'center' }}
+        >
+          + 새 차수 시작
+        </button>
       </Modal>
 
       {/* New Phase */}
