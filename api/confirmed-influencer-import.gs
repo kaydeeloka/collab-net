@@ -199,12 +199,6 @@ function importConfirmedInfluencerForm(body) {
           (phaseId ? '&phase_id=eq.' + phaseId : ''));
         if (Array.isArray(byHandle) && byHandle.length) influencer = byHandle[0];
       }
-      if (!influencer && fullName) {
-        var byName = supabaseGet('/rest/v1/influencers?select=id,handle,display_name&display_name=ilike.' + encodeURIComponent(fullName) +
-          (phaseId ? '&phase_id=eq.' + phaseId : ''));
-        if (Array.isArray(byName) && byName.length) influencer = byName[0];
-      }
-
       if (!influencer) {
         unmatched.push({ fullName: fullName, accountName: accountName });
         continue;
@@ -269,9 +263,22 @@ function importConfirmedInfluencerForm(body) {
   }
 }
 
+function getFormSheetRowCount(body) {
+  var b = body || {};
+  var sheetUrl = (b.sheetUrl || '').toString().trim();
+  if (!sheetUrl) return { error: 'sheetUrl이 필요합니다.' };
+  try {
+    var sheet = _openFormSheet(sheetUrl, b.sheetName);
+    return { ok: true, rowCount: Math.max(0, sheet.getLastRow() - 1) };
+  } catch (e) {
+    return { error: e.toString() };
+  }
+}
+
 function routeConfirmedImport(action, p, body) {
   switch (action) {
     case 'importConfirmedInfluencerForm': return importConfirmedInfluencerForm(body || {});
+    case 'getFormSheetRowCount':          return getFormSheetRowCount(body || {});
     default: return null;
   }
 }

@@ -368,6 +368,7 @@ export default function Confirmed() {
   const [showImport, setShowImport] = useState(false)
   const [importUrl,  setImportUrl]  = useState('')
   const [importing,  setImporting]  = useState(false)
+  const [importTotal, setImportTotal] = useState<number | null>(null)
   const [importResult, setImportResult] = useState<ImportFormResult | null>(null)
 
   useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
@@ -548,8 +549,16 @@ export default function Confirmed() {
   async function handleImportForm() {
     if (!importUrl.trim()) { showToast('구글 시트 링크를 입력하세요.', 'error'); return }
     setImporting(true)
+    setImportTotal(null)
     setImportResult(null)
     try {
+      const countRes = await gasPost<{ ok?: boolean; rowCount?: number; error?: string }>({
+        action: 'getFormSheetRowCount',
+        sheetUrl: importUrl.trim(),
+      })
+      if (countRes.error) { showToast('오류: ' + countRes.error, 'error'); return }
+      setImportTotal(countRes.rowCount ?? null)
+
       const r = await gasPost<ImportFormResult>({
         action: 'importConfirmedInfluencerForm',
         sheetUrl: importUrl.trim(),
@@ -563,6 +572,7 @@ export default function Confirmed() {
       showToast('오류: ' + (e as Error).message, 'error')
     } finally {
       setImporting(false)
+      setImportTotal(null)
     }
   }
 
@@ -1269,7 +1279,7 @@ export default function Confirmed() {
       {/* ── Google Form Import Modal ── */}
       <Modal open={showImport} onClose={() => setShowImport(false)} title="구글 폼 데이터 가져오기" size="lg">
         <div style={{ fontSize: 12, color: 'var(--gray-6)', lineHeight: 1.6, marginBottom: 12 }}>
-          구글 폼 응답 시트 링크를 입력하면 핸들(또는 이름)로 매칭하여 배송 주소·전화번호·리포스트 여부·비고를 자동으로 채워넣습니다.
+          구글 폼 응답 시트 링크를 입력하면 핸들로 매칭하여 배송 주소·전화번호·리포스트 여부·비고를 자동으로 채워넣고 이름을 업데이트합니다.
           주소 분리는 완벽하지 않을 수 있으니, 가져오기 후 결과를 확인해주세요.
         </div>
         <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>구글 시트 링크</label>
@@ -1310,6 +1320,29 @@ export default function Confirmed() {
                 </ul>
               </div>
             )}
+          </div>
+        )}
+
+        {importing && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--gray-6)', marginBottom: 6 }}>
+              <Spinner sm />
+              {importTotal === null
+                ? '시트 확인 중...'
+                : `총 ${importTotal}명 처리 중...`}
+            </div>
+            {importTotal !== null && (
+              <div style={{ fontSize: 11, color: 'var(--gray-4)', marginBottom: 8 }}>
+                데이터를 읽고 매칭하는 중입니다. 인원 수에 따라 1~3분 정도 소요될 수 있습니다.
+              </div>
+            )}
+            <div style={{ height: 4, borderRadius: 4, background: 'var(--gray-2)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 4, background: 'var(--blue)',
+                width: importTotal === null ? '30%' : '70%',
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
           </div>
         )}
 
