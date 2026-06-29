@@ -602,7 +602,7 @@ export default function TiktokTrend() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="틱톡 트렌드 분석"
-          description="Weekly US TikTok Beauty Insight Report · 미국 뷰티 틱톡 주간 인사이트"
+          description="미국 뷰티 틱톡 주간 해시태그 인사이트"
         />
       </PageHeroBanner>
 

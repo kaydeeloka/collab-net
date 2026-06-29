@@ -17,8 +17,8 @@ export default function BeautyNewsShell({
     <div className="page">
       <PageHeroBanner>
         <PageHeroBannerContent
-          title="트렌드 분석"
-          description="뷰티 뉴스 AI 분석 및 틱톡 트렌드 리포트를 확인하세요."
+          title="뷰티 뉴스 브리핑"
+          description="최신 뷰티 뉴스를 AI로 요약·분석합니다. 주간 브리핑을 매월 이메일로 자동으로 발송합니다."
         />
       </PageHeroBanner>
 

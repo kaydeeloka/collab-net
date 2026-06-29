@@ -425,27 +425,31 @@ function _fetchLatestFromSender(token, email) {
   const headers = { 'Authorization': 'Bearer ' + token };
 
   // 1) Inbox + from filter (no $orderby — unsupported with this filter on many tenants)
-  var inboxUrl = GRAPH_BASE + '/me/mailFolders/inbox/messages'
-    + '?$filter=' + encodeURIComponent("from/emailAddress/address eq '" + safeEmail + "'")
-    + select
-    + '&$top=50';
-  var res = UrlFetchApp.fetch(inboxUrl, { headers: headers, muteHttpExceptions: true });
-  if (res.getResponseCode() === 200) {
-    var entry = _entryFromMsg(_parseLatest(JSON.parse(res.getContentText())));
-    if (entry) return entry;
-  }
+  try {
+    var inboxUrl = GRAPH_BASE + '/me/mailFolders/inbox/messages'
+      + '?$filter=' + encodeURIComponent("from/emailAddress/address eq '" + safeEmail + "'")
+      + select
+      + '&$top=50';
+    var res = UrlFetchApp.fetch(inboxUrl, { headers: headers, muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      var entry = _entryFromMsg(_parseLatest(JSON.parse(res.getContentText())));
+      if (entry) return entry;
+    }
+  } catch (_) {}
 
   // 2) $search fallback (case-insensitive; needs ConsistencyLevel)
-  var searchUrl = GRAPH_BASE + '/me/messages?$search=' + encodeURIComponent('"from:' + safeEmail + '"')
-    + select
-    + '&$top=50';
-  res = UrlFetchApp.fetch(searchUrl, {
-    headers: Object.assign({}, headers, { 'ConsistencyLevel': 'eventual' }),
-    muteHttpExceptions: true,
-  });
-  if (res.getResponseCode() === 200) {
-    return _entryFromMsg(_parseLatest(JSON.parse(res.getContentText())));
-  }
+  try {
+    var searchUrl = GRAPH_BASE + '/me/messages?$search=' + encodeURIComponent('"from:' + safeEmail + '"')
+      + select
+      + '&$top=50';
+    var res2 = UrlFetchApp.fetch(searchUrl, {
+      headers: Object.assign({}, headers, { 'ConsistencyLevel': 'eventual' }),
+      muteHttpExceptions: true,
+    });
+    if (res2.getResponseCode() === 200) {
+      return _entryFromMsg(_parseLatest(JSON.parse(res2.getContentText())));
+    }
+  } catch (_) {}
 
   return null;
 }

@@ -654,7 +654,7 @@ export default function Listup() {
     <div className="page page--fill" id="page-listup">
       <PageHeroBanner>
         <PageHeroBannerContent
-          title="인플루언서 리스트업 & 크리에이터 DB 관리"
+          title="인플루언서 리스트업"
           description="Apify를 통해 조건에 맞는 TikTok 크리에이터를 탐색하고, 1~5순위 티어로 분류하여 아웃리치 파이프라인에 연결합니다."
           actions={(
             <>

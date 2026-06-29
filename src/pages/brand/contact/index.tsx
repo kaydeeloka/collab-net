@@ -39,6 +39,7 @@ import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import { DbTableRowSelect, DbTableSelectAll, dbTableRowClass } from '@/components/DbTableSelect'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact/contact-count'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 import { fetchEmailTemplates, type EmailTemplate } from '@/lib/template/email-templates'
 import { EmailTemplatePreviewModal } from '@/components/EmailTemplatePreview'
@@ -133,6 +134,7 @@ export default function BrandContact() {
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
+  const [syncProgress, setSyncProgress] = useState<{ checked: number; total: number; found: number } | null>(null)
   const [bulkMarking,     setBulkMarking]     = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
   const [bulkTplIdx,      setBulkTplIdx]      = useState(0)
@@ -315,6 +317,8 @@ export default function BrandContact() {
     return bounced
   }, [updateField, showToast])
 
+  const REPLY_BATCH = 25
+
   const syncReplies = useCallback(async () => {
     const candidates = rows.filter(r => !!r.email?.trim())
     if (!candidates.length) {
@@ -323,6 +327,7 @@ export default function BrandContact() {
     }
 
     setSyncingReplies(true)
+    setSyncProgress({ checked: 0, total: candidates.length, found: 0 })
     try {
       const auth = await checkOutlookConnected()
       if (!auth.configured || !auth.authorized) {
@@ -335,40 +340,49 @@ export default function BrandContact() {
         since: toIsoTimestamp(r.last_contact_at),
         lastReplyAt: toIsoTimestamp(r.last_reply_at),
       }))
-      const replies = await fetchOutlookReplies(syncItems)
 
       const messageIds: string[] = []
       let newReplies = 0
       let statusUpdates = 0
+      let totalChecked = 0
+      let totalFound = 0
 
-      for (const reply of replies) {
-        const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
-        if (!row || !isNewReply(row, reply)) continue
+      for (let i = 0; i < syncItems.length; i += REPLY_BATCH) {
+        const batch = syncItems.slice(i, i + REPLY_BATCH)
+        const replies = await fetchOutlookReplies(batch)
+        totalChecked += batch.length
+        totalFound += replies.length
+        setSyncProgress({ checked: totalChecked, total: candidates.length, found: totalFound })
 
-        const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
-        const { data: fresh, error: readErr } = await supabase
-          .from(table)
-          .select('reply_count, status, last_contact_at, last_reply_at')
-          .eq('id', row.id)
-          .single()
-        if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
-        if (!isNewReply(fresh, reply)) continue
+        for (const reply of replies) {
+          const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
+          if (!row || !isNewReply(row, reply)) continue
 
-        const replyAt = replyTimestamp(reply)
-        const patch: Partial<BrandRow> = {
-          last_reply_at: replyAt,
-          reply_count: (fresh.reply_count ?? 0) + 1,
+          const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
+          const { data: fresh, error: readErr } = await supabase
+            .from(table)
+            .select('reply_count, status, last_contact_at, last_reply_at')
+            .eq('id', row.id)
+            .single()
+          if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
+          if (!isNewReply(fresh, reply)) continue
+
+          const replyAt = replyTimestamp(reply)
+          const patch: Partial<BrandRow> = {
+            last_reply_at: replyAt,
+            reply_count: (fresh.reply_count ?? 0) + 1,
+          }
+          if (shouldAutoMarkReply(fresh.status ?? '')) {
+            patch.status = 'reply'
+            statusUpdates++
+          }
+
+          const { error } = await supabase.from(table).update(patch).eq('id', row.id)
+          if (error) { showToast(error.message, 'error'); continue }
+
+          newReplies++
+          if (reply.messageId) messageIds.push(reply.messageId)
         }
-        if (shouldAutoMarkReply(fresh.status ?? '')) {
-          patch.status = 'reply'
-          statusUpdates++
-        }
-
-        const { error } = await supabase.from(table).update(patch).eq('id', row.id)
-        if (error) { showToast(error.message, 'error'); continue }
-
-        newReplies++
-        if (reply.messageId) messageIds.push(reply.messageId)
       }
 
       if (messageIds.length) await markRepliesReadInOutlook(messageIds)
@@ -393,6 +407,7 @@ export default function BrandContact() {
       showToast(e instanceof Error ? e.message : '회신 확인 실패', 'error')
     } finally {
       setSyncingReplies(false)
+      setSyncProgress(null)
     }
   }, [rows, showToast, load, applyDeliveryBounces])
 
@@ -577,28 +592,50 @@ export default function BrandContact() {
   return (
     <div className="page page--fill" style={{ paddingLeft: 28, paddingRight: 28 }}>
 
-      {/* Banner */}
-      <div style={{ background: 'var(--blue-lt)', border: '1px solid rgba(159,186,197,.4)', borderRadius: 14, padding: '18px 24px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>브랜드 컨택 관리</h1>
-          <p style={{ fontSize: 13, color: '#555' }}>컨택 대상 브랜드의 상태를 관리하고 이메일을 발송합니다.</p>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="브랜드 컨택 관리"
+          description="컨택 대상 브랜드에게 아웃리치 이메일을 발송하고 컨택 상태·회신 여부를 관리합니다."
+          actions={(
+            <>
+              <button
+                onClick={syncReplies}
+                disabled={syncingReplies || loading}
+                title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
+                className="page-banner-btn"
+                style={{ background: '#fff', color: '#d97706', border: '1px solid #fcd34d', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: syncingReplies ? 0.7 : 1, cursor: syncingReplies ? 'wait' : 'pointer' }}
+              >
+                <MailCheck size={14} />
+                {syncingReplies ? '확인 중…' : '회신 확인'}
+              </button>
+              <button className="page-banner-btn page-banner-btn--secondary"
+                onClick={() => { load(); setCheckedIds(new Set()) }}>
+                <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+              </button>
+            </>
+          )}
+        />
+      </PageHeroBanner>
+
+      {syncProgress && (
+        <div style={{ background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
+            <span style={{ color: 'var(--gray-6)', fontWeight: 600 }}>
+              회신 확인 중... {syncProgress.checked} / {syncProgress.total}건
+            </span>
+            <span style={{ color: '#d97706', fontWeight: 700 }}>
+              {syncProgress.found > 0 ? `${syncProgress.found}건 회신 감지` : '회신 탐색 중'}
+            </span>
+          </div>
+          <div style={{ height: 5, background: 'var(--gray-2)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 4, background: 'var(--blue)',
+              width: `${Math.round((syncProgress.checked / syncProgress.total) * 100)}%`,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={syncReplies}
-            disabled={syncingReplies || loading}
-            title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
-            style={{ padding: '7px 14px', background: '#fff', color: '#d97706', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid #fcd34d', cursor: syncingReplies ? 'wait' : 'pointer', opacity: syncingReplies ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <MailCheck size={14} />
-            {syncingReplies ? '확인 중…' : '회신 확인'}
-          </button>
-          <button onClick={() => { load(); setCheckedIds(new Set()) }}
-            style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
-            ↻ 새로고침
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Stats */}
       {loading && <div className="loader"><Spinner /></div>}
@@ -734,7 +771,7 @@ export default function BrandContact() {
             value={bulkTplIdx}
             onChange={setBulkTplIdx}
             options={templates}
-            emptyLabel="템플릿 없음 — 브랜드 템플릿 관리에서 추가하세요"
+            emptyLabel="템플릿 없음 — 브랜드 에서 추가하세요"
           />
           <Button variant="ghost" size="sm" onClick={() => setShowBulkPreview(true)} disabled={templates.length === 0}>
             미리보기

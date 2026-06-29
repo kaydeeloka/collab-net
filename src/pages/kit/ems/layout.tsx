@@ -155,8 +155,8 @@ export default function EmsLayout() {
     <div className="page page--fill">
       <PageHeroBanner>
         <PageHeroBannerContent
-          title="EMS 글로벌 배송 & 통합 관리 시스템"
-          description="확정 인플루언서의 배송 정보를 통합 관리합니다."
+          title="EMS 글로벌 배송 추적"
+          description="확정 인플루언서의 배송 주소·EMS 운송장 번호·배송 상태를 통합 관리합니다."
           actions={(
             <button type="button" className="page-banner-btn page-banner-btn--secondary" onClick={loadStats}>
               <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침

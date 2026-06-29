@@ -26,8 +26,8 @@ export interface EmailTemplateUiConfig {
 
 export const EMAIL_TEMPLATE_UI_CONFIG: Record<EmailTemplateDomain, EmailTemplateUiConfig> = {
   influencer: {
-    bannerTitle: '템플릿 관리',
-    bannerDesc: '아웃리치 이메일 템플릿을 작성하고 관리합니다.',
+    bannerTitle: '인플루언서 템플릿 관리',
+    bannerDesc: '인플루언서 컨택 이메일 템플릿을 작성하고 관리합니다.',
     bannerDeco: 'emoji',
     categories: CONTACT_CATEGORIES,
     categoryColors: CONTACT_CATEGORY_COLORS,
@@ -62,7 +62,7 @@ export const EMAIL_TEMPLATE_UI_CONFIG: Record<EmailTemplateDomain, EmailTemplate
     titleMaxLength: 50,
   },
   ems: {
-    bannerTitle: '템플릿 관리',
+    bannerTitle: 'EMS 템플릿 관리',
     bannerDesc: '배송 오류·재발송 안내 이메일 템플릿을 작성하고 관리합니다.',
     bannerDeco: 'mail-icon',
     categories: EMS_TEMPLATE_CATEGORIES,

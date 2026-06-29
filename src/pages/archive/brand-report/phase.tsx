@@ -533,7 +533,7 @@ export default function ArchiveBrandReportPhase() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title={`${phase.name} 시즌 컬렉션`}
-          description={formatPhasePeriod(phase.started_at, phase.ended_at)}
+          description="차수별 시즌 개요·키트 구성·콘텐츠 성과를 작성하고 웹사이트 아카이브 정보를 관리합니다."
         />
       </PageHeroBanner>
 

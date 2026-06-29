@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ListFilter, MailCheck } from 'lucide-react'
+import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { BULK_BOUNCE_DELAYS_MS, fetchOutlookDeliveryFailures } from '@/lib/template/delivery-failure-sync'
 import BulkSendProgressModal from '@/components/BulkSendProgressModal'
 import {
@@ -119,6 +120,7 @@ function applyPlaceholders(text: string, inf: Influencer | null) {
 }
 
 const PAGE_SIZE = 25
+const REPLY_BATCH = 25
 function bulkSendConfirmMessage(count: number, tpl: { name: string; title: string }) {
   return `${count}명에게 일괄 발송하시겠습니까?\n템플릿: ${tpl.name}\n제목: ${tpl.title || '(제목 없음)'}`
 }
@@ -225,6 +227,7 @@ export default function Outreach() {
   const [bulkSendModal,   setBulkSendModal]   = useState<BulkSendLiveState | null>(null)
   const [checkingDeliveryFailures, setCheckingDeliveryFailures] = useState(false)
   const [syncingReplies,  setSyncingReplies]  = useState(false)
+  const [syncProgress,    setSyncProgress]    = useState<{ checked: number; total: number; found: number } | null>(null)
   const [bulkMarking,     setBulkMarking]     = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
@@ -426,17 +429,14 @@ export default function Outreach() {
   }, [updateField, showToast])
 
   const syncReplies = useCallback(async () => {
-    const candidates = influencers.filter(r => {
-      const email = r.email?.trim()
-      if (!email) return false
-      return (r.contact_count ?? 0) > 0 || ['yes', 'noreply', 'reply'].includes(r.status || '')
-    })
+    const candidates = influencers.filter(r => !!r.email?.trim())
     if (!candidates.length) {
       showToast('회신 확인할 발송 대상이 없습니다', 'error')
       return
     }
 
     setSyncingReplies(true)
+    setSyncProgress({ checked: 0, total: candidates.length, found: 0 })
     try {
       const auth = await checkOutlookConnected()
       if (!auth.configured || !auth.authorized) {
@@ -449,40 +449,48 @@ export default function Outreach() {
         since: toIsoTimestamp(r.last_contact_at),
         lastReplyAt: toIsoTimestamp(r.last_reply_at),
       }))
-      const replies = await fetchOutlookReplies(syncItems)
 
       const messageIds: string[] = []
       let newReplies = 0
       let statusUpdates = 0
+      let totalChecked = 0
 
-      for (const reply of replies) {
-        const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
-        if (!inf || !isNewReply(inf, reply)) continue
+      for (let i = 0; i < syncItems.length; i += REPLY_BATCH) {
+        const batch = syncItems.slice(i, i + REPLY_BATCH)
+        const replies = await fetchOutlookReplies(batch)
+        totalChecked += batch.length
+        setSyncProgress({ checked: totalChecked, total: candidates.length, found: newReplies })
 
-        const { data: fresh, error: readErr } = await supabase
-          .from('influencers')
-          .select('reply_count, status, last_contact_at, last_reply_at')
-          .eq('id', inf.id)
-          .single()
-        if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
-        if (!isNewReply(fresh, reply)) continue
+        for (const reply of replies) {
+          const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
+          if (!inf || !isNewReply(inf, reply)) continue
 
-        const replyAt = replyTimestamp(reply)
-        const patch: Partial<Influencer> = {
-          last_reply_at: replyAt,
-          reply_count: (fresh.reply_count ?? 0) + 1,
+          const { data: fresh, error: readErr } = await supabase
+            .from('influencers')
+            .select('reply_count, status, last_contact_at, last_reply_at')
+            .eq('id', inf.id)
+            .single()
+          if (readErr || !fresh) { showToast(readErr?.message ?? '회신 반영 실패', 'error'); continue }
+          if (!isNewReply(fresh, reply)) continue
+
+          const replyAt = replyTimestamp(reply)
+          const patch: Partial<Influencer> = {
+            last_reply_at: replyAt,
+            reply_count: (fresh.reply_count ?? 0) + 1,
+          }
+
+          if (shouldAutoMarkReply(fresh.status || '')) {
+            patch.status = 'reply'
+            statusUpdates++
+          }
+
+          const { error } = await supabase.from('influencers').update(patch).eq('id', inf.id)
+          if (error) { showToast(error.message, 'error'); continue }
+
+          newReplies++
+          if (reply.messageId) messageIds.push(reply.messageId)
+          setSyncProgress({ checked: totalChecked, total: candidates.length, found: newReplies })
         }
-
-        if (shouldAutoMarkReply(fresh.status || '')) {
-          patch.status = 'reply'
-          statusUpdates++
-        }
-
-        const { error } = await supabase.from('influencers').update(patch).eq('id', inf.id)
-        if (error) { showToast(error.message, 'error'); continue }
-
-        newReplies++
-        if (reply.messageId) messageIds.push(reply.messageId)
       }
 
       if (messageIds.length) await markRepliesReadInOutlook(messageIds)
@@ -510,6 +518,7 @@ export default function Outreach() {
       showToast(e instanceof Error ? e.message : '회신 확인 실패', 'error')
     } finally {
       setSyncingReplies(false)
+      setSyncProgress(null)
     }
   }, [influencers, loadInfluencers, showToast, applyDeliveryBounces])
 
@@ -654,28 +663,50 @@ export default function Outreach() {
   return (
     <div className="page page--fill" style={{ paddingLeft: 28, paddingRight: 28 }}>
 
-      {/* ── Banner ── */}
-      <div style={{ background: 'var(--blue-lt)', border: '1px solid rgba(159,186,197,.4)', borderRadius: 14, padding: '18px 24px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue-dk)', marginBottom: 4 }}>인플루언서 컨택 리스트업</h1>
-          <p style={{ fontSize: 13, color: '#555' }}>컨택 차수와 상태를 관리하고 일괄 발송합니다.</p>
+      <PageHeroBanner>
+        <PageHeroBannerContent
+          title="인플루언서 컨택 리스트업"
+          description="선정된 인플루언서에게 아웃리치 이메일을 발송하고 컨택 상태·회신 여부를 관리합니다."
+          actions={(
+            <>
+              <button
+                onClick={syncReplies}
+                disabled={syncingReplies || loading}
+                title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
+                className="page-banner-btn"
+                style={{ background: '#fff', color: '#d97706', border: '1px solid #fcd34d', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: syncingReplies ? 0.7 : 1, cursor: syncingReplies ? 'wait' : 'pointer' }}
+              >
+                <MailCheck size={14} />
+                {syncingReplies ? '확인 중…' : '회신 확인'}
+              </button>
+              <button className="page-banner-btn page-banner-btn--secondary"
+                onClick={() => { loadInfluencers(); setCheckedIds(new Set()) }}>
+                <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+              </button>
+            </>
+          )}
+        />
+      </PageHeroBanner>
+
+      {syncProgress && (
+        <div style={{ background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
+            <span style={{ color: 'var(--gray-6)', fontWeight: 600 }}>
+              회신 확인 중... {syncProgress.checked} / {syncProgress.total}건
+            </span>
+            <span style={{ color: '#d97706', fontWeight: 700 }}>
+              {syncProgress.found > 0 ? `${syncProgress.found}건 회신 감지` : '회신 탐색 중'}
+            </span>
+          </div>
+          <div style={{ height: 5, background: 'var(--gray-2)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 4, background: 'var(--blue)',
+              width: `${Math.round((syncProgress.checked / syncProgress.total) * 100)}%`,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={syncReplies}
-            disabled={syncingReplies || loading}
-            title="마지막 발송 이후 새 회신만 확인합니다 (가장 최신 메일 기준)"
-            style={{ padding: '7px 14px', background: '#fff', color: '#d97706', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid #fcd34d', cursor: syncingReplies ? 'wait' : 'pointer', opacity: syncingReplies ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <MailCheck size={14} />
-            {syncingReplies ? '확인 중…' : '회신 확인'}
-          </button>
-          <button onClick={() => { loadInfluencers(); setCheckedIds(new Set()) }}
-            style={{ padding: '7px 14px', background: '#fff', color: '#334', fontWeight: 700, fontSize: 12, borderRadius: 10, border: '1px solid var(--gray-3)', cursor: 'pointer' }}>
-            ↻ 새로고침
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ── Stats ── */}
       {loading && <div className="loader"><Spinner /></div>}

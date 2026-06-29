@@ -210,9 +210,8 @@ export default function MonitoringReport() {
     <div className="page page--fill">
       <PageHeroBanner style={{ marginBottom: 20 }}>
         <PageHeroBannerContent
-          eyebrow={<span style={{ fontSize: 13, fontWeight: 600, color: 'var(--teal-dk)' }}>Content Performance</span>}
-          title="콘텐츠 성과 OVERVIEW"
-          description="리뷰 모니터링 데이터를 기반으로 업로드 현황·콘텐츠 종류·플랫폼별 성과를 집계합니다."
+          title="모니터링 콘텐츠 성과"
+          description="리뷰 모니터링 데이터를 기반으로 업로드 현황·콘텐츠 종류·플랫폼별 참여 성과를 한눈에 확인합니다."
         />
       </PageHeroBanner>
 

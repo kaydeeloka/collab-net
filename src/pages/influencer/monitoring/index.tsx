@@ -896,7 +896,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           title="인플루언서 리뷰 모니터링"
           description={(
             <>
-              Apify로 최대 50명의 인플루언서 콘텐츠를 스캔하여 키워드 감지 결과를 실시간 추적합니다.
+              확정 인플루언서의 콘텐츠를 Apify로 스캔하여 키워드 감지 결과를 추적합니다.
               {stats.lastRun && stats.lastRun !== '-' && (
                 <span style={{ marginLeft: 10, color: 'var(--gray-5)', fontSize: 11 }}>
                   마지막 실행: {stats.lastRun}

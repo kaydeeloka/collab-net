@@ -53,8 +53,8 @@ const GROUPS: SideGroup[] = [
     label: 'KIT', icon: <Package size={22} />, defaultTo: '/kit/ems', prefix: '/kit',
     children: [
       { to: '/kit/ems', label: 'EMS 배송 추적', activeWhen: p => p === '/kit/ems' || p.startsWith('/kit/ems/') },
-      { to: '/kit/ems-template', label: '템플릿 관리' },
-      { to: '/kit/ems-data',  label: 'EMS 발송 데이터' },
+      { to: '/kit/ems-template', label: 'EMS 템플릿 관리' },
+      { to: '/kit/ems-data',  label: 'EMS 배송 데이터' },
     ],
   },
   {

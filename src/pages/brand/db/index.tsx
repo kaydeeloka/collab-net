@@ -65,7 +65,7 @@ export default function BrandDb() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="브랜드 DB"
-          description="일반 DB와 퍼스널 DB를 통합 관리합니다."
+          description="컨택 대상 브랜드의 담당자·연락처·상태를 일반 DB와 퍼스널 DB로 나누어 관리합니다."
           actions={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {sheetUrl && (

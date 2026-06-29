@@ -748,7 +748,7 @@ export default function Confirmed() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="확정 인플루언서 관리"
-          description="아웃리치에서 수락된 인플루언서 목록입니다. ✎ 버튼으로 상세 정보를 추가하세요."
+          description="확정된 인플루언서의 개인 정보·배송지·전화번호·리포스트 여부·리뷰 링크를 관리합니다."
           actions={(
             <>
               <Link to="/influencer/monitoring" className="page-banner-btn"

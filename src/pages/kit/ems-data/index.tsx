@@ -172,7 +172,7 @@ function downloadEmsExcel(data: EmsDataRow[]) {
     { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
   ]
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'EMS 발송 데이터')
+  XLSX.utils.book_append_sheet(wb, ws, 'EMS 배송 데이터')
   const date = kstToday()
   XLSX.writeFile(wb, `EMS_발송데이터_${date}.xlsx`)
 }
@@ -378,8 +378,8 @@ export default function EmsData() {
     <div className="page page--fill">
       <PageHeroBanner>
         <PageHeroBannerContent
-          title="EMS 발송 데이터"
-          description="확정 인플루언서(seq) 배송 정보를 우체국 EMS 양식 형식으로 확인합니다. 행을 클릭하면 상세 정보를 볼 수 있습니다."
+          title="EMS 배송 데이터"
+          description="우체국 EMS 발송 양식에 맞게 배송 정보를 정리하여 Excel로 다운로드 합니다."
           actions={(
             <>
               <button className="page-banner-btn page-banner-btn--secondary" onClick={handleDownload} disabled={loading || rows.length === 0}>

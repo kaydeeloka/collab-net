@@ -320,7 +320,7 @@ export default function Dashboard() {
         const cards = [
           {
             to: '/influencer/search', icon: <ClipboardList size={20} />,
-            title: '인플루언서 리스트업', desc: 'TikTok 크리에이터 탐색 · DB 관리',
+            title: '인플루언서 리스트업', desc: '인플루언서 서치 · DB 관리',
             stats: statsListup, color: '#3b82f6', go: '인플루언서 보기',
           },
           {
@@ -330,12 +330,12 @@ export default function Dashboard() {
           },
           {
             to: '/kit/ems', icon: <Package size={20} />,
-            title: 'EMS 배송 트래킹', desc: '키트 배송 현황 ',
+            title: 'EMS 배송 트래킹', desc: '키트 배송 현황 · 키트 관리',
             stats: statsEms, color: '#10b981', go: '배송 현황 보기',
           },
           {
             to: '/influencer/monitoring', icon: <BarChart2 size={20} />,
-            title: '인플루언서 모니터링', desc: '콘텐츠 성과 · MiMuse 언급 분석',
+            title: '인플루언서 모니터링', desc: '리뷰 모니터링 현황 · 콘텐츠 성과',
             stats: statsMonitoring, color: '#f97316', go: '모니터링 보기',
           },
         ]
@@ -401,13 +401,13 @@ export default function Dashboard() {
             border: '1.5px solid var(--teal-lt)', minHeight: 110,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뷰티 뉴스</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뷰티 뉴스 트렌드 키워드</div>
               <Link to="/trend/beauty-news" style={{
                 fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
                 background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
                 borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
                 transition: 'background .15s',
-              }}>트렌드 보기 →</Link>
+              }}>뉴스 브리핑 보기 →</Link>
             </div>
             {newsKeywords.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -436,7 +436,7 @@ export default function Dashboard() {
                 background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
                 borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
                 transition: 'background .15s',
-              }}>트렌드 보기 →</Link>
+              }}>틱톡 트렌드 보기 →</Link>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {TIKTOK_HASHTAGS_PREVIEW.map(h => {

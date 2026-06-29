@@ -55,7 +55,7 @@ export default function ArchiveBrandReportLayout() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="브랜드별 리포트"
-          description={`${phase.name} 시즌`}
+          description="확정 브랜드별 리뷰 모니터링과 콘텐츠 성과 결과 데이터를 브랜드별로 확인합니다."
         />
       </PageHeroBanner>
 
