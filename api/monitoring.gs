@@ -368,16 +368,6 @@ function _itemUniqueId(item) {
   ).toString().toLowerCase();
 }
 
-function _videoThumbnailUrl(video) {
-  var meta = video.videoMeta || {};
-  var url = (
-    meta.coverUrl || meta.originalCoverUrl ||
-    video['videoMeta.coverUrl'] || video['videoMeta.originalCoverUrl'] ||
-    ''
-  ).toString().trim();
-  return url || null;
-}
-
 // Write Apify results to Supabase monitoring table.
 function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runDate, phaseId) {
   const mapRes = UrlFetchApp.fetch(
@@ -407,7 +397,6 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
       else if (video.createTime) videoDate = Utilities.formatDate(new Date(video.createTime * 1000), 'Asia/Seoul', 'yyyy-MM-dd');
 
       const videoUrl   = video.webVideoUrl || video.videoUrl || '';
-      const thumbUrl   = _videoThumbnailUrl(video);
       const s          = video.stats || {};
       const matchedKws = keywords.filter(function(kw) { return itemText(video).includes(kw); });
 
@@ -438,11 +427,6 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
       );
       if (insRes.getResponseCode() < 300) {
         inserted++;
-        if (thumbUrl) {
-          var rows = JSON.parse(insRes.getContentText());
-          var monId = Array.isArray(rows) && rows[0] ? rows[0].id : null;
-          if (monId) _upsertMonitoringAssets_(sbUrl, monId, thumbUrl);
-        }
       } else {
         Logger.log('Supabase insert 오류 (' + handle + '): ' + insRes.getContentText());
       }
@@ -450,29 +434,6 @@ function _writeToSupabase(sbUrl, sbKey, videosByHandle, keywords, itemText, runD
   });
 
   return inserted;
-}
-
-function _upsertMonitoringAssets_(sbUrl, monitoringId, thumbnailSourceUrl) {
-  var assetPayload = JSON.stringify({
-    monitoring_id        : monitoringId,
-    thumbnail_source_url : thumbnailSourceUrl || null,
-    updated_at           : new Date().toISOString(),
-  });
-  var res = UrlFetchApp.fetch(
-    sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
-    {
-      method : 'POST',
-      headers: Object.assign({}, supabaseHeaders(), {
-        'Content-Type': 'application/json',
-        Prefer        : 'resolution=merge-duplicates',
-      }),
-      payload           : assetPayload,
-      muteHttpExceptions: true,
-    }
-  );
-  if (res.getResponseCode() >= 300) {
-    Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
-  }
 }
 
 function _clearRunProps() {
@@ -700,6 +661,13 @@ function updateVideoMetadata(body) {
 
 // ── Download cover + video URLs via scrape-creators actor ─────
 
+// Apify key-value-store record URLs are private (403 without auth); append the
+// token so the stored cover/video URLs are directly viewable from the dashboard.
+function _withApifyToken_(url, token) {
+  if (!url || url.indexOf('api.apify.com') === -1) return url || null;
+  return url + (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + token;
+}
+
 function downloadVideoAssets(body) {
   var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
@@ -710,10 +678,15 @@ function downloadVideoAssets(body) {
   });
   if (!tiktokRows.length) return { error: 'TikTok URL이 없습니다.' };
 
-  var rowByVideoId = {};
+  // Map TikTok video/photo id → all rows that reference it (duplicates allowed).
+  var rowsByVideoId = {};
+  var unkeyedRows = [];
   tiktokRows.forEach(function(row) {
-    var m = (row.review_link || '').match(/\/video\/(\d+)/);
-    if (m) rowByVideoId[m[1]] = row;
+    var m = (row.review_link || '').match(/\/(?:video|photo)\/(\d+)/);
+    if (!m) { unkeyedRows.push(row.review_link); return; }
+    var id = m[1];
+    if (!rowsByVideoId[id]) rowsByVideoId[id] = [];
+    rowsByVideoId[id].push(row);
   });
 
   var startRes = UrlFetchApp.fetch(
@@ -760,40 +733,66 @@ function downloadVideoAssets(body) {
   var cfg     = supabaseConfig();
   var sbUrl   = cfg.url;
   var now     = new Date().toISOString();
-  var updated = 0;
+  var updated   = 0;   // monitoring_assets rows successfully saved
+  var noUrl     = 0;   // Apify items with neither cover nor video URL
+  var unmatched = 0;   // Apify items whose id matched no monitoring row
 
   items.forEach(function(item) {
-    var row = rowByVideoId[String(item.id)];
-    if (!row) return;
-    var coverUrl = item.downloadCoverUrl || item.thumbnail || null;
-    var videoUrl = item.downloadUrl || item.videoUrl || null;
-    if (!coverUrl && !videoUrl) return;
+    var rows = rowsByVideoId[String(item.id)];
+    if (!rows || !rows.length) { unmatched++; return; }
+    // Prefer direct (token-free) CDN URLs; the Apify download* URLs are private (403 / insufficient-permissions).
+    // Photo posts (/photo/ URL, with an `images` array) still carry a slideshow videoUrl — ignore it and
+    // use the images as the media. Video posts use videoUrl.
+    var images  = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+    var isPhoto = (item.url || '').indexOf('/photo/') !== -1 || (images.length > 0 && !item.videoUrl);
 
-    var res = UrlFetchApp.fetch(
-      sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
-      {
-        method : 'POST',
-        headers: Object.assign({}, supabaseHeaders(), {
-          'Content-Type': 'application/json',
-          Prefer        : 'resolution=merge-duplicates',
-        }),
-        payload           : JSON.stringify({
-          monitoring_id: row.id,
-          cover_url    : coverUrl,
-          video_url    : videoUrl,
-          updated_at   : now,
-        }),
-        muteHttpExceptions: true,
-      }
-    );
-    if (res.getResponseCode() < 300) updated++;
-    else Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
+    var coverUrl, videoUrl, imageUrls;
+    if (isPhoto) {
+      coverUrl  = (images.length ? images[0] : null) || item.coverImg || null;
+      videoUrl  = null;
+      imageUrls = images.length ? images : null;   // all photos for download
+    } else {
+      coverUrl  = item.coverImg || (images.length ? images[0] : null) || null;
+      videoUrl  = _withApifyToken_(item.videoUrl || item.downloadUrl || null, token);
+      imageUrls = null;
+    }
+    if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
+
+    rows.forEach(function(row) {
+      var res = UrlFetchApp.fetch(
+        sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
+        {
+          method : 'POST',
+          headers: Object.assign({}, supabaseHeaders(), {
+            'Content-Type': 'application/json',
+            Prefer        : 'resolution=merge-duplicates',
+          }),
+          payload           : JSON.stringify({
+            monitoring_id: row.id,
+            cover_url    : coverUrl,
+            video_url    : videoUrl,
+            image_urls   : imageUrls,
+            updated_at   : now,
+          }),
+          muteHttpExceptions: true,
+        }
+      );
+      if (res.getResponseCode() < 300) updated++;
+      else Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
+    });
   });
 
   return {
-    ok     : true,
-    updated: updated,
-    message: updated + '개 영상 저장 완료 (TikTok ' + tiktokRows.length + '개 대상)',
+    ok           : true,
+    updated      : updated,
+    itemsReturned: items.length,
+    tiktokRows   : tiktokRows.length,
+    unmatched    : unmatched,
+    noDownloadUrl: noUrl,
+    unkeyedUrls  : unkeyedRows,
+    message: updated + '개 저장 · Apify 결과 ' + items.length + '개 · 매칭 실패 ' + unmatched
+      + '개 · 다운로드 URL 없음 ' + noUrl + '개 · URL 패턴 불일치 ' + unkeyedRows.length
+      + '개 (대상 ' + tiktokRows.length + '개)',
   };
 }
 

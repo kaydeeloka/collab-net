@@ -4,11 +4,9 @@ import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket
 export const MON_SCRAPE_LIMIT = 50
 
 export interface MonitoringAssets {
-  thumbnail_source_url: string | null
-  thumbnail_path:       string | null
-  video_path:           string | null
-  cover_url:            string | null
-  video_url:            string | null
+  cover_url:  string | null
+  video_url:  string | null
+  image_urls: string[] | null
 }
 
 export interface MonitoringRow {
@@ -161,11 +159,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   const row = Array.isArray(raw) ? raw[0] : raw
   if (!row) return null
   return {
-    thumbnail_source_url: row.thumbnail_source_url ?? null,
-    thumbnail_path:       row.thumbnail_path ?? null,
-    video_path:           row.video_path ?? null,
-    cover_url:            row.cover_url ?? null,
-    video_url:            row.video_url ?? null,
+    cover_url:  row.cover_url ?? null,
+    video_url:  row.video_url ?? null,
+    image_urls: Array.isArray(row.image_urls) ? row.image_urls : null,
   }
 }
 
@@ -234,7 +230,7 @@ function sortGroupRows(group: MonitoringRow[]): MonitoringRow[] {
 export async function loadMonitoringData(phaseId: string): Promise<{ rows: MonitoringRow[]; confirmedCount: number }> {
   const monitoringSelect = `
     id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-    monitoring_assets(thumbnail_source_url, thumbnail_path, video_path, cover_url, video_url),
+    monitoring_assets(cover_url, video_url, image_urls),
     influencer_platform_id,
     influencer_platform!monitoring_influencer_platform_id_fkey(
       platform, handle,

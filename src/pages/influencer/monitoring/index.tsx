@@ -22,6 +22,7 @@ import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-stora
 import {
   MIMUSE_BRAND,
   MIMUSE_COLOR,
+  BRAND_KW_COLORS as BRANDS_KW_COLORS,
   type BrandKwsState,
   type ConfirmedBrandKw,
   brandKeywordIndex,
@@ -33,8 +34,6 @@ import {
 
 const MONITORING_UPLOAD_PATH = '/influencer/monitoring'
 const MONITORING_LIST_PATH = '/influencer/monitoring-list'
-
-const BRANDS_KW_COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#f97316', '#06b6d4', '#3b82f6', '#e11d48']
 
 const MEDIA_OPTIONS   = ['photo', 'video']
 const CONTENT_OPTIONS = ['review video', 'unboxing', 'other']
@@ -234,11 +233,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   const row = Array.isArray(raw) ? raw[0] : raw
   if (!row) return null
   return {
-    thumbnail_source_url: row.thumbnail_source_url ?? null,
-    thumbnail_path:       row.thumbnail_path ?? null,
-    video_path:           row.video_path ?? null,
-    cover_url:            row.cover_url ?? null,
-    video_url:            row.video_url ?? null,
+    cover_url:  row.cover_url ?? null,
+    video_url:  row.video_url ?? null,
+    image_urls: Array.isArray(row.image_urls) ? row.image_urls : null,
   }
 }
 
@@ -301,7 +298,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     try {
       const monitoringSelect = `
         id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-        monitoring_assets(thumbnail_source_url, thumbnail_path, video_path, cover_url, video_url),
+        monitoring_assets(cover_url, video_url, image_urls),
         influencer_platform_id,
         influencer_platform!monitoring_influencer_platform_id_fkey(
           platform, handle,
@@ -380,6 +377,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
       setRows(merged)
     } catch (e: unknown) {
       console.error('loadMonitoring error:', e)
+      showToast('모니터링 로드 실패: ' + ((e as Error)?.message || e), 'error')
     }
     setLoading(false)
   }

@@ -42,7 +42,7 @@ ON CONFLICT (key) DO NOTHING;
 -- ============================================================
 INSERT INTO monitoring_keywords (brand, keywords) VALUES
   ('mimuse',  ARRAY['mimuse',  '미뮤즈']),
-  ('aesthen', ARRAY['aesthen', '에스텐']),
+  ('aesthein', ARRAY['aesthein', '에스텐']),
   ('joodoc',  ARRAY['joodoc',  '주독']),
   ('nesh',    ARRAY['nesh',    '네쉬']),
   ('varuza',  ARRAY['varuza',  '바루자'])

@@ -114,7 +114,7 @@ ALTER TABLE monitoring ALTER COLUMN confirmed_influencer_id DROP NOT NULL;
 
 -- Add a 'brands' aggregate row for the flat UI keyword list (monitoring page)
 INSERT INTO monitoring_keywords (brand, keywords)
-VALUES ('brands', ARRAY['aesthen', 'joodoc', 'nesh', 'varuza'])
+VALUES ('brands', ARRAY['aesthein', 'joodoc', 'nesh', 'varuza'])
 ON CONFLICT (brand) DO NOTHING;
 
 -- ALTER TABLE monitoring            ADD COLUMN IF NOT EXISTS <column> <type> DEFAULT <default>;
@@ -892,7 +892,7 @@ WITH seed (lookup_handle, lookup_platform, date, media, content, brand, review_l
   ('itskristv',                     'TikTok',           '2026-03-19',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@itskristv/video/7618756315069926670',                                                                                                                       423,          43,           4),
   ('itskristv',                     'Instagram',        '2026-03-19',       'video',       'review video',       'joodoc',       'https://www.instagram.com/p/DWC8JRWoAfL/',                                                                                                                                         484,          27,           6),
   ('jadetillman0',                  'TikTok',           '2026-02-25',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@jadetillman0/video/7610487335435750686',                                                                                                                    917,          55,           13),
-  ('jadetillman0',                  'TikTok',           '2026-02-27',       'video',       'review video',       'aesthen',      'https://www.tiktok.com/@jadetillman0/video/7611295160890166558',                                                                                                                    840,          43,           4),
+  ('jadetillman0',                  'TikTok',           '2026-02-27',       'video',       'review video',       'aesthein',      'https://www.tiktok.com/@jadetillman0/video/7611295160890166558',                                                                                                                    840,          43,           4),
   ('jadetillman0',                  'TikTok',           '2026-03-04',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@jadetillman0/video/7613420357109681439',                                                                                                                    174,          12,           5),
   ('jadetillman0',                  'TikTok',           '2026-03-28',       'video',       'review video',       'joodoc',       'https://www.tiktok.com/@jadetillman0/video/7621618776974363935?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       125,          16,           2),
   ('jadetillman0',                  'TikTok',           '2026-03-29',       'photo',       'etc',                'nesh',         'https://www.tiktok.com/@jadetillman0/photo/7621005574725045534?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                       129,          12,           1),
@@ -901,7 +901,7 @@ WITH seed (lookup_handle, lookup_platform, date, media, content, brand, review_l
   ('kelly_anne_81',                 'TikTok',           '2026-03-16',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@kelly_anne_81/video/7617550228098387213?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                      253,          36,           10),
   ('Kelsey.skincareee',             'TikTok',           '2026-02-28',       'video',       'unboxing',           'mimuse',       'https://www.tiktok.com/@kelsey.skincareee/video/7611403403024928031?_r=1&_t=ZP-91m64Z9vqes',                                                                                        184,          21,           11),
   ('Kelsey.skincareee',             'TikTok',           '2026-03-03',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@kelsey.skincareee/video/7612906452155419935?_r=1&_t=ZP-91m64Z9vqes',                                                                                        182,          22,           0),
-  ('Kelsey.skincareee',             'TikTok',           '2026-03-06',       'video',       'review video',       'aesthen',      'https://www.tiktok.com/@kelsey.skincareee/video/7614003202706459935',                                                                                                               127,          12,           0),
+  ('Kelsey.skincareee',             'TikTok',           '2026-03-06',       'video',       'review video',       'aesthein',      'https://www.tiktok.com/@kelsey.skincareee/video/7614003202706459935',                                                                                                               127,          12,           0),
   ('Kelsey.skincareee',             'TikTok',           '2026-03-14',       'photo',       'etc',                'varuza',       'https://www.tiktok.com/@kelsey.skincareee/photo/7616960348821720350?_r=1&_t=ZP-91m64Z9vqes',                                                                                        213,          11,           4),
   ('Kelsey.skincareee',             'TikTok',           '2026-03-17',       'video',       'review video',       'nesh',         'https://www.tiktok.com/@kelsey.skincareee/video/7618075475272813855?_r=1&_t=ZP-91m64Z9vqes',                                                                                        178,          12,           4),
   ('Kelsey.skincareee',             'TikTok',           '2026-03-18',       'video',       'review video',       'varuza',       'https://www.tiktok.com/@kelsey.skincareee/video/7618444980574555423?is_from_webapp=1&sender_device=pc&web_id=7601058904848696853',                                                  160,          19,           2),
@@ -1443,3 +1443,8 @@ ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_email TEXT[];
 
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS personal_phone TEXT;
 ALTER TABLE brand_general ADD COLUMN IF NOT EXISTS rep_email      TEXT;
+
+-- ============================================================
+--  Monitoring photo posts → store all image URLs for download
+-- ============================================================
+ALTER TABLE monitoring_assets ADD COLUMN IF NOT EXISTS image_urls JSONB;
