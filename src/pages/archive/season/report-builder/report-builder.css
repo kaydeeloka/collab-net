@@ -427,10 +427,12 @@
 }
 
 .rb-preview__eng {
-  font-size: 2.2cqw;
-  color: #888;
-  margin-bottom: 1%;
-  letter-spacing: 0.05em;
+  position: absolute;
+  top: 3.5cqw;
+  left: 8%;
+  font-size: 1.8cqw;
+  color: #648085;
+  letter-spacing: 0.06em;
 }
 
 .rb-preview__kor {

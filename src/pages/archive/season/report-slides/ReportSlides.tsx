@@ -113,7 +113,6 @@ function ContentHeader({
       ) : (
         <div className="rslide__kor">{content.korTitle}</div>
       )}
-      <div className="rslide__divider" />
     </div>
   )
 }

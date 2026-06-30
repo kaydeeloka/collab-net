@@ -347,6 +347,11 @@ export default function Listup() {
 
   async function runTcmSearch() {
     if (apifyTierIdx === null || !selectedKeywords.length) return
+    if (targetCreators < TCM_TARGET_MIN) {
+      showToast(tcmTargetLimitMessage(), 'error')
+      setTargetCreators(TCM_TARGET_MIN)
+      return
+    }
     const tier = tiers[apifyTierIdx]
     setApifyLoading(true)
     setApifyResults(null)
@@ -1325,12 +1330,6 @@ export default function Listup() {
                     max={TCM_TARGET_MAX}
                     step={1}
                     onChange={e => setTargetCreators(Math.min(TCM_TARGET_MAX, +e.target.value || 0))}
-                    onBlur={() => {
-                      if (targetCreators < TCM_TARGET_MIN) {
-                        showToast(tcmTargetLimitMessage(), 'error')
-                        setTargetCreators(TCM_TARGET_MIN)
-                      }
-                    }}
                   />
                 </div>
                 <button
