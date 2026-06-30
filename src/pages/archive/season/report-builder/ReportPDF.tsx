@@ -4,21 +4,20 @@ import type { ReportPage } from './types'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 
-// NanumGothic ExtraBold — closest CDN-available match for 나눔휴먼 OTF ExtraBold
-// Replace src with your own font file URL if you have 나눔휴먼 OTF ExtraBold
+// Full TTF files from Google Fonts GitHub — covers both Korean and Latin glyphs
 Font.register({
   family: 'NanumGothic',
   fonts: [
     {
-      src: 'https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.0.14/files/nanum-gothic-korean-400-normal.woff2',
+      src: 'https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
       fontWeight: 400,
     },
     {
-      src: 'https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.0.14/files/nanum-gothic-korean-700-normal.woff2',
+      src: 'https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Bold.ttf',
       fontWeight: 700,
     },
     {
-      src: 'https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.0.14/files/nanum-gothic-korean-800-normal.woff2',
+      src: 'https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-ExtraBold.ttf',
       fontWeight: 800,
     },
   ],
@@ -174,6 +173,27 @@ const s = StyleSheet.create({
 
   // ── Image page ────────────────────────────────────────────────
   pageImage: { width: '100%', maxHeight: 330, objectFit: 'contain', marginBottom: 10 },
+
+  // ── Project Overview ──────────────────────────────────────────
+  ovBody:        { flexDirection: 'row', gap: 20, flex: 1, marginBottom: 10 },
+  ovImgBlock:    { width: '27%', backgroundColor: C.grayLt, borderRadius: 8, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  ovImgEmpty:    { fontSize: 8, color: C.gray },
+  ovImg:         { width: '100%', height: '100%', objectFit: 'contain' },
+  ovTable:       { flex: 1, justifyContent: 'space-around' },
+  ovRow:         { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 4 },
+  ovPill:        { backgroundColor: C.teal, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 3, minWidth: 80, alignItems: 'center', flexShrink: 0 },
+  ovPillText:    { fontSize: 9, fontWeight: 400, color: C.white, textAlign: 'center' },
+  ovValue:       { fontSize: 10, fontWeight: 400, color: C.ink, flex: 1, lineHeight: 1.5 },
+  ovProcess:     { flexShrink: 0 },
+  ovProcessPill: { backgroundColor: C.teal, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 8 },
+  ovProcessText: { fontSize: 9, fontWeight: 400, color: C.white },
+  ovSteps:       { flexDirection: 'row' },
+  ovStepWrap:    { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  ovStep:        { flex: 1, backgroundColor: C.white, borderRadius: 6, padding: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)', borderStyle: 'solid' },
+  ovStepDate:    { backgroundColor: C.teal, borderRadius: 3, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 4 },
+  ovStepDateTxt: { fontSize: 7, fontWeight: 400, color: C.white },
+  ovStepLine:    { fontSize: 8, fontWeight: 400, color: '#333', lineHeight: 1.6 },
+  ovArrow:       { fontSize: 14, color: '#b0c4ce', paddingHorizontal: 3 },
 
   // ── Outro ─────────────────────────────────────────────────────
   outroCenter: {
@@ -357,6 +377,64 @@ function TextPDF({ page }: { page: ReportPage }) {
 }
 
 
+function ProjectOverviewPDF({ page }: { page: ReportPage }) {
+  const c = page.content
+  const infoRows = [
+    { label: '프로젝트 명',    value: c.projectName ?? '' },
+    { label: '프로젝트 목적',  value: c.projectPurpose ?? '' },
+    { label: '키트 발송 대상', value: c.kitRecipients ?? '' },
+    { label: '총 배송 수량',   value: c.totalShipping ?? '' },
+    { label: '참여 브랜드',    value: c.participatingBrands ?? '' },
+  ]
+  const steps = c.processSteps ?? []
+  return (
+    <Page size={[W, H]} style={s.page}>
+      <Image src={BG.content} style={s.bg} />
+      <View style={s.contentLayer}>
+        <PageHeader eng={c.engTitle} kor={c.korTitle} />
+        <View style={s.ovBody}>
+          {/* Image */}
+          <View style={s.ovImgBlock}>
+            {c.imageUrl
+              ? <Image src={c.imageUrl} style={s.ovImg} />
+              : <Text style={s.ovImgEmpty}>이미지</Text>}
+          </View>
+          {/* Info rows */}
+          <View style={s.ovTable}>
+            {infoRows.map(({ label, value }) => (
+              <View key={label} style={s.ovRow}>
+                <View style={s.ovPill}><Text style={s.ovPillText}>{label}</Text></View>
+                <Text style={s.ovValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        {/* Process steps */}
+        {steps.length > 0 && (
+          <View style={s.ovProcess}>
+            <View style={s.ovProcessPill}><Text style={s.ovProcessText}>진행 프로세스</Text></View>
+            <View style={s.ovSteps}>
+              {steps.map((step, i) => (
+                <View key={i} style={s.ovStepWrap}>
+                  <View style={s.ovStep}>
+                    {step.date ? (
+                      <View style={s.ovStepDate}><Text style={s.ovStepDateTxt}>{step.date}</Text></View>
+                    ) : null}
+                    {step.content.split('\n').filter(Boolean).map((line, li) => (
+                      <Text key={li} style={s.ovStepLine}>■ {line}</Text>
+                    ))}
+                  </View>
+                  {i < steps.length - 1 && <Text style={s.ovArrow}>›</Text>}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </View>
+    </Page>
+  )
+}
+
 function OutroPDF({ page }: { page: ReportPage }) {
   const parts = (page.content.caption || '').split('|').map(p => p.trim()).filter(Boolean)
   return (
@@ -393,8 +471,8 @@ export default function ReportPDF({ phaseName, pages, rows }: ReportPDFProps) {
     <Document title={`Mi Muse ${phaseName} Report`} author="Mi Muse">
       {sorted.map(page => {
         switch (page.type) {
-          case 'cover':               return <CoverPDF key={page.id} page={page} />
-          case 'project_overview':    return <TextPDF  key={page.id} page={page} />
+          case 'cover':               return <CoverPDF           key={page.id} page={page} />
+          case 'project_overview':    return <ProjectOverviewPDF key={page.id} page={page} />
           case 'kit_composition':     return <TextPDF  key={page.id} page={page} />
           case 'content_performance': return <StatsPDF key={page.id} page={page} rows={rows} />
           case 'best_review':         return <GridPDF  key={page.id} page={page} rows={rows} />

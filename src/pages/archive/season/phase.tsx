@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, ExternalLink, FileText, Pencil, Plus, Presentation, Save, Trash2, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Download, ExternalLink, FileText, GripVertical, Pencil, Plus, Presentation, Save, Trash2, Upload, X } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -146,6 +146,8 @@ export default function ArchiveBrandReportPhase() {
   const [reportEditMode, setReportEditMode] = useState(false)
   const [reportLoading, setReportLoading] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const downloadRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
 
@@ -488,6 +490,40 @@ export default function ArchiveBrandReportPhase() {
       return
     }
     if (data) setReportPages(prev => [...prev, data as ReportPage])
+  }
+
+  async function handleReorderPages(fromId: string, toId: string) {
+    if (fromId === toId) return
+    const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
+    const fromIdx = sorted.findIndex(p => p.id === fromId)
+    const toIdx = sorted.findIndex(p => p.id === toId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const reordered = [...sorted]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    const updated = reordered.map((p, i) => ({ ...p, order_index: i }))
+    setReportPages(updated)
+    await Promise.all(updated.map(p =>
+      supabase.from('report_pages').update({ order_index: p.order_index }).eq('id', p.id)
+    ))
+  }
+
+  async function handleMovePageBy(id: string, dir: -1 | 1) {
+    const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
+    const idx = sorted.findIndex(p => p.id === id)
+    const newIdx = idx + dir
+    if (newIdx < 0 || newIdx >= sorted.length) return
+    await handleReorderPages(id, sorted[newIdx].id)
+  }
+
+  function deleteReportPage(id: string, label: string) {
+    showConfirm(`「${label}」 페이지를 삭제하시겠습니까?`, () => {
+      void (async () => {
+        const { error } = await supabase.from('report_pages').delete().eq('id', id)
+        if (error) { showToast(error.message, 'error'); return }
+        setReportPages(prev => prev.filter(p => p.id !== id))
+      })()
+    })
   }
 
   const isUploading = uploadingHero
@@ -847,17 +883,59 @@ export default function ArchiveBrandReportPhase() {
                     )}
                   </div>
                 </div>
-                <div className="season-report">
-                  {reportLoading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner /></div>
-                  ) : (
-                    <ReportSlides
-                      pages={reportPages}
-                      rows={reportRows}
-                      editMode={reportEditMode}
-                      onUpdate={handleUpdateReportPage}
-                    />
-                  )}
+                <div className={reportEditMode ? 'season-report__edit-layout' : ''}>
+                  {reportEditMode && (() => {
+                    const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
+                    return (
+                      <div className="season-report__page-list">
+                        {sorted.map((page, idx) => (
+                          <div
+                            key={page.id}
+                            className={`season-report__page-item${dragOverId === page.id ? ' season-report__page-item--over' : ''}${dragId === page.id ? ' season-report__page-item--dragging' : ''}`}
+                            draggable
+                            onDragStart={() => setDragId(page.id)}
+                            onDragOver={e => { e.preventDefault(); setDragOverId(page.id) }}
+                            onDrop={() => {
+                              if (dragId) void handleReorderPages(dragId, page.id)
+                              setDragId(null); setDragOverId(null)
+                            }}
+                            onDragEnd={() => { setDragId(null); setDragOverId(null) }}
+                          >
+                            <span className="season-report__page-drag"><GripVertical size={13} /></span>
+                            <span className="season-report__page-num">{idx + 1}</span>
+                            <span className="season-report__page-label">{PAGE_TYPE_LABELS[page.type as PageType]}</span>
+                            <div className="season-report__page-arrows">
+                              <button type="button" disabled={idx === 0} onClick={() => void handleMovePageBy(page.id, -1)}>
+                                <ChevronUp size={11} />
+                              </button>
+                              <button type="button" disabled={idx === sorted.length - 1} onClick={() => void handleMovePageBy(page.id, 1)}>
+                                <ChevronDown size={11} />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              className="season-report__page-delete"
+                              onClick={e => { e.stopPropagation(); deleteReportPage(page.id, PAGE_TYPE_LABELS[page.type as PageType]) }}
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                  <div className="season-report">
+                    {reportLoading ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner /></div>
+                    ) : (
+                      <ReportSlides
+                        pages={reportPages}
+                        rows={reportRows}
+                        editMode={reportEditMode}
+                        onUpdate={handleUpdateReportPage}
+                      />
+                    )}
+                  </div>
                 </div>
               </>
             )}

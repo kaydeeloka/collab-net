@@ -2,6 +2,138 @@
 /* Loaded via <link> in index.html: hangeul.pstatic.net/hangeul_static/css/NanumHuman.css */
 /* Available: NanumHumanEL · NanumHumanlight · NanumHuman · NanumHumanbold · NanumHumanEB · NanumHumanheavy */
 
+/* ── Edit layout: sidebar + slides ── */
+
+.season-report__edit-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.season-report__edit-layout > .season-report {
+  flex: 1;
+  min-width: 0;
+}
+
+.season-report__page-list {
+  width: 168px;
+  flex-shrink: 0;
+  background: #f6f8f9;
+  border-right: 1px solid #dde3e7;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+}
+
+.season-report__page-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: grab;
+  user-select: none;
+  border-left: 2.5px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.season-report__page-item:hover {
+  background: #edf1f4;
+}
+
+.season-report__page-item--over {
+  background: #daeaf4;
+  border-left-color: #8BAAB8;
+}
+
+.season-report__page-item--dragging {
+  opacity: 0.4;
+}
+
+.season-report__page-drag {
+  color: #b0bec5;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.season-report__page-num {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.season-report__page-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #3a4a52;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.season-report__page-arrows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.season-report__page-arrows button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: #8BAAB8;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.season-report__page-arrows button:hover:not(:disabled) {
+  background: #daeaf4;
+  color: #4a7a88;
+}
+
+.season-report__page-arrows button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.season-report__page-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: #c0c8cc;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.season-report__page-delete:hover {
+  background: #fde8e8;
+  color: #dc2626;
+}
+
 /* ── Report controls bar ── */
 
 .season-report__controls {

@@ -268,7 +268,7 @@ function Slide({
                       <div key={label} className="rslide__ov-row">
                         <div className="rslide__ov-pill">{label}</div>
                         {editMode
-                          ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" />
+                          ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" multiline rows={2} />
                           : <div className="rslide__ov-value">{value}</div>}
                       </div>
                     ))}
