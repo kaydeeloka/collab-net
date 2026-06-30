@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import Modal from '@/components/Modal'
@@ -86,31 +86,17 @@ function SummaryStat({ icon, label, value }: { icon: React.ReactNode; label: str
   )
 }
 
-function ArchiveCard({
-  row,
-  brandColor,
-}: {
-  row: MonitoringRow
-  brandColor: string
-}) {
+function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: string }) {
   const thumbUrl = resolveMonitoringThumbnailUrl(row.assets)
   const videoUrl = row.assets?.video_url || null
   const isPhoto = !videoUrl && !!row.assets?.image_urls?.length
-  const mediaType = videoUrl ? 'video' : isPhoto ? 'photo' : null
   const account = (row.handle || '').replace(/^@/, '')
   const [imgFailed, setImgFailed] = useState(false)
   const [showPoster, setShowPoster] = useState(true)
-  const [videoFailed, setVideoFailed] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const posterContent = thumbUrl && !imgFailed ? (
-    <img
-      src={thumbUrl}
-      alt={row.display_name || account}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setImgFailed(true)}
-    />
+  const thumb = thumbUrl && !imgFailed ? (
+    <img src={thumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
   ) : (
     <div className="mon-arch-card__thumb-empty">
       <InfluencerAvatar url={row.avatar_url} label={row.display_name || account} size={48} />
@@ -121,7 +107,7 @@ function ArchiveCard({
   return (
     <div className="mon-arch-card">
       <div className="mon-arch-card__thumb">
-        {videoUrl && !videoFailed ? (
+        {videoUrl ? (
           <div className="mon-arch-card__player">
             <video
               ref={videoRef}
@@ -131,61 +117,29 @@ function ArchiveCard({
               preload="none"
               className="mon-arch-card__video"
               onPlay={() => setShowPoster(false)}
-              onError={() => setVideoFailed(true)}
             />
             {showPoster && (
-              <button
-                type="button"
-                className="mon-arch-card__poster"
-                onClick={() => { void videoRef.current?.play() }}
-                aria-label="영상 재생"
-              >
-                {posterContent}
-                <span className="mon-arch-card__poster-play">
-                  <Play size={20} fill="white" strokeWidth={0} />
-                </span>
+              <button type="button" className="mon-arch-card__poster" onClick={() => { void videoRef.current?.play() }} aria-label="영상 재생">
+                {thumb}
+                <span className="mon-arch-card__poster-play"><Play size={20} fill="white" strokeWidth={0} /></span>
               </button>
             )}
           </div>
         ) : (
-          <a
-            href={row.review_link ?? undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mon-arch-card__thumb-link"
-            tabIndex={row.review_link ? 0 : -1}
-          >
-            {posterContent}
-            {row.review_link && (
-              <span className="mon-arch-card__poster-play">
-                <Play size={20} fill="white" strokeWidth={0} />
-              </span>
-            )}
-          </a>
+          <div className="mon-arch-card__thumb-static">{thumb}</div>
         )}
 
         <div className="mon-arch-card__thumb-top">
           <PlatformBadge platform={row.platform} />
           {row.brand && (
-            <span
-              className="mon-arch-card__brand"
-              style={{ color: brandColor, borderColor: `${brandColor}66` }}
-            >
+            <span className="mon-arch-card__brand" style={{ color: brandColor, borderColor: `${brandColor}66` }}>
               {row.brand}
             </span>
           )}
         </div>
-
-        {mediaType && (
-          <span className={`mon-arch-card__type mon-arch-card__type--${mediaType}`}>
-            {mediaType === 'video' ? (
-              <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>
-            ) : (
-              <><ImageIcon size={11} strokeWidth={2} /> 사진</>
-            )}
-          </span>
-        )}
-
+        <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
+          {isPhoto ? <><ImageIcon size={11} strokeWidth={2} /> 사진</> : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+        </span>
       </div>
 
       <div className="mon-arch-card__body">
@@ -194,13 +148,16 @@ function ArchiveCard({
           <div className="mon-arch-card__creator-info">
             <div className="mon-arch-card__name">{row.display_name || `@${account}`}</div>
             <div className="mon-arch-card__handle">@{account}</div>
-            {row.date && (
-              <div className="mon-arch-card__date">{formatKstDate(row.date)}</div>
-            )}
+            {row.date && <div className="mon-arch-card__date">{formatKstDate(row.date)}</div>}
           </div>
         </div>
-
         <div className="mon-arch-card__stats">
+          {row.review_link && (
+            <a href={row.review_link} target="_blank" rel="noopener noreferrer" className="mon-arch-card__review-btn">
+              <ExternalLink size={11} />
+              리뷰 보기
+            </a>
+          )}
           <div className="mon-arch-card__stat-group">
             <StatPill icon={<Eye size={12} />} value={row.views} />
             <StatPill icon={<Heart size={12} />} value={row.likes} />
@@ -548,6 +505,7 @@ export default function MonitoringArchive() {
           )}
         </div>
       </Modal>
+
     </div>
   )
 }
