@@ -246,12 +246,6 @@ function CoverPDF({ page }: { page: ReportPage }) {
         {page.content.title
           ? <Text style={s.coverTitle}>{page.content.title}</Text>
           : null}
-        {page.content.subtitle
-          ? <Text style={s.coverSub}>{page.content.subtitle}</Text>
-          : null}
-        {page.content.tagline
-          ? <Text style={s.coverTagline}>{page.content.tagline}</Text>
-          : null}
       </View>
     </Page>
   )
