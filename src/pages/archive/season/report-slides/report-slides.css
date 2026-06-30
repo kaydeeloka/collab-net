@@ -239,6 +239,167 @@
   line-height: 1.6;
 }
 
+/* ── Project Overview ── */
+.rslide__ov-body {
+  display: flex;
+  gap: 2cqw;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 1cqw;
+  overflow: hidden;
+}
+
+.rslide__ov-img-block {
+  width: 27%;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, .88);
+  border-radius: 0.8cqw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.rslide__ov-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 1cqw;
+}
+
+.rslide__ov-img-empty {
+  width: 100%;
+  height: 100%;
+  background: #e8ecee;
+  border-radius: 0.8cqw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9cqw;
+  color: #aaa;
+}
+
+.rslide__ov-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  overflow: hidden;
+}
+
+.rslide__ov-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1cqw;
+}
+
+.rslide__ov-pill {
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 0.82cqw;
+  font-weight: 700;
+  padding: 0.28cqw 0.9cqw;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 8.5cqw;
+  text-align: center;
+}
+
+.rslide__ov-value {
+  font-size: 0.88cqw;
+  color: #1a1a1a;
+  line-height: 1.5;
+  padding-top: 0.1cqw;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rslide__ov-value-edit {
+  font-size: 0.82cqw;
+  flex: 1;
+}
+
+/* ── Process section ── */
+.rslide__ov-process {
+  flex-shrink: 0;
+}
+
+.rslide__ov-process-head {
+  display: inline-block;
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 0.8cqw;
+  font-weight: 700;
+  padding: 0.25cqw 1cqw;
+  border-radius: 999px;
+  margin-bottom: 0.7cqw;
+}
+
+.rslide__ov-steps {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.rslide__ov-step-wrap {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.rslide__ov-step-wrap:not(:last-child)::after {
+  content: '→';
+  font-size: 1.1cqw;
+  color: #8BAAB8;
+  padding: 0 0.4cqw;
+  flex-shrink: 0;
+  margin-top: 2cqw;
+}
+
+.rslide__ov-step {
+  flex: 1;
+  background: rgba(255, 255, 255, .85);
+  border-radius: 0.6cqw;
+  padding: 0.7cqw 0.9cqw;
+  overflow: hidden;
+}
+
+.rslide__ov-step-date {
+  display: inline-block;
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 0.72cqw;
+  font-weight: 700;
+  padding: 0.18cqw 0.65cqw;
+  border-radius: 999px;
+  margin-bottom: 0.5cqw;
+}
+
+.rslide__ov-step-date-edit {
+  font-size: 0.72cqw;
+  width: 100%;
+  margin-bottom: 0.4cqw;
+}
+
+.rslide__ov-step-content {
+  font-size: 0.76cqw;
+  color: #333;
+  line-height: 1.6;
+}
+
+.rslide__ov-step-bullet {
+  display: flex;
+  gap: 0.3cqw;
+  align-items: flex-start;
+}
+
+.rslide__ov-step-content-edit {
+  font-size: 0.76cqw;
+  width: 100%;
+  resize: none;
+}
+
 /* ── Edit mode inputs ── */
 .rslide-edit {
   border: none;

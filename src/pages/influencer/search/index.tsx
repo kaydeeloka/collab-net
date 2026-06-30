@@ -377,6 +377,7 @@ export default function Listup() {
           buffer?: number
           uploadSkipped?: number
           country?: string
+          apiError?: string
         }
       } = await gasPost({
         action: 'tcmRunSearch',
@@ -399,6 +400,9 @@ export default function Listup() {
       if (res.error) {
         alert('오류: ' + res.error)
         return
+      }
+      if (res.stats?.apiError) {
+        showToast('TCM API 오류 (일일 한도 초과 가능): ' + res.stats.apiError, 'error')
       }
       const list = res.creators ?? []
       const stats = res.stats

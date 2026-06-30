@@ -3,7 +3,7 @@ import { Eye, Heart, MessageCircle } from 'lucide-react'
 import { fmtNum } from '@/lib/utils'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
-import type { ReportPage, PageContent } from '../report-builder/types'
+import type { ReportPage, PageContent, ProcessStep } from '../report-builder/types'
 import './report-slides.css'
 
 // ── Background paths ──────────────────────────────────────────────
@@ -238,8 +238,86 @@ function Slide({
             </div>
           )}
 
-          {/* Text-body pages: project_overview, kit_composition, next_project */}
-          {(page.type === 'project_overview' || page.type === 'kit_composition' || page.type === 'next_project') && (
+          {/* Project Overview */}
+          {page.type === 'project_overview' && (() => {
+            const DEFAULT_STEPS: ProcessStep[] = [
+              { date: '', content: '' }, { date: '', content: '' },
+              { date: '', content: '' }, { date: '', content: '' },
+            ]
+            const steps = local.processSteps ?? DEFAULT_STEPS
+            const infoRows: { label: string; value: string | undefined; setter: (v: string) => void }[] = [
+              { label: '프로젝트 명',    value: local.projectName,        setter: v => setLocal(p => ({ ...p, projectName: v })) },
+              { label: '프로젝트 목적',  value: local.projectPurpose,     setter: v => setLocal(p => ({ ...p, projectPurpose: v })) },
+              { label: '키트 발송 대상', value: local.kitRecipients,      setter: v => setLocal(p => ({ ...p, kitRecipients: v })) },
+              { label: '총 배송 수량',   value: local.totalShipping,      setter: v => setLocal(p => ({ ...p, totalShipping: v })) },
+              { label: '참여 브랜드',    value: local.participatingBrands, setter: v => setLocal(p => ({ ...p, participatingBrands: v })) },
+            ]
+            return (
+              <>
+                <div className="rslide__ov-body">
+                  {/* Image 1/3 */}
+                  <div className="rslide__ov-img-block">
+                    {local.imageUrl
+                      ? <img src={local.imageUrl} className="rslide__ov-img" alt="product" referrerPolicy="no-referrer" />
+                      : <div className="rslide__ov-img-empty">이미지</div>}
+                  </div>
+                  {/* Info table 2/3 */}
+                  <div className="rslide__ov-table">
+                    {infoRows.map(({ label, value, setter }) => (
+                      <div key={label} className="rslide__ov-row">
+                        <div className="rslide__ov-pill">{label}</div>
+                        {editMode
+                          ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" />
+                          : <div className="rslide__ov-value">{value}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Process steps */}
+                <div className="rslide__ov-process">
+                  <div className="rslide__ov-process-head">진행 프로세스</div>
+                  <div className="rslide__ov-steps">
+                    {steps.map((step, i) => (
+                      <div key={i} className="rslide__ov-step-wrap">
+                        <div className="rslide__ov-step">
+                          {editMode ? (
+                            <ET
+                              value={step.date}
+                              onChange={v => setLocal(p => ({ ...p, processSteps: (p.processSteps ?? DEFAULT_STEPS).map((s, j) => j === i ? { ...s, date: v } : s) }))}
+                              onBlur={commit}
+                              placeholder="날짜"
+                              className="rslide__ov-step-date-edit"
+                            />
+                          ) : (
+                            step.date && <div className="rslide__ov-step-date">{step.date}</div>
+                          )}
+                          {editMode ? (
+                            <ET
+                              value={step.content}
+                              onChange={v => setLocal(p => ({ ...p, processSteps: (p.processSteps ?? DEFAULT_STEPS).map((s, j) => j === i ? { ...s, content: v } : s) }))}
+                              onBlur={commit}
+                              placeholder="내용 (줄바꿈으로 항목 구분)"
+                              className="rslide__ov-step-content-edit"
+                              multiline
+                            />
+                          ) : (
+                            <div className="rslide__ov-step-content">
+                              {step.content.split('\n').filter(Boolean).map((line, li) => (
+                                <div key={li} className="rslide__ov-step-bullet">■ {line}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )
+          })()}
+
+          {/* Text-body pages: kit_composition, next_project */}
+          {(page.type === 'kit_composition' || page.type === 'next_project') && (
             editMode ? (
               <ET value={local.body ?? ''} onChange={v => setLocal(p => ({ ...p, body: v }))} onBlur={commit} placeholder="내용을 입력하세요..." className="rslide__body-edit" multiline />
             ) : (

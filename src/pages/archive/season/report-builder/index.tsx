@@ -12,7 +12,7 @@ import { useArchivePhase } from '@/pages/archive/use-archive-phase'
 import ReportPDF from './ReportPDF'
 import {
   PAGE_TYPE_LABELS, DEFAULT_CONTENT,
-  type ReportPage, type PageType, type PageContent,
+  type ReportPage, type PageType, type PageContent, type ProcessStep,
 } from './types'
 import './report-builder.css'
 
@@ -87,10 +87,78 @@ function GridFields({ content, onChange }: { content: PageContent; onChange: (c:
   )
 }
 
+function ProjectOverviewFields({ content, onChange }: { content: PageContent; onChange: (c: PageContent) => void }) {
+  const DEFAULT_STEPS: ProcessStep[] = [
+    { date: '', content: '' }, { date: '', content: '' },
+    { date: '', content: '' }, { date: '', content: '' },
+  ]
+  const steps = content.processSteps ?? DEFAULT_STEPS
+
+  return (
+    <>
+      <TitleFields content={content} onChange={onChange} />
+      <label className="rb-field">
+        <span>이미지 URL</span>
+        <input value={content.imageUrl ?? ''} onChange={e => onChange({ ...content, imageUrl: e.target.value })} placeholder="https://..." />
+      </label>
+      <label className="rb-field">
+        <span>프로젝트 명</span>
+        <input value={content.projectName ?? ''} onChange={e => onChange({ ...content, projectName: e.target.value })} />
+      </label>
+      <label className="rb-field">
+        <span>프로젝트 목적</span>
+        <textarea rows={3} value={content.projectPurpose ?? ''} onChange={e => onChange({ ...content, projectPurpose: e.target.value })} />
+      </label>
+      <label className="rb-field">
+        <span>키트 발송 대상</span>
+        <input value={content.kitRecipients ?? ''} onChange={e => onChange({ ...content, kitRecipients: e.target.value })} />
+      </label>
+      <label className="rb-field">
+        <span>총 배송 수량</span>
+        <input value={content.totalShipping ?? ''} onChange={e => onChange({ ...content, totalShipping: e.target.value })} />
+      </label>
+      <label className="rb-field">
+        <span>참여 브랜드</span>
+        <input value={content.participatingBrands ?? ''} onChange={e => onChange({ ...content, participatingBrands: e.target.value })} />
+      </label>
+
+      <div style={{ borderTop: '1px solid var(--surface-md)', paddingTop: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>진행 프로세스</div>
+        {steps.map((step, i) => (
+          <div key={i} style={{ marginBottom: 12, padding: '12px 14px', background: 'var(--surface)', borderRadius: 'var(--r)', border: '1px solid var(--surface-md)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)', marginBottom: 8 }}>Step {i + 1}</div>
+            <label className="rb-field">
+              <span>날짜 (예: 26 Jan)</span>
+              <input
+                value={step.date}
+                onChange={e => {
+                  const newSteps = steps.map((s, j) => j === i ? { ...s, date: e.target.value } : s)
+                  onChange({ ...content, processSteps: newSteps })
+                }}
+              />
+            </label>
+            <label className="rb-field" style={{ marginTop: 8 }}>
+              <span>내용 (줄바꿈으로 항목 구분)</span>
+              <textarea
+                rows={3}
+                value={step.content}
+                onChange={e => {
+                  const newSteps = steps.map((s, j) => j === i ? { ...s, content: e.target.value } : s)
+                  onChange({ ...content, processSteps: newSteps })
+                }}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function ContentFields({ page, onChange }: { page: ReportPage; onChange: (c: PageContent) => void }) {
   switch (page.type) {
     case 'cover':               return <CoverFields content={page.content} onChange={onChange} />
-    case 'project_overview':    return <TextBodyFields content={page.content} onChange={onChange} />
+    case 'project_overview':    return <ProjectOverviewFields content={page.content} onChange={onChange} />
     case 'kit_composition':     return <TextBodyFields content={page.content} onChange={onChange} />
     case 'content_performance': return <TitleFields content={page.content} onChange={onChange} />
     case 'best_review':         return <GridFields content={page.content} onChange={onChange} />

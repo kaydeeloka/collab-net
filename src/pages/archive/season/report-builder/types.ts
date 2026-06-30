@@ -8,6 +8,11 @@ export type PageType =
   | 'next_project'
   | 'outro'
 
+export interface ProcessStep {
+  date: string
+  content: string
+}
+
 export interface PageContent {
   // cover / outro
   title?: string
@@ -19,6 +24,14 @@ export interface PageContent {
   body?: string
   // best_review grid columns
   columns?: number
+  // project_overview
+  imageUrl?: string
+  projectName?: string
+  projectPurpose?: string
+  kitRecipients?: string
+  totalShipping?: string
+  participatingBrands?: string
+  processSteps?: ProcessStep[]
 }
 
 export interface ReportPage {
@@ -42,7 +55,22 @@ export const PAGE_TYPE_LABELS: Record<PageType, string> = {
 
 export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   cover:               { title: '' },
-  project_overview:    { engTitle: 'Project Overview', korTitle: '프로젝트 개요', body: '' },
+  project_overview:    {
+    engTitle: 'OVERVIEW',
+    korTitle: '',
+    imageUrl: '',
+    projectName: '',
+    projectPurpose: '',
+    kitRecipients: '',
+    totalShipping: '',
+    participatingBrands: '',
+    processSteps: [
+      { date: '', content: '' },
+      { date: '', content: '' },
+      { date: '', content: '' },
+      { date: '', content: '' },
+    ],
+  },
   kit_composition:     { engTitle: 'Kit Composition', korTitle: '키트 구성', body: '' },
   content_performance: { engTitle: 'Content Performance', korTitle: '콘텐츠 성과 OVERVIEW' },
   best_review:         { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', columns: 5 },
