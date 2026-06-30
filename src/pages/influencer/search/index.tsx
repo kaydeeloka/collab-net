@@ -20,6 +20,7 @@ import {
   tcmKeywordLimitMessage,
   TCM_APIFY_SCRAPE_MAX,
   TCM_KEYWORD_MAX,
+  tcmTargetLimitMessage,
   tcmPoolBuffer,
   TCM_POOL_BUFFER_MICRO,
   TCM_PER_KEYWORD_TARGET_WARN,
@@ -561,7 +562,7 @@ export default function Listup() {
         await gasPost({
           action: 'loadCreatorResults',
           runId: id,
-          searchFilters: { maxRatio, maxUploadDays, requireEmail, followerMin: 0, followerMax: 0, maxCreators: 500 },
+          searchFilters: { maxRatio, maxUploadDays, requireEmail, followerMin: tier?.minF ?? 0, followerMax: tier?.maxF ?? 0, maxCreators: 500 },
           filterConditions: filterConds,
           existingHandles: existingHandlesRef.current,
         })
@@ -1323,7 +1324,13 @@ export default function Listup() {
                     min={TCM_TARGET_MIN}
                     max={TCM_TARGET_MAX}
                     step={1}
-                    onChange={e => setTargetCreators(clampTargetCreators(+e.target.value))}
+                    onChange={e => setTargetCreators(Math.min(TCM_TARGET_MAX, +e.target.value || 0))}
+                    onBlur={() => {
+                      if (targetCreators < TCM_TARGET_MIN) {
+                        showToast(tcmTargetLimitMessage(), 'error')
+                        setTargetCreators(TCM_TARGET_MIN)
+                      }
+                    }}
                   />
                 </div>
                 <button

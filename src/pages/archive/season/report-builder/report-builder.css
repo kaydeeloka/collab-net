@@ -421,7 +421,7 @@
 .rb-preview__content-layer {
   position: absolute;
   inset: 0;
-  padding: 7% 10%;
+  padding: 7% 10% 7% 8%;
   display: flex;
   flex-direction: column;
 }

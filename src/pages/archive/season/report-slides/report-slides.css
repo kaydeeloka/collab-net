@@ -57,7 +57,7 @@
 .rslide__content-layer {
   position: absolute;
   inset: 0;
-  padding: 6cqw 9cqw;
+  padding: 6cqw 9cqw 6cqw 8cqw;
   display: flex;
   flex-direction: column;
   overflow: hidden;
