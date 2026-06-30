@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings } from 'lucide-react'
+import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings, ChevronUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { phaseNum, escHtml, normalizePhaseNameInput, suggestNextPhaseName } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -86,9 +86,19 @@ export default function Layout() {
   const { showToast } = useToast()
 
   const [openSub,       setOpenSub]       = useState<string | null>(null)
-  const subTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+  const subTimer      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mainScrollRef = useRef<HTMLDivElement>(null)
   const { pathname } = useLocation()
   const navigate     = useNavigate()
+
+  useEffect(() => {
+    const el = mainScrollRef.current
+    if (!el) return
+    function onScroll() { setShowScrollTop(el!.scrollTop > 400) }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   // ── Phase state (from PhaseContext → Supabase) ──
   const { selectedPhaseId, activePhaseId, viewPhaseId, phases: phaseList, switchPhase: ctxSwitchPhase } = usePhase()
@@ -318,9 +328,39 @@ export default function Layout() {
           />
         )}
 
-        <div className="main-scroll">
+        <div className="main-scroll" ref={mainScrollRef}>
           <Outlet context={{ dbOptions, activeDbId, switchPhase }} />
         </div>
+
+        {showScrollTop && (
+          <button
+            type="button"
+            onClick={() => mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            style={{
+              position: 'fixed',
+              bottom: 28,
+              right: 28,
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: '#8BAAB8',
+              border: 'none',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(0,0,0,.18)',
+              zIndex: 9999,
+              transition: 'background .15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#648085')}
+            onMouseLeave={e => (e.currentTarget.style.background = '#8BAAB8')}
+            title="맨 위로"
+          >
+            <ChevronUp size={20} />
+          </button>
+        )}
       </div>
 
       {/* ── Phase Management modal ── */}

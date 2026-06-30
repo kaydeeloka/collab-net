@@ -246,7 +246,7 @@
   flex: 1;
   min-height: 0;
   margin-bottom: 1cqw;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .rslide__ov-img-block {
@@ -284,7 +284,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-around;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .rslide__ov-row {
@@ -297,7 +297,7 @@
   background: #8BAAB8;
   color: #fff;
   font-size: 0.82cqw;
-  font-weight: 700;
+  font-weight: 400;
   padding: 0.28cqw 0.9cqw;
   border-radius: 999px;
   white-space: nowrap;
@@ -313,6 +313,8 @@
   padding-top: 0.1cqw;
   white-space: pre-wrap;
   word-break: break-word;
+  flex: 1;
+  overflow: visible;
 }
 
 .rslide__ov-value-edit {
@@ -323,6 +325,7 @@
 /* ── Process section ── */
 .rslide__ov-process {
   flex-shrink: 0;
+  margin-top: 0.9cqw;
 }
 
 .rslide__ov-process-head {
@@ -330,7 +333,7 @@
   background: #8BAAB8;
   color: #fff;
   font-size: 0.8cqw;
-  font-weight: 700;
+  font-weight: 400;
   padding: 0.25cqw 1cqw;
   border-radius: 999px;
   margin-bottom: 0.7cqw;
@@ -338,31 +341,34 @@
 
 .rslide__ov-steps {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0;
 }
 
 .rslide__ov-step-wrap {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex: 1;
 }
 
 .rslide__ov-step-wrap:not(:last-child)::after {
-  content: '→';
-  font-size: 1.1cqw;
-  color: #8BAAB8;
+  content: '›';
+  font-size: 2cqw;
+  color: #b0c4ce;
   padding: 0 0.4cqw;
   flex-shrink: 0;
-  margin-top: 2cqw;
+  line-height: 1;
 }
 
 .rslide__ov-step {
   flex: 1;
-  background: rgba(255, 255, 255, .85);
-  border-radius: 0.6cqw;
-  padding: 0.7cqw 0.9cqw;
-  overflow: hidden;
+  background: #fff;
+  border-radius: 0.7cqw;
+  padding: 0.55cqw 0.75cqw;
+  overflow: visible;
+  border: 1px solid rgba(0, 0, 0, .07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
+  align-self: stretch;
 }
 
 .rslide__ov-step-date {
@@ -370,10 +376,10 @@
   background: #8BAAB8;
   color: #fff;
   font-size: 0.72cqw;
-  font-weight: 700;
+  font-weight: 400;
   padding: 0.18cqw 0.65cqw;
-  border-radius: 999px;
-  margin-bottom: 0.5cqw;
+  border-radius: 0.35cqw;
+  margin-bottom: 0.55cqw;
 }
 
 .rslide__ov-step-date-edit {
@@ -383,9 +389,10 @@
 }
 
 .rslide__ov-step-content {
-  font-size: 0.76cqw;
+  font-size: 0.95cqw;
   color: #333;
-  line-height: 1.6;
+  line-height: 1.65;
+  font-weight: 400;
 }
 
 .rslide__ov-step-bullet {
@@ -395,7 +402,7 @@
 }
 
 .rslide__ov-step-content-edit {
-  font-size: 0.76cqw;
+  font-size: 0.9cqw;
   width: 100%;
   resize: none;
 }
@@ -426,7 +433,7 @@ textarea.rslide-edit {
 }
 
 .rslide__cover-caption-edit { font-size: 0.9cqw; color: #888; margin-bottom: 1.2cqw; }
-.rslide__cover-title-edit   { font-size: 2.8cqw; font-weight: 800; color: #1a1a1a; max-width: 55%; }
+.rslide__cover-title-edit   { font-size: 2.8cqw; font-weight: 800; color: #1a1a1a; max-width: 55%; resize: none; line-height: 1.3; }
 .rslide__cover-sub-edit     { font-size: 1.4cqw; color: #666; }
 .rslide__eng-edit           { position: absolute; top: 3.5cqw; left: 8cqw; width: 40%; font-size: 1.8cqw; color: #648085; }
 .rslide__kor-edit           { font-size: 2.6cqw; font-weight: 800; color: #1a1a1a; }

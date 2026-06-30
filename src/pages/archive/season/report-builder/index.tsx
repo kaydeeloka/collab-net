@@ -87,6 +87,53 @@ function GridFields({ content, onChange }: { content: PageContent; onChange: (c:
   )
 }
 
+function ImageUploadField({ imageUrl, onChange }: { imageUrl: string | undefined; onChange: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError('')
+    setUploading(true)
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const path = `report-images/${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('report-assets').upload(path, file, { upsert: true })
+    if (upErr) { setError(upErr.message); setUploading(false); return }
+    const { data } = supabase.storage.from('report-assets').getPublicUrl(path)
+    onChange(data.publicUrl)
+    setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  return (
+    <div className="rb-field">
+      <span>이미지</span>
+      {imageUrl && (
+        <div style={{ position: 'relative', marginBottom: 8 }}>
+          <img src={imageUrl} alt="preview" style={{ width: '100%', maxHeight: 160, objectFit: 'contain', borderRadius: 6, border: '1px solid var(--surface-md)', background: '#f8f8f8' }} />
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 4, border: 'none', background: 'rgba(0,0,0,.45)', color: '#fff', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >×</button>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        style={{ padding: '7px 14px', fontSize: 12, fontWeight: 700, borderRadius: 'var(--r)', border: '1px solid var(--surface-md)', background: 'var(--surface)', color: 'var(--gray-7)', cursor: 'pointer', width: '100%' }}
+      >
+        {uploading ? '업로드 중…' : imageUrl ? '이미지 교체' : '이미지 업로드'}
+      </button>
+      {error && <span style={{ fontSize: 11, color: '#dc2626' }}>{error}</span>}
+    </div>
+  )
+}
+
 function ProjectOverviewFields({ content, onChange }: { content: PageContent; onChange: (c: PageContent) => void }) {
   const DEFAULT_STEPS: ProcessStep[] = [
     { date: '', content: '' }, { date: '', content: '' },
@@ -97,10 +144,7 @@ function ProjectOverviewFields({ content, onChange }: { content: PageContent; on
   return (
     <>
       <TitleFields content={content} onChange={onChange} />
-      <label className="rb-field">
-        <span>이미지 URL</span>
-        <input value={content.imageUrl ?? ''} onChange={e => onChange({ ...content, imageUrl: e.target.value })} placeholder="https://..." />
-      </label>
+      <ImageUploadField imageUrl={content.imageUrl} onChange={url => onChange({ ...content, imageUrl: url })} />
       <label className="rb-field">
         <span>프로젝트 명</span>
         <input value={content.projectName ?? ''} onChange={e => onChange({ ...content, projectName: e.target.value })} />

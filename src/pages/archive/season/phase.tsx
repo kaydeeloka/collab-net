@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, ExternalLink, FileText, LayoutTemplate, Pencil, Presentation, Save, Trash2, Upload } from 'lucide-react'
+import { Download, ExternalLink, FileText, Pencil, Plus, Presentation, Save, Trash2, Upload } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { pdf } from '@react-pdf/renderer'
 import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
 import ReportPDF from './report-builder/ReportPDF'
-import type { ReportPage, PageContent } from './report-builder/types'
+import { PAGE_TYPE_LABELS, DEFAULT_CONTENT, type ReportPage, type PageContent, type PageType } from './report-builder/types'
 import ReportSlides from './report-slides/ReportSlides'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -145,7 +145,9 @@ export default function ArchiveBrandReportPhase() {
   const [reportRows, setReportRows] = useState<MonitoringRow[]>([])
   const [reportEditMode, setReportEditMode] = useState(false)
   const [reportLoading, setReportLoading] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const downloadRef = useRef<HTMLDivElement>(null)
+  const addMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!downloadOpen) return
@@ -158,16 +160,31 @@ export default function ArchiveBrandReportPhase() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [downloadOpen])
 
+  useEffect(() => {
+    if (!addOpen) return
+    function handleClick(e: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [addOpen])
+
   async function handleDownloadPdf() {
     if (!resolvedPhaseId || !phase || pdfDownloading) return
     setDownloadOpen(false)
     setPdfDownloading(true)
     try {
-      const [{ data: pageData }, { rows }] = await Promise.all([
-        supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
-        loadMonitoringData(resolvedPhaseId),
+      // Use in-memory state (already synced on each field blur); fall back to DB if tab hasn't loaded
+      const [pages, rows] = await Promise.all([
+        reportPages.length > 0
+          ? Promise.resolve([...reportPages].sort((a, b) => a.order_index - b.order_index))
+          : supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index').then(({ data }) => (data as ReportPage[]) ?? []),
+        reportRows.length > 0
+          ? Promise.resolve(reportRows)
+          : loadMonitoringData(resolvedPhaseId).then(r => r.rows),
       ])
-      const pages = (pageData as ReportPage[]) ?? []
       if (pages.length === 0) {
         showToast('리포트 페이지가 없습니다. 편집 버튼으로 먼저 페이지를 추가하세요.', 'info')
         return
@@ -455,6 +472,22 @@ export default function ArchiveBrandReportPhase() {
   async function handleUpdateReportPage(page: ReportPage) {
     await supabase.from('report_pages').update({ content: page.content }).eq('id', page.id)
     setReportPages(prev => prev.map(p => p.id === page.id ? page : p))
+  }
+
+  async function addReportPage(type: PageType) {
+    if (!resolvedPhaseId) return
+    setAddOpen(false)
+    const maxOrder = reportPages.reduce((m, p) => Math.max(m, p.order_index), -1)
+    const { data, error } = await supabase
+      .from('report_pages')
+      .insert({ phase_id: resolvedPhaseId, order_index: maxOrder + 1, type, content: DEFAULT_CONTENT[type] })
+      .select()
+      .single()
+    if (error) {
+      showToast(error.code === '42P01' ? 'report_pages 테이블이 없습니다.' : `저장 오류: ${error.message}`, 'error')
+      return
+    }
+    if (data) setReportPages(prev => [...prev, data as ReportPage])
   }
 
   const isUploading = uploadingHero
@@ -748,13 +781,32 @@ export default function ArchiveBrandReportPhase() {
             ) : (
               <>
                 <div className="season-report__controls">
-                  <Link
-                    to={`/archive/${phaseName}/report-builder`}
-                    className="cfg-btn cfg-btn--ghost"
-                  >
-                    <LayoutTemplate size={13} />
-                    편집기
-                  </Link>
+                  {reportEditMode && (
+                    <div className="season-report__download-wrap" ref={addMenuRef}>
+                      <button
+                        type="button"
+                        className="cfg-btn cfg-btn--ghost"
+                        onClick={() => setAddOpen(o => !o)}
+                      >
+                        <Plus size={13} />
+                        추가
+                      </button>
+                      {addOpen && (
+                        <div className="season-report__download-menu">
+                          {(Object.keys(PAGE_TYPE_LABELS) as PageType[]).map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              className="season-report__download-item"
+                              onClick={() => { void addReportPage(t) }}
+                            >
+                              {PAGE_TYPE_LABELS[t]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     className={`cfg-btn${reportEditMode ? ' cfg-btn--blue' : ' cfg-btn--ghost'}`}

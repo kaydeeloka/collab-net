@@ -22,7 +22,7 @@ function bgFor(type: string) {
 // ── Editable text element ─────────────────────────────────────────
 
 function ET({
-  value, onChange, onBlur, placeholder, className, multiline,
+  value, onChange, onBlur, placeholder, className, multiline, rows = 4,
 }: {
   value: string
   onChange: (v: string) => void
@@ -30,6 +30,7 @@ function ET({
   placeholder?: string
   className?: string
   multiline?: boolean
+  rows?: number
 }) {
   if (multiline) {
     return (
@@ -39,7 +40,7 @@ function ET({
         onChange={e => onChange(e.target.value)}
         onBlur={onBlur}
         placeholder={placeholder}
-        rows={4}
+        rows={rows}
       />
     )
   }
@@ -160,7 +161,7 @@ function Slide({
       {page.type === 'cover' && (
         <div className="rslide__cover-layer">
           {editMode ? (
-            <ET value={local.title ?? ''} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="2026 Q1 시딩 프로젝트 결과 리포트" className="rslide__cover-title-edit" />
+            <ET value={local.title ?? ''} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="2026 Q1 시딩 프로젝트 결과 리포트" className="rslide__cover-title-edit" multiline rows={2} />
           ) : (
             local.title && <div className="rslide__cover-title">{local.title}</div>
           )}
@@ -293,12 +294,16 @@ function Slide({
                           )}
                           {editMode ? (
                             <ET
-                              value={step.content}
-                              onChange={v => setLocal(p => ({ ...p, processSteps: (p.processSteps ?? DEFAULT_STEPS).map((s, j) => j === i ? { ...s, content: v } : s) }))}
+                              value={step.content.split('\n').map(l => l ? `■ ${l}` : '').join('\n')}
+                              onChange={v => {
+                                const clean = v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n')
+                                setLocal(p => ({ ...p, processSteps: (p.processSteps ?? DEFAULT_STEPS).map((s, j) => j === i ? { ...s, content: clean } : s) }))
+                              }}
                               onBlur={commit}
-                              placeholder="내용 (줄바꿈으로 항목 구분)"
+                              placeholder="■ 내용을 입력하세요"
                               className="rslide__ov-step-content-edit"
                               multiline
+                              rows={2}
                             />
                           ) : (
                             <div className="rslide__ov-step-content">
