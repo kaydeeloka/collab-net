@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, ExternalLink, FileText, Pencil, Presentation, Save, Trash2, Upload } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Download, ExternalLink, FileText, LayoutTemplate, Pencil, Presentation, Save, Trash2, Upload } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
+import { pdf } from '@react-pdf/renderer'
+import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
+import ReportPDF from './report-builder/ReportPDF'
+import type { ReportPage, PageContent } from './report-builder/types'
+import ReportSlides from './report-slides/ReportSlides'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { PageTabs } from '@/components/ui'
@@ -110,6 +115,9 @@ function ProductCard({
 export default function ArchiveBrandReportPhase() {
   const { phase, phasesLoading } = useArchivePhase()
   const { phases, refreshPhases } = usePhase()
+  const { phaseName } = useParams<{ phaseName: string }>()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const resolvedPhaseId = phase?.id ?? null
   const { showToast, showConfirm } = useToast()
 
@@ -126,10 +134,17 @@ export default function ArchiveBrandReportPhase() {
   const [heroLoading, setHeroLoading] = useState(true)
   const [overviewKitUrl, setOverviewKitUrl] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [activeTab, setActiveTab] = useState<'website' | 'report'>('website')
+  const [activeTab, setActiveTab] = useState<'website' | 'report'>(
+    searchParams.get('tab') === 'report' ? 'report' : 'website'
+  )
   const [uploadingHero, setUploadingHero] = useState(false)
   const [saving, setSaving] = useState(false)
   const [downloadOpen, setDownloadOpen] = useState(false)
+  const [pdfDownloading, setPdfDownloading] = useState(false)
+  const [reportPages, setReportPages] = useState<ReportPage[]>([])
+  const [reportRows, setReportRows] = useState<MonitoringRow[]>([])
+  const [reportEditMode, setReportEditMode] = useState(false)
+  const [reportLoading, setReportLoading] = useState(false)
   const downloadRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -143,9 +158,39 @@ export default function ArchiveBrandReportPhase() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [downloadOpen])
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
+    if (!resolvedPhaseId || !phase || pdfDownloading) return
     setDownloadOpen(false)
-    window.print()
+    setPdfDownloading(true)
+    try {
+      const [{ data: pageData }, { rows }] = await Promise.all([
+        supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
+        loadMonitoringData(resolvedPhaseId),
+      ])
+      const pages = (pageData as ReportPage[]) ?? []
+      if (pages.length === 0) {
+        showToast('리포트 페이지가 없습니다. 편집 버튼으로 먼저 페이지를 추가하세요.', 'info')
+        return
+      }
+      const pdfInstance = pdf(<ReportPDF phaseName={phase.name} pages={pages} rows={rows} />)
+      const blob = await Promise.race([
+        pdfInstance.toBlob(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('PDF 생성 시간 초과 (30초). 배경 이미지 경로를 확인해 주세요.')), 30_000)
+        ),
+      ])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `MiMuse_${phase.name}_Report.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('PDF generation error:', e)
+      showToast('PDF 생성 중 오류가 발생했습니다', 'error')
+    } finally {
+      setPdfDownloading(false)
+    }
   }
 
   async function handleDownloadPpt() {
@@ -395,6 +440,21 @@ export default function ArchiveBrandReportPhase() {
   function handleTabChange(tab: 'website' | 'report') {
     if (tab !== 'website' && editMode) cancelEditMode()
     setActiveTab(tab)
+    if (tab === 'report' && resolvedPhaseId && reportPages.length === 0) {
+      setReportLoading(true)
+      void Promise.all([
+        supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
+        loadMonitoringData(resolvedPhaseId),
+      ]).then(([{ data }, { rows }]) => {
+        setReportPages((data as ReportPage[]) ?? [])
+        setReportRows(rows)
+      }).finally(() => setReportLoading(false))
+    }
+  }
+
+  async function handleUpdateReportPage(page: ReportPage) {
+    await supabase.from('report_pages').update({ content: page.content }).eq('id', page.id)
+    setReportPages(prev => prev.map(p => p.id === page.id ? page : p))
   }
 
   const isUploading = uploadingHero
@@ -688,13 +748,20 @@ export default function ArchiveBrandReportPhase() {
             ) : (
               <>
                 <div className="season-report__controls">
+                  <Link
+                    to={`/archive/${phaseName}/report-builder`}
+                    className="cfg-btn cfg-btn--ghost"
+                  >
+                    <LayoutTemplate size={13} />
+                    편집기
+                  </Link>
                   <button
                     type="button"
-                    className="cfg-btn cfg-btn--ghost"
-                    onClick={() => showToast('편집 기능은 준비 중입니다', 'info')}
+                    className={`cfg-btn${reportEditMode ? ' cfg-btn--blue' : ' cfg-btn--ghost'}`}
+                    onClick={() => setReportEditMode(m => !m)}
                   >
                     <Pencil size={13} />
-                    편집
+                    {reportEditMode ? '편집 완료' : '편집'}
                   </button>
                   <div className="season-report__download-wrap" ref={downloadRef}>
                     <button
@@ -710,10 +777,11 @@ export default function ArchiveBrandReportPhase() {
                         <button
                           type="button"
                           className="season-report__download-item"
-                          onClick={handleDownloadPdf}
+                          disabled={pdfDownloading}
+                          onClick={() => { void handleDownloadPdf() }}
                         >
                           <FileText size={13} />
-                          PDF
+                          {pdfDownloading ? 'PDF 생성 중…' : 'PDF'}
                         </button>
                         <button
                           type="button"
@@ -728,27 +796,16 @@ export default function ArchiveBrandReportPhase() {
                   </div>
                 </div>
                 <div className="season-report">
-                  <SeasonReportCover title={reportCoverTitle} />
-
-                  <SeasonCollectionOverview overview={overview} kitImageUrl={overviewKitUrl} />
-
-                  <SeasonCollectionKitComposition composition={kitComposition} />
-
-                  {resolvedPhaseId && (
-                    <SeasonCollectionContentPerformance phaseId={resolvedPhaseId} />
+                  {reportLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner /></div>
+                  ) : (
+                    <ReportSlides
+                      pages={reportPages}
+                      rows={reportRows}
+                      editMode={reportEditMode}
+                      onUpdate={handleUpdateReportPage}
+                    />
                   )}
-
-                  {resolvedPhaseId && (
-                    <SeasonReviewHighlights phaseId={resolvedPhaseId} />
-                  )}
-
-                  {resolvedPhaseId && (
-                    <SeasonBrandMentions phaseId={resolvedPhaseId} />
-                  )}
-
-                  <SeasonNextStep data={nextStep} />
-
-                  <SeasonContact />
                 </div>
               </>
             )}

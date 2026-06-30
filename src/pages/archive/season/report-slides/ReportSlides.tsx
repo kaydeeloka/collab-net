@@ -1,0 +1,300 @@
+import { useState } from 'react'
+import { Eye, Heart, MessageCircle } from 'lucide-react'
+import { fmtNum } from '@/lib/utils'
+import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
+import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
+import type { ReportPage, PageContent } from '../report-builder/types'
+import './report-slides.css'
+
+// ── Background paths ──────────────────────────────────────────────
+const BG = {
+  title:   '/report/title-bg.jpg',
+  content: '/report/content-bg.jpg',
+  outro:   '/report/conclusion-bg.jpg',
+}
+
+function bgFor(type: string) {
+  if (type === 'cover') return BG.title
+  if (type === 'outro') return BG.outro
+  return BG.content
+}
+
+// ── Editable text element ─────────────────────────────────────────
+
+function ET({
+  value, onChange, onBlur, placeholder, className, multiline,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onBlur: () => void
+  placeholder?: string
+  className?: string
+  multiline?: boolean
+}) {
+  if (multiline) {
+    return (
+      <textarea
+        className={`rslide-edit ${className ?? ''}`}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        rows={4}
+      />
+    )
+  }
+  return (
+    <input
+      className={`rslide-edit ${className ?? ''}`}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onBlur={onBlur}
+      placeholder={placeholder}
+    />
+  )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return fmtNum(n)
+}
+
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+  return out
+}
+
+interface BrandStat { brand: string; count: number; views: number; likes: number; comments: number }
+function computeBrandStats(rows: MonitoringRow[]): BrandStat[] {
+  const m: Record<string, BrandStat> = {}
+  rows.filter(r => r.review_link?.startsWith('http')).forEach(r => {
+    const b = r.brand || '기타'
+    if (!m[b]) m[b] = { brand: b, count: 0, views: 0, likes: 0, comments: 0 }
+    m[b].count++; m[b].views += r.views; m[b].likes += r.likes; m[b].comments += r.comments
+  })
+  return Object.values(m).sort((a, b) => b.views - a.views)
+}
+
+// ── Content header (English + Korean title) ───────────────────────
+
+function ContentHeader({
+  content, editMode, onChange, onBlur,
+}: {
+  content: PageContent
+  editMode: boolean
+  onChange: (c: PageContent) => void
+  onBlur: () => void
+}) {
+  return (
+    <div className="rslide__header">
+      {editMode ? (
+        <ET
+          value={content.engTitle ?? ''}
+          onChange={v => onChange({ ...content, engTitle: v })}
+          onBlur={onBlur}
+          placeholder="English title..."
+          className="rslide__eng-edit"
+        />
+      ) : (
+        <div className="rslide__eng">{content.engTitle}</div>
+      )}
+      {editMode ? (
+        <ET
+          value={content.korTitle ?? ''}
+          onChange={v => onChange({ ...content, korTitle: v })}
+          onBlur={onBlur}
+          placeholder="한국어 제목..."
+          className="rslide__kor-edit"
+        />
+      ) : (
+        <div className="rslide__kor">{content.korTitle}</div>
+      )}
+      <div className="rslide__divider" />
+    </div>
+  )
+}
+
+// ── Individual slide ──────────────────────────────────────────────
+
+function Slide({
+  page, editMode, rows, onUpdate,
+}: {
+  page: ReportPage
+  editMode: boolean
+  rows: MonitoringRow[]
+  onUpdate: (content: PageContent) => void
+}) {
+  const [local, setLocal] = useState<PageContent>(page.content)
+
+  // Keep local in sync when page content changes from outside
+  const currentJson = JSON.stringify(page.content)
+  const [lastJson, setLastJson] = useState(currentJson)
+  if (currentJson !== lastJson) {
+    setLocal(page.content)
+    setLastJson(currentJson)
+  }
+
+  function commit() {
+    onUpdate(local)
+  }
+
+  // ── Outro: just background, no content ──────────────────────────
+  if (page.type === 'outro') {
+    return (
+      <div
+        className="rslide"
+        style={{ backgroundImage: `url(${BG.outro})` }}
+      />
+    )
+  }
+
+  const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
+
+  return (
+    <div className="rslide" style={{ backgroundImage: `url(${bgFor(page.type)})` }}>
+
+      {/* ── Cover ── */}
+      {page.type === 'cover' && (
+        <div className="rslide__cover-layer">
+          {editMode ? (
+            <ET value={local.title ?? ''} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="2026 Q1 시딩 프로젝트 결과 리포트" className="rslide__cover-title-edit" />
+          ) : (
+            local.title && <div className="rslide__cover-title">{local.title}</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Content pages (common header) ── */}
+      {page.type !== 'cover' && (
+        <div className="rslide__content-layer">
+          <ContentHeader content={local} editMode={editMode} onChange={c => setLocal(c)} onBlur={commit} />
+
+          {/* Content performance (stats) */}
+          {page.type === 'content_performance' && (
+            <div className="rslide__stats-row">
+              {[
+                { label: '총 리뷰',   value: fmt(reviewRows.length) },
+                { label: '총 조회수', value: fmt(reviewRows.reduce((s, r) => s + r.views,    0)) },
+                { label: '총 좋아요', value: fmt(reviewRows.reduce((s, r) => s + r.likes,    0)) },
+                { label: '총 댓글',   value: fmt(reviewRows.reduce((s, r) => s + r.comments, 0)) },
+              ].map((st, i) => (
+                <div key={i} className="rslide__stat-box">
+                  <div className="rslide__stat-value">{st.value}</div>
+                  <div className="rslide__stat-label">{st.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Best review highlights (influencer grid) */}
+          {page.type === 'best_review' && (() => {
+            const cols = local.columns ?? 5
+            const items = reviewRows.slice(0, cols * 3)
+            return (
+              <div className="rslide__grid" style={{ '--grid-cols': cols } as React.CSSProperties}>
+                {items.map(row => {
+                  const thumb = resolveMonitoringThumbnailUrl(row.assets)
+                  const handle = (row.handle || '').replace(/^@/, '')
+                  return (
+                    <div key={row.id} className="rslide__grid-cell">
+                      {thumb
+                        ? <img src={thumb} className="rslide__grid-thumb" alt={handle} referrerPolicy="no-referrer" />
+                        : <div className="rslide__grid-thumb-empty" />}
+                      <div className="rslide__grid-body">
+                        <div className="rslide__grid-handle">@{handle}</div>
+                        <div className="rslide__grid-stat">
+                          <Eye size={9} /> {fmt(row.views)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          {/* Brand mention highlights */}
+          {page.type === 'brand_mention' && (
+            <div className="rslide__table">
+              <div className="rslide__table-head">
+                <span style={{ flex: 2 }}>브랜드</span>
+                <span>리뷰</span>
+                <span>조회수</span>
+                <span>좋아요</span>
+                <span>댓글</span>
+              </div>
+              {computeBrandStats(rows).map((b, i) => (
+                <div key={i} className={`rslide__table-row${i % 2 ? ' rslide__table-row--alt' : ''}`}>
+                  <span style={{ flex: 2 }}>{b.brand}</span>
+                  <span>{b.count}</span>
+                  <span>{fmt(b.views)}</span>
+                  <span>{fmt(b.likes)}</span>
+                  <span>{fmt(b.comments)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Text-body pages: project_overview, kit_composition, next_project */}
+          {(page.type === 'project_overview' || page.type === 'kit_composition' || page.type === 'next_project') && (
+            editMode ? (
+              <ET value={local.body ?? ''} onChange={v => setLocal(p => ({ ...p, body: v }))} onBlur={commit} placeholder="내용을 입력하세요..." className="rslide__body-edit" multiline />
+            ) : (
+              <div className="rslide__body">{local.body}</div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Edit mode indicator */}
+      {editMode && (
+        <div className="rslide__edit-badge">편집 중</div>
+      )}
+    </div>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────
+
+export default function ReportSlides({
+  pages,
+  rows,
+  editMode,
+  onUpdate,
+}: {
+  pages: ReportPage[]
+  rows: MonitoringRow[]
+  editMode: boolean
+  onUpdate: (page: ReportPage) => Promise<void>
+}) {
+  const sorted = [...pages].sort((a, b) => a.order_index - b.order_index)
+
+  if (sorted.length === 0) {
+    return (
+      <div className="rslide-empty">
+        <p>리포트 페이지가 없습니다.</p>
+        <p style={{ fontSize: 13, color: 'var(--gray-4)', marginTop: 8 }}>
+          상단 편집기 버튼을 눌러 페이지를 추가하세요.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="report-slides">
+      {sorted.map(page => (
+        <Slide
+          key={page.id}
+          page={page}
+          editMode={editMode}
+          rows={rows}
+          onUpdate={content => onUpdate({ ...page, content })}
+        />
+      ))}
+    </div>
+  )
+}

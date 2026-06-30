@@ -1,40 +1,6 @@
-/* ── Brand report fonts (나눔휴먼 KO · 모노플렉스 KR EN) ── */
-
-@font-face {
-  font-family: 'Report EN';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-kr@1.0/MonoplexKR-Regular.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'Report EN';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_Monoplex-kr@1.0/MonoplexKR-Bold.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'Report KO';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2501-1@1.1/NanumHumanTTFRegular.woff2') format('woff2');
-  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
-}
-
-@font-face {
-  font-family: 'Report KO';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2501-1@1.1/NanumHumanTTFBold.woff2') format('woff2');
-  unicode-range: U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+A960-A97F, U+D7B0-D7FF;
-}
+/* ── Brand report fonts (나눔휴먼 — Naver CDN) ── */
+/* Loaded via <link> in index.html: hangeul.pstatic.net/hangeul_static/css/NanumHuman.css */
+/* Available: NanumHumanEL · NanumHumanlight · NanumHuman · NanumHumanbold · NanumHumanEB · NanumHumanheavy */
 
 /* ── Report controls bar ── */
 
@@ -95,7 +61,7 @@
   --report-surface: #F8F6F6;
   --report-white: #F8F6F6;
 
-  font-family: 'Report KO', 'Report EN', 'NanumHuman', 'Monoplex KR', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   color: var(--report-ink);
   display: flex;
   flex-direction: column;

@@ -1,0 +1,295 @@
+/* ── Slide wrapper ── */
+.report-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  padding: 24px 48px;
+}
+
+/* ── Single slide ── */
+.rslide {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #f5f4f3;
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .10);
+  container-type: inline-size;
+}
+
+/* ── Cover layer — title sits just below the logo in title-bg ── */
+.rslide__cover-layer {
+  position: absolute;
+  inset: 0;
+  padding: 18cqw 11cqw 7cqw 8cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqw;
+}
+
+.rslide__cover-caption {
+  font-size: 0.9cqw;
+  color: #888;
+  letter-spacing: 0.18em;
+  margin-bottom: 1.2cqw;
+}
+
+.rslide__cover-title {
+  font-size: 2.8cqw;
+  font-weight: 800;
+  color: #1a1a1a;
+  line-height: 1.3;
+  max-width: 55%;
+}
+
+.rslide__cover-sub {
+  font-size: 1.4cqw;
+  color: #666;
+}
+
+/* ── Content layer — all non-cover/outro pages ── */
+.rslide__content-layer {
+  position: absolute;
+  inset: 0;
+  padding: 6cqw 9cqw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header: English + Korean titles ── */
+.rslide__header {
+  margin-bottom: 1.6cqw;
+}
+
+.rslide__eng {
+  font-size: 1.9cqw;
+  color: #888;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4cqw;
+  min-height: 2.4cqw;
+}
+
+.rslide__kor {
+  font-size: 2.6cqw;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 1.4cqw;
+  min-height: 3.2cqw;
+}
+
+.rslide__divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(0, 0, 0, .12);
+  margin-bottom: 1.6cqw;
+}
+
+/* ── Stats ── */
+.rslide__stats-row {
+  display: flex;
+  gap: 1.4cqw;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.rslide__stat-box {
+  flex: 1;
+  background: rgba(255, 255, 255, .88);
+  border-radius: 0.8cqw;
+  padding: 1.4cqw 1.6cqw;
+  border-left: 0.3cqw solid #8BAAB8;
+  backdrop-filter: blur(4px);
+}
+
+.rslide__stat-value {
+  font-size: 2.6cqw;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 0.4cqw;
+  font-variant-numeric: tabular-nums;
+}
+
+.rslide__stat-label {
+  font-size: 0.9cqw;
+  color: #888;
+}
+
+/* ── Influencer grid ── */
+.rslide__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols, 5), 1fr);
+  gap: 0.8cqw;
+  flex: 1;
+  overflow: hidden;
+}
+
+.rslide__grid-cell {
+  background: rgba(255, 255, 255, .9);
+  border-radius: 0.5cqw;
+  overflow: hidden;
+}
+
+.rslide__grid-thumb {
+  width: 100%;
+  height: 6.5cqw;
+  object-fit: cover;
+  display: block;
+}
+
+.rslide__grid-thumb-empty {
+  width: 100%;
+  height: 6.5cqw;
+  background: #e5e5e5;
+}
+
+.rslide__grid-body {
+  padding: 0.4cqw 0.5cqw;
+}
+
+.rslide__grid-handle {
+  font-size: 0.7cqw;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rslide__grid-stat {
+  font-size: 0.65cqw;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 0.2cqw;
+}
+
+/* ── Brand table ── */
+.rslide__table {
+  flex: 1;
+  overflow: hidden;
+  font-size: 1cqw;
+}
+
+.rslide__table-head {
+  display: flex;
+  gap: 0.5cqw;
+  padding: 0.7cqw 1cqw;
+  background: #8BAAB8;
+  border-radius: 0.4cqw;
+  margin-bottom: 0.2cqw;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85cqw;
+}
+
+.rslide__table-head span,
+.rslide__table-row span {
+  flex: 1;
+  text-align: right;
+}
+
+.rslide__table-head span:first-child,
+.rslide__table-row span:first-child {
+  text-align: left;
+}
+
+.rslide__table-row {
+  display: flex;
+  gap: 0.5cqw;
+  padding: 0.6cqw 1cqw;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  color: #1a1a1a;
+  font-size: 0.9cqw;
+}
+
+.rslide__table-row--alt {
+  background: rgba(255, 255, 255, .5);
+}
+
+/* ── Text body ── */
+.rslide__body {
+  font-size: 1.1cqw;
+  color: #333;
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+/* ── Image ── */
+.rslide__page-image {
+  max-width: 100%;
+  max-height: 50cqw;
+  object-fit: contain;
+  border-radius: 0.4cqw;
+  margin-bottom: 0.8cqw;
+}
+
+.rslide__caption {
+  font-size: 0.9cqw;
+  color: #888;
+  line-height: 1.6;
+}
+
+/* ── Edit mode inputs ── */
+.rslide-edit {
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, .35);
+  border-bottom: 1.5px solid #8BAAB8;
+  border-radius: 0;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  padding: 2px 4px;
+  backdrop-filter: blur(2px);
+  transition: background .15s;
+}
+
+.rslide-edit:focus {
+  background: rgba(255, 255, 255, .6);
+  border-bottom-color: #4a7a88;
+}
+
+textarea.rslide-edit {
+  resize: none;
+  line-height: inherit;
+}
+
+.rslide__cover-caption-edit { font-size: 0.9cqw; color: #888; margin-bottom: 1.2cqw; }
+.rslide__cover-title-edit   { font-size: 2.8cqw; font-weight: 800; color: #1a1a1a; max-width: 55%; }
+.rslide__cover-sub-edit     { font-size: 1.4cqw; color: #666; }
+.rslide__eng-edit           { font-size: 1.9cqw; color: #888; }
+.rslide__kor-edit           { font-size: 2.6cqw; font-weight: 800; color: #1a1a1a; }
+.rslide__body-edit          { font-size: 1.1cqw; color: #333; flex: 1; }
+.rslide__url-edit           { font-size: 0.9cqw; color: #666; margin-bottom: 0.8cqw; }
+.rslide__caption-edit       { font-size: 0.9cqw; color: #888; }
+
+/* ── Edit badge ── */
+.rslide__edit-badge {
+  position: absolute;
+  top: 1cqw;
+  right: 1cqw;
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 0.8cqw;
+  font-weight: 700;
+  padding: 0.25cqw 0.7cqw;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+/* ── Empty state ── */
+.rslide-empty {
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--gray-5);
+  font-size: 14px;
+  border: 1px dashed var(--surface-md);
+  border-radius: var(--r);
+  background: var(--white);
+}
