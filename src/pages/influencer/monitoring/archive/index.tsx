@@ -100,6 +100,7 @@ function ArchiveCard({
   const account = (row.handle || '').replace(/^@/, '')
   const [imgFailed, setImgFailed] = useState(false)
   const [showPoster, setShowPoster] = useState(true)
+  const [videoFailed, setVideoFailed] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const posterContent = thumbUrl && !imgFailed ? (
@@ -120,7 +121,7 @@ function ArchiveCard({
   return (
     <div className="mon-arch-card">
       <div className="mon-arch-card__thumb">
-        {videoUrl ? (
+        {videoUrl && !videoFailed ? (
           <div className="mon-arch-card__player">
             <video
               ref={videoRef}
@@ -130,6 +131,7 @@ function ArchiveCard({
               preload="none"
               className="mon-arch-card__video"
               onPlay={() => setShowPoster(false)}
+              onError={() => setVideoFailed(true)}
             />
             {showPoster && (
               <button
@@ -146,7 +148,20 @@ function ArchiveCard({
             )}
           </div>
         ) : (
-          posterContent
+          <a
+            href={row.review_link ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mon-arch-card__thumb-link"
+            tabIndex={row.review_link ? 0 : -1}
+          >
+            {posterContent}
+            {row.review_link && (
+              <span className="mon-arch-card__poster-play">
+                <Play size={20} fill="white" strokeWidth={0} />
+              </span>
+            )}
+          </a>
         )}
 
         <div className="mon-arch-card__thumb-top">

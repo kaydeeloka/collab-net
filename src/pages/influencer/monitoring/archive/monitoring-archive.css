@@ -219,6 +219,27 @@
   transform: translate(-50%, -50%) scale(1.08);
 }
 
+/* Link fallback (when no video_url or video failed to load) */
+.mon-arch-card__thumb-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.mon-arch-card__thumb-link img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mon-arch-card__thumb-link:hover .mon-arch-card__poster-play {
+  background: rgba(0, 0, 0, .72);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
 .mon-arch-card:hover .mon-arch-card__thumb img {
   transform: scale(1.04);
 }
