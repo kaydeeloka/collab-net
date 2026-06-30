@@ -71,7 +71,7 @@
 }
 
 .season-collection__divider-label--report {
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -112,7 +112,7 @@
 .season-report__cover-title {
   margin: 0;
   max-width: min(720px, 90%);
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: clamp(26px, 3.2vw, 38px);
   font-weight: 700;
   line-height: 1.28;
@@ -125,7 +125,7 @@
   left: 48px;
   bottom: 36px;
   margin: 0;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.16em;
@@ -149,7 +149,7 @@
 }
 
 .season-report__eyebrow {
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.12em;
@@ -159,7 +159,7 @@
 
 .season-report__title {
   margin: 0;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: clamp(22px, 2.4vw, 28px);
   font-weight: 700;
   line-height: 1.25;
@@ -179,7 +179,7 @@
   align-items: center;
   justify-content: center;
   padding: 6px 14px;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: var(--report-teal-dk);
@@ -227,7 +227,7 @@
 
 .season-report .season-overview__field-label {
   padding: 6px 12px;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: var(--report-teal-dk);
@@ -259,7 +259,7 @@
   display: inline-flex;
   margin: 0 0 20px;
   padding: 6px 14px;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -275,7 +275,7 @@
 }
 
 .season-report .season-overview__timeline-period {
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   color: var(--report-teal-dk);
 }
 
@@ -317,7 +317,7 @@
   display: inline-flex;
   margin-bottom: 14px;
   padding: 6px 14px;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -346,7 +346,7 @@
 }
 
 .season-report .season-kit-composition__block-heading {
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   color: var(--report-ink);
 }
 
@@ -377,7 +377,7 @@
   display: inline-flex;
   margin-bottom: 10px;
   padding: 5px 12px;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -426,7 +426,7 @@
 }
 
 .season-report .season-content-performance__panel-title {
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
 }
 
 .season-report .season-content-performance__row {
@@ -448,7 +448,7 @@
 }
 
 .season-report .season-content-performance__link {
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   color: var(--report-ink);
   border-color: var(--report-ink);
 }
@@ -505,7 +505,7 @@
 }
 
 .season-report .season-review-hl__handle {
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: var(--report-ink);
@@ -521,7 +521,7 @@
   display: inline-flex;
   align-self: flex-start;
   padding: 4px 10px;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -557,7 +557,7 @@
 .season-report .season-review-hl__metrics dd,
 .season-report .season-brand-mentions__metrics dd {
   margin: 0;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: var(--report-ink);
@@ -572,7 +572,7 @@
 
 .season-report .season-review-hl__link {
   margin-top: auto;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 12px;
   font-weight: 600;
   color: var(--report-ink);
@@ -606,7 +606,7 @@
 
 .season-report .season-brand-mentions__name {
   margin: 0;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -636,7 +636,7 @@
   display: inline-flex;
   align-self: flex-start;
   padding: 5px 12px;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: var(--report-teal-dk);
@@ -678,7 +678,7 @@
 
 .season-report .season-next-step__block-heading {
   margin: 0;
-  font-family: 'Report KO', 'NanumHuman', sans-serif;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 14px;
   font-weight: 700;
   color: var(--report-ink);
@@ -731,7 +731,7 @@
 }
 
 .season-contact__eyebrow {
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.16em;
@@ -740,7 +740,7 @@
 }
 
 .season-contact__email {
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: clamp(18px, 2.4vw, 26px);
   font-weight: 700;
   color: var(--report-ink);
@@ -754,7 +754,7 @@
 
 .season-contact__eod {
   margin-top: 12px;
-  font-family: 'Report EN', 'Monoplex KR', monospace;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 11px;
   letter-spacing: 0.16em;
   color: var(--report-teal-dk);

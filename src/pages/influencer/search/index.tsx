@@ -956,17 +956,31 @@ export default function Listup() {
                       <td className="num">{fmtNum(inf.video_count)}</td>
 
                       <td className="num">{inf.engagement_rate}%</td>
-                      <td>
-                        <button
-                          onClick={() => markContact(inf.id)}
-                          style={{
-                            padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
-                            border: `1.5px solid ${inf.contacted ? '#6ee7b7' : '#e2e8f0'}`,
-                            background: inf.contacted ? '#d1fae5' : '#f1f5f9',
-                            color: inf.contacted ? '#065f46' : '#94a3b8',
-                          }}>
-                          {inf.contacted ? '✓ 컨택' : '컨택'}
-                        </button>
+                      <td style={{ paddingRight: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <button
+                            onClick={() => markContact(inf.id)}
+                            style={{
+                              padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
+                              border: `1.5px solid ${inf.contacted ? '#6ee7b7' : '#e2e8f0'}`,
+                              background: inf.contacted ? '#d1fae5' : '#f1f5f9',
+                              color: inf.contacted ? '#065f46' : '#94a3b8',
+                            }}>
+                            {inf.contacted ? '✓ 컨택' : '컨택'}
+                          </button>
+                          <button
+                            onClick={() => requestDeleteInfluencer(inf.id)}
+                            style={{
+                              width: 24, height: 24, borderRadius: 6, border: '1px solid #fecaca',
+                              background: '#fff5f5', color: '#dc2626', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 13, fontWeight: 700, flexShrink: 0,
+                            }}
+                            title="삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
