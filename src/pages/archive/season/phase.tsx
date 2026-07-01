@@ -125,6 +125,7 @@ export default function ArchiveBrandReportPhase() {
   const [pdfDownloading, setPdfDownloading] = useState(false)
   const [reportPages, setReportPages] = useState<ReportPage[]>([])
   const [reportRows, setReportRows] = useState<MonitoringRow[]>([])
+  const [reportConfirmedBrands, setReportConfirmedBrands] = useState<{ name: string; nameEn: string }[]>([])
   const [reportEditMode, setReportEditMode] = useState(false)
   const [reportLoading, setReportLoading] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -348,10 +349,36 @@ export default function ArchiveBrandReportPhase() {
     void Promise.all([
       supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
       loadMonitoringData(resolvedPhaseId),
-    ]).then(([{ data }, { rows }]) => {
+      supabase.from('confirmed_brands').select('brand_name').eq('phase_id', resolvedPhaseId),
+      supabase.from('monitoring_keywords').select('brand, keywords, phase_id').eq('phase_id', resolvedPhaseId),
+    ]).then(([{ data }, { rows }, { data: cbData }, { data: kwData }]) => {
       if (!cancelled) {
         setReportPages((data as ReportPage[]) ?? [])
         setReportRows(rows)
+        const kwRows: { brand: string; keywords: string[] | null }[] = (kwData ?? [])
+        const isAscii = (s: string) => /^[a-z0-9][a-z0-9_\s-]*$/i.test(s.trim())
+        const brands = ((cbData ?? []) as { brand_name: string }[]).map((r, i) => {
+          const korLower = r.brand_name.trim().toLowerCase()
+          const korKey = r.brand_name.trim().toLowerCase().replace(/\s+/g, '_')
+          // Find keyword row by: Korean name in keywords, OR brand = Korean key, OR positional fallback
+          const kwRow =
+            kwRows.find(k => Array.isArray(k.keywords) && k.keywords.some(kw => kw.toLowerCase() === korLower)) ??
+            kwRows.find(k => k.brand === korKey || k.brand === korLower) ??
+            kwRows.filter(k => k.brand !== 'mimuse')[i]
+          let nameEn = r.brand_name
+          if (kwRow) {
+            // If the brand column is already English/ASCII and differs from Korean → use it directly
+            if (isAscii(kwRow.brand) && kwRow.brand.toLowerCase() !== korLower && kwRow.brand.toLowerCase() !== korKey) {
+              nameEn = kwRow.brand
+            } else {
+              // Scan keywords for the first ASCII/English term
+              const engKw = (kwRow.keywords ?? []).find(kw => isAscii(kw) && kw.toLowerCase() !== korLower && kw.toLowerCase() !== korKey)
+              if (engKw) nameEn = engKw
+            }
+          }
+          return { name: r.brand_name, nameEn }
+        })
+        setReportConfirmedBrands(brands)
       }
     }).finally(() => { if (!cancelled) setReportLoading(false) })
     return () => { cancelled = true }
@@ -816,6 +843,7 @@ export default function ArchiveBrandReportPhase() {
                       <ReportSlides
                         pages={reportPages}
                         rows={reportRows}
+                        confirmedBrands={reportConfirmedBrands}
                         editMode={reportEditMode}
                         onUpdate={handleUpdateReportPage}
                       />

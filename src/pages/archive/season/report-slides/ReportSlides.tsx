@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { fmtNum } from '@/lib/utils'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
+import { monitoringBrandKey } from '@/lib/influencer/monitoring-keywords'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
 import type { ReportPage, PageContent, ProcessStep } from './types'
 import './report-slides.css'
@@ -115,11 +116,12 @@ function ContentHeader({
 // ── Individual slide ──────────────────────────────────────────────
 
 function Slide({
-  page, editMode, rows, onUpdate,
+  page, editMode, rows, confirmedBrands, onUpdate,
 }: {
   page: ReportPage
   editMode: boolean
   rows: MonitoringRow[]
+  confirmedBrands: { name: string; nameEn: string }[]
   onUpdate: (content: PageContent) => void
 }) {
   const [local, setLocal] = useState<PageContent>(page.content)
@@ -433,27 +435,52 @@ function Slide({
             )
           })()}
 
-          {/* Brand mention highlights */}
-          {page.type === 'brand_mention' && (
-            <div className="rslide__table">
-              <div className="rslide__table-head">
-                <span style={{ flex: 2 }}>브랜드</span>
-                <span>리뷰</span>
-                <span>조회수</span>
-                <span>좋아요</span>
-                <span>댓글</span>
+          {/* Brand mention gallery */}
+          {page.type === 'brand_mention' && (() => {
+            function brandVariants(name: string): string[] {
+              const lower = name.trim().toLowerCase()
+              return [lower, monitoringBrandKey(name), lower.replace(/\s+/g, ''), lower.replace(/\s+/g, '-')]
+            }
+            const groups: { nameEn: string; brandRows: MonitoringRow[] }[] = confirmedBrands.length > 0
+              ? confirmedBrands.slice(0, 4).map(({ name, nameEn }) => {
+                  // Match monitoring rows using all variants of both Korean name and English key
+                  const variants = new Set([...brandVariants(name), ...brandVariants(nameEn)])
+                  const matched = reviewRows.filter(r => r.brand && variants.has(r.brand.toLowerCase()))
+                  return { nameEn, brandRows: matched }
+                })
+              : [
+                  { nameEn: 'BRAND 1', brandRows: [] },
+                  { nameEn: 'BRAND 2', brandRows: [] },
+                  { nameEn: 'BRAND 3', brandRows: [] },
+                  { nameEn: 'BRAND 4', brandRows: [] },
+                ]
+            return (
+              <div className="rslide__bm-grid">
+                {groups.map(({ nameEn, brandRows }, gi) => {
+                  return (
+                  <div key={gi} className="rslide__bm-brand">
+                    <div className="rslide__bm-pill">{nameEn}</div>
+                    <div className="rslide__bm-thumbs">
+                      {Array.from({ length: 4 }).map((_, ti) => {
+                        const row = brandRows[ti]
+                        const thumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
+                        const isVideo = row ? !!(row.assets?.video_url) : false
+                        return (
+                          <div key={ti} className="rslide__bm-thumb">
+                            {thumb
+                              ? <img src={thumb} alt="" referrerPolicy="no-referrer" className="rslide__bm-img" />
+                              : <div className="rslide__bm-ph" />}
+                            {isVideo && <div className="rslide__bm-play" />}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  )
+                })}
               </div>
-              {computeBrandStats(rows).map((b, i) => (
-                <div key={i} className={`rslide__table-row${i % 2 ? ' rslide__table-row--alt' : ''}`}>
-                  <span style={{ flex: 2 }}>{b.brand}</span>
-                  <span>{b.count}</span>
-                  <span>{fmt(b.views)}</span>
-                  <span>{fmt(b.likes)}</span>
-                  <span>{fmt(b.comments)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+            )
+          })()}
 
           {/* Project Overview */}
           {page.type === 'project_overview' && (() => {
@@ -633,11 +660,13 @@ function Slide({
 export default function ReportSlides({
   pages,
   rows,
+  confirmedBrands,
   editMode,
   onUpdate,
 }: {
   pages: ReportPage[]
   rows: MonitoringRow[]
+  confirmedBrands: { name: string; nameEn: string }[]
   editMode: boolean
   onUpdate: (page: ReportPage) => Promise<void>
 }) {
@@ -662,6 +691,7 @@ export default function ReportSlides({
           page={page}
           editMode={editMode}
           rows={rows}
+          confirmedBrands={confirmedBrands}
           onUpdate={content => onUpdate({ ...page, content })}
         />
       ))}

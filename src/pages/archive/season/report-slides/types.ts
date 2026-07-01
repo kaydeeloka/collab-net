@@ -90,7 +90,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
     engTitle: 'OVERVIEW',
     korTitle: 'Mi Muse 시딩 키트 구성',
     kitImageUrl: '',
-    kitConceptTitle: '2026 VOL.1 콘셉트',
+    kitConceptTitle: '',
     kitConceptText: '',
     kitBrandItems: '',
     kitMimuseItems: '',
