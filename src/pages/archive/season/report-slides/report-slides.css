@@ -486,6 +486,211 @@
   gap: 0.2cqw;
 }
 
+/* ── Best review highlight photo wall ── */
+.rslide__hl-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.45cqw;
+  overflow: hidden;
+}
+
+.rslide__hl-cell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.35cqw;
+}
+
+.rslide__hl-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rslide__hl-ph {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(150deg, #d5e4ea 0%, #c4d8df 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1cqw;
+  font-weight: 600;
+  color: rgba(100, 128, 133, .7);
+  letter-spacing: 0.05em;
+}
+
+
+/* ── Best review detail cards ── */
+.rslide__brd-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr auto;
+  column-gap: 1.2cqw;
+  row-gap: 0;
+  overflow: hidden;
+}
+
+.rslide__brd-card {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  background: #fff;
+  border-radius: 0.6cqw;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, .08);
+}
+
+.rslide__brd-media {
+  position: relative;
+  overflow: hidden;
+}
+
+.rslide__brd-ph {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(150deg, #d5e4ea 0%, #c4d8df 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1cqw;
+  font-weight: 600;
+  color: rgba(100, 128, 133, .65);
+  letter-spacing: 0.05em;
+}
+
+.rslide__brd-badges {
+  position: absolute;
+  top: 0.7cqw;
+  right: 0.7cqw;
+  display: flex;
+  align-items: center;
+  gap: 0.35cqw;
+}
+
+.rslide__brd-badge--review {
+  font-size: 0.65cqw;
+  font-weight: 700;
+  color: #fff;
+  background: #648085;
+  padding: 0.2cqw 0.55cqw;
+  border-radius: 0.2cqw;
+  line-height: 1;
+}
+
+.rslide__brd-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  background: #fff;
+  border-top: 1px solid rgba(0, 0, 0, .09);
+}
+
+.rslide__brd-label {
+  background: #8BAAB8;
+  font-size: 11px;
+  font-weight: 400;
+  color: #fff;
+  padding: 0.48cqw 0.7cqw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, .2);
+  border-right: none;
+}
+
+.rslide__brd-label--last {
+  border-bottom: none;
+}
+
+.rslide__brd-value {
+  padding: 0.48cqw 0.7cqw;
+  font-size: 11px;
+  font-weight: 400;
+  color: #1a1a1a;
+  line-height: 1.45;
+  border-bottom: 1px solid rgba(0, 0, 0, .08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.rslide__brd-value:last-child {
+  border-bottom: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.rslide__brd-value--link {
+  color: #648085;
+}
+
+.rslide__brd-handle-link {
+  color: #648085;
+  text-decoration: underline;
+  text-underline-offset: 0.1cqw;
+  cursor: pointer;
+}
+
+.rslide__brd-value--desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: #444;
+  line-height: 1.55;
+}
+
+.rslide__brd-edit-input {
+  font-size: 11px;
+  font-weight: 400;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, .08);
+  outline: none;
+  padding: 0.4cqw 0.6cqw;
+  background: transparent;
+  resize: none;
+  width: 100%;
+  font-family: inherit;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.rslide__brd-edit-input--area {
+  border-bottom: none;
+  align-self: stretch;
+  text-align: left;
+  overflow-y: auto;
+}
+
+.rslide__brd-info-edit {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  background: #fff;
+  border-top: 1px solid rgba(0, 0, 0, .09);
+}
+
+.rslide__brd-edit-label {
+  background: #8BAAB8;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  padding: 0.48cqw 0.7cqw;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .2);
+}
+
+.rslide__brd-edit-label--last {
+  border-bottom: none;
+}
+
 /* ── Brand table ── */
 .rslide__table {
   flex: 1;

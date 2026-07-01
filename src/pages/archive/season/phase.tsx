@@ -159,7 +159,7 @@ export default function ArchiveBrandReportPhase() {
 
     setPdfDownloading(true)
     try {
-      const [html2canvas, { pdf, Document, Page, Image: PdfImage }] = await Promise.all([
+      const [html2canvas, { pdf, Document, Page, Image: PdfImage, Link: PdfLink, View: PdfView }] = await Promise.all([
         import('html2canvas').then(m => m.default),
         import('@react-pdf/renderer'),
       ])
@@ -183,8 +183,10 @@ export default function ArchiveBrandReportPhase() {
         }
       }
 
+      type PdfHotlink = { url: string; x: number; y: number; w: number; h: number }
       const slideEls = Array.from(sourceSlidesEl.querySelectorAll<HTMLElement>('.rslide'))
       const dataUrls: string[] = []
+      const pageHotlinks: PdfHotlink[][] = []
 
       for (const el of slideEls) {
         const imgs = Array.from(el.querySelectorAll<HTMLImageElement>('img'))
@@ -196,6 +198,23 @@ export default function ArchiveBrandReportPhase() {
           img.src = converted ?? PLACEHOLDER
           restores.push(() => { img.src = orig })
         }))
+
+        // Collect clickable link positions before capture
+        const slideRect = el.getBoundingClientRect()
+        const hotlinks: PdfHotlink[] = []
+        el.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(linkEl => {
+          const href = linkEl.getAttribute('data-pdf-link')
+          if (!href) return
+          const r = linkEl.getBoundingClientRect()
+          hotlinks.push({
+            url: href,
+            x: ((r.left - slideRect.left) / slideRect.width) * 960,
+            y: ((r.top - slideRect.top) / slideRect.height) * 540,
+            w: (r.width / slideRect.width) * 960,
+            h: (r.height / slideRect.height) * 540,
+          })
+        })
+        pageHotlinks.push(hotlinks)
 
         const prevRadius = el.style.borderRadius
         el.style.borderRadius = '0'
@@ -218,8 +237,13 @@ export default function ArchiveBrandReportPhase() {
       const blob = await pdf(
         <Document title={`Mi Muse ${phase.name} Report`}>
           {dataUrls.map((url, i) => (
-            <Page key={String(i)} size={[W, H]} style={{ margin: 0, padding: 0 }}>
+            <Page key={String(i)} size={[W, H]} style={{ margin: 0, padding: 0, position: 'relative' }}>
               <PdfImage src={url} style={{ width: W, height: H, margin: 0, padding: 0 }} />
+              {(pageHotlinks[i] ?? []).map((hl, j) => (
+                <PdfLink key={j} src={hl.url} style={{ position: 'absolute', top: hl.y, left: hl.x, width: hl.w, height: hl.h }}>
+                  <PdfView style={{ width: hl.w, height: hl.h }} />
+                </PdfLink>
+              ))}
             </Page>
           ))}
         </Document>

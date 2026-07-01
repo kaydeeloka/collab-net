@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Eye } from 'lucide-react'
 import { fmtNum } from '@/lib/utils'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
@@ -369,26 +368,64 @@ function Slide({
             )
           })()}
 
-          {/* Best review highlights (influencer grid) */}
-          {page.type === 'best_review' && (() => {
-            const cols = local.columns ?? 5
-            const items = reviewRows.slice(0, cols * 3)
+          {/* Best review highlights — photo wall (placeholder) */}
+          {page.type === 'best_review' && (
+            <div className="rslide__hl-grid">
+              {Array.from({ length: 14 }).map((_, i) => (
+                <div key={i} className="rslide__hl-cell">
+                  <div className="rslide__hl-ph">이미지</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Best review detail cards */}
+          {page.type === 'best_review_detail' && (() => {
+            function parseBrdCard(raw?: string) {
+              const lines = (raw ?? '').split('\n')
+              return { handle: lines[0] ?? '', followers: lines[1] ?? '', comment: lines.slice(2).join('\n') }
+            }
+            const cardKeys = ['brdCard1', 'brdCard2', 'brdCard3'] as const
             return (
-              <div className="rslide__grid" style={{ '--grid-cols': cols } as React.CSSProperties}>
-                {items.map(row => {
-                  const thumb = resolveMonitoringThumbnailUrl(row.assets)
-                  const handle = (row.handle || '').replace(/^@/, '')
+              <div className="rslide__brd-grid">
+                {cardKeys.map((key, i) => {
+                  const d = parseBrdCard(local[key])
                   return (
-                    <div key={row.id} className="rslide__grid-cell">
-                      {thumb
-                        ? <img src={thumb} className="rslide__grid-thumb" alt={handle} referrerPolicy="no-referrer" />
-                        : <div className="rslide__grid-thumb-empty" />}
-                      <div className="rslide__grid-body">
-                        <div className="rslide__grid-handle">@{handle}</div>
-                        <div className="rslide__grid-stat">
-                          <Eye size={9} /> {fmt(row.views)}
+                    <div key={i} className="rslide__brd-card">
+                      <div className="rslide__brd-media">
+                        <div className="rslide__brd-ph">이미지</div>
+                        <div className="rslide__brd-badges">
+                          <span className="rslide__brd-badge--review">리뷰보기</span>
                         </div>
                       </div>
+                      {editMode ? (
+                        <div className="rslide__brd-info-edit">
+                          <span className="rslide__brd-edit-label">인플루언서</span>
+                          <ET value={d.handle} onChange={v => setLocal(p => ({ ...p, [key]: [v, d.followers, d.comment].join('\n') }))} onBlur={commit} placeholder="@handle" className="rslide__brd-edit-input" />
+                          <span className="rslide__brd-edit-label">팔로워</span>
+                          <ET value={d.followers} onChange={v => setLocal(p => ({ ...p, [key]: [d.handle, v, d.comment].join('\n') }))} onBlur={commit} placeholder="예: 7.4K" className="rslide__brd-edit-input" />
+                          <span className="rslide__brd-edit-label rslide__brd-edit-label--last">댓글 반응</span>
+                          <ET value={d.comment} onChange={v => setLocal(p => ({ ...p, [key]: [d.handle, d.followers, v].join('\n') }))} onBlur={commit} placeholder="댓글 반응 내용..." className="rslide__brd-edit-input rslide__brd-edit-input--area" multiline rows={4} />
+                        </div>
+                      ) : (() => {
+                        const rawHandle = d.handle || ''
+                        const slug = rawHandle.replace(/^@/, '')
+                        const tiktokUrl = slug ? `https://www.tiktok.com/@${slug}` : ''
+                        return (
+                          <div className="rslide__brd-info">
+                            <span className="rslide__brd-label">인플루언서</span>
+                            <span className="rslide__brd-value rslide__brd-value--link">
+                              {tiktokUrl
+                                ? <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" data-pdf-link={tiktokUrl} className="rslide__brd-handle-link">{rawHandle || '—'}</a>
+                                : (rawHandle || '—')}
+                            </span>
+                            <span className="rslide__brd-label">팔로워</span>
+                            <span className="rslide__brd-value">{d.followers || '—'}</span>
+                            <span className="rslide__brd-label rslide__brd-label--last">댓글 반응</span>
+                            <span className="rslide__brd-value rslide__brd-value--desc">{d.comment || '—'}</span>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })}

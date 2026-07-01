@@ -4,6 +4,7 @@ export type PageType =
   | 'kit_composition'
   | 'content_performance'
   | 'best_review'
+  | 'best_review_detail'
   | 'brand_mention'
   | 'next_project'
   | 'outro'
@@ -32,6 +33,10 @@ export interface PageContent {
   totalShipping?: string
   participatingBrands?: string
   processSteps?: ProcessStep[]
+  // best_review_detail cards — each stored as "@handle\nfollowers\ncomment"
+  brdCard1?: string
+  brdCard2?: string
+  brdCard3?: string
   // kit_composition
   kitImageUrl?: string
   kitConceptTitle?: string
@@ -56,7 +61,8 @@ export const PAGE_TYPE_LABELS: Record<PageType, string> = {
   project_overview:    '프로젝트 개요',
   kit_composition:     '키트 구성',
   content_performance: '콘텐츠 성과',
-  best_review:         '베스트 리뷰',
+  best_review:         '베스트 리뷰 (그리드)',
+  best_review_detail:  '베스트 리뷰 (상세)',
   brand_mention:       '브랜드 언급',
   next_project:        '다음 프로젝트',
   outro:               '마무리',
@@ -96,6 +102,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
     cpContentTypes: '숏폼 중심\n전체 콘텐츠의 대다수가 TikTok 숏폼으로 생성\n\n댓글 반응 활발\n키트 패키징·구성에 대한 자발적 질문 및 공유 다수\n\n키트 언박싱 포맷\n개봉 과정을 담은 리뷰가 주요 콘텐츠 유형으로 확인',
   },
   best_review:         { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', columns: 5 },
+  best_review_detail:  { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', brdCard1: '', brdCard2: '', brdCard3: '' },
   brand_mention:       { engTitle: 'Brand Mention Highlights', korTitle: '브랜드 언급 하이라이트' },
   next_project:        { engTitle: 'Next Step', korTitle: '2026 Q2 시딩 프로젝트', body: '' },
   outro:               { title: 'E.O.D', caption: '' },
