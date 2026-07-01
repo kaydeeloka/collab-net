@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import Modal from '@/components/Modal'
@@ -51,6 +51,13 @@ function triggerDownload(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url)
 }
 
+/** Returns days remaining before the 7-day Apify link expiry, or null if unknown. */
+function videoLinkDaysLeft(assetsUpdatedAt: string | null | undefined): number | null {
+  if (!assetsUpdatedAt) return null
+  const daysPassed = Math.floor((Date.now() - new Date(assetsUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
+  return Math.max(0, 7 - daysPassed)
+}
+
 function PlatformBadge({ platform }: { platform: string }) {
   const { label, style } = platformBadgeStyle(platform)
   return <span className={platformBadgeClass(platform)} style={style}>{label}</span>
@@ -92,8 +99,8 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const isPhoto = !videoUrl && !!row.assets?.image_urls?.length
   const account = (row.handle || '').replace(/^@/, '')
   const [imgFailed, setImgFailed] = useState(false)
-  const [showPoster, setShowPoster] = useState(true)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [videoError, setVideoError] = useState(false)
+  const daysLeft = videoUrl ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
 
   const thumb = thumbUrl && !imgFailed ? (
     <img src={thumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
@@ -107,23 +114,26 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   return (
     <div className="mon-arch-card">
       <div className="mon-arch-card__thumb">
-        {videoUrl ? (
+        {videoUrl && !videoError ? (
           <div className="mon-arch-card__player">
             <video
-              ref={videoRef}
               src={videoUrl}
               controls
               playsInline
-              preload="none"
+              preload="metadata"
               className="mon-arch-card__video"
-              onPlay={() => setShowPoster(false)}
+              onError={() => setVideoError(true)}
             />
-            {showPoster && (
-              <button type="button" className="mon-arch-card__poster" onClick={() => { void videoRef.current?.play() }} aria-label="영상 재생">
-                {thumb}
-                <span className="mon-arch-card__poster-play"><Play size={20} fill="white" strokeWidth={0} /></span>
-              </button>
-            )}
+            {/* direct link fallback in case browser can't stream the URL */}
+            <a
+              href={videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mon-arch-card__video-link"
+              title="영상 직접 열기"
+            >
+              <ExternalLink size={13} />
+            </a>
           </div>
         ) : (
           <div className="mon-arch-card__thumb-static">{thumb}</div>
@@ -137,6 +147,11 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
             </span>
           )}
         </div>
+        {daysLeft !== null && (
+          <span className={`mon-arch-card__expiry${daysLeft === 0 ? ' mon-arch-card__expiry--expired' : daysLeft <= 2 ? ' mon-arch-card__expiry--warn' : ''}`}>
+            {daysLeft === 0 ? '만료됨' : `D-${daysLeft}`}
+          </span>
+        )}
         <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
           {isPhoto ? <><ImageIcon size={11} strokeWidth={2} /> 사진</> : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
         </span>
@@ -387,6 +402,13 @@ export default function MonitoringArchive() {
           <SummaryStat icon={<Eye size={15} />} label="조회" value={fmtNum(totals.views)} />
           <SummaryStat icon={<Heart size={15} />} label="좋아요" value={fmtNum(totals.likes)} />
           <SummaryStat icon={<MessageCircle size={15} />} label="댓글" value={fmtNum(totals.comments)} />
+        </div>
+      )}
+
+      {!loading && filteredRows.some(r => r.assets?.video_url) && (
+        <div className="mon-arch-notice">
+          <Clock size={13} className="mon-arch-notice__icon" />
+          영상 링크는 데이터 가져오기 후 <strong>7일 이내</strong>에 다운로드하세요. 기간이 지나면 링크가 만료되어 Apify에서 데이터를 다시 가져와야 합니다.
         </div>
       )}
 

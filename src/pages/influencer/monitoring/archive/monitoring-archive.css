@@ -48,6 +48,33 @@
 }
 
 /* ─────────────────────────────────────
+   EXPIRY NOTICE
+───────────────────────────────────── */
+.mon-arch-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--r);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.6;
+}
+
+.mon-arch-notice__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #d97706;
+}
+
+.mon-arch-notice strong {
+  font-weight: 700;
+}
+
+/* ─────────────────────────────────────
    FILTER / SORT TOOLBAR
 ───────────────────────────────────── */
 .mon-arch-filters.filters {
@@ -199,7 +226,7 @@
   padding: 0;
   border: none;
   cursor: pointer;
-  background: var(--gray-2);
+  background: #111;
   overflow: hidden;
 }
 
@@ -305,6 +332,49 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: capitalize;
+}
+
+.mon-arch-card__video-link {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .5);
+  color: #fff;
+  text-decoration: none;
+}
+.mon-arch-card__video-link:hover {
+  background: rgba(0, 0, 0, .8);
+}
+
+/* Expiry countdown badge (bottom-left of thumb) */
+.mon-arch-card__expiry {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 3;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #fff;
+  background: rgba(40, 40, 40, .6);
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.mon-arch-card__expiry--warn {
+  background: rgba(194, 65, 12, .88);
+}
+.mon-arch-card__expiry--expired {
+  background: rgba(185, 28, 28, .9);
 }
 
 .mon-arch-card__type {

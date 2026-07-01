@@ -233,9 +233,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   const row = Array.isArray(raw) ? raw[0] : raw
   if (!row) return null
   return {
-    cover_url:  row.cover_url ?? null,
-    video_url:  row.video_url ?? null,
-    image_urls: Array.isArray(row.image_urls) ? row.image_urls : null,
+    cover_url:        row.cover_url ?? null,
+    video_url:        row.video_url ?? null,
+    image_urls:       Array.isArray(row.image_urls) ? row.image_urls : null,
+    assets_updated_at: row.updated_at ?? null,
   }
 }
 
@@ -298,7 +299,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     try {
       const monitoringSelect = `
         id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
-        monitoring_assets(cover_url, video_url, image_urls),
+        monitoring_assets(cover_url, video_url, image_urls, updated_at),
         influencer_platform_id,
         influencer_platform!monitoring_influencer_platform_id_fkey(
           platform, handle,
