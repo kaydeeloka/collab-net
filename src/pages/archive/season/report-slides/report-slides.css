@@ -124,6 +124,214 @@
   color: #888;
 }
 
+/* ── Content Performance redesign ── */
+.rslide__cp {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 1.4cqw;
+}
+
+.rslide__section-pill {
+  display: inline-flex;
+  background: #8BAAB8;
+  color: #fff;
+  font-family: 'NanumHuman', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 4px 16px;
+  border-radius: 999px;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+/* table label pills — fixed min-width, centered */
+.rslide__section-pill--label {
+  flex-shrink: 0;
+  min-width: 8.5cqw;
+  justify-content: center;
+}
+
+/* 진행 프로세스 header pill — bottom margin */
+.rslide__section-pill--process {
+  margin-bottom: 0.7cqw;
+}
+
+.rslide__cp-recovery {
+  display: flex;
+  gap: 1.2cqw;
+  flex-shrink: 0;
+}
+
+.rslide__cp-card {
+  flex: 1;
+  background: rgba(255,255,255,.88);
+  border-radius: 0.8cqw;
+  padding: 1cqw 1.2cqw 0.9cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4cqw;
+  border: 1px solid rgba(0,0,0,.07);
+}
+
+.rslide__cp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rslide__cp-card-total {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8BAAB8;
+}
+
+.rslide__cp-card-label {
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.rslide__cp-card-desc {
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 400;
+  flex: 1;
+}
+
+.rslide__cp-card-pct {
+  color: #8BAAB8;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.rslide__cp-card-stat {
+  font-size: 11px;
+  color: #8BAAB8;
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: 0.2cqw;
+}
+
+.rslide__cp-card-desc-edit {
+  font-size: 0.85cqw;
+  color: #1a1a1a;
+  width: 100%;
+}
+
+.rslide__cp-card-pct-edit {
+  font-size: 0.75cqw;
+  color: #888;
+  width: 100%;
+}
+
+.rslide__cp-progress {
+  height: 0.3cqw;
+  background: #e8eef1;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.3cqw;
+}
+
+.rslide__cp-progress-bar {
+  height: 100%;
+  background: #8BAAB8;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.rslide__cp-bottom {
+  display: flex;
+  gap: 1.6cqw;
+  flex: 1;
+  min-height: 0;
+}
+
+.rslide__cp-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4cqw;
+}
+
+
+.rslide__cp-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.4cqw;
+  flex: 1;
+}
+
+.rslide__cp-donut {
+  width: 16cqw;
+  height: 16cqw;
+  flex-shrink: 0;
+}
+
+.rslide__cp-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqw;
+}
+
+.rslide__cp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5cqw;
+  font-size: 0.85cqw;
+  color: #333;
+}
+
+.rslide__cp-legend-dot {
+  width: 0.7cqw;
+  height: 0.7cqw;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rslide__cp-legend-label {
+  flex: 1;
+}
+
+.rslide__cp-legend-pct {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.rslide__cp-ctypes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8cqw;
+  flex: 1;
+}
+
+.rslide__cp-ctype-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15cqw;
+}
+
+.rslide__cp-ctype-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.rslide__cp-ctype-desc {
+  font-size: 14px;
+  font-weight: 400;
+  color: #555;
+  line-height: 1.5;
+}
+
+.rslide__cp-ctypes-edit {
+  font-size: 0.85cqw;
+  color: #1a1a1a;
+  width: 100%;
+  flex: 1;
+}
+
 /* ── Influencer grid ── */
 .rslide__grid {
   display: grid;
@@ -293,18 +501,6 @@
   gap: 1cqw;
 }
 
-.rslide__ov-pill {
-  background: #8BAAB8;
-  color: #fff;
-  font-size: 1cqw;
-  font-weight: 400;
-  padding: 0.28cqw 0.9cqw;
-  border-radius: 999px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  min-width: 8.5cqw;
-  text-align: center;
-}
 
 .rslide__ov-value {
   font-size: 1.2cqw;
@@ -331,16 +527,6 @@
   margin-top: 0.9cqw;
 }
 
-.rslide__ov-process-head {
-  display: inline-block;
-  background: #8BAAB8;
-  color: #fff;
-  font-size: 1cqw;
-  font-weight: 400;
-  padding: 0.25cqw 1cqw;
-  border-radius: 999px;
-  margin-bottom: 0.7cqw;
-}
 
 .rslide__ov-steps {
   display: flex;
@@ -385,8 +571,9 @@
   display: inline-block;
   background: #8BAAB8;
   color: #fff;
+  font-family: 'NanumHuman', sans-serif;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 400;
   padding: 0.15cqw 0.6cqw;
   border-radius: 0.3cqw;
 }
@@ -429,7 +616,7 @@
 /* ── Kit Composition 2×3 grid (top row 2× taller) ── */
 .rslide__kit-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 0.75fr 1.25fr;
   grid-template-rows: 2fr 1fr;
   gap: 2.2cqw 1.2cqw;
   flex: 1;
@@ -497,17 +684,12 @@
   border-radius: 0.8cqw;
 }
 
-/* concept pill — rounded pill, left-aligned */
-.rslide__kit-pill--concept {
+/* concept pill — left-aligned with cell margins */
+.rslide__section-pill--concept {
   display: inline-block;
-  background: #8BAAB8;
-  color: #fff;
-  font-size: 14px;
+  align-self: flex-start;
   font-weight: 400;
   padding: 0.28cqw 1.1cqw;
-  border-radius: 999px;
-  white-space: nowrap;
-  align-self: flex-start;
   margin-top: 0;
   margin-bottom: 0.9cqw;
   margin-left: 3cqw;
@@ -515,19 +697,15 @@
 }
 
 /* composition pill — floats at top-center of cell, half outside */
-.rslide__kit-pill--composition {
+.rslide__section-pill--composition {
   position: absolute;
   top: -0.65cqw;
   left: 50%;
   transform: translateX(-50%);
   display: inline-block;
-  background: #8BAAB8;
-  color: #fff;
-  font-size: 14px;
+  align-self: auto;
   font-weight: 400;
   padding: 0.25cqw 1.8cqw;
-  border-radius: 999px;
-  white-space: nowrap;
 }
 
 .rslide__kit-concept-text {

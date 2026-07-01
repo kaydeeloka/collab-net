@@ -80,6 +80,12 @@ function computeBrandStats(rows: MonitoringRow[]): BrandStat[] {
   return Object.values(m).sort((a, b) => b.views - a.views)
 }
 
+// ── Section pill ─────────────────────────────────────────────────
+
+function SectionPill({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rslide__section-pill${className ? ` ${className}` : ''}`}>{children}</div>
+}
+
 // ── Content header (English + Korean title) ───────────────────────
 
 function ContentHeader({
@@ -173,22 +179,177 @@ function Slide({
         <div className="rslide__content-layer">
           <ContentHeader content={local} editMode={editMode} onChange={c => setLocal(c)} onBlur={commit} />
 
-          {/* Content performance (stats) */}
-          {page.type === 'content_performance' && (
-            <div className="rslide__stats-row">
-              {[
-                { label: '총 리뷰',   value: fmt(reviewRows.length) },
-                { label: '총 조회수', value: fmt(reviewRows.reduce((s, r) => s + r.views,    0)) },
-                { label: '총 좋아요', value: fmt(reviewRows.reduce((s, r) => s + r.likes,    0)) },
-                { label: '총 댓글',   value: fmt(reviewRows.reduce((s, r) => s + r.comments, 0)) },
-              ].map((st, i) => (
-                <div key={i} className="rslide__stat-box">
-                  <div className="rslide__stat-value">{st.value}</div>
-                  <div className="rslide__stat-label">{st.label}</div>
+          {/* Content performance */}
+          {page.type === 'content_performance' && (() => {
+            const DEFAULT_RECOVERY = '인플루언서||80\n매거진||100\n콘텐츠 수량||98'
+            const DEFAULT_CTYPES = '숏폼 중심\n전체 콘텐츠의 대다수가 TikTok 숏폼으로 생성\n\n댓글 반응 활발\n키트 패키징·구성에 대한 자발적 질문 및 공유 다수\n\n키트 언박싱 포맷\n개봉 과정을 담은 리뷰가 주요 콘텐츠 유형으로 확인'
+
+            const recoveryCards = (local.cpRecoveryCards ?? DEFAULT_RECOVERY).split('\n').map(line => {
+              const parts = line.split('|')
+              return { label: parts[0] ?? '', desc: parts[1] ?? '', pct: parseInt(parts[2] ?? '0') || 0 }
+            })
+
+            // Auto-compute influencer upload rate from monitoring rows
+            const infMap = new Map<string, boolean>()
+            const infUploadMap = new Map<string, boolean>()
+            for (const r of rows) {
+              const key = (r as any).confirmed_influencer_id || (r as any).influencer_platform_id || r.id
+              infMap.set(key, true)
+              if (r.review_link?.startsWith('http')) infUploadMap.set(key, true)
+            }
+            const totalInf = infMap.size
+            const uploadedInf = infUploadMap.size
+            const infPct = totalInf ? Math.round(uploadedInf / totalInf * 100) : 0
+            const contentTypeItems = (local.cpContentTypes ?? DEFAULT_CTYPES).split('\n\n').map(block => {
+              const lines = block.trim().split('\n')
+              return { title: lines[0] ?? '', desc: lines.slice(1).join('\n') }
+            })
+
+            const total = reviewRows.length
+            const channelSegs = [
+              { label: 'TikTok',    count: reviewRows.filter(r => /tiktok/i.test(r.platform ?? '')).length, color: '#648085' },
+              { label: 'Instagram', count: reviewRows.filter(r => /insta/i.test(r.platform ?? '')).length,  color: '#8BAAB8' },
+              { label: 'magazine',  count: reviewRows.filter(r => /magazine/i.test(r.platform ?? '')).length, color: '#BED6DE' },
+            ].map(s => ({ ...s, pct: total ? Math.round(s.count / total * 100) : 0 }))
+              .filter(s => s.count > 0)
+
+            const R = 35; const C = 2 * Math.PI * R
+            let cum = 0
+            const donutPaths = channelSegs.map(s => {
+              const offset = -cum * C / 100
+              cum += s.pct
+              return { ...s, dasharray: `${s.pct * C / 100} ${C}`, dashoffset: offset }
+            })
+
+            return (
+              <div className="rslide__cp">
+                <SectionPill>회수율</SectionPill>
+                <div className="rslide__cp-recovery">
+                  {recoveryCards.map((card, i) => {
+                    const isInfluencer = i === 0
+                    const isContent    = i === 2
+                    const barPct = isInfluencer ? infPct : card.pct
+                    return (
+                      <div key={i} className="rslide__cp-card">
+                        <div className="rslide__cp-card-header">
+                          <div className="rslide__cp-card-label">{card.label}</div>
+                          {isContent && reviewRows.length > 0 && (
+                            <div className="rslide__cp-card-total">총 {reviewRows.length}건</div>
+                          )}
+                        </div>
+                        {editMode ? (
+                          <>
+                            <ET
+                              value={card.desc}
+                              onChange={v => {
+                                const updated = recoveryCards.map((c, j) => j === i ? { ...c, desc: v } : c)
+                                setLocal(p => ({ ...p, cpRecoveryCards: updated.map(c => `${c.label}|${c.desc}|${c.pct}`).join('\n') }))
+                              }}
+                              onBlur={commit}
+                              placeholder="설명 입력"
+                              className="rslide__cp-card-desc-edit"
+                            />
+                            {!isInfluencer && (
+                              <ET
+                                value={String(card.pct)}
+                                onChange={v => {
+                                  const updated = recoveryCards.map((c, j) => j === i ? { ...c, pct: parseInt(v) || 0 } : c)
+                                  setLocal(p => ({ ...p, cpRecoveryCards: updated.map(c => `${c.label}|${c.desc}|${c.pct}`).join('\n') }))
+                                }}
+                                onBlur={commit}
+                                placeholder="진행률 (0-100)"
+                                className="rslide__cp-card-pct-edit"
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="rslide__cp-card-desc">
+                              {card.desc.split('\n').map((line, li) => (
+                                <div key={li}>
+                                  {line.split(/(\d+%)/g).map((part, pi) =>
+                                    /^\d+%$/.test(part)
+                                      ? <span key={pi} className="rslide__cp-card-pct">{part}</span>
+                                      : part
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        <div className="rslide__cp-progress">
+                          <div className="rslide__cp-progress-bar" style={{ width: `${barPct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          )}
+
+                <div className="rslide__cp-bottom" style={{ marginTop: 16 }}>
+                  <div className="rslide__cp-panel">
+                    <SectionPill>콘텐츠 업로드 채널</SectionPill>
+                    <div className="rslide__cp-donut-wrap">
+                      <svg viewBox="0 0 100 100" className="rslide__cp-donut">
+                        {donutPaths.map((seg, i) => (
+                          <circle key={i} cx={50} cy={50} r={R} fill="none"
+                            stroke={seg.color} strokeWidth={18}
+                            strokeDasharray={seg.dasharray}
+                            strokeDashoffset={seg.dashoffset}
+                            transform="rotate(-90 50 50)"
+                          />
+                        ))}
+                      </svg>
+                      <div className="rslide__cp-legend">
+                        {channelSegs.map((seg, i) => (
+                          <div key={i} className="rslide__cp-legend-item">
+                            <span className="rslide__cp-legend-dot" style={{ background: seg.color }} />
+                            <span className="rslide__cp-legend-label">{seg.label}</span>
+                            <span className="rslide__cp-legend-pct">{seg.pct}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rslide__cp-panel">
+                    <SectionPill>콘텐츠 유형</SectionPill>
+                    {editMode ? (
+                      <ET
+                        value={(local.cpContentTypes ?? DEFAULT_CTYPES)
+                          .split('\n\n')
+                          .map(block => {
+                            const lines = block.trim().split('\n')
+                            return [`■ ${lines[0].replace(/^■\s?/, '')}`, ...lines.slice(1)].join('\n')
+                          })
+                          .join('\n\n')}
+                        onChange={v => {
+                          const cleaned = v.split('\n\n').map(block => {
+                            const lines = block.split('\n')
+                            return [lines[0].replace(/^■\s?/, ''), ...lines.slice(1)].join('\n')
+                          }).join('\n\n')
+                          setLocal(p => ({ ...p, cpContentTypes: cleaned }))
+                        }}
+                        onBlur={commit}
+                        placeholder={'■ 제목\n설명\n\n■ 제목\n설명'}
+                        className="rslide__cp-ctypes-edit"
+                        multiline
+                        rows={7}
+                      />
+                    ) : (
+                      <div className="rslide__cp-ctypes">
+                        {contentTypeItems.map((item, i) => (
+                          <div key={i} className="rslide__cp-ctype-item">
+                            <div className="rslide__cp-ctype-title">■ {item.title}</div>
+                            <div className="rslide__cp-ctype-desc">{item.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Best review highlights (influencer grid) */}
           {page.type === 'best_review' && (() => {
@@ -266,7 +427,7 @@ function Slide({
                   <div className="rslide__ov-table">
                     {infoRows.map(({ label, value, setter }) => (
                       <div key={label} className="rslide__ov-row">
-                        <div className="rslide__ov-pill">{label}</div>
+                        <SectionPill className="rslide__section-pill--label">{label}</SectionPill>
                         {editMode
                           ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" multiline rows={2} />
                           : <div className="rslide__ov-value">{value}</div>}
@@ -276,7 +437,7 @@ function Slide({
                 </div>
                 {/* Process steps */}
                 <div className="rslide__ov-process">
-                  <div className="rslide__ov-process-head">진행 프로세스</div>
+                  <SectionPill className="rslide__section-pill--process">진행 프로세스</SectionPill>
                   <div className="rslide__ov-steps">
                     {steps.map((step, i) => (
                       <div key={i} className="rslide__ov-step-wrap">
@@ -339,7 +500,7 @@ function Slide({
                 {editMode ? (
                   <ET value={local.kitConceptTitle ?? ''} onChange={v => setLocal(p => ({ ...p, kitConceptTitle: v }))} onBlur={commit} placeholder="2026 VOL.1 콘셉트" className="rslide__kit-pill-edit" />
                 ) : (
-                  <div className="rslide__kit-pill--concept">{local.kitConceptTitle || '2026 VOL.1 콘셉트'}</div>
+                  <SectionPill className="rslide__section-pill--concept">{local.kitConceptTitle || '2026 VOL.1 콘셉트'}</SectionPill>
                 )}
                 {editMode ? (
                   <ET value={local.kitConceptText ?? ''} onChange={v => setLocal(p => ({ ...p, kitConceptText: v }))} onBlur={commit} placeholder="콘셉트 설명..." className="rslide__kit-text-edit" multiline rows={6} />
@@ -349,7 +510,7 @@ function Slide({
               </div>
               {/* Bottom-left: brand items — light blue card, process-head pill */}
               <div className="rslide__kit-cell rslide__kit-cell--composition">
-                <div className="rslide__kit-pill--composition">브랜드 구성품</div>
+                <SectionPill className="rslide__section-pill--composition">브랜드 구성품</SectionPill>
                 {editMode ? (
                   <ET
                     value={(local.kitBrandItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
@@ -370,7 +531,7 @@ function Slide({
               </div>
               {/* Bottom-right: Mi Muse items — light blue card, process-head pill */}
               <div className="rslide__kit-cell rslide__kit-cell--composition">
-                <div className="rslide__kit-pill--composition">Mi Muse 구성품</div>
+                <SectionPill className="rslide__section-pill--composition">Mi Muse 구성품</SectionPill>
                 {editMode ? (
                   <ET
                     value={(local.kitMimuseItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}

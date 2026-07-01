@@ -38,6 +38,9 @@ export interface PageContent {
   kitConceptText?: string
   kitBrandItems?: string
   kitMimuseItems?: string
+  // content_performance
+  cpRecoveryCards?: string  // "label|desc|pct" per line
+  cpContentTypes?: string   // "title\ndesc" blocks separated by \n\n
 }
 
 export interface ReportPage {
@@ -86,7 +89,12 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
     kitBrandItems: '',
     kitMimuseItems: '',
   },
-  content_performance: { engTitle: 'Content Performance', korTitle: '콘텐츠 성과 OVERVIEW' },
+  content_performance: {
+    engTitle: 'Content Performance',
+    korTitle: '콘텐츠 성과 OVERVIEW',
+    cpRecoveryCards: '인플루언서||80\n매거진||100\n콘텐츠 수량||98',
+    cpContentTypes: '숏폼 중심\n전체 콘텐츠의 대다수가 TikTok 숏폼으로 생성\n\n댓글 반응 활발\n키트 패키징·구성에 대한 자발적 질문 및 공유 다수\n\n키트 언박싱 포맷\n개봉 과정을 담은 리뷰가 주요 콘텐츠 유형으로 확인',
+  },
   best_review:         { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', columns: 5 },
   brand_mention:       { engTitle: 'Brand Mention Highlights', korTitle: '브랜드 언급 하이라이트' },
   next_project:        { engTitle: 'Next Project', korTitle: '넥스트 프로젝트', body: '' },
