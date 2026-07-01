@@ -32,6 +32,12 @@ export interface PageContent {
   totalShipping?: string
   participatingBrands?: string
   processSteps?: ProcessStep[]
+  // kit_composition
+  kitImageUrl?: string
+  kitConceptTitle?: string
+  kitConceptText?: string
+  kitBrandItems?: string
+  kitMimuseItems?: string
 }
 
 export interface ReportPage {
@@ -71,7 +77,15 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
       { date: '', content: '' },
     ],
   },
-  kit_composition:     { engTitle: 'Kit Composition', korTitle: '키트 구성', body: '' },
+  kit_composition:     {
+    engTitle: 'Kit Composition',
+    korTitle: '키트 구성',
+    kitImageUrl: '',
+    kitConceptTitle: '2026 VOL.1 콘셉트',
+    kitConceptText: '',
+    kitBrandItems: '',
+    kitMimuseItems: '',
+  },
   content_performance: { engTitle: 'Content Performance', korTitle: '콘텐츠 성과 OVERVIEW' },
   best_review:         { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', columns: 5 },
   brand_mention:       { engTitle: 'Brand Mention Highlights', korTitle: '브랜드 언급 하이라이트' },

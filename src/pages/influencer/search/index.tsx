@@ -502,14 +502,26 @@ export default function Listup() {
 
   async function loadDashStats() {
     if (!viewPhaseId) return
-    const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-      supabase.from('influencers').select('contacted, tiers(rank)').eq('phase_id', viewPhaseId),
-      supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId),
-    ])
-    if (!infData) return
+    type StatsRow = { contacted: boolean; tiers?: { rank: string } | null }
+    const PAGE = 1000
+    let from = 0
+    const allInf: StatsRow[] = []
+    while (true) {
+      const { data } = await supabase
+        .from('influencers')
+        .select('contacted, tiers(rank)')
+        .eq('phase_id', viewPhaseId)
+        .range(from, from + PAGE - 1)
+      if (!data?.length) break
+      allInf.push(...(data as unknown as StatsRow[]))
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    const { count: confirmedCount } = await supabase
+      .from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId)
     let total = 0, contacted = 0
     const tierCounts: Record<string, number> = {}
-    for (const r of infData as unknown as { contacted: boolean; tiers?: { rank: string } | null }[]) {
+    for (const r of allInf) {
       total++
       if (r.contacted) contacted++
       const rank = r.tiers?.rank
@@ -589,17 +601,31 @@ export default function Listup() {
     if (!viewPhaseId) return
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', viewPhaseId).order('created_at', { ascending: false })
-    if (error) { setDbLoading(false); return }
-    setInfluencers(data ?? [])
+    const PAGE = 1000
+    let from = 0
+    const all: Influencer[] = []
+    while (true) {
+      const { data, error } = await supabase
+        .from('influencers')
+        .select('*, tiers(rank, label, category)')
+        .eq('phase_id', viewPhaseId)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1)
+      if (error) { setDbLoading(false); return }
+      if (!data?.length) break
+      all.push(...(data as Influencer[]))
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    setInfluencers(all)
     setDbLoading(false)
   }
 
   const loadImportPreview = useCallback(async () => {
     if (!viewPhaseId || !importPhaseId) { setImportPreview(null); return }
     const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
-      supabase.from('influencers').select('handle, status, tiers(rank)').eq('phase_id', importPhaseId),
+      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
+      supabase.from('influencers').select('handle, status, tiers(rank)').eq('phase_id', importPhaseId).limit(5000),
     ])
     const existingSet = new Set((current ?? []).map(r => r.handle.toLowerCase()))
     const sourceRows = (source ?? []) as unknown as Array<{ handle: string; status: string; tiers?: { rank: string } | null }>
@@ -624,10 +650,10 @@ export default function Listup() {
     setImporting(true)
     try {
       const [{ data: current }, { data: source }] = await Promise.all([
-        supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
+        supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
         supabase.from('influencers').select(
           'handle, display_name, email, platform, followers, following, following_ratio, total_likes, video_count, engagement_rate, profile_url, tier_id, memo, status, tiers(rank)',
-        ).eq('phase_id', importPhaseId),
+        ).eq('phase_id', importPhaseId).limit(5000),
       ])
       const existingSet = new Set((current ?? []).map(r => r.handle.toLowerCase()))
       const sourceRows = (source ?? []) as unknown as Array<{
@@ -677,6 +703,7 @@ export default function Listup() {
       setImportPhaseId('')
       setImportPreview(null)
       loadInfluencers()
+      loadDashStats()
     } finally {
       setImporting(false)
     }
@@ -686,6 +713,7 @@ export default function Listup() {
     const { error } = await supabase.from('influencers').delete().eq('id', id)
     if (error) { alert('오류: ' + error.message); return }
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
+    loadDashStats()
   }
 
   function requestDeleteInfluencer(id: string) {

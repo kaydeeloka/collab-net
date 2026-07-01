@@ -321,8 +321,79 @@ function Slide({
             )
           })()}
 
-          {/* Text-body pages: kit_composition, next_project */}
-          {(page.type === 'kit_composition' || page.type === 'next_project') && (
+          {/* Kit Composition — 2×3 grid (top 2fr / bottom 1fr) */}
+          {page.type === 'kit_composition' && (
+            <div className="rslide__kit-grid">
+              {/* Top-left: image */}
+              <div className="rslide__kit-cell rslide__kit-img-cell">
+                {editMode ? (
+                  <ET value={local.kitImageUrl ?? ''} onChange={v => setLocal(p => ({ ...p, kitImageUrl: v }))} onBlur={commit} placeholder="이미지 URL..." className="rslide__kit-img-url-edit" />
+                ) : local.kitImageUrl ? (
+                  <img src={local.kitImageUrl} className="rslide__kit-img" alt="kit" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="rslide__kit-img-empty">이미지</div>
+                )}
+              </div>
+              {/* Top-right: concept — transparent, pill = ov-pill style */}
+              <div className="rslide__kit-cell rslide__kit-cell--concept">
+                {editMode ? (
+                  <ET value={local.kitConceptTitle ?? ''} onChange={v => setLocal(p => ({ ...p, kitConceptTitle: v }))} onBlur={commit} placeholder="2026 VOL.1 콘셉트" className="rslide__kit-pill-edit" />
+                ) : (
+                  <div className="rslide__kit-pill--concept">{local.kitConceptTitle || '2026 VOL.1 콘셉트'}</div>
+                )}
+                {editMode ? (
+                  <ET value={local.kitConceptText ?? ''} onChange={v => setLocal(p => ({ ...p, kitConceptText: v }))} onBlur={commit} placeholder="콘셉트 설명..." className="rslide__kit-text-edit" multiline rows={6} />
+                ) : (
+                  <div className="rslide__kit-concept-text">{local.kitConceptText ?? ''}</div>
+                )}
+              </div>
+              {/* Bottom-left: brand items — light blue card, process-head pill */}
+              <div className="rslide__kit-cell rslide__kit-cell--composition">
+                <div className="rslide__kit-pill--composition">브랜드 구성품</div>
+                {editMode ? (
+                  <ET
+                    value={(local.kitBrandItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
+                    onChange={v => setLocal(p => ({ ...p, kitBrandItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
+                    onBlur={commit}
+                    placeholder="■ 항목을 입력하세요"
+                    className="rslide__kit-text-edit"
+                    multiline
+                    rows={3}
+                  />
+                ) : (
+                  <div className="rslide__kit-list">
+                    {(local.kitBrandItems ?? '').split('\n').filter(Boolean).map((line, li) => (
+                      <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Bottom-right: Mi Muse items — light blue card, process-head pill */}
+              <div className="rslide__kit-cell rslide__kit-cell--composition">
+                <div className="rslide__kit-pill--composition">Mi Muse 구성품</div>
+                {editMode ? (
+                  <ET
+                    value={(local.kitMimuseItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
+                    onChange={v => setLocal(p => ({ ...p, kitMimuseItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
+                    onBlur={commit}
+                    placeholder="■ 항목을 입력하세요"
+                    className="rslide__kit-text-edit"
+                    multiline
+                    rows={3}
+                  />
+                ) : (
+                  <div className="rslide__kit-list">
+                    {(local.kitMimuseItems ?? '').split('\n').filter(Boolean).map((line, li) => (
+                      <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Next project — body text */}
+          {page.type === 'next_project' && (
             editMode ? (
               <ET value={local.body ?? ''} onChange={v => setLocal(p => ({ ...p, body: v }))} onBlur={commit} placeholder="내용을 입력하세요..." className="rslide__body-edit" multiline />
             ) : (
