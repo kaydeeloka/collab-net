@@ -636,14 +636,103 @@ function Slide({
             </div>
           )}
 
-          {/* Next project — body text */}
-          {page.type === 'next_project' && (
-            editMode ? (
-              <ET value={local.body ?? ''} onChange={v => setLocal(p => ({ ...p, body: v }))} onBlur={commit} placeholder="내용을 입력하세요..." className="rslide__body-edit" multiline />
-            ) : (
-              <div className="rslide__body">{local.body}</div>
+          {/* Next project */}
+          {page.type === 'next_project' && (() => {
+            const imageUrls = (local.npImageUrls ?? '').split('\n').map(u => u.trim()).slice(0, 4)
+            const conceptLines = (local.npConcept ?? '').split('\n')
+            const conceptTitle = conceptLines[0] ?? ''
+            const conceptDetail = conceptLines.slice(1)
+            const infoRows = [
+              { label: '프로젝트 컨셉', key: 'npConcept' as const, value: local.npConcept ?? '', isMulti: true },
+              { label: '프로젝트 기간',  key: 'npPeriod' as const,  value: local.npPeriod ?? '', isMulti: false },
+              { label: '키트 발송 대상', key: 'npKitRecipients' as const, value: local.npKitRecipients ?? '', isMulti: false },
+              { label: '참여 브랜드',    key: 'npBrands' as const,  value: local.npBrands ?? '', isMulti: false },
+            ]
+            const cardKeys = ['npCard1', 'npCard2', 'npCard3'] as const
+            function parseCard(raw?: string) {
+              const lines = (raw ?? '').split('\n')
+              return { title: lines[0] ?? '', bullets: lines.slice(1).filter(Boolean) }
+            }
+            return (
+              <div className="rslide__np">
+                {/* Top: images + info */}
+                <div className="rslide__np-body">
+                  {/* Left: 4-image strip */}
+                  <div className="rslide__np-imgs">
+                    {Array.from({ length: 4 }).map((_, i) => {
+                      const url = imageUrls[i]
+                      return (
+                        <div key={i} className="rslide__np-img-cell">
+                          {editMode ? (
+                            <ET value={url ?? ''} onChange={v => {
+                              const arr = [...imageUrls]; arr[i] = v
+                              setLocal(p => ({ ...p, npImageUrls: arr.join('\n') }))
+                            }} onBlur={commit} placeholder="이미지 URL..." className="rslide__np-img-url-edit" />
+                          ) : url ? (
+                            <img src={url} alt="" referrerPolicy="no-referrer" className="rslide__np-img" />
+                          ) : (
+                            <div className="rslide__np-img-ph" />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* Right: info table */}
+                  <div className="rslide__np-info">
+                    {infoRows.map(row => (
+                      <div key={row.label} className="rslide__np-row">
+                        <SectionPill className="rslide__section-pill--np-label">{row.label}</SectionPill>
+                        {editMode ? (
+                          <ET value={row.value} onChange={v => setLocal(p => ({ ...p, [row.key]: v }))} onBlur={commit}
+                            className="rslide__np-value-edit" multiline={row.isMulti} rows={row.isMulti ? 3 : 1} />
+                        ) : row.key === 'npConcept' ? (
+                          <div className="rslide__np-concept">
+                            <div className="rslide__np-concept-title">{conceptTitle}</div>
+                            {conceptDetail.map((line, li) => (
+                              <div key={li} className={`rslide__np-concept-line${line.startsWith('■') ? ' rslide__np-concept-bullet' : ''}`}>{line}</div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rslide__np-value">{row.value}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Bottom: improvement section */}
+                <div className="rslide__np-bottom">
+                  {editMode ? (
+                    <ET value={local.npImprovementTitle ?? ''} onChange={v => setLocal(p => ({ ...p, npImprovementTitle: v }))} onBlur={commit}
+                      placeholder="보완 섹션 제목..." className="rslide__np-impr-title-edit" />
+                  ) : (
+                    <SectionPill className="rslide__section-pill--np-impr">{local.npImprovementTitle || '1차 대비 보완 운영 예정'}</SectionPill>
+                  )}
+                  <div className="rslide__np-cards">
+                    {cardKeys.map((key, ci) => {
+                      const card = parseCard(local[key])
+                      return (
+                        <div key={ci} className="rslide__np-card">
+                          {editMode ? (
+                            <ET value={local[key] ?? ''} onChange={v => setLocal(p => ({ ...p, [key]: v }))} onBlur={commit}
+                              placeholder={'카드 제목\n■ 내용\n■ 내용'} className="rslide__np-card-edit" multiline rows={5} />
+                          ) : (
+                            <>
+                              <div className="rslide__np-card-title">{card.title}</div>
+                              {card.bullets.map((b, bi) => (
+                                <div key={bi} className="rslide__np-card-bullet">
+                                  {b.startsWith('■') ? b : `■ ${b}`}
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
             )
-          )}
+          })()}
         </div>
       )}
 

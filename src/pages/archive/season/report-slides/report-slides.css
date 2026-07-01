@@ -814,6 +814,187 @@
   background: rgba(255, 255, 255, .5);
 }
 
+/* ── Next Project redesign ── */
+.rslide__np {
+  display: grid;
+  grid-template-rows: 55% 1fr;
+  flex: 1;
+  min-height: 0;
+  gap: 1.8cqw;
+}
+
+.rslide__np-body {
+  display: flex;
+  gap: 1.6cqw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left: 4-image horizontal strip */
+.rslide__np-imgs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45cqw;
+  width: 42%;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0.6cqw;
+}
+
+.rslide__np-img-cell {
+  overflow: hidden;
+  border-radius: 0.35cqw;
+  background: #dde8ec;
+  min-height: 0;
+}
+
+.rslide__np-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rslide__np-img-ph {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(160deg, #d5e4ea 0%, #c4d8df 100%);
+}
+
+.rslide__np-img-url-edit {
+  font-size: 0.7cqw;
+  color: #333;
+  width: 100%;
+}
+
+/* Right: info table */
+.rslide__np-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.65cqw;
+  padding-top: 0.3cqw;
+  min-height: 0;
+}
+
+.rslide__np-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1cqw;
+}
+
+.rslide__section-pill--np-label {
+  flex-shrink: 0;
+  min-width: 9cqw;
+  text-align: center;
+}
+
+.rslide__np-value {
+  font-size: 1.15cqw;
+  color: #1a1a1a;
+  line-height: 1.5;
+  padding-top: 0.15cqw;
+  flex: 1;
+}
+
+.rslide__np-concept {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2cqw;
+  padding-top: 0.1cqw;
+}
+
+.rslide__np-concept-title {
+  font-size: 1.15cqw;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.rslide__np-concept-line {
+  font-size: 1cqw;
+  color: #555;
+  line-height: 1.55;
+}
+
+.rslide__np-concept-bullet {
+  padding-left: 0.2cqw;
+  color: #444;
+}
+
+.rslide__np-value-edit {
+  font-size: 1cqw;
+  color: #1a1a1a;
+  flex: 1;
+  resize: none;
+}
+
+/* Bottom: improvement section */
+.rslide__np-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55cqw;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rslide__section-pill--np-impr {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.rslide__np-impr-title-edit {
+  font-size: 0.9cqw;
+  color: #fff;
+  width: 40%;
+}
+
+.rslide__np-cards {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr;
+  gap: 0.7cqw;
+  overflow: hidden;
+}
+
+.rslide__np-card {
+  background: #EAF3F6;
+  border-radius: 0.5cqw;
+  padding: 0.75cqw 1cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cqw;
+  overflow: hidden;
+}
+
+.rslide__np-card-title {
+  font-size: 1.05cqw;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 0.2cqw;
+}
+
+.rslide__np-card-bullet {
+  font-size: 0.9cqw;
+  color: #333;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+
+.rslide__np-card-edit {
+  font-size: 0.85cqw;
+  color: #333;
+  width: 100%;
+  flex: 1;
+  resize: none;
+}
+
 /* ── Text body ── */
 .rslide__body {
   font-size: 1.1cqw;
