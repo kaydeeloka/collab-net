@@ -13,4 +13,18 @@ export default defineConfig({
       '@pages':      resolve(__dirname, 'src/pages'),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-xlsx':    ['xlsx'],
+          'vendor-jszip':   ['jszip'],
+          'vendor-qrcode':  ['qrcode'],
+        },
+      },
+    },
+  },
 })

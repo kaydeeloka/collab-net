@@ -47,7 +47,6 @@ import EmsData    from './pages/kit/ems-data'
 import ArchivePicker              from './pages/archive'
 import ArchiveDesignPhase         from './pages/archive/design/phase'
 import ArchiveBrandReportPhase    from './pages/archive/season/phase'
-import ReportBuilder              from './pages/archive/season/report-builder'
 import ArchiveBrandReportLayout    from './pages/archive/brand-report/layout'
 import ArchiveBrandReportList      from './pages/archive/brand-report/index'
 import ArchiveBrandReportIndex     from './pages/archive/brand-report/report-index'
@@ -154,7 +153,6 @@ export default function App() {
                 <Route path="/archive/:phaseName/season" element={<RedirectArchivePhaseDefault />} />
                 <Route path="/archive/:phaseName/season-web" element={<ArchiveBrandReportPhase />} />
                 <Route path="/archive/:phaseName/season-report" element={<ArchiveBrandReportPhase />} />
-                <Route path="/archive/:phaseName/report-builder" element={<ReportBuilder />} />
                 <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportLayout />}>
                   <Route index element={<ArchiveBrandReportIndex />} />
                   <Route path=":brandSlug" element={<ArchiveBrandReportBrand />} />

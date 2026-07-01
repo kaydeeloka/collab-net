@@ -1,14 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Download, ExternalLink, FileText, GripVertical, Pencil, Plus, Presentation, Save, Trash2, Upload, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, FileText, GripVertical, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
 import { supabase } from '@/lib/supabase'
-import { pdf } from '@react-pdf/renderer'
 import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
-import ReportPDF from './report-builder/ReportPDF'
-import { PAGE_TYPE_LABELS, DEFAULT_CONTENT, type ReportPage, type PageContent, type PageType } from './report-builder/types'
+import { PAGE_TYPE_LABELS, DEFAULT_CONTENT, type ReportPage, type PageContent, type PageType } from './report-slides/types'
 import ReportSlides from './report-slides/ReportSlides'
 import Spinner from '@/components/Spinner'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -16,22 +14,8 @@ import { PageTabs } from '@/components/ui'
 import { PAGE_HERO_DEFAULT_BG } from '@/components/page-hero-banner.constants'
 import '@/pages/brand/confirmed/archive/archive.css'
 import './web-archive/season-collection.css'
-import './report/season-report.css'
 import { loadSeasonBrands, type SeasonBrandItem } from './web-archive/load-season-brands'
 import { getSeasonCollectionCopy, conceptTitleFromProjectConcept, splitArchiveParagraphs } from './season-collection-content'
-import { getSeasonCollectionOverview } from './report/season-collection-overview'
-import { getSeasonCollectionKitComposition } from './report/season-collection-kit-composition'
-import SeasonCollectionOverview from './report/SeasonCollectionOverview'
-import SeasonCollectionKitComposition from './report/SeasonCollectionKitComposition'
-import SeasonCollectionContentPerformance from './report/SeasonCollectionContentPerformance'
-import SeasonReviewHighlights from './report/SeasonReviewHighlights'
-import SeasonBrandMentions from './report/SeasonBrandMentions'
-import SeasonNextStep from './report/SeasonNextStep'
-import SeasonContact from './report/SeasonContact'
-import SeasonReportCover from './report/SeasonReportCover'
-import { getReportCoverTitle } from './report/report-cover'
-import { getSeasonNextStep } from './report/season-collection-next-step'
-import { REPORT_CONTACT } from './report/report-theme'
 import {
   loadStorageImageUrl,
   removeCollectionImg,
@@ -138,7 +122,6 @@ export default function ArchiveBrandReportPhase() {
   const [editMode, setEditMode] = useState(false)
   const [uploadingHero, setUploadingHero] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [downloadOpen, setDownloadOpen] = useState(false)
   const [pdfDownloading, setPdfDownloading] = useState(false)
   const [reportPages, setReportPages] = useState<ReportPage[]>([])
   const [reportRows, setReportRows] = useState<MonitoringRow[]>([])
@@ -147,19 +130,7 @@ export default function ArchiveBrandReportPhase() {
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const downloadRef = useRef<HTMLDivElement>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!downloadOpen) return
-    function handleClick(e: MouseEvent) {
-      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
-        setDownloadOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [downloadOpen])
 
   useEffect(() => {
     if (!addOpen) return
@@ -173,30 +144,87 @@ export default function ArchiveBrandReportPhase() {
   }, [addOpen])
 
   async function handleDownloadPdf() {
-    if (!resolvedPhaseId || !phase || pdfDownloading) return
-    setDownloadOpen(false)
+    if (!phase || pdfDownloading) return
+
+    if (reportEditMode) {
+      showToast('편집 모드를 종료한 후 다운로드해 주세요.', 'info')
+      return
+    }
+
+    const sourceSlidesEl = document.querySelector<HTMLElement>('.report-slides')
+    if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
+      showToast('슬라이드가 보이지 않습니다. 리포트 탭을 먼저 열어주세요.', 'info')
+      return
+    }
+
     setPdfDownloading(true)
     try {
-      // Use in-memory state (already synced on each field blur); fall back to DB if tab hasn't loaded
-      const [pages, rows] = await Promise.all([
-        reportPages.length > 0
-          ? Promise.resolve([...reportPages].sort((a, b) => a.order_index - b.order_index))
-          : supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index').then(({ data }) => (data as ReportPage[]) ?? []),
-        reportRows.length > 0
-          ? Promise.resolve(reportRows)
-          : loadMonitoringData(resolvedPhaseId).then(r => r.rows),
+      const [html2canvas, { pdf, Document, Page, Image: PdfImage }] = await Promise.all([
+        import('html2canvas').then(m => m.default),
+        import('@react-pdf/renderer'),
       ])
-      if (pages.length === 0) {
-        showToast('리포트 페이지가 없습니다. 편집 버튼으로 먼저 페이지를 추가하세요.', 'info')
-        return
+
+      const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
+      async function imgToDataUrl(src: string): Promise<string | null> {
+        try {
+          const sameOrigin = src.startsWith(window.location.origin) || src.startsWith('/')
+          const resp = await fetch(src, sameOrigin ? {} : { mode: 'cors', credentials: 'omit' })
+          if (!resp.ok) return null
+          const blob = await resp.blob()
+          return await new Promise<string>((res, rej) => {
+            const reader = new FileReader()
+            reader.onload = () => res(reader.result as string)
+            reader.onerror = () => rej(new Error('FileReader error'))
+            reader.readAsDataURL(blob)
+          })
+        } catch {
+          return null
+        }
       }
-      const pdfInstance = pdf(<ReportPDF phaseName={phase.name} pages={pages} rows={rows} />)
-      const blob = await Promise.race([
-        pdfInstance.toBlob(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('PDF 생성 시간 초과 (30초). 배경 이미지 경로를 확인해 주세요.')), 30_000)
-        ),
-      ])
+
+      const slideEls = Array.from(sourceSlidesEl.querySelectorAll<HTMLElement>('.rslide'))
+      const dataUrls: string[] = []
+
+      for (const el of slideEls) {
+        const imgs = Array.from(el.querySelectorAll<HTMLImageElement>('img'))
+        const restores: Array<() => void> = []
+        await Promise.all(imgs.map(async (img) => {
+          const orig = img.src
+          if (!orig || orig.startsWith('data:')) return
+          const converted = await imgToDataUrl(orig)
+          img.src = converted ?? PLACEHOLDER
+          restores.push(() => { img.src = orig })
+        }))
+
+        const prevRadius = el.style.borderRadius
+        el.style.borderRadius = '0'
+
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: false,
+          allowTaint: false,
+          backgroundColor: '#F8F6F6',
+          logging: false,
+          imageTimeout: 0,
+        })
+
+        el.style.borderRadius = prevRadius
+        restores.forEach(fn => fn())
+        dataUrls.push(canvas.toDataURL('image/jpeg', 0.95))
+      }
+
+      const W = 960, H = 540
+      const blob = await pdf(
+        <Document title={`Mi Muse ${phase.name} Report`}>
+          {dataUrls.map((url, i) => (
+            <Page key={String(i)} size={[W, H]} style={{ margin: 0, padding: 0 }}>
+              <PdfImage src={url} style={{ width: W, height: H, margin: 0, padding: 0 }} />
+            </Page>
+          ))}
+        </Document>
+      ).toBlob()
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -204,154 +232,11 @@ export default function ArchiveBrandReportPhase() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
-      console.error('PDF generation error:', e)
-      showToast('PDF 생성 중 오류가 발생했습니다', 'error')
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('PDF generation error:', msg, e)
+      showToast(`PDF 오류: ${msg.slice(0, 80)}`, 'error')
     } finally {
       setPdfDownloading(false)
-    }
-  }
-
-  async function handleDownloadPpt() {
-    setDownloadOpen(false)
-    try {
-      const { default: PptxGenJS } = await import('pptxgenjs')
-      const pptx = new PptxGenJS()
-      pptx.layout = 'LAYOUT_16x9'
-
-      const TEAL_DK = '648085'
-      const TEAL_LT = 'BED6DE'
-      const INK = '040000'
-      const SURFACE = 'F8F6F6'
-
-      const coverSlide = pptx.addSlide()
-      coverSlide.background = { color: SURFACE }
-      coverSlide.addText('MI MUSE', {
-        x: 0.8, y: 0.5, w: 8.4, h: 0.3,
-        fontSize: 10, color: TEAL_DK, charSpacing: 3,
-      })
-      coverSlide.addText(reportCoverTitle, {
-        x: 0.8, y: 1.4, w: 8.4, h: 2.5,
-        fontSize: 30, bold: true, color: INK, breakLine: true,
-      })
-      coverSlide.addText('MI MUSE — BEAUTY SEEDING PROJECT', {
-        x: 0.8, y: 4.8, w: 8.4, h: 0.3,
-        fontSize: 9, color: TEAL_DK, charSpacing: 2,
-      })
-
-      const overviewSlide = pptx.addSlide()
-      overviewSlide.background = { color: SURFACE }
-      overviewSlide.addText(overview.heading, {
-        x: 0.5, y: 0.3, w: 9, h: 0.6,
-        fontSize: 20, bold: true, color: INK,
-      })
-      overview.fields.forEach((field, i) => {
-        const y = 1.1 + i * 0.7
-        overviewSlide.addText(field.label ?? '', {
-          x: 0.5, y, w: 2.3, h: 0.5,
-          fontSize: 10, bold: true, color: TEAL_DK,
-          fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
-        })
-        overviewSlide.addText(field.value + (field.sub ? `\n${field.sub}` : ''), {
-          x: 2.9, y, w: 6.6, h: 0.5,
-          fontSize: 10, color: INK, valign: 'middle', breakLine: true,
-        })
-      })
-
-      const kitSlide = pptx.addSlide()
-      kitSlide.background = { color: SURFACE }
-      kitSlide.addText(kitComposition.title, {
-        x: 0.5, y: 0.3, w: 9, h: 0.6,
-        fontSize: 20, bold: true, color: INK,
-      })
-      kitSlide.addText(kitComposition.conceptHeading, {
-        x: 0.5, y: 1.1, w: 9, h: 0.38,
-        fontSize: 11, bold: true, color: TEAL_DK,
-        fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
-      })
-      kitComposition.conceptParagraphs.forEach((para, i) => {
-        kitSlide.addText(para, {
-          x: 0.5, y: 1.62 + i * 0.42, w: 9, h: 0.38,
-          fontSize: 10, color: INK,
-        })
-      })
-      const compY = 1.62 + kitComposition.conceptParagraphs.length * 0.42 + 0.3
-      kitSlide.addText(kitComposition.brandComponents.heading, {
-        x: 0.5, y: compY, w: 4.3, h: 0.35,
-        fontSize: 10, bold: true, color: TEAL_DK,
-      })
-      kitComposition.brandComponents.items.forEach((item, i) => {
-        kitSlide.addText(`• ${item}`, {
-          x: 0.5, y: compY + 0.4 + i * 0.35, w: 4.3, h: 0.3,
-          fontSize: 10, color: INK,
-        })
-      })
-      kitSlide.addText(kitComposition.museComponents.heading, {
-        x: 5.2, y: compY, w: 4.3, h: 0.35,
-        fontSize: 10, bold: true, color: TEAL_DK,
-      })
-      kitComposition.museComponents.items.forEach((item, i) => {
-        kitSlide.addText(`• ${item}`, {
-          x: 5.2, y: compY + 0.4 + i * 0.35, w: 4.3, h: 0.3,
-          fontSize: 10, color: INK,
-        })
-      })
-
-      const nextStepData = getSeasonNextStep(phase?.name ?? '')
-      const nextSlide = pptx.addSlide()
-      nextSlide.background = { color: SURFACE }
-      nextSlide.addText('NEXT STEP', {
-        x: 0.5, y: 0.3, w: 9, h: 0.3,
-        fontSize: 10, color: TEAL_DK, charSpacing: 2,
-      })
-      nextSlide.addText(nextStepData.title, {
-        x: 0.5, y: 0.62, w: 9, h: 0.6,
-        fontSize: 20, bold: true, color: INK,
-      })
-      nextStepData.fields.forEach((field, i) => {
-        const x = 0.5 + i * 3.05
-        nextSlide.addText(field.label, {
-          x, y: 1.4, w: 2.9, h: 0.35,
-          fontSize: 10, bold: true, color: TEAL_DK,
-          fill: { color: TEAL_LT }, align: 'center', valign: 'middle',
-        })
-        nextSlide.addText(field.value + (field.sub ? `\n${field.sub}` : ''), {
-          x, y: 1.8, w: 2.9, h: 0.6,
-          fontSize: 11, color: INK, breakLine: true,
-        })
-      })
-      nextStepData.strategies.forEach((block, i) => {
-        const x = 0.5 + i * 3.05
-        nextSlide.addText(block.heading, {
-          x, y: 2.7, w: 2.9, h: 0.35,
-          fontSize: 11, bold: true, color: INK,
-        })
-        block.items.forEach((item, j) => {
-          nextSlide.addText(`• ${item}`, {
-            x, y: 3.1 + j * 0.5, w: 2.9, h: 0.5,
-            fontSize: 9, color: INK, valign: 'top',
-          })
-        })
-      })
-
-      const contactSlide = pptx.addSlide()
-      contactSlide.background = { color: SURFACE }
-      contactSlide.addText('CONTACT', {
-        x: 0.5, y: 2.1, w: 9, h: 0.4,
-        fontSize: 12, color: TEAL_DK, charSpacing: 3, align: 'center',
-      })
-      contactSlide.addText(REPORT_CONTACT.email, {
-        x: 0.5, y: 2.6, w: 9, h: 0.8,
-        fontSize: 24, bold: true, color: INK, align: 'center',
-      })
-      contactSlide.addText('E.O.D', {
-        x: 0.5, y: 3.6, w: 9, h: 0.4,
-        fontSize: 11, color: TEAL_DK, charSpacing: 3, align: 'center',
-      })
-
-      await pptx.writeFile({ fileName: `${phase?.name ?? '시즌'}_결과리포트.pptx` })
-      showToast('PPT 다운로드가 완료되었습니다', 'success')
-    } catch {
-      showToast('PPT 생성 중 오류가 발생했습니다', 'error')
     }
   }
 
@@ -653,13 +538,6 @@ export default function ArchiveBrandReportPhase() {
     displayConcept,
     phaseArchiveDesc,
   )
-  const overview = getSeasonCollectionOverview(
-    phase.name,
-    brands.map(b => b.brandName),
-  )
-  const kitComposition = getSeasonCollectionKitComposition(phase.name)
-  const reportCoverTitle = getReportCoverTitle(phase.name, phase.started_at, phase.ended_at)
-  const nextStep = getSeasonNextStep(phase.name)
   const contentLoading = brandsLoading || heroLoading
 
   return (
@@ -856,37 +734,15 @@ export default function ArchiveBrandReportPhase() {
                     <Pencil size={13} />
                     {reportEditMode ? '편집 완료' : '편집'}
                   </button>
-                  <div className="season-report__download-wrap" ref={downloadRef}>
-                    <button
-                      type="button"
-                      className="cfg-btn cfg-btn--ghost"
-                      onClick={() => setDownloadOpen(o => !o)}
-                    >
-                      <Download size={13} />
-                      다운로드
-                    </button>
-                    {downloadOpen && (
-                      <div className="season-report__download-menu">
-                        <button
-                          type="button"
-                          className="season-report__download-item"
-                          disabled={pdfDownloading}
-                          onClick={() => { void handleDownloadPdf() }}
-                        >
-                          <FileText size={13} />
-                          {pdfDownloading ? 'PDF 생성 중…' : 'PDF'}
-                        </button>
-                        <button
-                          type="button"
-                          className="season-report__download-item"
-                          onClick={() => { void handleDownloadPpt() }}
-                        >
-                          <Presentation size={13} />
-                          PPT
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    className="cfg-btn cfg-btn--ghost"
+                    disabled={pdfDownloading}
+                    onClick={() => { void handleDownloadPdf() }}
+                  >
+                    <FileText size={13} />
+                    {pdfDownloading ? 'PDF 생성 중…' : 'PDF 다운로드'}
+                  </button>
                 </div>
                 <div className={reportEditMode ? 'season-report__edit-layout' : ''}>
                   {reportEditMode && (() => {

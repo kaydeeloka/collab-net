@@ -56,9 +56,9 @@ export const PAGE_TYPE_LABELS: Record<PageType, string> = {
   project_overview:    '프로젝트 개요',
   kit_composition:     '키트 구성',
   content_performance: '콘텐츠 성과',
-  best_review:         '베스트 리뷰 하이라이트',
-  brand_mention:       '브랜드 언급 하이라이트',
-  next_project:        '넥스트 프로젝트',
+  best_review:         '베스트 리뷰',
+  brand_mention:       '브랜드 언급',
+  next_project:        '다음 프로젝트',
   outro:               '마무리',
 }
 
@@ -66,7 +66,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   cover:               { title: '' },
   project_overview:    {
     engTitle: 'OVERVIEW',
-    korTitle: '',
+    korTitle: 'Mi Muse 시딩 프로젝트 개요',
     imageUrl: '',
     projectName: '',
     projectPurpose: '',
@@ -81,8 +81,8 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
     ],
   },
   kit_composition:     {
-    engTitle: 'Kit Composition',
-    korTitle: '키트 구성',
+    engTitle: 'OVERVIEW',
+    korTitle: 'Mi Muse 시딩 키트 구성',
     kitImageUrl: '',
     kitConceptTitle: '2026 VOL.1 콘셉트',
     kitConceptText: '',
@@ -97,6 +97,6 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   },
   best_review:         { engTitle: 'Best Review Highlights', korTitle: '베스트 리뷰 하이라이트', columns: 5 },
   brand_mention:       { engTitle: 'Brand Mention Highlights', korTitle: '브랜드 언급 하이라이트' },
-  next_project:        { engTitle: 'Next Project', korTitle: '넥스트 프로젝트', body: '' },
+  next_project:        { engTitle: 'Next Step', korTitle: '2026 Q2 시딩 프로젝트', body: '' },
   outro:               { title: 'E.O.D', caption: '' },
 }

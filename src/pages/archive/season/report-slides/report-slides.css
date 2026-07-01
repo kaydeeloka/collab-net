@@ -10,17 +10,120 @@
 .rslide {
   width: 100%;
   aspect-ratio: 16 / 9;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: #f5f4f3;
+  background-color: #F8F6F6;
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  border: 1.5px solid #d1d9e0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, .10);
   container-type: inline-size;
   font-family: 'NanumHuman', sans-serif;
+}
+
+/* ── Logo ── */
+.rslide__logo {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+}
+.rslide__logo--cover {
+  left: 7cqw;
+  top: 6cqw;
+  width: 24cqw;
+  height: auto;
+}
+.rslide__logo--content {
+  right: 5cqw;
+  top: 3.2cqw;
+  width: 11cqw;
+  height: auto;
+  opacity: 0.45;
+}
+
+/* ── Cover copyright ── */
+.rslide__cover-copyright {
+  position: absolute;
+  left: 2.2cqw;
+  bottom: 2cqw;
+  font-size: 11px;
+  font-weight: 300;
+  color: #aaa;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ── Outro layout ── */
+.rslide__outro-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 4cqw;
+  z-index: 1;
+}
+.rslide__outro-title {
+  font-size: 6cqw;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0.05em;
+  font-family: sans-serif;
+}
+.rslide__outro-caption {
+  position: absolute;
+  bottom: 3.5cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85cqw;
+  color: #333;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  font-family: sans-serif;
+}
+.rslide__outro-title-edit {
+  font-size: 4cqw;
+  color: #1a1a1a;
+  font-weight: 700;
+  text-align: center;
+  width: 60%;
+}
+.rslide__outro-caption-edit {
+  font-size: 0.85cqw;
+  color: #333;
+  width: 60%;
+  text-align: center;
+  margin-top: 2cqw;
+}
+
+/* ── Outro contact bar (CONTACT | email) ── */
+.rslide__outro-contact {
+  position: absolute;
+  bottom: 3.8cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1.4cqw;
+  font-family: sans-serif;
+  white-space: nowrap;
+}
+.rslide__outro-contact-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #1a1a1a;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.rslide__outro-contact-divider {
+  width: 1px;
+  height: 1.4cqw;
+  background: #aaa;
+  flex-shrink: 0;
+}
+.rslide__outro-contact-email {
+  font-size: 11px;
+  font-weight: 400;
+  color: #333;
 }
 
 /* ── Cover layer — title sits just below the logo in title-bg ── */
@@ -134,23 +237,25 @@
 }
 
 .rslide__section-pill {
-  display: inline-flex;
+  display: inline-block;
   background: #8BAAB8;
   color: #fff;
   font-family: 'NanumHuman', sans-serif;
   font-size: 14px;
   font-weight: 400;
-  padding: 4px 16px;
+  line-height: 26px;
+  padding: 0 16px;
   border-radius: 999px;
   align-self: flex-start;
   white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
 }
 
 /* table label pills — fixed min-width, centered */
 .rslide__section-pill--label {
   flex-shrink: 0;
   min-width: 8.5cqw;
-  justify-content: center;
 }
 
 /* 진행 프로세스 header pill — bottom margin */
@@ -578,6 +683,7 @@
   border-radius: 0.3cqw;
 }
 
+
 .rslide__ov-step--edit {
   padding-top: 0.9cqw;
 }
@@ -597,12 +703,10 @@
 }
 
 .rslide__ov-step-bullet {
-  display: flex;
-  gap: 0.25cqw;
-  align-items: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-height: 1.5;
 }
 
 .rslide__ov-step-content-edit {
@@ -621,6 +725,17 @@
   gap: 2.2cqw 1.2cqw;
   flex: 1;
   min-height: 0;
+}
+
+/* Bottom row wrapper — spans both grid columns, two equal halves inside */
+.rslide__kit-composition-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1.2cqw;
+}
+
+.rslide__kit-composition-row .rslide__kit-cell {
+  flex: 1;
 }
 
 /* base cell — overridden by modifiers */
@@ -689,7 +804,7 @@
   display: inline-block;
   align-self: flex-start;
   font-weight: 400;
-  padding: 0.28cqw 1.1cqw;
+  padding: 0 1.1cqw;
   margin-top: 0;
   margin-bottom: 0.9cqw;
   margin-left: 3cqw;
@@ -705,7 +820,7 @@
   display: inline-block;
   align-self: auto;
   font-weight: 400;
-  padding: 0.25cqw 1.8cqw;
+  padding: 0 1.8cqw;
 }
 
 .rslide__kit-concept-text {
@@ -805,6 +920,109 @@ textarea.rslide-edit {
   border-radius: 999px;
   pointer-events: none;
 }
+
+/* ── Report tab shell (controls + edit sidebar) ── */
+.season-report__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 48px 0;
+}
+
+.season-report__download-wrap { position: relative; }
+
+.season-report__download-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e4e8;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10);
+  min-width: 120px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.season-report__download-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.season-report__download-item:hover { background: #f5f7f9; }
+.season-report__download-item:disabled { opacity: .5; cursor: not-allowed; }
+
+.season-report__edit-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 0 48px;
+}
+
+.season-report__page-list {
+  width: 180px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 24px;
+}
+
+.season-report__page-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #e5e9ec;
+  cursor: grab;
+  user-select: none;
+}
+.season-report__page-item--over     { border-color: #8BAAB8; background: #eef4f7; }
+.season-report__page-item--dragging { opacity: .4; }
+
+.season-report__page-drag  { color: #bbb; display: flex; }
+.season-report__page-num   { color: #aaa; font-size: 11px; min-width: 14px; }
+.season-report__page-label { flex: 1; }
+
+.season-report__page-arrows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.season-report__page-arrows button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+  color: #aaa;
+  line-height: 1;
+}
+.season-report__page-arrows button:disabled { opacity: .3; cursor: not-allowed; }
+
+.season-report__page-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ccc;
+  padding: 2px;
+  line-height: 1;
+}
+.season-report__page-delete:hover { color: #e05252; }
+
+.season-report { flex: 1; min-width: 0; }
 
 /* ── Empty state ── */
 .rslide-empty {

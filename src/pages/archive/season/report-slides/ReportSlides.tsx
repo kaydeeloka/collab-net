@@ -1,23 +1,12 @@
 import { useState } from 'react'
-import { Eye, Heart, MessageCircle } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { fmtNum } from '@/lib/utils'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
-import type { ReportPage, PageContent, ProcessStep } from '../report-builder/types'
+import type { ReportPage, PageContent, ProcessStep } from './types'
 import './report-slides.css'
 
-// ── Background paths ──────────────────────────────────────────────
-const BG = {
-  title:   '/report/title-bg.jpg',
-  content: '/report/content-bg.jpg',
-  outro:   '/report/conclusion-bg.jpg',
-}
-
-function bgFor(type: string) {
-  if (type === 'cover') return BG.title
-  if (type === 'outro') return BG.outro
-  return BG.content
-}
+const LOGO = '/report/logo-04.png'
 
 // ── Editable text element ─────────────────────────────────────────
 
@@ -148,20 +137,49 @@ function Slide({
     onUpdate(local)
   }
 
-  // ── Outro: just background, no content ──────────────────────────
+  // ── Outro ──────────────────────────────────────────────────────
   if (page.type === 'outro') {
+    const DEFAULT_CONTACT = 'CONTACT | beautyproject@cranecomm.com'
+    const captionValue = local.caption || DEFAULT_CONTACT
+    const contactParts = captionValue.split('|').map(p => p.trim())
     return (
-      <div
-        className="rslide"
-        style={{ backgroundImage: `url(${BG.outro})` }}
-      />
+      <div className="rslide">
+        <img src={LOGO} className="rslide__logo rslide__logo--content" alt="" />
+        <div className="rslide__outro-layer">
+          {editMode ? (
+            <ET value={local.title ?? 'E.O.D'} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="E.O.D" className="rslide__outro-title-edit" />
+          ) : (
+            <div className="rslide__outro-title">{local.title || 'E.O.D'}</div>
+          )}
+          {editMode ? (
+            <ET value={local.caption ?? ''} onChange={v => setLocal(p => ({ ...p, caption: v }))} onBlur={commit} placeholder="CONTACT  |  email@example.com" className="rslide__outro-caption-edit" />
+          ) : contactParts.length >= 2 ? (
+            <div className="rslide__outro-contact">
+              <span className="rslide__outro-contact-label" style={{ lineHeight: 1 }}>{contactParts[0]}</span>
+              <span className="rslide__outro-contact-divider" />
+              <span className="rslide__outro-contact-email" style={{ lineHeight: 1 }}>{contactParts.slice(1).join('|').trim()}</span>
+            </div>
+          ) : (
+            <div className="rslide__outro-caption">{captionValue}</div>
+          )}
+        </div>
+      </div>
     )
   }
 
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
 
   return (
-    <div className="rslide" style={{ backgroundImage: `url(${bgFor(page.type)})` }}>
+    <div className="rslide">
+
+      {/* ── Logo ── */}
+      {page.type === 'cover'
+        ? <img src={LOGO} className="rslide__logo rslide__logo--cover" alt="" />
+        : <img src={LOGO} className="rslide__logo rslide__logo--content" alt="" />
+      }
+      {page.type === 'cover' && (
+        <div className="rslide__cover-copyright">© CRANECOMMUNICATIONS</div>
+      )}
 
       {/* ── Cover ── */}
       {page.type === 'cover' && (
@@ -508,47 +526,48 @@ function Slide({
                   <div className="rslide__kit-concept-text">{local.kitConceptText ?? ''}</div>
                 )}
               </div>
-              {/* Bottom-left: brand items — light blue card, process-head pill */}
-              <div className="rslide__kit-cell rslide__kit-cell--composition">
-                <SectionPill className="rslide__section-pill--composition">브랜드 구성품</SectionPill>
-                {editMode ? (
-                  <ET
-                    value={(local.kitBrandItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
-                    onChange={v => setLocal(p => ({ ...p, kitBrandItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
-                    onBlur={commit}
-                    placeholder="■ 항목을 입력하세요"
-                    className="rslide__kit-text-edit"
-                    multiline
-                    rows={3}
-                  />
-                ) : (
-                  <div className="rslide__kit-list">
-                    {(local.kitBrandItems ?? '').split('\n').filter(Boolean).map((line, li) => (
-                      <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {/* Bottom-right: Mi Muse items — light blue card, process-head pill */}
-              <div className="rslide__kit-cell rslide__kit-cell--composition">
-                <SectionPill className="rslide__section-pill--composition">Mi Muse 구성품</SectionPill>
-                {editMode ? (
-                  <ET
-                    value={(local.kitMimuseItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
-                    onChange={v => setLocal(p => ({ ...p, kitMimuseItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
-                    onBlur={commit}
-                    placeholder="■ 항목을 입력하세요"
-                    className="rslide__kit-text-edit"
-                    multiline
-                    rows={3}
-                  />
-                ) : (
-                  <div className="rslide__kit-list">
-                    {(local.kitMimuseItems ?? '').split('\n').filter(Boolean).map((line, li) => (
-                      <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
-                    ))}
-                  </div>
-                )}
+              {/* Bottom row: two equal composition cells */}
+              <div className="rslide__kit-composition-row">
+                <div className="rslide__kit-cell rslide__kit-cell--composition">
+                  <SectionPill className="rslide__section-pill--composition">브랜드 구성품</SectionPill>
+                  {editMode ? (
+                    <ET
+                      value={(local.kitBrandItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
+                      onChange={v => setLocal(p => ({ ...p, kitBrandItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
+                      onBlur={commit}
+                      placeholder="■ 항목을 입력하세요"
+                      className="rslide__kit-text-edit"
+                      multiline
+                      rows={3}
+                    />
+                  ) : (
+                    <div className="rslide__kit-list">
+                      {(local.kitBrandItems ?? '').split('\n').filter(Boolean).map((line, li) => (
+                        <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="rslide__kit-cell rslide__kit-cell--composition">
+                  <SectionPill className="rslide__section-pill--composition">Mi Muse 구성품</SectionPill>
+                  {editMode ? (
+                    <ET
+                      value={(local.kitMimuseItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}
+                      onChange={v => setLocal(p => ({ ...p, kitMimuseItems: v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n') }))}
+                      onBlur={commit}
+                      placeholder="■ 항목을 입력하세요"
+                      className="rslide__kit-text-edit"
+                      multiline
+                      rows={3}
+                    />
+                  ) : (
+                    <div className="rslide__kit-list">
+                      {(local.kitMimuseItems ?? '').split('\n').filter(Boolean).map((line, li) => (
+                        <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
