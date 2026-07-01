@@ -1,5 +1,5 @@
 import type { NavigateFunction } from 'react-router-dom'
-import { archiveSectionPath, type ArchiveSection } from './archive-slug'
+import { archiveSectionPath, archiveBasePath, type ArchiveSection } from './archive-slug'
 
 export async function setGlobalArchivePhase(
   phase: { id: string; name: string },
@@ -8,5 +8,8 @@ export async function setGlobalArchivePhase(
   navigate: NavigateFunction,
 ) {
   await switchPhase(phase.id)
-  navigate(archiveSectionPath(phase, section))
+  const path = section === 'season'
+    ? `${archiveBasePath(phase)}/season-web`
+    : archiveSectionPath(phase, section)
+  navigate(path)
 }

@@ -370,7 +370,7 @@
   flex: 1;
   background: #fff;
   border-radius: 0.7cqw;
-  padding: 2cqw 0.85cqw 1.1cqw;
+  padding: 2cqw 1.4cqw 2cqw;
   overflow: visible;
   border: 1px solid rgba(0, 0, 0, .07);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
@@ -391,11 +391,15 @@
   border-radius: 0.3cqw;
 }
 
+.rslide__ov-step--edit {
+  padding-top: 0.9cqw;
+}
+
 .rslide__ov-step-date-edit {
   font-size: 0.85cqw;
   color: #1a1a1a;
   width: 100%;
-  margin-bottom: 0.4cqw;
+  margin-bottom: 0.6cqw;
 }
 
 .rslide__ov-step-content {
@@ -419,6 +423,7 @@
   color: #333;
   width: 100%;
   resize: none;
+  min-height: 6cqw;
 }
 
 /* ── Kit Composition 2×3 grid (top row 2× taller) ── */
@@ -461,6 +466,7 @@
   box-shadow: none;
   position: relative;
   overflow: visible;
+  justify-content: flex-start;
   padding-top: 2.2cqw;
   padding-left: 3cqw;
   padding-right: 3cqw;
@@ -519,7 +525,7 @@
   color: #fff;
   font-size: 14px;
   font-weight: 400;
-  padding: 0.25cqw 1cqw;
+  padding: 0.25cqw 1.8cqw;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -539,10 +545,11 @@
   font-size: 14px;
   color: #333;
   line-height: 1.7;
-  flex: 1;
+  text-align: left;
   display: flex;
   flex-direction: column;
   gap: 0.4cqw;
+  margin-top: 1.2cqw;
   margin-left: 3cqw;
   margin-right: 3cqw;
 }

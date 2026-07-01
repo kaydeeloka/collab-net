@@ -405,7 +405,7 @@ export default function ReportBuilder() {
       {/* ── Toolbar ── */}
       <div className="rb-toolbar">
         <div className="rb-toolbar__left">
-          <Link to={`/archive/${phaseName}/season?tab=report`} className="rb-back-btn" aria-label="돌아가기">
+          <Link to={`/archive/${phaseName}/season-report`} className="rb-back-btn" aria-label="돌아가기">
             <ArrowLeft size={15} />
           </Link>
           <FileText size={16} />

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, Download, ExternalLink, FileText, GripVertical, Pencil, Plus, Presentation, Save, Trash2, Upload, X } from 'lucide-react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
@@ -117,9 +117,11 @@ export default function ArchiveBrandReportPhase() {
   const { phases, refreshPhases } = usePhase()
   const { phaseName } = useParams<{ phaseName: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const location = useLocation()
   const resolvedPhaseId = phase?.id ?? null
   const { showToast, showConfirm } = useToast()
+
+  const activeTab: 'website' | 'report' = location.pathname.endsWith('/season-report') ? 'report' : 'website'
 
   const [brands, setBrands] = useState<SeasonBrandItem[]>([])
   const [brandsLoading, setBrandsLoading] = useState(true)
@@ -134,9 +136,6 @@ export default function ArchiveBrandReportPhase() {
   const [heroLoading, setHeroLoading] = useState(true)
   const [overviewKitUrl, setOverviewKitUrl] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [activeTab, setActiveTab] = useState<'website' | 'report'>(
-    searchParams.get('tab') === 'report' ? 'report' : 'website'
-  )
   const [uploadingHero, setUploadingHero] = useState(false)
   const [saving, setSaving] = useState(false)
   const [downloadOpen, setDownloadOpen] = useState(false)
@@ -433,6 +432,22 @@ export default function ArchiveBrandReportPhase() {
     return () => { cancelled = true }
   }, [resolvedPhaseId, phase?.project_concept, phase?.collection_img, phase?.design_theme_img, phase?.design_kit_box_img])
 
+  useEffect(() => {
+    if (activeTab !== 'report' || !resolvedPhaseId) return
+    let cancelled = false
+    setReportLoading(true)
+    void Promise.all([
+      supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
+      loadMonitoringData(resolvedPhaseId),
+    ]).then(([{ data }, { rows }]) => {
+      if (!cancelled) {
+        setReportPages((data as ReportPage[]) ?? [])
+        setReportRows(rows)
+      }
+    }).finally(() => { if (!cancelled) setReportLoading(false) })
+    return () => { cancelled = true }
+  }, [activeTab, resolvedPhaseId])
+
   function buildProjectConceptForSave(title: string, existingConcept?: string | null, archiveDesc?: string) {
     const trimmedTitle = title.trim()
     const restParagraphs = splitArchiveParagraphs(existingConcept).slice(1)
@@ -458,17 +473,7 @@ export default function ArchiveBrandReportPhase() {
 
   function handleTabChange(tab: 'website' | 'report') {
     if (tab !== 'website' && editMode) cancelEditMode()
-    setActiveTab(tab)
-    if (tab === 'report' && resolvedPhaseId && reportPages.length === 0) {
-      setReportLoading(true)
-      void Promise.all([
-        supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
-        loadMonitoringData(resolvedPhaseId),
-      ]).then(([{ data }, { rows }]) => {
-        setReportPages((data as ReportPage[]) ?? [])
-        setReportRows(rows)
-      }).finally(() => setReportLoading(false))
-    }
+    navigate(`/archive/${phaseName}/${tab === 'report' ? 'season-report' : 'season-web'}`)
   }
 
   async function handleUpdateReportPage(page: ReportPage) {

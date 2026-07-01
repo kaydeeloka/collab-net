@@ -280,7 +280,7 @@ function Slide({
                   <div className="rslide__ov-steps">
                     {steps.map((step, i) => (
                       <div key={i} className="rslide__ov-step-wrap">
-                        <div className="rslide__ov-step">
+                        <div className={`rslide__ov-step${editMode ? ' rslide__ov-step--edit' : ''}`}>
                           {editMode ? (
                             <ET
                               value={step.date}
@@ -303,7 +303,7 @@ function Slide({
                               placeholder="■ 내용을 입력하세요"
                               className="rslide__ov-step-content-edit"
                               multiline
-                              rows={2}
+                              rows={4}
                             />
                           ) : (
                             <div className="rslide__ov-step-content">

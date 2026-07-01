@@ -65,7 +65,7 @@ function ArchiveRedirectSpinner() {
 
 function RedirectArchivePhaseDefault() {
   const { phaseName } = useParams<{ phaseName: string }>()
-  return <Navigate to={`/archive/${phaseName}/season`} replace />
+  return <Navigate to={`/archive/${phaseName}/season-web`} replace />
 }
 
 function RedirectLegacyDesignPhase() {
@@ -151,7 +151,9 @@ export default function App() {
                 <Route path="/archive" element={<ArchivePicker />} />
                 <Route path="/archive/:phaseName" element={<RedirectArchivePhaseDefault />} />
                 <Route path="/archive/:phaseName/design" element={<ArchiveDesignPhase />} />
-                <Route path="/archive/:phaseName/season" element={<ArchiveBrandReportPhase />} />
+                <Route path="/archive/:phaseName/season" element={<RedirectArchivePhaseDefault />} />
+                <Route path="/archive/:phaseName/season-web" element={<ArchiveBrandReportPhase />} />
+                <Route path="/archive/:phaseName/season-report" element={<ArchiveBrandReportPhase />} />
                 <Route path="/archive/:phaseName/report-builder" element={<ReportBuilder />} />
                 <Route path="/archive/:phaseName/brand-report" element={<ArchiveBrandReportLayout />}>
                   <Route index element={<ArchiveBrandReportIndex />} />
