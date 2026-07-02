@@ -267,9 +267,11 @@
 }
 
 .brslide__cp-reaction-text {
-  font-size: 12px;
+  font-size: 14px;
   color: #333;
   line-height: 1.6;
+  padding-left: 0.5cqw;
+  margin-top: 0.4cqw;
 }
 
 /* ── Review List ── */

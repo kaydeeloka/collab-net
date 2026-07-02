@@ -311,7 +311,8 @@ function BrandSlide({
                           {editMode ? (
                             <ET value={step.content.split('\n').map(l => l ? `■ ${l}` : '').join('\n')}
                               onChange={v => {
-                                const clean = v.split('\n').map(l => l.replace(/^■\s?/, '')).join('\n')
+                                // Strip ■ from each line start, then clean any mid-line ■ left by backspace merging
+                                const clean = v.split('\n').map(l => l.replace(/^■\s*/, '')).join('\n').replace(/■\s?/g, '')
                                 setLocal(p => ({ ...p, processSteps: (p.processSteps ?? DEFAULT_STEPS).map((s, j) => j === i ? { ...s, content: clean } : s) }))
                               }}
                               onBlur={commit} placeholder="■ 내용을 입력하세요"
@@ -321,7 +322,7 @@ function BrandSlide({
                               {step.content.split('\n').filter(Boolean).map((line, li) => (
                                 <div key={li} className="rslide__ov-step-bullet">
                                   <span className="rslide__ov-step-bullet-icon">■</span>
-                                  <span>{line}</span>
+                                  <span>{line.replace(/^■\s?/, '')}</span>
                                 </div>
                               ))}
                             </div>
@@ -510,7 +511,7 @@ function BrandSlide({
 
                 {/* Comment reaction */}
                 <div className="brslide__cp-reaction">
-                  <SectionPill>{brandName} 리뷰 콘텐츠 댓글 반응</SectionPill>
+                  <SectionPill>{(brandEn ?? brandName).toUpperCase()} 리뷰 콘텐츠 댓글 반응</SectionPill>
                   {editMode ? (
                     <ET value={local.cpCommentReaction ?? ''} onChange={v => setLocal(p => ({ ...p, cpCommentReaction: v }))}
                       onBlur={commit} placeholder="댓글 반응 요약을 입력하세요..." className="brslide__cp-reaction-edit" />
