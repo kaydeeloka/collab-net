@@ -160,102 +160,65 @@ export default function ArchiveBrandReportPhase() {
 
     setPdfDownloading(true)
     try {
-      const [html2canvas, { pdf, Document, Page, Image: PdfImage, Link: PdfLink, View: PdfView }] = await Promise.all([
-        import('html2canvas').then(m => m.default),
-        import('@react-pdf/renderer'),
-      ])
-
-      const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-
-      async function imgToDataUrl(src: string): Promise<string | null> {
+      // Collect all CSS rules from the current page so slides render identically
+      const cssTexts: string[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
         try {
-          const sameOrigin = src.startsWith(window.location.origin) || src.startsWith('/')
-          const resp = await fetch(src, sameOrigin ? {} : { mode: 'cors', credentials: 'omit' })
-          if (!resp.ok) return null
-          const blob = await resp.blob()
-          return await new Promise<string>((res, rej) => {
-            const reader = new FileReader()
-            reader.onload = () => res(reader.result as string)
-            reader.onerror = () => rej(new Error('FileReader error'))
-            reader.readAsDataURL(blob)
-          })
+          for (const rule of Array.from(sheet.cssRules)) {
+            cssTexts.push(rule.cssText)
+          }
         } catch {
-          return null
+          if (sheet.href) cssTexts.push(`@import url('${sheet.href}');`)
         }
       }
 
-      type PdfHotlink = { url: string; x: number; y: number; w: number; h: number }
-      const slideEls = Array.from(sourceSlidesEl.querySelectorAll<HTMLElement>('.rslide'))
-      const dataUrls: string[] = []
-      const pageHotlinks: PdfHotlink[][] = []
+      const slidesHtml = sourceSlidesEl.innerHTML
+      const printHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<base href="${window.location.origin}/">
+<style>${cssTexts.join('\n')}</style>
+<style>
+@page { size: 960px 540px; margin: 0; }
+*, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
+.report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; overflow: visible !important; }
+.rslide { width: 960px !important; height: 540px !important; flex-shrink: 0 !important; page-break-after: always; break-after: page; border-radius: 0 !important; overflow: hidden !important; transform: none !important; }
+</style>
+</head>
+<body><div class="report-slides">${slidesHtml}</div></body>
+</html>`
 
-      for (const el of slideEls) {
-        const imgs = Array.from(el.querySelectorAll<HTMLImageElement>('img'))
-        const restores: Array<() => void> = []
-        await Promise.all(imgs.map(async (img) => {
-          const orig = img.src
-          if (!orig || orig.startsWith('data:')) return
-          const converted = await imgToDataUrl(orig)
-          img.src = converted ?? PLACEHOLDER
-          restores.push(() => { img.src = orig })
-        }))
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:960px;height:540px;border:none;visibility:hidden;'
+      document.body.appendChild(iframe)
 
-        // Collect clickable link positions before capture
-        const slideRect = el.getBoundingClientRect()
-        const hotlinks: PdfHotlink[] = []
-        el.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(linkEl => {
-          const href = linkEl.getAttribute('data-pdf-link')
-          if (!href) return
-          const r = linkEl.getBoundingClientRect()
-          hotlinks.push({
-            url: href,
-            x: ((r.left - slideRect.left) / slideRect.width) * 960,
-            y: ((r.top - slideRect.top) / slideRect.height) * 540,
-            w: (r.width / slideRect.width) * 960,
-            h: (r.height / slideRect.height) * 540,
-          })
-        })
-        pageHotlinks.push(hotlinks)
-
-        const prevRadius = el.style.borderRadius
-        el.style.borderRadius = '0'
-
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          useCORS: false,
-          allowTaint: false,
-          backgroundColor: '#F8F6F6',
-          logging: false,
-          imageTimeout: 0,
-        })
-
-        el.style.borderRadius = prevRadius
-        restores.forEach(fn => fn())
-        dataUrls.push(canvas.toDataURL('image/jpeg', 0.95))
+      const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document
+      if (!iframeDoc) {
+        document.body.removeChild(iframe)
+        showToast('PDF 출력 준비 중 오류가 발생했습니다.', 'error')
+        return
       }
 
-      const W = 960, H = 540
-      const blob = await pdf(
-        <Document title={`Mi Muse ${phase.name} Report`}>
-          {dataUrls.map((url, i) => (
-            <Page key={String(i)} size={[W, H]} style={{ margin: 0, padding: 0, position: 'relative' }}>
-              <PdfImage src={url} style={{ width: W, height: H, margin: 0, padding: 0 }} />
-              {(pageHotlinks[i] ?? []).map((hl, j) => (
-                <PdfLink key={j} src={hl.url} style={{ position: 'absolute', top: hl.y, left: hl.x, width: hl.w, height: hl.h }}>
-                  <PdfView style={{ width: hl.w, height: hl.h }} />
-                </PdfLink>
-              ))}
-            </Page>
-          ))}
-        </Document>
-      ).toBlob()
+      iframeDoc.open()
+      iframeDoc.write(printHtml)
+      iframeDoc.close()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `MiMuse_${phase.name}_Report.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      iframe.addEventListener('load', () => {
+        const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
+        const waitAll = imgs.map(img =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() })
+        )
+        Promise.all(waitAll).then(() => {
+          setTimeout(() => {
+            iframe.contentWindow?.print()
+            setTimeout(() => document.body.removeChild(iframe), 1000)
+          }, 200)
+        })
+      })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('PDF generation error:', msg, e)

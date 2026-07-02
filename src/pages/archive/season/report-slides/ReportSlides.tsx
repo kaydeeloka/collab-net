@@ -6,7 +6,7 @@ import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
 import type { ReportPage, PageContent, ProcessStep } from './types'
 import './report-slides.css'
 
-const LOGO = '/report/logo-04.png'
+const LOGO = '/img/logo-report.svg'
 
 // ── Editable text element ─────────────────────────────────────────
 
