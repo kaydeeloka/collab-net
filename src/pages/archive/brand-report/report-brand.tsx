@@ -29,6 +29,7 @@ export default function ArchiveBrandReportBrand() {
 
   const [pages, setPages] = useState<BrandReportPage[]>([])
   const [rows, setRows] = useState<MonitoringRow[]>([])
+  const [sharedPages, setSharedPages] = useState<BrandReportPage[]>([])
   const [loading, setLoading] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -52,7 +53,7 @@ export default function ArchiveBrandReportBrand() {
     if (!phase?.id || !brand) return
     setLoading(true)
     try {
-      const [{ data }, { rows: monRows }] = await Promise.all([
+      const [{ data }, { rows: monRows }, { data: sharedData }] = await Promise.all([
         supabase
           .from('brand_report_pages')
           .select('*')
@@ -60,9 +61,16 @@ export default function ArchiveBrandReportBrand() {
           .eq('brand_name', brand.brandName)
           .order('order_index'),
         loadMonitoringData(phase.id),
+        supabase
+          .from('brand_report_pages')
+          .select('*')
+          .eq('phase_id', phase.id)
+          .eq('brand_name', '__shared__')
+          .order('order_index'),
       ])
 
       let loaded = (data as BrandReportPage[]) ?? []
+      let shared = (sharedData as BrandReportPage[]) ?? []
 
       // Auto-create default pages when none exist
       if (loaded.length === 0) {
@@ -80,8 +88,29 @@ export default function ArchiveBrandReportBrand() {
         loaded = (newPages as BrandReportPage[]) ?? []
       }
 
+      // Ensure shared pages exist for cover + project_overview
+      const sharedTypes: BrandPageType[] = ['cover', 'project_overview']
+      for (const t of sharedTypes) {
+        if (!shared.find(p => p.type === t)) {
+          const source = loaded.find(p => p.type === t)
+          const { data: newShared } = await supabase
+            .from('brand_report_pages')
+            .insert({
+              phase_id: phase.id,
+              brand_name: '__shared__',
+              order_index: sharedTypes.indexOf(t),
+              type: t,
+              content: source?.content ?? BRAND_DEFAULT_CONTENT[t],
+            })
+            .select()
+            .single()
+          if (newShared) shared = [...shared, newShared as BrandReportPage]
+        }
+      }
+
       setPages(loaded)
       setRows(monRows)
+      setSharedPages(shared)
     } finally {
       setLoading(false)
     }
@@ -92,6 +121,11 @@ export default function ArchiveBrandReportBrand() {
   async function handleUpdatePage(page: BrandReportPage) {
     await supabase.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
     setPages(prev => prev.map(p => p.id === page.id ? page : p))
+  }
+
+  async function handleUpdateSharedPage(page: BrandReportPage) {
+    await supabase.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
+    setSharedPages(prev => prev.map(p => p.id === page.id ? page : p))
   }
 
   async function addPage(type: BrandPageType) {
@@ -300,6 +334,8 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
             brandEn={brand.brandEn ?? undefined}
             editMode={editMode}
             onUpdate={handleUpdatePage}
+            sharedPages={sharedPages}
+            onUpdateShared={handleUpdateSharedPage}
           />
         </div>
       </div>

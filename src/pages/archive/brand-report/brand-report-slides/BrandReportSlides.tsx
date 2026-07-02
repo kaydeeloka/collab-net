@@ -215,17 +215,32 @@ function BrandSlide({
       )}
 
       {/* Cover */}
-      {page.type === 'cover' && (
-        <div className="rslide__cover-layer">
-          {editMode ? (
-            <ET value={local.title ?? ''} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit}
-              placeholder={`2026 Q1 시딩 프로젝트 결과 리포트 _ ${brandName}`}
-              className="rslide__cover-title-edit" multiline rows={2} />
-          ) : (
-            local.title && <div className="rslide__cover-title">{local.title}</div>
-          )}
-        </div>
-      )}
+      {page.type === 'cover' && (() => {
+        const brandSuffix = brandEn
+          ? brandEn.charAt(0).toUpperCase() + brandEn.slice(1)
+          : brandName
+        const titlePrefix = (local.title ?? '').replace(/\s*_\s*.*$/, '').trimEnd()
+        return (
+          <div className="rslide__cover-layer">
+            {editMode ? (
+              <div className="brslide__cover-title-edit-wrap">
+                <ET
+                  value={titlePrefix}
+                  onChange={v => setLocal(p => ({ ...p, title: v }))}
+                  onBlur={commit}
+                  placeholder="2026 Q1 시딩 프로젝트 결과 리포트"
+                  className="rslide__cover-title-edit"
+                />
+                <span className="brslide__cover-brand-suffix">_ {brandSuffix}</span>
+              </div>
+            ) : (
+              <div className="rslide__cover-title">
+                {titlePrefix} _ {brandSuffix}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Content pages */}
       {page.type !== 'cover' && (
@@ -360,7 +375,7 @@ function BrandSlide({
             const autoCtRows = [
               { label: 'Mi Muse 리뷰', ...countByPlat(mimuseRows) },
               { label: '브랜드별 리뷰', ...countByPlat(allBrandRows) },
-              { label: `${brandName} 리뷰`, ...countByPlat(brandRows) },
+              { label: `${(brandEn ?? brandName).toUpperCase()} 리뷰`, ...countByPlat(brandRows) },
               { label: '합계', ...countByPlat(reviewRows) },
             ]
 
@@ -726,6 +741,8 @@ function BrandSlide({
 
 // ── Main export ───────────────────────────────────────────────────
 
+const SHARED_TYPES = new Set<string>(['cover', 'project_overview'])
+
 export default function BrandReportSlides({
   pages,
   rows,
@@ -733,6 +750,8 @@ export default function BrandReportSlides({
   brandEn,
   editMode,
   onUpdate,
+  sharedPages = [],
+  onUpdateShared,
 }: {
   pages: BrandReportPage[]
   rows: MonitoringRow[]
@@ -740,6 +759,8 @@ export default function BrandReportSlides({
   brandEn?: string
   editMode: boolean
   onUpdate: (page: BrandReportPage) => Promise<void>
+  sharedPages?: BrandReportPage[]
+  onUpdateShared?: (page: BrandReportPage) => Promise<void>
 }) {
   const sorted = [...pages].sort((a, b) => a.order_index - b.order_index)
 
@@ -753,17 +774,24 @@ export default function BrandReportSlides({
 
   return (
     <div className="report-slides brand-report-slides">
-      {sorted.map(page => (
-        <BrandSlide
-          key={page.id}
-          page={page}
-          brandName={brandName}
-          brandEn={brandEn}
-          editMode={editMode}
-          rows={rows}
-          onUpdate={content => onUpdate({ ...page, content })}
-        />
-      ))}
+      {sorted.map(page => {
+        const sharedPage = SHARED_TYPES.has(page.type) ? sharedPages.find(s => s.type === page.type) : undefined
+        const effectivePage = sharedPage ?? page
+        const handleUpdate = sharedPage && onUpdateShared
+          ? (content: BrandPageContent) => onUpdateShared({ ...sharedPage, content })
+          : (content: BrandPageContent) => onUpdate({ ...page, content })
+        return (
+          <BrandSlide
+            key={page.id}
+            page={effectivePage}
+            brandName={brandName}
+            brandEn={brandEn}
+            editMode={editMode}
+            rows={rows}
+            onUpdate={handleUpdate}
+          />
+        )
+      })}
     </div>
   )
 }
