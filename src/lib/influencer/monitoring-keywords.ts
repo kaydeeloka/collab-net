@@ -24,6 +24,7 @@ export type BrandKwsState = {
 export type ConfirmedBrandKw = {
   key: string
   name: string
+  en: string
 }
 
 export function emptyBrandKws(): BrandKwsState {

@@ -30,6 +30,7 @@ function paginate<T>(items: T[], page: number) {
 interface ConfirmedBrand {
   id:              string
   brand_name:      string
+  brand_en:        string | null
   contact_name:    string | null
   position:        string | null
   email:           string | null
@@ -45,6 +46,7 @@ interface ConfirmedBrand {
 
 const EMPTY_FORM = {
   brand_name:      '',
+  brand_en:        '',
   contact_name:    '',
   position:        '',
   email:           '',
@@ -108,6 +110,7 @@ export default function BrandConfirmedManagement() {
     const { error } = await supabase.from('confirmed_brands').insert({
       phase_id:        selectedPhaseId,
       brand_name:      addForm.brand_name.trim(),
+      brand_en:        addForm.brand_en.trim()        || null,
       contact_name:    addForm.contact_name.trim()    || null,
       position:        addForm.position.trim()        || null,
       email:           addForm.email.trim()           || null,
@@ -128,6 +131,7 @@ export default function BrandConfirmedManagement() {
     setEditId(r.id)
     setEditForm({
       brand_name:      r.brand_name,
+      brand_en:        r.brand_en        ?? '',
       contact_name:    r.contact_name    ?? '',
       position:        r.position        ?? '',
       email:           r.email           ?? '',
@@ -146,6 +150,7 @@ export default function BrandConfirmedManagement() {
     setSaving(true)
     const { error } = await supabase.from('confirmed_brands').update({
       brand_name:      editForm.brand_name.trim(),
+      brand_en:        editForm.brand_en.trim()        || null,
       contact_name:    editForm.contact_name.trim()    || null,
       position:        editForm.position.trim()        || null,
       email:           editForm.email.trim()           || null,
@@ -201,13 +206,21 @@ export default function BrandConfirmedManagement() {
   const modalForm = (form: Form, setForm: (f: Form) => void) => (
     <div className="ui-form">
       <FormSection title="필수 입력" />
-      <FormInput
-        label="브랜드"
-        required
-        value={form.brand_name}
-        onChange={e => setForm({ ...form, brand_name: e.target.value })}
-        placeholder="브랜드명 입력"
-      />
+      <FormGrid>
+        <FormInput
+          label="브랜드 (한국어)"
+          required
+          value={form.brand_name}
+          onChange={e => setForm({ ...form, brand_name: e.target.value })}
+          placeholder="브랜드명 입력"
+        />
+        <FormInput
+          label="브랜드 (영문)"
+          value={form.brand_en}
+          onChange={e => setForm({ ...form, brand_en: e.target.value })}
+          placeholder="Brand name in English"
+        />
+      </FormGrid>
 
       <FormSection title="선택 입력" />
       <FormGrid>
@@ -242,13 +255,14 @@ export default function BrandConfirmedManagement() {
 
       <div className="ui-panel">
         <div className="ui-panel__scroll">
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1100 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1200 }}>
             <colgroup>
               <col style={{ width: 40 }} />
-              <col style={{ width: 220 }} />
-              <col style={{ width: 200 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 140 }} />
+              <col style={{ width: 180 }} />
               <col style={{ width: 120 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 110 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 110 }} />
@@ -256,8 +270,8 @@ export default function BrandConfirmedManagement() {
             </colgroup>
             <thead>
               <tr className="table-head-row">
-                {['No.', '브랜드', '담당자', '직급', '휴대폰', '홈페이지', '생산원가', '제품 받음', '비고'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 7 ? 'center' : 'left' }}>
+                {['No.', '브랜드', '브랜드 (영문)', '담당자', '직급', '휴대폰', '홈페이지', '생산원가', '제품 받음', '비고'].map((h, i) => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: i === 0 || i === 8 ? 'center' : 'left' }}>
                     {h}
                   </th>
                 ))}
@@ -265,9 +279,9 @@ export default function BrandConfirmedManagement() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 확정 브랜드가 없습니다.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 확정 브랜드가 없습니다.</td></tr>
               ) : pg.pageItems.map((r, i) => {
                 const noteVal = noteEdits[r.id] !== undefined ? noteEdits[r.id] : (r.notes ?? '')
                 return (
@@ -281,6 +295,9 @@ export default function BrandConfirmedManagement() {
                         <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-8)', wordBreak: 'break-word' }}>{r.brand_name}</span>
                         {r.product && <span style={{ fontSize: 11, color: 'var(--gray-5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</span>}
                       </div>
+                    </td>
+                    <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)' }}>
+                      {r.brand_en || <span style={{ color: 'var(--gray-3)' }}>—</span>}
                     </td>
                     <td style={{ padding: '0 12px', fontSize: 12 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -360,6 +377,14 @@ export default function BrandConfirmedManagement() {
           size="lg"
         >
           <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+            <div style={{ marginBottom: 14 }}>
+              <ReportCard icon={<Info size={18} />} title="브랜드">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <ReportStat label="브랜드 (한국어)" value={viewRow.brand_name} />
+                  <ReportStat label="브랜드 (영문)" value={viewRow.brand_en || '—'} />
+                </div>
+              </ReportCard>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <ReportCard icon={<User size={18} />} title="담당자">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

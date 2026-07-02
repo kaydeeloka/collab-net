@@ -323,19 +323,17 @@ function Slide({
                             )}
                           </>
                         ) : (
-                          <>
-                            <div className="rslide__cp-card-desc">
-                              {card.desc.split('\n').map((line, li) => (
-                                <div key={li}>
-                                  {line.split(/(\d+%)/g).map((part, pi) =>
-                                    /^\d+%$/.test(part)
-                                      ? <span key={pi} className="rslide__cp-card-pct">{part}</span>
-                                      : part
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </>
+                          <div className="rslide__cp-card-desc">
+                            {card.desc.split('\n').map((line, li) => (
+                              <div key={li}>
+                                {line.split(/(\d+%)/g).map((part, pi) =>
+                                  /^\d+%$/.test(part)
+                                    ? <span key={pi} className="rslide__cp-card-pct">{part}</span>
+                                    : part
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
                         <div className="rslide__cp-progress">
                           <div className="rslide__cp-progress-bar" style={{ width: `${barPct}%` }} />

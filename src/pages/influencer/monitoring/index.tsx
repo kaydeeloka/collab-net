@@ -23,6 +23,7 @@ import {
   MIMUSE_BRAND,
   MIMUSE_COLOR,
   BRAND_KW_COLORS as BRANDS_KW_COLORS,
+  DEFAULT_MIMUSE_KEYWORDS,
   type BrandKwsState,
   type ConfirmedBrandKw,
   brandKeywordIndex,
@@ -387,13 +388,14 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     if (!viewPhaseId) return
     try {
       const [brandsRes, kwsRes] = await Promise.all([
-        supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+        supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
         supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
           .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
       ])
       const confirmed: ConfirmedBrandKw[] = (brandsRes.data || []).map(b => ({
         key: monitoringBrandKey(b.brand_name),
         name: b.brand_name,
+        en: (b.brand_en || '').toLowerCase(),
       }))
       setConfirmedBrands(confirmed)
       const rows = kwsRes.data || []
@@ -486,12 +488,28 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     return r.confirmed_influencer_id || r.influencer_platform_id || r.id
   }
 
+  function brandEngKey(b: ConfirmedBrandKw): string {
+    return b.en || b.key
+  }
+
+  function normalizeBrandToKey(raw: string): string {
+    if (!raw) return ''
+    const lower = raw.toLowerCase()
+    if (lower === MIMUSE_BRAND || isMimuseKeyword(lower, brandKws.mimuse || [])) return MIMUSE_BRAND
+    const found =
+      confirmedBrands.find(b => b.en === lower) ||
+      confirmedBrands.find(b => b.key === lower) ||
+      confirmedBrands.find(b => b.name.toLowerCase() === lower) ||
+      confirmedBrands.find(b => (brandKws.byBrand[b.key] || []).some(kw => kw.toLowerCase() === lower))
+    return found ? brandEngKey(found) : lower
+  }
+
   function rowToEditForm(r: MonRow) {
     return {
       date:        r.date || '',
       media:       r.media || '',
       content:     r.content || '',
-      brand:       (r.brand || '').toLowerCase(),
+      brand:       normalizeBrandToKey(r.brand || ''),
       review_link: r.review_link || '',
       views:       r.views || 0,
       likes:       r.likes || 0,
@@ -832,11 +850,11 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     }, {} as Record<string, number>),
     lastRun: rows.find(r => r.updated)?.updated || '',
   }
-  const mimuseReviewCount = stats.brandCounts.mimuse ?? 0
-  const brandReviewCount = Object.entries(stats.brandCounts).reduce(
-    (sum, [key, count]) => (key === 'mimuse' ? sum : sum + count),
-    0,
-  )
+  const kwCount = (keywords: string[]) =>
+    [...new Set(keywords.map(k => k.toLowerCase()))].reduce((sum, kw) => sum + (stats.brandCounts[kw] ?? 0), 0)
+  const mimuseReviewCount = kwCount(brandKws.mimuse.length ? brandKws.mimuse : DEFAULT_MIMUSE_KEYWORDS)
+  const brandReviewCount = confirmedBrands.reduce((sum, b) =>
+    sum + kwCount([b.key, b.en, b.name, ...(brandKws.byBrand[b.key] ?? [])]), 0)
   const platformReviewCounts = Object.fromEntries(
     PLATFORM_BUCKETS.map(key => [
       key,
@@ -848,13 +866,38 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   const mediaTotal   = photoCount + videoCount
 
   const filteredRows = rows.filter(r => {
-    if (brandFilter !== 'all' && (r.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false
+    if (!rowMatchesBrand(r, brandFilter)) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (![r.handle, r.display_name, r.brand, r.keywords, r.review_link].join(' ').toLowerCase().includes(q)) return false
     }
     return true
   })
+
+  const uploadDisplayCount = (() => {
+    const map = new Map<string, MonRow[]>()
+    filteredRows.forEach(r => {
+      const key = r.confirmed_influencer_id || r.influencer_platform_id || r.id
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(r)
+    })
+    const filteredGroups = Array.from(map.values())
+      .map(rows => platformFilter !== 'all' ? rows.filter(r => platformBucket(r.platform) === platformFilter) : rows)
+      .filter(rows => {
+        if (rows.length === 0) return false
+        if (uploadFilter !== 'all') {
+          const anyLink = rows.some(r => r.review_link?.startsWith('http'))
+          if (uploadFilter === 'uploaded' && !anyLink) return false
+          if (uploadFilter === 'not_uploaded' && anyLink) return false
+        }
+        return true
+      })
+    // upload filter is group-level → show influencer count (명) to match stat card
+    // 전체 → show individual row count (건)
+    return uploadFilter !== 'all'
+      ? filteredGroups.length
+      : filteredGroups.reduce((sum, rows) => sum + rows.length, 0)
+  })()
 
   const thBase: React.CSSProperties = {
     position: 'sticky', top: 0, zIndex: 1,
@@ -876,10 +919,20 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     ...PLATFORM_BUCKETS.map(key => ({ value: key, label: PLATFORM_DISPLAY[key].label })),
   ]
 
+  function rowMatchesBrand(r: MonRow, filter: string): boolean {
+    if (filter === 'all') return true
+    const rowBrand = (r.brand || '').toLowerCase()
+    if (filter === MIMUSE_BRAND) return rowBrand === MIMUSE_BRAND || isMimuseKeyword(rowBrand, brandKws.mimuse || [])
+    const b = confirmedBrands.find(cb => brandEngKey(cb) === filter)
+    if (!b) return rowBrand === filter
+    const identifiers = [b.key, b.en, b.name.toLowerCase(), ...(brandKws.byBrand[b.key] || []).map(k => k.toLowerCase())].filter(Boolean)
+    return identifiers.includes(rowBrand)
+  }
+
   const BRAND_FILTER_OPTIONS = [
     { value: 'all', label: '전체' },
     { value: MIMUSE_BRAND, label: 'MiMuse' },
-    ...confirmedBrands.map(b => ({ value: b.key, label: b.name })),
+    ...confirmedBrands.map(b => ({ value: brandEngKey(b), label: brandEngKey(b) })),
   ]
 
   const STATUS_FILTER_OPTIONS = [
@@ -1014,7 +1067,12 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
               { key: 'mimuse', label: 'MiMuse', count: mimuseReviewCount, color: MIMUSE_COLOR },
-              { key: 'brand', label: '브랜드별', count: brandReviewCount, color: '#64748b' },
+              ...confirmedBrands.map((b, idx) => ({
+                key: b.key,
+                label: b.name,
+                count: kwCount([b.key, b.en, b.name, ...(brandKws.byBrand[b.key] ?? [])]),
+                color: BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length],
+              })),
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <span style={{
@@ -1088,7 +1146,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         const allUploadedRows = rows.filter(r => r.review_link?.startsWith('http'))
         const uploadedRows    = allUploadedRows.filter(r => {
           if (listPlatformFilter !== 'all' && platformBucket(r.platform) !== listPlatformFilter) return false
-          if (listBrandFilter !== 'all' && (r.brand || '').toLowerCase() !== listBrandFilter.toLowerCase()) return false
+          if (!rowMatchesBrand(r, listBrandFilter)) return false
           return true
         })
         const listTotalPages = Math.max(1, Math.ceil(uploadedRows.length / MON_PAGE_SIZE))
@@ -1245,6 +1303,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         >
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 320 }} />
+          <span style={{ fontSize: 13, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>
+            표시: <strong style={{ color: 'var(--yellow-text)' }}>{uploadDisplayCount}</strong>{uploadFilter !== 'all' ? '명' : '개'}
+          </span>
           <button
             type="button"
             className="cfg-btn cfg-btn--ghost"
@@ -1304,6 +1365,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                 <thead>
                   <tr>
                     <th style={{ ...thBase, width: 36, textAlign: 'center' }}>no.</th>
+                    <th style={thBase}>인플루언서</th>
                     <th style={thBase}>
                       <HeaderFilterMenu
                         label="플랫폼"
@@ -1349,7 +1411,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   {groups.length === 0
                     ? (
                       <tr>
-                        <td colSpan={13} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
+                        <td colSpan={14} style={{ textAlign: 'center', color: 'var(--gray-5)', padding: 40, whiteSpace: 'normal' }}>
                           {emptyMsg}
                         </td>
                       </tr>
@@ -1398,7 +1460,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                                   />
                                   <div style={{ minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                  <PlatformBadge platform={group.rows[0].platform} />
                                   {anyLink
                                     ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>완료</span>
                                     : <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>미업로드</span>}
@@ -1425,6 +1486,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                                 </div>
                               </td>
                             )}
+
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {r.platform ? <PlatformBadge platform={r.platform} /> : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                            </td>
 
                             <td style={{ fontSize: 12, color: 'var(--gray-6)', whiteSpace: 'nowrap' }}>
                               {fmtDate(r.date)}
@@ -1765,7 +1830,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                     onChange={e => setEditForm(f => f ? { ...f, brand: e.target.value } : f)}>
                     <option value="">—</option>
                     <option value={MIMUSE_BRAND}>MiMuse</option>
-                    {confirmedBrands.map(b => <option key={b.key} value={b.key}>{b.name}</option>)}
+                    {confirmedBrands.map(b => { const eng = brandEngKey(b); return <option key={b.key} value={eng}>{eng}</option> })}
                   </select>
                 </div>
                 <div>

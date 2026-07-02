@@ -1,0 +1,449 @@
+/* ── Overview image block ── */
+.brand-report-slides .rslide__ov-img-block {
+  width: 31%;
+}
+
+/* ── Overview table alignment ── */
+.brand-report-slides .rslide__ov-table {
+    justify-content: space-between;
+}
+
+.brand-report-slides .rslide__section-pill--label {
+  width: 11cqw;
+  min-width: 11cqw;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 12px;
+  padding: 1px 10px;
+  line-height: 22px;
+}
+
+.brand-report-slides .rslide__ov-value--single {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-report-slides .rslide__ov-row--tall {
+  align-items: flex-start;
+}
+
+.brand-report-slides .rslide__ov-row--tall .rslide__ov-value,
+.brand-report-slides .rslide__ov-row--tall .rslide__ov-value-edit {
+  min-height: 2.8cqw;
+}
+
+/* ── Slide background ── */
+.brand-report-slides .rslide {
+  background-color: #EEF6FC;
+}
+
+/* ── Cover title — single line ── */
+.brand-report-slides .rslide__cover-title {
+  max-width: none;
+  white-space: nowrap;
+  font-size: 2.4cqw;
+}
+
+/* ── Logo opacity ── */
+.brand-report-slides .rslide__logo--content {
+  opacity: 1;
+}
+
+/* ── Brand report colour overrides (#8BAAB8 → #6AADEE, #648085 → #4A8EC8) ── */
+
+/* eng title text */
+.brand-report-slides .rslide__eng       { color: #6AADEE; }
+.brand-report-slides .rslide__eng-edit  { color: #6AADEE; }
+
+/* stat box left accent */
+.brand-report-slides .rslide__stat-box  { border-left-color: #6AADEE; }
+
+/* section pills */
+.brand-report-slides .rslide__section-pill { background: #6AADEE; }
+
+/* content performance cards */
+.brand-report-slides .rslide__cp-card-total { color: #6AADEE; }
+.brand-report-slides .rslide__cp-card-pct   { color: #6AADEE; }
+.brand-report-slides .rslide__cp-card-stat  { color: #6AADEE; }
+.brand-report-slides .rslide__cp-progress-bar { background: #6AADEE; }
+
+/* best review detail — labels & badges */
+.brand-report-slides .rslide__brd-badge--review  { background: #4A8EC8; }
+.brand-report-slides .rslide__brd-label          { background: #6AADEE; }
+.brand-report-slides .rslide__brd-edit-label     { background: #6AADEE; }
+.brand-report-slides .rslide__brd-handle-link    { color: #4A8EC8; }
+.brand-report-slides .rslide__brd-value--link    { color: #4A8EC8; }
+
+/* brand mention pill */
+.brand-report-slides .rslide__bm-pill { background: #6AADEE; }
+
+/* brand table header */
+.brand-report-slides .rslide__table-head { background: #6AADEE; }
+
+/* edit mode inputs */
+.brand-report-slides .rslide-edit      { border-bottom-color: #6AADEE; }
+.brand-report-slides .rslide__edit-badge { background: #6AADEE; }
+
+/* ── Outro contacts ── */
+.brslide__outro-contact {
+  align-items: center;
+}
+
+.brslide__outro-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35cqw;
+}
+
+.brslide__outro-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7cqw;
+}
+
+.brslide__outro-contact-name {
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.brslide__outro-contact-email {
+  font-size: 11px;
+  color: #4A8EC8;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brslide__outro-contact-email:hover {
+  text-decoration: underline;
+}
+
+/* ── Brand Content Performance ── */
+.brslide__cp {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2cqw;
+  flex: 1;
+  min-height: 0;
+}
+
+.brslide__cp-tables {
+  display: flex;
+  gap: 1.6cqw;
+  min-height: 0;
+}
+
+.brslide__cp-table-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqw;
+  min-height: 0;
+}
+
+.brslide__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #1a1a1a;
+}
+
+.brslide__table th {
+  background: #C8DCE4;
+  color: #3a6475;
+  font-weight: 600;
+  padding: 0.35cqw 0.6cqw;
+  text-align: center;
+  border: 1px solid #b8cfd8;
+}
+
+.brslide__table td {
+  padding: 0.3cqw 0.6cqw;
+  text-align: center;
+  border: 1px solid #e0eaee;
+  background: #fff;
+}
+
+.brslide__table tr:nth-child(even) td {
+  background: #f5f9fa;
+}
+
+.brslide__table-total td {
+  font-weight: 700;
+  background: #e8f2f5 !important;
+}
+
+.brslide__table-cell-edit {
+  font-size: 11px;
+  text-align: center;
+  width: 100%;
+  padding: 0 !important;
+}
+
+.brslide__cp-reaction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5cqw;
+}
+
+.brslide__cp-reaction-edit {
+  font-size: 12px;
+  color: #1a1a1a;
+  width: 100%;
+}
+
+.brslide__cp-reaction-text {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* ── Review List ── */
+.brslide__rl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7cqw;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.brslide__rl-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3a6475;
+}
+
+.brslide__rl-subtitle-edit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3a6475;
+}
+
+.brslide__rl-offset-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4cqw;
+  margin-left: auto;
+  font-size: 10px;
+  color: #888;
+}
+
+.brslide__rl-offset-edit {
+  font-size: 10px;
+  width: 3cqw;
+}
+
+.brslide__rl-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.brslide__rl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  color: #1a1a1a;
+}
+
+.brslide__rl-table th {
+  background: #C8DCE4;
+  color: #3a6475;
+  font-weight: 600;
+  padding: 0.4cqw 0.5cqw;
+  text-align: center;
+  border: 1px solid #b8cfd8;
+  white-space: nowrap;
+}
+
+.brslide__rl-table td {
+  padding: 0.28cqw 0.5cqw;
+  border: 1px solid #e5edf0;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.brslide__rl-table tr:nth-child(even) td {
+  background: #f7fbfc;
+}
+
+.brslide__rl-no {
+  text-align: center;
+  color: #888;
+  width: 2.5cqw;
+}
+
+.brslide__rl-handle {
+  font-weight: 500;
+  color: #2a5060;
+  white-space: nowrap;
+}
+
+.brslide__rl-url {
+  max-width: 28cqw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brslide__rl-url a {
+  color: #4a8fa8;
+  text-decoration: none;
+  font-size: 9px;
+}
+
+.brslide__rl-empty {
+  text-align: center;
+  color: #aaa;
+  padding: 1cqw;
+  font-size: 11px;
+}
+
+.brslide__rl-page-info {
+  font-size: 9px;
+  color: #999;
+  text-align: right;
+}
+
+/* ── Brand Mention grid (single brand) ── */
+.brslide__bm-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.4cqw;
+  flex: 1;
+  min-height: 0;
+}
+
+.brslide__bm-thumb {
+  position: relative;
+  overflow: hidden;
+  background: #dde8ec;
+  border-radius: 0.3cqw;
+  min-height: 0;
+}
+
+.brslide__bm-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.brslide__bm-ph {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(160deg, #d5e4ea 0%, #c4d8df 100%);
+}
+
+/* ── Brand Mention Detail ── */
+.brslide__bmd {
+  display: flex;
+  gap: 1.6cqw;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.brslide__bmd-img-block {
+  width: 55%;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0.6cqw;
+}
+
+.brslide__bmd-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.brslide__bmd-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.brslide__bmd-stats {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #d8eaee;
+  border-radius: 0.5cqw;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.brslide__bmd-stat-row {
+  display: flex;
+  border-bottom: 1px solid #d8eaee;
+  min-height: 0;
+}
+
+.brslide__bmd-stat-row:last-child {
+  border-bottom: none;
+  flex: 1;
+}
+
+.brslide__bmd-stat-label {
+  width: 6cqw;
+  flex-shrink: 0;
+  background: #C8DCE4;
+  color: #3a6475;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.3cqw 0.5cqw;
+  line-height: 1.3;
+}
+
+.brslide__bmd-stat-value {
+  flex: 1;
+  font-size: 12px;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  padding: 0.3cqw 0.8cqw;
+}
+
+.brslide__bmd-stat-edit {
+  flex: 1;
+  font-size: 12px;
+  color: #1a1a1a;
+  padding: 0.2cqw 0.5cqw !important;
+}
+
+.brslide__bmd-stat-row--reaction {
+  flex: 1;
+  min-height: 0;
+}
+
+.brslide__bmd-reaction-edit {
+  flex: 1;
+  font-size: 11px;
+  color: #333;
+  padding: 0.3cqw 0.5cqw !important;
+}
+
+.brslide__bmd-reaction-text {
+  flex: 1;
+  font-size: 11px;
+  color: #333;
+  line-height: 1.6;
+  padding: 0.4cqw 0.8cqw;
+  text-align: center;
+  display: flex;
+  align-items: center;
+}

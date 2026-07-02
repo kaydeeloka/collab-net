@@ -274,10 +274,10 @@
   flex: 1;
   background: rgba(255,255,255,.88);
   border-radius: 0.8cqw;
-  padding: 1cqw 1.2cqw 0.9cqw;
+  padding: 1.4cqw 1.6cqw 1.2cqw;
   display: flex;
   flex-direction: column;
-  gap: 0.4cqw;
+  gap: 0.6cqw;
   border: 1px solid rgba(0,0,0,.07);
 }
 
@@ -288,32 +288,33 @@
 }
 
 .rslide__cp-card-total {
-  font-size: 12px;
+  font-size: 1.1cqw;
   font-weight: 600;
   color: #8BAAB8;
 }
 
 .rslide__cp-card-label {
-  font-size: 14px;
+  font-size: 1.5cqw;
   color: #1a1a1a;
   font-weight: 700;
 }
 
 .rslide__cp-card-desc {
-  font-size: 14px;
+  font-size: 1.3cqw;
   color: #1a1a1a;
   font-weight: 400;
   flex: 1;
+  line-height: 1.45;
 }
 
 .rslide__cp-card-pct {
   color: #8BAAB8;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1.6cqw;
 }
 
 .rslide__cp-card-stat {
-  font-size: 11px;
+  font-size: 1cqw;
   color: #8BAAB8;
   font-weight: 600;
   margin-top: auto;
@@ -847,7 +848,7 @@
   flex-shrink: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 0;
+  border-radius: 0.7cqw;
 }
 
 .rslide__np-img-cell {
