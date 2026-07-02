@@ -163,7 +163,7 @@
 .rslide__content-layer {
   position: absolute;
   inset: 0;
-  padding: 3.5cqw 9cqw 6cqw 4.5cqw;
+  padding: 3.5cqw 5cqw 6cqw 4.5cqw;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -245,7 +245,7 @@
   font-size: 14px;
   font-weight: 400;
   line-height: 26px;
-  padding: 0 16px;
+  padding: 2px 16px;
   border-radius: 999px;
   align-self: flex-start;
   white-space: nowrap;
@@ -835,8 +835,8 @@
 .rslide__np-imgs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.45cqw;
-  width: 42%;
+  gap: 0;
+  width: 54%;
   flex-shrink: 0;
   min-height: 0;
   overflow: hidden;
@@ -874,8 +874,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 0.65cqw;
+  justify-content: space-between;
   padding-top: 0.3cqw;
   min-height: 0;
 }
@@ -893,7 +892,7 @@
 }
 
 .rslide__np-value {
-  font-size: 1.15cqw;
+  font-size: 14px;
   color: #1a1a1a;
   line-height: 1.5;
   padding-top: 0.15cqw;
@@ -909,14 +908,14 @@
 }
 
 .rslide__np-concept-title {
-  font-size: 1.15cqw;
+  font-size: 14px;
   font-weight: 700;
   color: #1a1a1a;
   line-height: 1.4;
 }
 
 .rslide__np-concept-line {
-  font-size: 1cqw;
+  font-size: 12px;
   color: #555;
   line-height: 1.55;
 }
@@ -926,8 +925,31 @@
   color: #444;
 }
 
+.rslide__np-concept-title-edit {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  width: 100%;
+}
+.rslide__np-concept-desc-edit {
+  font-size: 12px;
+  color: #555;
+  width: 100%;
+}
+.rslide__np-card-title-edit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3a6475;
+  width: 100%;
+}
+.rslide__np-card-content-edit {
+  font-size: 12px;
+  color: #333;
+  width: 100%;
+  flex: 1;
+}
 .rslide__np-value-edit {
-  font-size: 1cqw;
+  font-size: 14px;
   color: #1a1a1a;
   flex: 1;
   resize: none;
@@ -937,7 +959,7 @@
 .rslide__np-bottom {
   display: flex;
   flex-direction: column;
-  gap: 0.55cqw;
+  gap: 1.4cqw;
   min-height: 0;
   overflow: hidden;
 }
@@ -956,36 +978,54 @@
 .rslide__np-cards {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr;
-  gap: 0.7cqw;
+  display: flex;
+  align-items: stretch;
+  gap: 0.8cqw;
+  overflow: hidden;
+}
+
+.rslide__np-card-wrap {
+  display: flex;
+  flex: 1;
   overflow: hidden;
 }
 
 .rslide__np-card {
-  background: #EAF3F6;
-  border-radius: 0.5cqw;
-  padding: 0.75cqw 1cqw;
+  flex: 1;
+  background: #fff;
+  border-radius: 0.7cqw;
+  padding: 0.9cqw 1.2cqw 1cqw;
   display: flex;
   flex-direction: column;
-  gap: 0.3cqw;
+  gap: 0.7cqw;
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, .07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
 }
 
 .rslide__np-card-title {
-  font-size: 1.05cqw;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin-bottom: 0.2cqw;
+  display: inline-block;
+  align-self: flex-start;
+  background: #C8DCE4;
+  color: #3a6475;
+  font-family: 'NanumHuman', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.18cqw 0.7cqw;
+  border-radius: 0.3cqw;
+  white-space: nowrap;
 }
 
 .rslide__np-card-bullet {
-  font-size: 0.9cqw;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
   color: #333;
-  line-height: 1.55;
-  white-space: pre-wrap;
+  line-height: 1.6;
   word-break: keep-all;
+}
+.rslide__np-card-bullet-icon {
+  flex-shrink: 0;
 }
 
 .rslide__np-card-edit {
@@ -1128,12 +1168,15 @@
   flex: 1;
   background: #fff;
   border-radius: 0.7cqw;
-  padding: 2cqw 1.4cqw 2cqw;
+  padding: 2cqw 1.4cqw;
   overflow: visible;
   border: 1px solid rgba(0, 0, 0, .07);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
   align-self: stretch;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .rslide__ov-step-date {
@@ -1141,8 +1184,8 @@
   top: -0.6cqw;
   left: 0.7cqw;
   display: inline-block;
-  background: #8BAAB8;
-  color: #fff;
+  background: #C8DCE4;
+  color: #3a6475;
   font-family: 'NanumHuman', sans-serif;
   font-size: 12px;
   font-weight: 400;
@@ -1163,17 +1206,21 @@
 }
 
 .rslide__ov-step-content {
-  font-size: 1cqw;
+  font-size: 14px;
   color: #333;
   line-height: 1.7;
   font-weight: 400;
 }
 
 .rslide__ov-step-bullet {
-  white-space: pre-wrap;
+  display: flex;
+  gap: 6px;
   word-break: keep-all;
   overflow-wrap: break-word;
   line-height: 1.5;
+}
+.rslide__ov-step-bullet-icon {
+  flex-shrink: 0;
 }
 
 .rslide__ov-step-content-edit {

@@ -396,7 +396,6 @@ function Slide({
                       <div className="rslide__brd-media">
                         <div className="rslide__brd-ph">이미지</div>
                         <div className="rslide__brd-badges">
-                          <span className="rslide__brd-badge--review">리뷰보기</span>
                         </div>
                       </div>
                       {editMode ? (
@@ -550,7 +549,10 @@ function Slide({
                           ) : (
                             <div className="rslide__ov-step-content">
                               {step.content.split('\n').filter(Boolean).map((line, li) => (
-                                <div key={li} className="rslide__ov-step-bullet">■ {line}</div>
+                                <div key={li} className="rslide__ov-step-bullet">
+                                  <span className="rslide__ov-step-bullet-icon">■</span>
+                                  <span>{line}</span>
+                                </div>
                               ))}
                             </div>
                           )}
@@ -681,16 +683,27 @@ function Slide({
                     {infoRows.map(row => (
                       <div key={row.label} className="rslide__np-row">
                         <SectionPill className="rslide__section-pill--np-label">{row.label}</SectionPill>
-                        {editMode ? (
+                        {row.key === 'npConcept' ? (
+                          editMode ? (
+                            <div className="rslide__np-concept">
+                              <ET value={conceptTitle}
+                                onChange={v => setLocal(p => ({ ...p, npConcept: [v, ...conceptDetail].join('\n') }))}
+                                onBlur={commit} placeholder="컨셉 제목..." className="rslide__np-concept-title-edit" />
+                              <ET value={conceptDetail.join('\n')}
+                                onChange={v => setLocal(p => ({ ...p, npConcept: [conceptTitle, ...v.split('\n')].join('\n') }))}
+                                onBlur={commit} placeholder="컨셉 설명..." className="rslide__np-concept-desc-edit" multiline rows={2} />
+                            </div>
+                          ) : (
+                            <div className="rslide__np-concept">
+                              <div className="rslide__np-concept-title">{conceptTitle}</div>
+                              {conceptDetail.map((line, li) => (
+                                <div key={li} className={`rslide__np-concept-line${line.startsWith('■') ? ' rslide__np-concept-bullet' : ''}`}>{line}</div>
+                              ))}
+                            </div>
+                          )
+                        ) : editMode ? (
                           <ET value={row.value} onChange={v => setLocal(p => ({ ...p, [row.key]: v }))} onBlur={commit}
                             className="rslide__np-value-edit" multiline={row.isMulti} rows={row.isMulti ? 3 : 1} />
-                        ) : row.key === 'npConcept' ? (
-                          <div className="rslide__np-concept">
-                            <div className="rslide__np-concept-title">{conceptTitle}</div>
-                            {conceptDetail.map((line, li) => (
-                              <div key={li} className={`rslide__np-concept-line${line.startsWith('■') ? ' rslide__np-concept-bullet' : ''}`}>{line}</div>
-                            ))}
-                          </div>
                         ) : (
                           <div className="rslide__np-value">{row.value}</div>
                         )}
@@ -710,20 +723,29 @@ function Slide({
                     {cardKeys.map((key, ci) => {
                       const card = parseCard(local[key])
                       return (
-                        <div key={ci} className="rslide__np-card">
-                          {editMode ? (
-                            <ET value={local[key] ?? ''} onChange={v => setLocal(p => ({ ...p, [key]: v }))} onBlur={commit}
-                              placeholder={'카드 제목\n■ 내용\n■ 내용'} className="rslide__np-card-edit" multiline rows={5} />
-                          ) : (
-                            <>
-                              <div className="rslide__np-card-title">{card.title}</div>
-                              {card.bullets.map((b, bi) => (
-                                <div key={bi} className="rslide__np-card-bullet">
-                                  {b.startsWith('■') ? b : `■ ${b}`}
-                                </div>
-                              ))}
-                            </>
-                          )}
+                        <div key={ci} className="rslide__np-card-wrap">
+                          <div className="rslide__np-card">
+                            {editMode ? (
+                              <>
+                                <ET value={card.title}
+                                  onChange={v => setLocal(p => { const c = parseCard(p[key]); return { ...p, [key]: [v, ...c.bullets.map(b => b.startsWith('■') ? b : `■ ${b}`)].join('\n') } })}
+                                  onBlur={commit} placeholder="카드 제목..." className="rslide__np-card-title-edit" />
+                                <ET value={card.bullets.map(b => b.startsWith('■') ? b : `■ ${b}`).join('\n')}
+                                  onChange={v => setLocal(p => { const c = parseCard(p[key]); return { ...p, [key]: [c.title, ...v.split('\n').map(l => l.replace(/^■\s?/, ''))].join('\n') } })}
+                                  onBlur={commit} placeholder={'■ 내용\n■ 내용'} className="rslide__np-card-content-edit" multiline rows={4} />
+                              </>
+                            ) : (
+                              <>
+                                <div className="rslide__np-card-title">{card.title}</div>
+                                {card.bullets.map((b, bi) => (
+                                  <div key={bi} className="rslide__np-card-bullet">
+                                    <span className="rslide__np-card-bullet-icon">■</span>
+                                    <span>{b.replace(/^■\s*/, '')}</span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
