@@ -85,6 +85,9 @@
 
 /* brand table header */
 .brand-report-slides .rslide__table-head { background: #6AADEE; }
+.brand-report-slides .brslide__table th { background: #6AADEE; color: #fff; }
+.brand-report-slides .brslide__rl-table th { background: #6AADEE; color: #fff; }
+.brand-report-slides .brslide__bmd-stat-label { background: #6AADEE; color: #fff; }
 
 /* edit mode inputs */
 .brand-report-slides .rslide-edit      { border-bottom-color: #6AADEE; }
