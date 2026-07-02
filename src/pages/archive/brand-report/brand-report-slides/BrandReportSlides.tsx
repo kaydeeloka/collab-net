@@ -234,8 +234,8 @@ function BrandSlide({
                 <span className="brslide__cover-brand-suffix">_ {brandSuffix}</span>
               </div>
             ) : (
-              <div className="rslide__cover-title">
-                {titlePrefix} _ {brandSuffix}
+              <div className="rslide__cover-title" style={{ whiteSpace: 'nowrap', maxWidth: 'none' }}>
+                {`${titlePrefix} _ ${brandSuffix}`}
               </div>
             )}
           </div>

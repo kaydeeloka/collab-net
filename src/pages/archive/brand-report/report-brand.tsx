@@ -185,7 +185,7 @@ export default function ArchiveBrandReportBrand() {
     if (!brand || pdfDownloading) return
     if (editMode) { showToast('편집 모드를 종료한 후 다운로드해 주세요.', 'info'); return }
 
-    const sourceSlidesEl = document.querySelector<HTMLElement>('.report-slides')
+    const sourceSlidesEl = document.querySelector<HTMLElement>('.brand-report-slides')
     if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
       showToast('슬라이드가 보이지 않습니다.', 'info')
       return

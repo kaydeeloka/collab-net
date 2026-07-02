@@ -253,7 +253,7 @@ export default function Layout() {
       children: [
         { to: archiveSectionPath(phase, 'season'), label: '시즌 컬렉션', activeWhen: (p: string) => archiveSectionFromPath(p) === 'season' },
         { to: archiveSectionPath(phase, 'design'), label: '디자인 자료', activeWhen: (p: string) => archiveSectionFromPath(p) === 'design' },
-        { to: archiveSectionPath(phase, 'brand-report'), label: '브랜드별 리포트', end: true },
+        { to: archiveSectionPath(phase, 'brand-report'), label: '브랜드별 리포트', activeWhen: (p: string) => archiveSectionFromPath(p) === 'brand-report' },
       ],
     }
   }, [activeGroup, pathname, phaseList])
