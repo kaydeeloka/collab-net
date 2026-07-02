@@ -55,13 +55,13 @@ export default function Dashboard() {
     const phaseId = viewPhaseId ?? activeDbId
     if (!phaseId) return
     try {
-      const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-        supabase.from('influencers').select('status, contacted').eq('phase_id', phaseId),
+      const [{ data: infData, count: infTotal }, { count: confirmedCount }] = await Promise.all([
+        supabase.from('influencers').select('status, contacted', { count: 'exact' }).eq('phase_id', phaseId),
         supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', phaseId),
       ])
       const contacted = (infData ?? []).filter(r => r.contacted)
       const contactTotal = contacted.length
-      const total = infData?.length ?? 0
+      const total = infTotal ?? infData?.length ?? 0
       const sent = contacted.filter(r => INFLUENCER_CONTACT_SENT_STATUSES.includes(r.status)).length
       const replied = contacted.filter(r => INFLUENCER_CONTACT_REPLIED_STATUSES.includes(r.status)).length
       const confirmed = confirmedCount ?? 0
