@@ -242,7 +242,7 @@
   background: #8BAAB8;
   color: #fff;
   font-family: 'NanumHuman', sans-serif;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 26px;
   padding: 2px 16px;
@@ -253,10 +253,10 @@
   vertical-align: middle;
 }
 
-/* table label pills — fixed min-width, centered */
+/* table label pills */
 .rslide__section-pill--label {
   flex-shrink: 0;
-  min-width: 8.5cqw;
+  min-width: 10cqw;
 }
 
 /* 진행 프로세스 header pill — bottom margin */
@@ -896,7 +896,6 @@
 .rslide__section-pill--np-label {
   flex-shrink: 0;
   min-width: 9cqw;
-  text-align: center;
 }
 
 .rslide__np-value {
@@ -975,7 +974,6 @@
 
 .rslide__section-pill--np-impr {
   align-self: flex-start;
-  font-size: 12px;
 }
 
 .rslide__np-impr-title-edit {
@@ -1112,7 +1110,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  gap: 0.7cqw;
+  justify-content: space-between;
   overflow: visible;
 }
 
@@ -1124,7 +1123,7 @@
 
 
 .rslide__ov-value {
-  font-size: 1.2cqw;
+  font-size: 14px;
   color: #1a1a1a;
   line-height: 1.5;
   padding-top: 0.1cqw;
@@ -1135,7 +1134,7 @@
 }
 
 .rslide__ov-value-edit {
-  font-size: 1.2cqw;
+  font-size: 12px;
   color: #1a1a1a;
   flex: 1;
   resize: none;
@@ -1145,7 +1144,7 @@
 /* ── Process section ── */
 .rslide__ov-process {
   flex-shrink: 0;
-  margin-top: 0.9cqw;
+  margin-top: 1.8cqw;
 }
 
 
@@ -1177,7 +1176,7 @@
   flex: 1;
   background: #fff;
   border-radius: 0.7cqw;
-  padding: 2cqw 1.4cqw;
+  padding: 1.8cqw 1.4cqw 1.2cqw;
   overflow: visible;
   border: 1px solid rgba(0, 0, 0, .07);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
@@ -1204,14 +1203,15 @@
 
 
 .rslide__ov-step--edit {
-  padding-top: 0.9cqw;
+  padding-top: 0.8cqw;
+  justify-content: flex-start;
+  gap: 0.6cqw;
 }
 
 .rslide__ov-step-date-edit {
   font-size: 0.85cqw;
   color: #1a1a1a;
   width: 100%;
-  margin-bottom: 0.6cqw;
 }
 
 .rslide__ov-step-content {
@@ -1324,11 +1324,7 @@
 
 /* concept pill — left-aligned with cell margins */
 .rslide__section-pill--concept {
-  display: inline-block;
   align-self: flex-start;
-  font-weight: 400;
-  padding: 0 1.1cqw;
-  margin-top: 0;
   margin-bottom: 0.9cqw;
   margin-left: 3cqw;
   margin-right: 3cqw;
@@ -1340,10 +1336,6 @@
   top: -0.65cqw;
   left: 50%;
   transform: translateX(-50%);
-  display: inline-block;
-  align-self: auto;
-  font-weight: 400;
-  padding: 0 1.8cqw;
 }
 
 .rslide__kit-concept-text {

@@ -31,9 +31,9 @@ export default function ArchiveBrandReportBrand() {
   const [rows, setRows] = useState<MonitoringRow[]>([])
   const [sharedPages, setSharedPages] = useState<BrandReportPage[]>([])
   const [loading, setLoading] = useState(false)
+  const [pdfDownloading, setPdfDownloading] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [pdfDownloading, setPdfDownloading] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
@@ -210,11 +210,11 @@ export default function ArchiveBrandReportBrand() {
 <style>
 @page { size: 960px 540px; margin: 0; }
 *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
+html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
 .report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; overflow: visible !important; }
 .rslide { width: 960px !important; height: 540px !important; flex-shrink: 0 !important; page-break-after: always; break-after: page; border-radius: 0 !important; overflow: hidden !important; transform: none !important; }
 </style>
-</head><body><div class="report-slides">${sourceSlidesEl.innerHTML}</div></body></html>`
+</head><body><div class="report-slides brand-report-slides">${sourceSlidesEl.innerHTML}</div></body></html>`
 
       const iframe = document.createElement('iframe')
       iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:960px;height:540px;border:none;visibility:hidden;'

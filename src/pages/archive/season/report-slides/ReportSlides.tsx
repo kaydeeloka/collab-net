@@ -532,11 +532,11 @@ function Slide({
               { date: '', content: '' }, { date: '', content: '' },
             ]
             const steps = local.processSteps ?? DEFAULT_STEPS
-            const infoRows: { label: string; value: string | undefined; setter: (v: string) => void }[] = [
-              { label: '프로젝트 명',    value: local.projectName,        setter: v => setLocal(p => ({ ...p, projectName: v })) },
-              { label: '프로젝트 목적',  value: local.projectPurpose,     setter: v => setLocal(p => ({ ...p, projectPurpose: v })) },
-              { label: '키트 발송 대상', value: local.kitRecipients,      setter: v => setLocal(p => ({ ...p, kitRecipients: v })) },
-              { label: '총 배송 수량',   value: local.totalShipping,      setter: v => setLocal(p => ({ ...p, totalShipping: v })) },
+            const infoRows: { label: string; value: string | undefined; setter: (v: string) => void; multiline?: boolean; rows?: number }[] = [
+              { label: '프로젝트 명',    value: local.projectName,         setter: v => setLocal(p => ({ ...p, projectName: v })),         multiline: true, rows: 2 },
+              { label: '프로젝트 목적',  value: local.projectPurpose,      setter: v => setLocal(p => ({ ...p, projectPurpose: v })),      multiline: true, rows: 3 },
+              { label: '키트 발송 대상', value: local.kitRecipients,       setter: v => setLocal(p => ({ ...p, kitRecipients: v })) },
+              { label: '총 배송 수량',   value: local.totalShipping,       setter: v => setLocal(p => ({ ...p, totalShipping: v })) },
               { label: '참여 브랜드',    value: local.participatingBrands, setter: v => setLocal(p => ({ ...p, participatingBrands: v })) },
             ]
             return (
@@ -565,11 +565,11 @@ function Slide({
                   </div>
                   {/* Info table 2/3 */}
                   <div className="rslide__ov-table">
-                    {infoRows.map(({ label, value, setter }) => (
+                    {infoRows.map(({ label, value, setter, multiline, rows }) => (
                       <div key={label} className="rslide__ov-row">
                         <SectionPill className="rslide__section-pill--label">{label}</SectionPill>
                         {editMode
-                          ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" multiline rows={2} />
+                          ? <ET value={value ?? ''} onChange={setter} onBlur={commit} className="rslide__ov-value-edit" multiline={multiline} rows={rows ?? 1} />
                           : <div className="rslide__ov-value">{value}</div>}
                       </div>
                     ))}
