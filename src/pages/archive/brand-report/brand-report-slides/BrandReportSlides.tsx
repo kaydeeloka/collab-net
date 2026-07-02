@@ -92,10 +92,11 @@ function platformLabel(p: string) {
 // ── Individual slide ──────────────────────────────────────────────
 
 function BrandSlide({
-  page, brandName, editMode, rows, onUpdate,
+  page, brandName, brandEn, editMode, rows, onUpdate,
 }: {
   page: BrandReportPage
   brandName: string
+  brandEn?: string
   editMode: boolean
   rows: MonitoringRow[]
   onUpdate: (content: BrandPageContent) => void
@@ -137,6 +138,7 @@ function BrandSlide({
     brandName.trim().toLowerCase(),
     brandKey,
     brandName.trim().toLowerCase().replace(/\s+/g, ''),
+    ...(brandEn ? [brandEn.toLowerCase()] : []),
   ])
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
   const brandRows = reviewRows.filter(r => r.brand && brandVariants.has(r.brand.toLowerCase()))
@@ -144,10 +146,11 @@ function BrandSlide({
 
   // ── Outro ──────────────────────────────────────────────────────
   if (page.type === 'outro') {
-    const CONTACTS = [
-      { name: '신유빈 프로', email: 'ybshin@cranecomm.com' },
-      { name: '김도연 프로', email: 'dykim@cranecomm.com' },
-    ]
+    const DEFAULT_CONTACTS = '신유빈 프로|ybshin@cranecomm.com\n김도연 프로|dykim@cranecomm.com'
+    const contacts = (local.outroContacts ?? DEFAULT_CONTACTS).split('\n').map(line => {
+      const [name = '', email = ''] = line.split('|')
+      return { name, email }
+    })
     return (
       <div className="rslide">
         <div className="rslide__outro-layer">
@@ -161,10 +164,36 @@ function BrandSlide({
             <span className="rslide__outro-contact-label">CONTACT</span>
             <span className="rslide__outro-contact-divider" />
             <div className="brslide__outro-contact-list">
-              {CONTACTS.map(c => (
-                <div key={c.email} className="brslide__outro-contact-row">
-                  <span className="brslide__outro-contact-name">{c.name}</span>
-                  <a href={`mailto:${c.email}`} className="brslide__outro-contact-email">{c.email}</a>
+              {contacts.map((c, i) => (
+                <div key={i} className="brslide__outro-contact-row">
+                  {editMode ? (
+                    <input
+                      className="brslide__outro-contact-name-edit"
+                      value={c.name}
+                      onChange={e => {
+                        const updated = contacts.map((x, j) => j === i ? { ...x, name: e.target.value } : x)
+                        setLocal(p => ({ ...p, outroContacts: updated.map(x => `${x.name}|${x.email}`).join('\n') }))
+                      }}
+                      onBlur={commit}
+                      placeholder="이름"
+                    />
+                  ) : (
+                    <span className="brslide__outro-contact-name">{c.name}</span>
+                  )}
+                  {editMode ? (
+                    <input
+                      className="brslide__outro-contact-email-edit"
+                      value={c.email}
+                      onChange={e => {
+                        const updated = contacts.map((x, j) => j === i ? { ...x, email: e.target.value } : x)
+                        setLocal(p => ({ ...p, outroContacts: updated.map(x => `${x.name}|${x.email}`).join('\n') }))
+                      }}
+                      onBlur={commit}
+                      placeholder="email@example.com"
+                    />
+                  ) : (
+                    <a href={`mailto:${c.email}`} className="brslide__outro-contact-email">{c.email}</a>
+                  )}
                 </div>
               ))}
             </div>
@@ -321,11 +350,19 @@ function BrandSlide({
               }
             }).filter(p => p.count > 0)
 
-            const DEFAULT_CT = `Mi Muse 리뷰|0|0|0|0\n개별 브랜드 리뷰|0|0|0|0\n브랜드 단독 리뷰|0|0|0|0\n합계|0|0|0|0`
-            const ctRows = (local.cpContentTypeRows ?? DEFAULT_CT).split('\n').map(line => {
-              const p = line.split('|')
-              return { label: p[0] ?? '', tiktok: p[1] ?? '0', instagram: p[2] ?? '0', magazine: p[3] ?? '0', total: p[4] ?? '0' }
-            })
+            const countByPlat = (rws: MonitoringRow[]) => {
+              const tiktok = rws.filter(r => platformLabel(r.platform ?? '') === 'TikTok').length
+              const instagram = rws.filter(r => platformLabel(r.platform ?? '') === 'Instagram').length
+              const magazine = rws.filter(r => platformLabel(r.platform ?? '') === 'Magazine').length
+              return { tiktok, instagram, magazine, total: tiktok + instagram + magazine }
+            }
+            const allBrandRows = reviewRows.filter(r => r.brand !== 'mimuse')
+            const autoCtRows = [
+              { label: 'Mi Muse 리뷰', ...countByPlat(mimuseRows) },
+              { label: '브랜드별 리뷰', ...countByPlat(allBrandRows) },
+              { label: `${brandName} 리뷰`, ...countByPlat(brandRows) },
+              { label: '합계', ...countByPlat(reviewRows) },
+            ]
 
             return (
               <div className="brslide__cp">
@@ -333,11 +370,18 @@ function BrandSlide({
                 <div className="rslide__cp-recovery">
                   {recoveryCards.map((card, i) => {
                     const isInfluencer = i === 0
+                    const isContentCount = i === 2
                     const barPct = isInfluencer ? infPct : card.pct
                     return (
                       <div key={i} className="rslide__cp-card">
                         <div className="rslide__cp-card-header">
                           <div className="rslide__cp-card-label">{card.label}</div>
+                          {isContentCount && (
+                            <div className="rslide__cp-card-total">{reviewRows.length}건</div>
+                          )}
+                          {isInfluencer && (
+                            <div className="rslide__cp-card-total">{infUploadMap.size}/{infMap.size}명</div>
+                          )}
                         </div>
                         {editMode ? (
                           <>
@@ -378,74 +422,76 @@ function BrandSlide({
                 </div>
 
                 {/* Tables row */}
-                <div className="brslide__cp-tables">
-                  {/* Content type table — editable */}
-                  <div className="brslide__cp-table-block">
-                    <SectionPill>콘텐츠 종류</SectionPill>
-                    <table className="brslide__table">
-                      <thead>
-                        <tr>
-                          <th>구분</th><th>TikTok</th><th>Instagram</th><th>Magazine</th><th>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ctRows.map((row, ri) => (
-                          <tr key={ri} className={ri === ctRows.length - 1 ? 'brslide__table-total' : ''}>
-                            <td>{row.label || `행 ${ri + 1}`}</td>
-                            {editMode ? (
-                              ['tiktok', 'instagram', 'magazine', 'total'].map(col => (
-                                <td key={col}>
-                                  <ET
-                                    value={(row as any)[col]}
-                                    onChange={v => {
-                                      const updated = ctRows.map((r, j) => j === ri ? { ...r, [col]: v } : r)
-                                      setLocal(p => ({ ...p, cpContentTypeRows: updated.map(r => `${r.label}|${r.tiktok}|${r.instagram}|${r.magazine}|${r.total}`).join('\n') }))
-                                    }}
-                                    onBlur={commit}
-                                    className="brslide__table-cell-edit"
-                                  />
+                {editMode ? (
+                  <div className="brslide__cp-tables">
+                    <div className="brslide__cp-table-block">
+                      <SectionPill>콘텐츠 종류</SectionPill>
+                      <div className="brslide__cp-auto-info">
+                        모니터링 콘텐츠 성과 데이터에서 자동으로 불러옵니다.
+                      </div>
+                    </div>
+                    <div className="brslide__cp-table-block">
+                      <SectionPill>콘텐츠 성과</SectionPill>
+                      <div className="brslide__cp-auto-info">
+                        모니터링 콘텐츠 성과 데이터에서 자동으로 불러옵니다.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="brslide__cp-tables">
+                    {/* Content type table — auto from monitoring data */}
+                    <div className="brslide__cp-table-block">
+                      <SectionPill>콘텐츠 종류</SectionPill>
+                      <table className="brslide__table">
+                        <thead>
+                          <tr>
+                            <th>구분</th><th>TikTok</th><th>Instagram</th><th>Magazine</th><th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {autoCtRows.map((row, ri) => {
+                            const isTotal = ri === autoCtRows.length - 1
+                            const isBrandSpecific = ri === 2
+                            return (
+                              <tr key={ri} className={isTotal ? 'brslide__table-total' : isBrandSpecific ? 'brslide__table-sub' : ''}>
+                                <td style={isBrandSpecific ? { paddingLeft: '1.2cqw', color: '#5a7a8a' } : undefined}>
+                                  {row.label}
                                 </td>
-                              ))
-                            ) : (
-                              <>
-                                <td>{row.tiktok}</td>
-                                <td>{row.instagram}</td>
-                                <td>{row.magazine}</td>
+                                <td>{row.tiktok || '—'}</td>
+                                <td>{row.instagram || '—'}</td>
+                                <td>{row.magazine || '—'}</td>
                                 <td>{row.total}</td>
-                              </>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* Platform performance table — auto */}
-                  <div className="brslide__cp-table-block">
-                    <SectionPill>콘텐츠 성과</SectionPill>
-                    <table className="brslide__table">
-                      <thead>
-                        <tr>
-                          <th>플랫폼</th><th>건 수</th><th>평균 조회수</th><th>평균 좋아요</th><th>평균 댓글</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {platStats.map((s, i) => (
-                          <tr key={i}>
-                            <td>{s.label}</td>
-                            <td>{s.count}</td>
-                            <td>{s.avgViews}</td>
-                            <td>{s.label === 'Magazine' ? '—' : s.avgLikes}</td>
-                            <td>{s.avgComments}</td>
+                    {/* Platform performance table — auto */}
+                    <div className="brslide__cp-table-block">
+                      <SectionPill>콘텐츠 성과</SectionPill>
+                      <table className="brslide__table">
+                        <thead>
+                          <tr>
+                            <th>플랫폼</th><th>건 수</th><th>평균 조회수</th><th>평균 좋아요</th><th>평균 댓글</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {editMode && (
-                      <div className="rslide__cp-auto-note">콘텐츠 성과 대시보드 데이터 기반으로 자동 집계됩니다.</div>
-                    )}
+                        </thead>
+                        <tbody>
+                          {platStats.map((s, i) => (
+                            <tr key={i}>
+                              <td>{s.label}</td>
+                              <td>{s.count}</td>
+                              <td>{s.avgViews}</td>
+                              <td>{s.label === 'Magazine' ? '—' : s.avgLikes}</td>
+                              <td>{s.avgComments}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Comment reaction */}
                 <div className="brslide__cp-reaction">
@@ -684,12 +730,14 @@ export default function BrandReportSlides({
   pages,
   rows,
   brandName,
+  brandEn,
   editMode,
   onUpdate,
 }: {
   pages: BrandReportPage[]
   rows: MonitoringRow[]
   brandName: string
+  brandEn?: string
   editMode: boolean
   onUpdate: (page: BrandReportPage) => Promise<void>
 }) {
@@ -710,6 +758,7 @@ export default function BrandReportSlides({
           key={page.id}
           page={page}
           brandName={brandName}
+          brandEn={brandEn}
           editMode={editMode}
           rows={rows}
           onUpdate={content => onUpdate({ ...page, content })}

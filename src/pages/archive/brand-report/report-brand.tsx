@@ -297,6 +297,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
             pages={pages}
             rows={rows}
             brandName={brand.brandName}
+            brandEn={brand.brandEn ?? undefined}
             editMode={editMode}
             onUpdate={handleUpdatePage}
           />

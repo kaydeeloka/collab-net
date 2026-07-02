@@ -122,7 +122,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
     npPeriod: '',
     npKitRecipients: '',
     npBrands: '',
-    npImprovementTitle: '1차 대비 보완 운영 예정',
+    npImprovementTitle: 'N차 대비 보완 운영 예정',
     npCard1: '',
     npCard2: '',
     npCard3: '',

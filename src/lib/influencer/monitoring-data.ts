@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket } from '@/lib/influencer/content-platforms'
+import { type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 
 export const MON_SCRAPE_LIMIT = 50
 
@@ -40,6 +41,7 @@ export interface ContentTypeRow {
   instagram: number
   magazine:  number
   total:     number
+  isSub?:    boolean
 }
 
 export interface PlatformPerformanceRow {
@@ -64,7 +66,7 @@ export interface ReportSummary {
 }
 
 export interface BrandPerformanceRow {
-  key:         'mimuse' | 'brand'
+  key:         string
   label:       string
   count:       number
   avgViews:    number | null
@@ -103,10 +105,6 @@ export interface ContentReport {
   uploadChannels:        UploadChannelSegment[]
 }
 
-const BRAND_PERF_LABELS: Record<'mimuse' | 'brand', string> = {
-  mimuse: 'Mi Muse',
-  brand:  '브랜드별',
-}
 
 const TOP_POSTS_LIMIT = 10
 
@@ -117,18 +115,46 @@ function brandDisplayLabel(brand: string | null): string {
   return brand!
 }
 
-function buildBrandPerformanceRows(reviewRows: MonitoringRow[]): BrandPerformanceRow[] {
-  return (['mimuse', 'brand'] as const).map(key => {
-    const matched = reviewRows.filter(r => contentTypeBucket(r.brand) === key)
-    return {
-      key,
-      label:       BRAND_PERF_LABELS[key],
+function matchesBrand(r: MonitoringRow, b: ConfirmedBrandKw, kwsByBrand: Record<string, string[]> = {}): boolean {
+  const brand = (r.brand || '').toLowerCase()
+  if (!brand) return false
+  if (brand === b.key) return true
+  if (b.en && brand === b.en.toLowerCase()) return true
+  if (brand === b.name.toLowerCase()) return true
+  const kws = kwsByBrand[b.key] ?? []
+  return kws.some(k => k.toLowerCase() === brand)
+}
+
+function buildBrandPerformanceRows(
+  reviewRows: MonitoringRow[],
+  confirmedBrands: ConfirmedBrandKw[],
+  kwsByBrand: Record<string, string[]> = {},
+): BrandPerformanceRow[] {
+  const rows: BrandPerformanceRow[] = []
+
+  const mimuseRows = reviewRows.filter(r => contentTypeBucket(r.brand) === 'mimuse')
+  rows.push({
+    key:         'mimuse',
+    label:       'Mi Muse',
+    count:       mimuseRows.length,
+    avgViews:    mimuseRows.length ? avgField(mimuseRows, 'views') : null,
+    avgLikes:    mimuseRows.length ? avgField(mimuseRows, 'likes') : null,
+    avgComments: mimuseRows.length ? avgField(mimuseRows, 'comments') : null,
+  })
+
+  for (const b of confirmedBrands) {
+    const matched = reviewRows.filter(r => matchesBrand(r, b, kwsByBrand))
+    rows.push({
+      key:         b.key,
+      label:       b.en || b.name,
       count:       matched.length,
       avgViews:    matched.length ? avgField(matched, 'views') : null,
       avgLikes:    matched.length ? avgField(matched, 'likes') : null,
       avgComments: matched.length ? avgField(matched, 'comments') : null,
-    }
-  })
+    })
+  }
+
+  return rows
 }
 
 function buildTopPosts(reviewRows: MonitoringRow[]): TopPostRow[] {
@@ -334,7 +360,11 @@ function platformSupportsLikes(key: PlatformBucket): boolean {
   return key !== 'magazine'
 }
 
-export function computeContentReport(rows: MonitoringRow[]): ContentReport {
+export function computeContentReport(
+  rows: MonitoringRow[],
+  confirmedBrands: ConfirmedBrandKw[] = [],
+  kwsByBrand: Record<string, string[]> = {},
+): ContentReport {
   const reviewRows = rows.filter(isUploaded)
 
   const groupMap = new Map<string, MonitoringRow[]>()
@@ -366,11 +396,23 @@ export function computeContentReport(rows: MonitoringRow[]): ContentReport {
     }
   })
 
+  for (const b of confirmedBrands) {
+    const matched = reviewRows.filter(r => matchesBrand(r, b, kwsByBrand))
+    contentTypeRows.push({
+      label:     b.en || b.name,
+      tiktok:    matched.filter(r => platformBucket(r.platform) === 'tiktok').length,
+      instagram: matched.filter(r => platformBucket(r.platform) === 'instagram').length,
+      magazine:  matched.filter(r => platformBucket(r.platform) === 'magazine').length,
+      total:     matched.length,
+      isSub:     true,
+    })
+  }
+
   contentTypeRows.push({
     label:     '합계',
-    tiktok:    contentTypeRows.reduce((s, r) => s + r.tiktok, 0),
-    instagram: contentTypeRows.reduce((s, r) => s + r.instagram, 0),
-    magazine:  contentTypeRows.reduce((s, r) => s + r.magazine, 0),
+    tiktok:    reviewRows.filter(r => platformBucket(r.platform) === 'tiktok').length,
+    instagram: reviewRows.filter(r => platformBucket(r.platform) === 'instagram').length,
+    magazine:  reviewRows.filter(r => platformBucket(r.platform) === 'magazine').length,
     total:     reviewRows.filter(r => contentTypeBucket(r.brand)).length,
   })
 
@@ -424,7 +466,7 @@ export function computeContentReport(rows: MonitoringRow[]): ContentReport {
       },
     },
     contentTypeRows,
-    brandPerformanceRows: buildBrandPerformanceRows(reviewRows),
+    brandPerformanceRows: buildBrandPerformanceRows(reviewRows, confirmedBrands, kwsByBrand),
     performanceRows,
     topPosts: buildTopPosts(reviewRows),
     uploadChannels,

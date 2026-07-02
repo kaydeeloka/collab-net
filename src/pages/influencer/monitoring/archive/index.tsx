@@ -234,7 +234,7 @@ export default function MonitoringArchive() {
         ])
         if (cancelled) return
         setRows(data.rows)
-        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name }))
+        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: '' }))
         setBrands(confirmed)
         setBrandKw(buildBrandKwsFromRows(kwsRes.data || [], confirmed).byBrand)
       } catch (e) {

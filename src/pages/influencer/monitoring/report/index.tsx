@@ -8,6 +8,8 @@ import {
   type UploadChannelSegment,
 } from '@/lib/influencer/monitoring-data'
 import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/influencer/content-platforms'
+import { monitoringBrandKey, BRAND_KW_COLORS, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
+import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -187,8 +189,9 @@ function fmtAvg(n: number | null): string {
 
 export default function MonitoringReport() {
   const { viewPhaseId, loading: phaseLoading } = usePhase()
-  const [report, setReport]   = useState<ContentReport | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [report, setReport]           = useState<ContentReport | null>(null)
+  const [confirmedBrands, setConfirmedBrands] = useState<ConfirmedBrandKw[]>([])
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
     if (phaseLoading) return
@@ -198,8 +201,19 @@ export default function MonitoringReport() {
       return
     }
     setLoading(true)
-    loadMonitoringData(viewPhaseId)
-      .then(({ rows }) => setReport(computeContentReport(rows)))
+    Promise.all([
+      loadMonitoringData(viewPhaseId),
+      supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
+    ])
+      .then(([{ rows }, brandsRes]) => {
+        const brands: ConfirmedBrandKw[] = (brandsRes.data || []).map(b => ({
+          key:  monitoringBrandKey(b.brand_name),
+          name: b.brand_name,
+          en:   (b.brand_en || '').toLowerCase(),
+        }))
+        setConfirmedBrands(brands)
+        setReport(computeContentReport(rows, brands))
+      })
       .catch(e => console.error('monitoring report load error:', e))
       .finally(() => setLoading(false))
   }, [viewPhaseId, phaseLoading])
@@ -294,9 +308,15 @@ export default function MonitoringReport() {
                 </tr>
               </thead>
               <tbody>
-                {report.contentTypeRows.map(row => (
-                  <tr key={row.label} className={row.label === '합계' ? 'is-total' : undefined}>
-                    <td style={{ ...tdStyle, textAlign: 'left' }}>{row.label}</td>
+                {report.contentTypeRows.map((row, i) => (
+                  <tr key={i} className={row.label === '합계' ? 'is-total' : undefined}>
+                    <td style={{
+                      ...tdStyle,
+                      textAlign: 'left',
+                      ...(row.isSub ? { paddingLeft: 24, color: 'var(--gray-6)', fontStyle: 'italic', fontSize: 12 } : {}),
+                    }}>
+                      {row.isSub ? `└ ${row.label}` : row.label}
+                    </td>
                     <td style={tdStyle}>{row.tiktok || '—'}</td>
                     <td style={tdStyle}>{row.instagram || '—'}</td>
                     <td style={{ ...tdStyle, borderRight: 'none', textAlign: 'right', paddingRight: 18 }}>{row.magazine || '—'}</td>
@@ -317,22 +337,23 @@ export default function MonitoringReport() {
                 </tr>
               </thead>
               <tbody>
-                {report.brandPerformanceRows.map(row => (
-                  <tr key={row.key}>
-                    <td style={{
-                      ...tdStyle,
-                      textAlign: 'left',
-                      fontWeight: 700,
-                      color: row.key === 'mimuse' ? 'var(--teal-dk)' : 'var(--gray-7)',
-                    }}>
-                      {row.label}
-                    </td>
-                    <td style={tdStyle}>{row.count || '—'}</td>
-                    <td style={{ ...tdStyle, fontWeight: row.avgViews ? 700 : 600 }}>{fmtAvg(row.avgViews)}</td>
-                    <td style={tdStyle}>{fmtAvg(row.avgLikes)}</td>
-                    <td style={{ ...tdStyle, borderRight: 'none' }}>{fmtAvg(row.avgComments)}</td>
-                  </tr>
-                ))}
+                {report.brandPerformanceRows.map((row, i) => {
+                  const isMimuse = row.key === 'mimuse'
+                  const color = isMimuse
+                    ? 'var(--teal-dk)'
+                    : BRAND_KW_COLORS[(i - 1) % BRAND_KW_COLORS.length]
+                  return (
+                    <tr key={row.key}>
+                      <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 700, color }}>
+                        {row.label}
+                      </td>
+                      <td style={tdStyle}>{row.count || '—'}</td>
+                      <td style={{ ...tdStyle, fontWeight: row.avgViews ? 700 : 600 }}>{fmtAvg(row.avgViews)}</td>
+                      <td style={tdStyle}>{fmtAvg(row.avgLikes)}</td>
+                      <td style={{ ...tdStyle, borderRight: 'none' }}>{fmtAvg(row.avgComments)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </ReportTable>
           </div>

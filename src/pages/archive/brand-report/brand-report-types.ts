@@ -18,6 +18,7 @@ export interface BrandPageContent {
   // cover / outro
   title?: string
   caption?: string
+  outroContacts?: string       // "name|email" per line
   // header (all content pages)
   engTitle?: string
   korTitle?: string
