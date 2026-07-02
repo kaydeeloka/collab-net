@@ -185,6 +185,12 @@ export default function ArchiveBrandReportPhase() {
 html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
 .report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; overflow: visible !important; }
 .rslide { width: 960px !important; height: 540px !important; flex-shrink: 0 !important; page-break-after: always; break-after: page; border-radius: 0 !important; overflow: hidden !important; transform: none !important; }
+.rslide__content-layer { height: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
+.rslide__np { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
+.rslide__np-bottom { margin-top: 0 !important; gap: 0.8cqw !important; }
+.rslide__np-cards { min-height: 0 !important; }
+.rslide__np-card { padding: 0.6cqw 1cqw !important; gap: 0.4cqw !important; }
+.rslide__np-card-bullet { font-size: 11px !important; line-height: 1.5 !important; }
 </style>
 </head>
 <body><div class="report-slides">${slidesHtml}</div></body>

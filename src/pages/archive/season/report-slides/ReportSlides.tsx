@@ -679,7 +679,7 @@ function Slide({
                   ) : (
                     <div className="rslide__kit-list">
                       {(local.kitBrandItems ?? '').split('\n').filter(Boolean).map((line, li) => (
-                        <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                        <div key={li} className="rslide__kit-list-item"><span className="rslide__kit-list-bullet">■</span><span>{line.replace(/^■\s?/, '')}</span></div>
                       ))}
                     </div>
                   )}
@@ -699,7 +699,7 @@ function Slide({
                   ) : (
                     <div className="rslide__kit-list">
                       {(local.kitMimuseItems ?? '').split('\n').filter(Boolean).map((line, li) => (
-                        <div key={li} className="rslide__kit-list-item">■ {line.replace(/^■\s?/, '')}</div>
+                        <div key={li} className="rslide__kit-list-item"><span className="rslide__kit-list-bullet">■</span><span>{line.replace(/^■\s?/, '')}</span></div>
                       ))}
                     </div>
                   )}

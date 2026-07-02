@@ -1033,6 +1033,7 @@
 }
 .rslide__np-card-bullet-icon {
   flex-shrink: 0;
+  font-size: 8px;
 }
 
 .rslide__np-card-edit {
@@ -1176,7 +1177,7 @@
   flex: 1;
   background: #fff;
   border-radius: 0.7cqw;
-  padding: 1.8cqw 1.4cqw 1.2cqw;
+  padding: 2.4cqw 1.4cqw 1.2cqw;
   overflow: visible;
   border: 1px solid rgba(0, 0, 0, .07);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .05);
@@ -1215,7 +1216,7 @@
 }
 
 .rslide__ov-step-content {
-  font-size: 14px;
+  font-size: 12px;
   color: #333;
   line-height: 1.7;
   font-weight: 400;
@@ -1230,6 +1231,7 @@
 }
 .rslide__ov-step-bullet-icon {
   flex-shrink: 0;
+  font-size: 8px;
 }
 
 .rslide__ov-step-content-edit {
@@ -1363,7 +1365,14 @@
 }
 
 .rslide__kit-list-item {
+  display: flex;
+  gap: 4px;
   padding-bottom: 0.2cqw;
+}
+.rslide__kit-list-bullet {
+  font-size: 8px;
+  flex-shrink: 0;
+  line-height: inherit;
 }
 
 /* ── Image upload zone (edit mode) ── */
