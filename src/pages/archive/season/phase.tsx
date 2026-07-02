@@ -305,45 +305,68 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     return () => { cancelled = true }
   }, [resolvedPhaseId, phase?.project_concept, phase?.collection_img, phase?.design_theme_img, phase?.design_kit_box_img])
 
+  const DEFAULT_PAGE_ORDER: PageType[] = [
+    'cover', 'project_overview', 'kit_composition', 'content_performance',
+    'best_review', 'best_review_detail', 'brand_mention', 'next_project', 'outro',
+  ]
+
   useEffect(() => {
     if (activeTab !== 'report' || !resolvedPhaseId) return
     let cancelled = false
     setReportLoading(true)
-    void Promise.all([
-      supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
-      loadMonitoringData(resolvedPhaseId),
-      supabase.from('confirmed_brands').select('brand_name').eq('phase_id', resolvedPhaseId),
-      supabase.from('monitoring_keywords').select('brand, keywords, phase_id').eq('phase_id', resolvedPhaseId),
-    ]).then(([{ data }, { rows }, { data: cbData }, { data: kwData }]) => {
-      if (!cancelled) {
-        setReportPages((data as ReportPage[]) ?? [])
-        setReportRows(rows)
-        const kwRows: { brand: string; keywords: string[] | null }[] = (kwData ?? [])
-        const isAscii = (s: string) => /^[a-z0-9][a-z0-9_\s-]*$/i.test(s.trim())
-        const brands = ((cbData ?? []) as { brand_name: string }[]).map((r, i) => {
-          const korLower = r.brand_name.trim().toLowerCase()
-          const korKey = r.brand_name.trim().toLowerCase().replace(/\s+/g, '_')
-          // Find keyword row by: Korean name in keywords, OR brand = Korean key, OR positional fallback
-          const kwRow =
-            kwRows.find(k => Array.isArray(k.keywords) && k.keywords.some(kw => kw.toLowerCase() === korLower)) ??
-            kwRows.find(k => k.brand === korKey || k.brand === korLower) ??
-            kwRows.filter(k => k.brand !== 'mimuse')[i]
-          let nameEn = r.brand_name
-          if (kwRow) {
-            // If the brand column is already English/ASCII and differs from Korean → use it directly
-            if (isAscii(kwRow.brand) && kwRow.brand.toLowerCase() !== korLower && kwRow.brand.toLowerCase() !== korKey) {
-              nameEn = kwRow.brand
-            } else {
-              // Scan keywords for the first ASCII/English term
-              const engKw = (kwRow.keywords ?? []).find(kw => isAscii(kw) && kw.toLowerCase() !== korLower && kw.toLowerCase() !== korKey)
-              if (engKw) nameEn = engKw
+    void (async () => {
+      try {
+        const [{ data }, { rows }, { data: cbData }, { data: kwData }] = await Promise.all([
+          supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
+          loadMonitoringData(resolvedPhaseId),
+          supabase.from('confirmed_brands').select('brand_name').eq('phase_id', resolvedPhaseId),
+          supabase.from('monitoring_keywords').select('brand, keywords, phase_id').eq('phase_id', resolvedPhaseId),
+        ])
+        if (cancelled) return
+
+        let pages = (data as ReportPage[]) ?? []
+
+        // Auto-create all default pages when none exist yet
+        if (pages.length === 0) {
+          const inserts = DEFAULT_PAGE_ORDER.map((type, i) => ({
+            phase_id: resolvedPhaseId,
+            order_index: i,
+            type,
+            content: DEFAULT_CONTENT[type],
+          }))
+          const { data: newPages } = await supabase.from('report_pages').insert(inserts).select()
+          if (!cancelled) pages = (newPages as ReportPage[]) ?? []
+        }
+
+        if (!cancelled) {
+          setReportPages(pages)
+          setReportRows(rows)
+          const kwRows: { brand: string; keywords: string[] | null }[] = (kwData ?? [])
+          const isAscii = (s: string) => /^[a-z0-9][a-z0-9_\s-]*$/i.test(s.trim())
+          const brands = ((cbData ?? []) as { brand_name: string }[]).map((r, i) => {
+            const korLower = r.brand_name.trim().toLowerCase()
+            const korKey = r.brand_name.trim().toLowerCase().replace(/\s+/g, '_')
+            const kwRow =
+              kwRows.find(k => Array.isArray(k.keywords) && k.keywords.some(kw => kw.toLowerCase() === korLower)) ??
+              kwRows.find(k => k.brand === korKey || k.brand === korLower) ??
+              kwRows.filter(k => k.brand !== 'mimuse')[i]
+            let nameEn = r.brand_name
+            if (kwRow) {
+              if (isAscii(kwRow.brand) && kwRow.brand.toLowerCase() !== korLower && kwRow.brand.toLowerCase() !== korKey) {
+                nameEn = kwRow.brand
+              } else {
+                const engKw = (kwRow.keywords ?? []).find(kw => isAscii(kw) && kw.toLowerCase() !== korLower && kw.toLowerCase() !== korKey)
+                if (engKw) nameEn = engKw
+              }
             }
-          }
-          return { name: r.brand_name, nameEn }
-        })
-        setReportConfirmedBrands(brands)
+            return { name: r.brand_name, nameEn }
+          })
+          setReportConfirmedBrands(brands)
+        }
+      } finally {
+        if (!cancelled) setReportLoading(false)
       }
-    }).finally(() => { if (!cancelled) setReportLoading(false) })
+    })()
     return () => { cancelled = true }
   }, [activeTab, resolvedPhaseId])
 
@@ -726,7 +749,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                       </button>
                       {addOpen && (
                         <div className="season-report__download-menu">
-                          {(Object.keys(PAGE_TYPE_LABELS) as PageType[]).map(t => (
+                          {(['best_review', 'best_review_detail'] as PageType[]).map(t => (
                             <button
                               key={t}
                               type="button"

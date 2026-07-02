@@ -116,7 +116,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   brand_mention:       { engTitle: 'Brand Mention Highlights', korTitle: '브랜드 언급 하이라이트' },
   next_project:        {
     engTitle: 'Next Step',
-    korTitle: '2026 Q2 시딩 프로젝트',
+    korTitle: '',
     npImageUrls: '',
     npConcept: '',
     npPeriod: '',

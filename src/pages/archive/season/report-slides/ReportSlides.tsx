@@ -4,6 +4,7 @@ import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-stora
 import { monitoringBrandKey } from '@/lib/influencer/monitoring-keywords'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
 import type { ReportPage, PageContent, ProcessStep } from './types'
+import { uploadReportSlideImage } from './report-image-upload'
 import './report-slides.css'
 
 const LOGO = '/img/logo-report.svg'
@@ -125,6 +126,7 @@ function Slide({
   onUpdate: (content: PageContent) => void
 }) {
   const [local, setLocal] = useState<PageContent>(page.content)
+  const [uploading, setUploading] = useState<string | null>(null)
 
   // Keep local in sync when page content changes from outside
   const currentJson = JSON.stringify(page.content)
@@ -136,6 +138,46 @@ function Slide({
 
   function commit() {
     onUpdate(local)
+  }
+
+  async function handleImageUpload(field: 'imageUrl' | 'kitImageUrl') {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      setUploading(field)
+      const url = await uploadReportSlideImage(page.phase_id, file)
+      setUploading(null)
+      if (url) {
+        const next = { ...local, [field]: url }
+        setLocal(next)
+        onUpdate(next)
+      }
+    }
+    input.click()
+  }
+
+  async function handleNpImageUpload(index: number, currentUrls: string[]) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      setUploading(`np_${index}`)
+      const url = await uploadReportSlideImage(page.phase_id, file)
+      setUploading(null)
+      if (url) {
+        const arr = [...currentUrls]
+        arr[index] = url
+        const next = { ...local, npImageUrls: arr.join('\n') }
+        setLocal(next)
+        onUpdate(next)
+      }
+    }
+    input.click()
   }
 
   // ── Outro ──────────────────────────────────────────────────────
@@ -306,6 +348,11 @@ function Slide({
                 <div className="rslide__cp-bottom" style={{ marginTop: 16 }}>
                   <div className="rslide__cp-panel">
                     <SectionPill>콘텐츠 업로드 채널</SectionPill>
+                    {editMode && (
+                      <div className="rslide__cp-auto-note">
+                        콘텐츠 성과 대시보드 데이터 기반으로 자동 집계됩니다.
+                      </div>
+                    )}
                     <div className="rslide__cp-donut-wrap">
                       <svg viewBox="0 0 100 100" className="rslide__cp-donut">
                         {donutPaths.map((seg, i) => (
@@ -499,9 +546,24 @@ function Slide({
                 <div className="rslide__ov-body">
                   {/* Image 1/3 */}
                   <div className="rslide__ov-img-block">
-                    {local.imageUrl
-                      ? <img src={local.imageUrl} className="rslide__ov-img" alt="product" referrerPolicy="no-referrer" />
-                      : <div className="rslide__ov-img-empty">이미지</div>}
+                    {editMode ? (
+                      <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('imageUrl')}>
+                        {uploading === 'imageUrl' ? (
+                          <div className="rslide__img-upload-loading">업로드 중...</div>
+                        ) : local.imageUrl ? (
+                          <>
+                            <img src={local.imageUrl} className="rslide__ov-img" alt="product" referrerPolicy="no-referrer" />
+                            <div className="rslide__img-upload-overlay">이미지 변경</div>
+                          </>
+                        ) : (
+                          <div className="rslide__img-upload-empty">이미지</div>
+                        )}
+                      </div>
+                    ) : local.imageUrl ? (
+                      <img src={local.imageUrl} className="rslide__ov-img" alt="product" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="rslide__ov-img-empty">이미지</div>
+                    )}
                   </div>
                   {/* Info table 2/3 */}
                   <div className="rslide__ov-table">
@@ -571,7 +633,18 @@ function Slide({
               {/* Top-left: image */}
               <div className="rslide__kit-cell rslide__kit-img-cell">
                 {editMode ? (
-                  <ET value={local.kitImageUrl ?? ''} onChange={v => setLocal(p => ({ ...p, kitImageUrl: v }))} onBlur={commit} placeholder="이미지 URL..." className="rslide__kit-img-url-edit" />
+                  <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('kitImageUrl')}>
+                    {uploading === 'kitImageUrl' ? (
+                      <div className="rslide__img-upload-loading">업로드 중...</div>
+                    ) : local.kitImageUrl ? (
+                      <>
+                        <img src={local.kitImageUrl} className="rslide__kit-img" alt="kit" referrerPolicy="no-referrer" />
+                        <div className="rslide__img-upload-overlay">이미지 변경</div>
+                      </>
+                    ) : (
+                      <div className="rslide__img-upload-empty">이미지</div>
+                    )}
+                  </div>
                 ) : local.kitImageUrl ? (
                   <img src={local.kitImageUrl} className="rslide__kit-img" alt="kit" referrerPolicy="no-referrer" />
                 ) : (
@@ -662,13 +735,22 @@ function Slide({
                   <div className="rslide__np-imgs">
                     {Array.from({ length: 4 }).map((_, i) => {
                       const url = imageUrls[i]
+                      const key = `np_${i}`
                       return (
                         <div key={i} className="rslide__np-img-cell">
                           {editMode ? (
-                            <ET value={url ?? ''} onChange={v => {
-                              const arr = [...imageUrls]; arr[i] = v
-                              setLocal(p => ({ ...p, npImageUrls: arr.join('\n') }))
-                            }} onBlur={commit} placeholder="이미지 URL..." className="rslide__np-img-url-edit" />
+                            <div className="rslide__img-upload-zone" onClick={() => handleNpImageUpload(i, imageUrls)}>
+                              {uploading === key ? (
+                                <div className="rslide__img-upload-loading">업로드 중...</div>
+                              ) : url ? (
+                                <>
+                                  <img src={url} alt="" referrerPolicy="no-referrer" className="rslide__np-img" />
+                                  <div className="rslide__img-upload-overlay">변경</div>
+                                </>
+                              ) : (
+                                <div className="rslide__img-upload-empty" style={{ fontSize: '0.7cqw' }}>이미지</div>
+                              )}
+                            </div>
                           ) : url ? (
                             <img src={url} alt="" referrerPolicy="no-referrer" className="rslide__np-img" />
                           ) : (
