@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
-import { archivePhaseSlugFromPath, archiveSectionPath, isArchiveDetailPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
+import { archivePhaseSlugFromPath, archiveSectionFromPath, archiveSectionPath, isArchiveDetailPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
 import { formatKstShortDate } from '@/lib/kst-time'
 
 interface NavSubChild extends StickyBarNavSubChild {}
@@ -251,8 +251,8 @@ export default function Layout() {
     return {
       ...activeGroup,
       children: [
-        { to: archiveSectionPath(phase, 'season'), label: '시즌 컬렉션' },
-        { to: archiveSectionPath(phase, 'design'), label: '디자인 자료' },
+        { to: archiveSectionPath(phase, 'season'), label: '시즌 컬렉션', activeWhen: (p: string) => archiveSectionFromPath(p) === 'season' },
+        { to: archiveSectionPath(phase, 'design'), label: '디자인 자료', activeWhen: (p: string) => archiveSectionFromPath(p) === 'design' },
         { to: archiveSectionPath(phase, 'brand-report'), label: '브랜드별 리포트', end: true },
       ],
     }

@@ -145,7 +145,6 @@ function Slide({
     const contactParts = captionValue.split('|').map(p => p.trim())
     return (
       <div className="rslide">
-        <img src={LOGO} className="rslide__logo rslide__logo--content" alt="" />
         <div className="rslide__outro-layer">
           {editMode ? (
             <ET value={local.title ?? 'E.O.D'} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="E.O.D" className="rslide__outro-title-edit" />
