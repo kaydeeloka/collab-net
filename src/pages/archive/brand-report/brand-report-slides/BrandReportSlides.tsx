@@ -272,7 +272,9 @@ function BrandSlide({
       {/* Content pages */}
       {page.type !== 'cover' && (
         <div className="rslide__content-layer">
-          <ContentHeader content={local} editMode={editMode} onChange={c => setLocal(c)} onBlur={commit} />
+          {page.type !== 'review_list' && (
+            <ContentHeader content={local} editMode={editMode} onChange={c => setLocal(c)} onBlur={commit} />
+          )}
 
           {/* Project Overview */}
           {page.type === 'project_overview' && (() => {
@@ -559,18 +561,41 @@ function BrandSlide({
 
             return (
               <div className="brslide__rl">
-                <div className="brslide__rl-subtitle">
+                <div className="rslide__header brslide__rl-custom-header">
                   {editMode ? (
-                    <ET value={local.rlSubtitle ?? ''} onChange={v => setLocal(p => ({ ...p, rlSubtitle: v }))}
-                      onBlur={commit} placeholder="Mi Muse 리뷰 / 브랜드 개별 리뷰" className="brslide__rl-subtitle-edit" />
+                    <ET value={local.engTitle ?? ''} onChange={v => setLocal(p => ({ ...p, engTitle: v }))} onBlur={commit}
+                      placeholder="English title..." className="rslide__eng-edit" />
                   ) : (
-                    <span>— {subtitle}</span>
+                    <div className="rslide__eng">{local.engTitle}</div>
                   )}
-                  {editMode && (
-                    <div className="brslide__rl-offset-wrap">
-                      <span className="brslide__rl-offset-label">시작 행</span>
-                      <ET value={String(offset)} onChange={v => setLocal(p => ({ ...p, rlOffset: parseInt(v) || 0 }))}
-                        onBlur={commit} className="brslide__rl-offset-edit" />
+                  {editMode ? (
+                    <>
+                      <ET value={local.korTitle ?? ''} onChange={v => setLocal(p => ({ ...p, korTitle: v }))} onBlur={commit}
+                        placeholder="한국어 제목..." className="rslide__kor-edit" />
+                      <div className="brslide__rl-subtitle-row">
+                        <select
+                          value={local.rlSubtitle ?? 'Mi Muse 리뷰'}
+                          onChange={e => {
+                            const next = { ...local, rlSubtitle: e.target.value, rlOffset: 0 }
+                            setLocal(next)
+                            onUpdate(next)
+                          }}
+                          className="brslide__rl-subtitle-select"
+                        >
+                          <option value="Mi Muse 리뷰">Mi Muse 리뷰</option>
+                          <option value="브랜드 개별 리뷰">브랜드 개별 리뷰</option>
+                        </select>
+                        <div className="brslide__rl-offset-wrap">
+                          <span className="brslide__rl-offset-label">시작 행</span>
+                          <ET value={String(offset)} onChange={v => setLocal(p => ({ ...p, rlOffset: parseInt(v) || 0 }))}
+                            onBlur={commit} className="brslide__rl-offset-edit" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="brslide__rl-kor-inline">
+                      <div className="rslide__kor">{local.korTitle}</div>
+                      <span className="brslide__rl-subtitle-inline">— {subtitle}</span>
                     </div>
                   )}
                 </div>
@@ -614,11 +639,6 @@ function BrandSlide({
                     </tbody>
                   </table>
                 </div>
-                {tableRows.length > ROWS_PER_PAGE && (
-                  <div className="brslide__rl-page-info">
-                    {offset + 1}–{Math.min(offset + ROWS_PER_PAGE, tableRows.length)} / 총 {tableRows.length}건
-                  </div>
-                )}
               </div>
             )
           })()}

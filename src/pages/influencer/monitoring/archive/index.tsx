@@ -552,9 +552,6 @@ export default function MonitoringArchive() {
     status: 'running' | 'done'; message?: string; minimized: boolean
   }>({ open: false, videoTotal: 0, videoDone: 0, imageTotal: 0, imageDone: 0, status: 'running', minimized: false })
   const [uploadingVideos, setUploadingVideos] = useState(false)
-  const [photoRefresh, setPhotoRefresh] = useState<{
-    open: boolean; datasetId: string; loading: boolean; message: string | null
-  }>({ open: false, datasetId: '', loading: false, message: null })
   const [reportBmPage, setReportBmPage] = useState<ReportPage | null>(null)
   useEffect(() => {
     if (videoUploadModal.status !== 'done' || !videoUploadModal.open) return
@@ -881,25 +878,6 @@ export default function MonitoringArchive() {
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, best_review_picks: nowOn } : r))
   }
 
-  async function handlePhotoRefresh() {
-    const id = photoRefresh.datasetId.trim()
-    if (!id) return
-    setPhotoRefresh(s => ({ ...s, loading: true, message: null }))
-    try {
-      const res = await gasPost<{ ok?: boolean; error?: string; message?: string }>({
-        action: 'refreshPhotoUrls',
-        datasetId: id,
-      })
-      if (res.error) {
-        setPhotoRefresh(s => ({ ...s, loading: false, message: '오류: ' + res.error }))
-        return
-      }
-      setPhotoRefresh(s => ({ ...s, loading: false, message: res.message ?? '완료' }))
-      if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
-    } catch (e: unknown) {
-      setPhotoRefresh(s => ({ ...s, loading: false, message: '오류: ' + (e as Error).message }))
-    }
-  }
 
   return (
     <div className="page page--fill">
@@ -932,53 +910,11 @@ export default function MonitoringArchive() {
                   리뷰 저장
                 </button>
               )}
-              <button
-                className="page-banner-btn page-banner-btn--secondary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                title="Apify 데이터셋에서 사진 링크를 다시 가져옵니다"
-                onClick={() => setPhotoRefresh(s => ({ ...s, open: !s.open, message: null }))}
-              >
-                <ImageIcon size={14} />
-                사진 링크 갱신
-              </button>
             </div>
           )}
         />
       </PageHeroBanner>
 
-      {photoRefresh.open && (
-        <div className="mon-arch-photo-refresh">
-          <span className="mon-arch-photo-refresh__label">Apify Dataset ID</span>
-          <input
-            className="mon-arch-photo-refresh__input"
-            type="text"
-            placeholder="예: abc123XYZ"
-            value={photoRefresh.datasetId}
-            onChange={e => setPhotoRefresh(s => ({ ...s, datasetId: e.target.value, message: null }))}
-            onKeyDown={e => { if (e.key === 'Enter') void handlePhotoRefresh() }}
-            disabled={photoRefresh.loading}
-            autoFocus
-          />
-          <button
-            className="cfg-btn"
-            disabled={photoRefresh.loading || !photoRefresh.datasetId.trim()}
-            onClick={() => void handlePhotoRefresh()}
-          >
-            {photoRefresh.loading ? <Spinner sm /> : <Download size={13} />}
-            가져오기
-          </button>
-          {photoRefresh.message && (
-            <span className={`mon-arch-photo-refresh__msg${photoRefresh.message.startsWith('오류') ? ' mon-arch-photo-refresh__msg--error' : ''}`}>
-              {photoRefresh.message}
-            </span>
-          )}
-          <button
-            className="mon-arch-photo-refresh__close"
-            onClick={() => setPhotoRefresh(s => ({ ...s, open: false, message: null, datasetId: '' }))}
-            aria-label="닫기"
-          ><X size={14} /></button>
-        </div>
-      )}
 
 {hasData && (
         <div className="mon-arch-summary">
