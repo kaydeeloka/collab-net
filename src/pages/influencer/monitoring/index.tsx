@@ -208,14 +208,16 @@ export default function Monitoring() {
   const [listPlatformFilter, setListPlatformFilter] = useState('all')
   const [listBrandFilter,    setListBrandFilter]    = useState('all')
   const [statusFilter,     setStatusFilter]     = useState('all')
-  const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | null>(null)
+  const [mediaFilter,      setMediaFilter]      = useState('all')
+  const [contentFilter,    setContentFilter]    = useState('all')
+  const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | 'media' | 'content' | null>(null)
   const [openListFilter,   setOpenListFilter]   = useState<'platform' | 'brand' | null>(null)
   const [metaUpdating,     setMetaUpdating]     = useState(false)
   const [metaModal,        setMetaModal]        = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
   const [assetDownloading, setAssetDownloading] = useState(false)
   const [assetModal,       setAssetModal]       = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
 
-  useEffect(() => { setUploadPage(1) }, [searchQuery, uploadFilter, platformFilter, brandFilter, statusFilter])
+  useEffect(() => { setUploadPage(1) }, [searchQuery, uploadFilter, platformFilter, brandFilter, statusFilter, mediaFilter, contentFilter])
   useEffect(() => { setListPage(1) }, [activeTab, listPlatformFilter, listBrandFilter])
 
   useEffect(() => {
@@ -868,6 +870,8 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   const filteredRows = rows.filter(r => {
     if (!rowMatchesBrand(r, brandFilter)) return false
+    if (mediaFilter !== 'all' && (r.media || '').toLowerCase() !== mediaFilter) return false
+    if (contentFilter !== 'all' && (r.content || '').toLowerCase() !== contentFilter) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       if (![r.handle, r.display_name, r.brand, r.keywords, r.review_link].join(' ').toLowerCase().includes(q)) return false
@@ -941,6 +945,16 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     { value: 'pending', label: '대기중' },
   ]
 
+  const MEDIA_FILTER_OPTIONS = [
+    { value: 'all',   label: '전체' },
+    ...MEDIA_OPTIONS.map(m => ({ value: m, label: m })),
+  ]
+
+  const CONTENT_FILTER_OPTIONS = [
+    { value: 'all',   label: '전체' },
+    ...CONTENT_OPTIONS.map(c => ({ value: c, label: c })),
+  ]
+
   return (
     <div className="page page--fill">
       <PageHeroBanner>
@@ -964,7 +978,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   취소
                 </button>
               )}
-              <button className="page-banner-btn" onClick={startScrape} disabled={scrapeLoading || runPending}
+              <button className="page-banner-btn" onClick={() => showConfirm('모니터링 스크래핑을 실행하시겠습니까? Apify 크레딧이 사용됩니다.', () => { void startScrape() })} disabled={scrapeLoading || runPending}
                 style={{ background: 'var(--teal)', color: '#fff', borderColor: 'var(--teal)' }}>
                 {scrapeLoading && !runPending ? '실행 중…' : '모니터링 실행'}
               </button>
@@ -1379,8 +1393,26 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                       />
                     </th>
                     <th style={thBase}>업로드일</th>
-                    <th style={thBase}>미디어</th>
-                    <th style={thBase}>콘텐츠</th>
+                    <th style={thBase}>
+                      <HeaderFilterMenu
+                        label="미디어"
+                        value={mediaFilter}
+                        options={MEDIA_FILTER_OPTIONS}
+                        onChange={setMediaFilter}
+                        open={openFilter === 'media'}
+                        onOpenChange={open => setOpenFilter(open ? 'media' : null)}
+                      />
+                    </th>
+                    <th style={thBase}>
+                      <HeaderFilterMenu
+                        label="콘텐츠"
+                        value={contentFilter}
+                        options={CONTENT_FILTER_OPTIONS}
+                        onChange={setContentFilter}
+                        open={openFilter === 'content'}
+                        onOpenChange={open => setOpenFilter(open ? 'content' : null)}
+                      />
+                    </th>
                     <th style={thBase}>
                       <HeaderFilterMenu
                         label="브랜드"

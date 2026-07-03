@@ -5,7 +5,8 @@ export interface MonitoringAssets {
 }
 
 /** Thumbnail to display for a monitoring row.
- *  Prefers image_urls[0] (Apify-hosted, permanent) over cover_url (TikTok CDN signed, expires). */
+ *  Prefers cover_url when explicitly set by the user (any permanent URL).
+ *  Falls back to image_urls[0] then bare cover_url. */
 export function resolveMonitoringThumbnailUrl(assets: MonitoringAssets | null | undefined) {
-  return assets?.image_urls?.[0] ?? assets?.cover_url ?? null
+  return assets?.cover_url ?? assets?.image_urls?.[0] ?? null
 }

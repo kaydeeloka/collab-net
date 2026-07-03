@@ -659,6 +659,78 @@ function updateVideoMetadata(body) {
   };
 }
 
+// ── Refresh photo CDN URLs from an existing Apify dataset ─────
+// Re-fetches item.images from a given dataset and overwrites image_urls in monitoring_assets.
+function refreshPhotoUrls(body) {
+  var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
+  if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
+
+  var datasetId = (body || {}).datasetId;
+  if (!datasetId) return { error: 'datasetId가 필요합니다.' };
+
+  var cfg   = supabaseConfig();
+  var sbUrl = cfg.url;
+  var now   = new Date().toISOString();
+
+  // Fetch all monitoring rows to build TikTok ID → monitoring row ID map
+  var monRes = UrlFetchApp.fetch(
+    sbUrl + '/rest/v1/monitoring?select=id,review_link&limit=2000',
+    { headers: supabaseHeaders(), muteHttpExceptions: true }
+  );
+  var monRows = JSON.parse(monRes.getContentText());
+  if (!Array.isArray(monRows)) return { error: 'Supabase 조회 오류: ' + monRes.getContentText().slice(0, 200) };
+
+  var rowsByVideoId = {};
+  monRows.forEach(function(row) {
+    var m = (row.review_link || '').match(/\/(?:video|photo)\/(\d+)/);
+    if (!m) return;
+    var id = m[1];
+    if (!rowsByVideoId[id]) rowsByVideoId[id] = [];
+    rowsByVideoId[id].push(row.id);
+  });
+
+  // Fetch items from the Apify dataset
+  var apifyRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=2000',
+    { muteHttpExceptions: true }
+  );
+  var items = JSON.parse(apifyRes.getContentText());
+  if (!Array.isArray(items)) return { error: 'Apify 데이터 파싱 오류' };
+
+  var updated = 0, skipped = 0, noImages = 0;
+
+  items.forEach(function(item) {
+    var images  = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+    var isPhoto = (item.url || '').indexOf('/photo/') !== -1 || (images.length > 0 && !item.videoUrl);
+    if (!isPhoto || !images.length) { noImages++; return; }
+
+    var monIds = rowsByVideoId[String(item.id)];
+    if (!monIds || !monIds.length) { skipped++; return; }
+
+    monIds.forEach(function(monitoringId) {
+      UrlFetchApp.fetch(
+        sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
+        {
+          method : 'POST',
+          headers: Object.assign({}, supabaseHeaders(), {
+            'Content-Type': 'application/json',
+            Prefer        : 'resolution=merge-duplicates',
+          }),
+          payload           : JSON.stringify({ monitoring_id: monitoringId, image_urls: images, updated_at: now }),
+          muteHttpExceptions: true,
+        }
+      );
+      updated++;
+    });
+  });
+
+  return {
+    ok     : true,
+    updated: updated,
+    message: '사진 링크 갱신 완료 — ' + updated + '개 업데이트 · ' + skipped + '개 매칭 안됨',
+  };
+}
+
 // ── Download cover + video URLs via scrape-creators actor ─────
 
 // Apify key-value-store record URLs are private (403 without auth); append the
@@ -828,6 +900,7 @@ function routeMonitoring(action, p, body) {
     case 'processApifyRunById'     : return processApifyRunById((body || {}).runId || '', (body || {}).phaseId);
     case 'updateVideoMetadata'     : return updateVideoMetadata(body || {});
     case 'downloadVideoAssets'     : return downloadVideoAssets(body || {});
+    case 'refreshPhotoUrls'        : return refreshPhotoUrls(body || {});
     default                        : return null;
   }
 }

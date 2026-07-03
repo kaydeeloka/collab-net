@@ -105,13 +105,24 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const [videoError, setVideoError] = useState(false)
   const [localThumbUrl, setLocalThumbUrl] = useState<string | null>(null)
   const [thumbUploading, setThumbUploading] = useState(false)
-  const [currentImageIdx, setCurrentImageIdx] = useState(0)
+  const [currentImageIdx, setCurrentImageIdx] = useState(() => {
+    const cover = row.assets?.cover_url ?? null
+    const imgs = row.assets?.image_urls ?? null
+    if (!cover || !imgs) return 0
+    const idx = imgs.indexOf(cover)
+    return idx >= 0 ? idx : 0
+  })
+  const [photoViewMode, setPhotoViewMode] = useState<'photo' | 'thumb'>('photo')
+  // Tracks the cover_url actually saved (updated on save so the carousel can jump to it)
+  const [savedCoverUrl, setSavedCoverUrl] = useState<string | null>(row.assets?.cover_url ?? null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const imageUrls = row.assets?.image_urls ?? null
   const imageCount = imageUrls?.length ?? 0
   const hasCarousel = isPhoto && imageCount > 1
+  // Index of the saved cover inside imageUrls (−1 if not found)
+  const savedCoverIdx = savedCoverUrl ? (imageUrls?.indexOf(savedCoverUrl) ?? -1) : -1
 
   function handleCapture() {
     const video = videoRef.current
@@ -150,7 +161,7 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
       const newUrl = `${urlData.publicUrl}?t=${Date.now()}`
       const { error: updateErr } = await supabase
         .from('monitoring_assets')
-        .update({ cover_url: newUrl, image_urls: null, updated_at: new Date().toISOString() })
+        .update({ cover_url: newUrl, updated_at: new Date().toISOString() })
         .eq('monitoring_id', row.id)
       if (updateErr) throw updateErr
       setLocalThumbUrl(newUrl)
@@ -168,7 +179,12 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
   const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
 
-  const displayThumbUrl = localThumbUrl ?? (hasCarousel ? imageUrls![currentImageIdx] : thumbUrl)
+  // In 사진 mode: always show the current carousel image.
+  // In 썸네일 mode: show localThumbUrl (just confirmed) or the current carousel image.
+  // Non-carousel cards: localThumbUrl overrides for immediate feedback after upload.
+  const displayThumbUrl = hasCarousel
+    ? (photoViewMode === 'thumb' && localThumbUrl ? localThumbUrl : imageUrls![currentImageIdx])
+    : (localThumbUrl ?? thumbUrl)
   const thumb = displayThumbUrl && !imgFailed ? (
     <img src={displayThumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
   ) : (
@@ -213,42 +229,50 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
               <>
                 <button
                   className="mon-arch-card__carousel-btn mon-arch-card__carousel-btn--prev"
-                  onClick={e => { e.stopPropagation(); setCurrentImageIdx(i => Math.max(0, i - 1)) }}
+                  onClick={e => { e.stopPropagation(); setLocalThumbUrl(null); setCurrentImageIdx(i => Math.max(0, i - 1)) }}
                   disabled={currentImageIdx === 0}
                 >
                   <ChevronUp size={14} style={{ transform: 'rotate(-90deg)' }} />
                 </button>
                 <button
                   className="mon-arch-card__carousel-btn mon-arch-card__carousel-btn--next"
-                  onClick={e => { e.stopPropagation(); setCurrentImageIdx(i => Math.min(imageCount - 1, i + 1)) }}
+                  onClick={e => { e.stopPropagation(); setLocalThumbUrl(null); setCurrentImageIdx(i => Math.min(imageCount - 1, i + 1)) }}
                   disabled={currentImageIdx === imageCount - 1}
                 >
                   <ChevronUp size={14} style={{ transform: 'rotate(90deg)' }} />
                 </button>
                 <span className="mon-arch-card__carousel-counter">{currentImageIdx + 1}/{imageCount}</span>
-                <button
-                  className="mon-arch-card__carousel-set-thumb"
-                  disabled={thumbUploading}
-                  onClick={async e => {
-                    e.stopPropagation()
-                    const url = imageUrls![currentImageIdx]
-                    if (!url) return
-                    setThumbUploading(true)
-                    try {
-                      const res = await fetch(url)
-                      if (!res.ok) throw new Error('fetch failed')
-                      const blob = await res.blob()
-                      await handleThumbUpload(new File([blob], 'thumb.jpg', { type: 'image/jpeg' }))
-                    } catch {
-                      showToast('썸네일 설정에 실패했습니다.', 'error')
-                      setThumbUploading(false)
-                    }
-                  }}
-                  title="이 사진을 썸네일로 설정"
-                >
-                  {thumbUploading ? <Spinner sm /> : <ImageIcon size={11} />}
-                  썸네일 설정
-                </button>
+                {photoViewMode === 'thumb' && (
+                  <button
+                    className="mon-arch-card__carousel-set-thumb"
+                    disabled={thumbUploading}
+                    onClick={async e => {
+                      e.stopPropagation()
+                      const url = imageUrls![currentImageIdx]
+                      if (!url) return
+                      setThumbUploading(true)
+                      try {
+                        const { error } = await supabase
+                          .from('monitoring_assets')
+                          .update({ cover_url: url, updated_at: new Date().toISOString() })
+                          .eq('monitoring_id', row.id)
+                        if (error) throw error
+                        setLocalThumbUrl(url)
+                        setSavedCoverUrl(url)
+                        showToast('썸네일이 저장되었습니다.', 'success')
+                      } catch (e) {
+                        console.error('썸네일 설정 오류:', e)
+                        showToast('썸네일 저장에 실패했습니다.', 'error')
+                      } finally {
+                        setThumbUploading(false)
+                      }
+                    }}
+                    title="이 사진을 썸네일로 설정"
+                  >
+                    {thumbUploading ? <Spinner sm /> : <ImageIcon size={11} />}
+                    썸네일 설정
+                  </button>
+                )}
               </>
             )}
           </>
@@ -283,8 +307,8 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
           }}
         />
 
-        {/* Upload overlay — visible on hover when not in video mode */}
-        {!showVideo && (
+        {/* Upload overlay — only for video cards (photo cards use carousel 썸네일 설정) */}
+        {!showVideo && !!videoUrl && (
           <button
             className={`mon-arch-card__thumb-upload${thumbUploading ? ' mon-arch-card__thumb-upload--loading' : ''}`}
             onClick={() => fileInputRef.current?.click()}
@@ -308,9 +332,30 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
               ? <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>
               : <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>}
           </button>
+        ) : hasCarousel ? (
+          <button
+            className={`mon-arch-card__media-toggle${photoViewMode === 'thumb' ? ' mon-arch-card__media-toggle--video' : ''}`}
+            onClick={() => {
+              if (photoViewMode === 'photo') {
+                // Jump to the saved cover image so the user can see which one is stored
+                if (savedCoverIdx >= 0) setCurrentImageIdx(savedCoverIdx)
+                setLocalThumbUrl(null)
+                setPhotoViewMode('thumb')
+              } else {
+                setPhotoViewMode('photo')
+              }
+            }}
+            title={photoViewMode === 'photo' ? '썸네일 편집 모드로 전환' : '사진 보기로 전환'}
+          >
+            {photoViewMode === 'photo'
+              ? <><ImageIcon size={11} strokeWidth={2} /> 사진 {imageCount}장</>
+              : <><Camera size={11} /> 썸네일</>}
+          </button>
         ) : (
           <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
-            {isPhoto ? <><ImageIcon size={11} strokeWidth={2} /> 사진</> : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+            {isPhoto
+              ? <><ImageIcon size={11} strokeWidth={2} /> 사진</>
+              : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
           </span>
         )}
       </div>
@@ -384,6 +429,14 @@ export default function MonitoringArchive() {
     status: 'running' | 'done'; message?: string; minimized: boolean
   }>({ open: false, videoTotal: 0, videoDone: 0, imageTotal: 0, imageDone: 0, status: 'running', minimized: false })
   const [uploadingVideos, setUploadingVideos] = useState(false)
+  const [photoRefresh, setPhotoRefresh] = useState<{
+    open: boolean; datasetId: string; loading: boolean; message: string | null
+  }>({ open: false, datasetId: '', loading: false, message: null })
+  useEffect(() => {
+    if (videoUploadModal.status !== 'done' || !videoUploadModal.open) return
+    const t = setTimeout(() => setVideoUploadModal(m => ({ ...m, open: false })), 3000)
+    return () => clearTimeout(t)
+  }, [videoUploadModal.status, videoUploadModal.open])
 
   useEffect(() => {
     if (phaseLoading) return
@@ -561,7 +614,7 @@ export default function MonitoringArchive() {
 
   async function handleUploadVideos() {
     const needsVideo = (r: MonitoringRow) => !!r.assets?.video_url?.includes('api.apify.com')
-    const needsImage = (r: MonitoringRow) => { const u = r.assets?.image_urls?.[0]; return !!u && !u.includes('supabase') }
+    const needsImage = (r: MonitoringRow) => { const u = r.assets?.image_urls?.[0]; return !!u && !u.includes('monitoring-photos') }
 
     const videoRows = filteredRows.filter(needsVideo)
     const imageRows = filteredRows.filter(r => needsImage(r) && !needsVideo(r))
@@ -604,13 +657,17 @@ export default function MonitoringArchive() {
           const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
           const savedUrls: string[] = []
           for (let i = 0; i < cdnUrls.length; i++) {
-            const imgRes = await fetch(cdnUrls[i])
-            if (!imgRes.ok) continue
-            const imgBlob = await imgRes.blob()
-            const imgPath = `${row.id}_${i}.jpg`
-            await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: 'image/jpeg', upsert: true })
-            const { data: imgUrlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
-            savedUrls.push(imgUrlData.publicUrl)
+            try {
+              const imgRes = await fetch(cdnUrls[i])
+              if (!imgRes.ok) continue
+              const imgBlob = await imgRes.blob()
+              const imgPath = `${row.id}_${i}.jpg`
+              await supabase.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+              const { data: imgUrlData } = supabase.storage.from('monitoring-photos').getPublicUrl(imgPath)
+              savedUrls.push(`${imgUrlData.publicUrl}?t=${Date.now()}`)
+            } catch {
+              // skip individual image failures, keep going
+            }
           }
           if (savedUrls.length) updatePayload.image_urls = savedUrls
           savedImages++
@@ -631,13 +688,17 @@ export default function MonitoringArchive() {
         const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
         const savedUrls: string[] = []
         for (let i = 0; i < cdnUrls.length; i++) {
-          const imgRes = await fetch(cdnUrls[i])
-          if (!imgRes.ok) continue
-          const imgBlob = await imgRes.blob()
-          const imgPath = `${row.id}_${i}.jpg`
-          await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: 'image/jpeg', upsert: true })
-          const { data: imgUrlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
-          savedUrls.push(imgUrlData.publicUrl)
+          try {
+            const imgRes = await fetch(cdnUrls[i])
+            if (!imgRes.ok) continue
+            const imgBlob = await imgRes.blob()
+            const imgPath = `${row.id}_${i}.jpg`
+            await supabase.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+            const { data: imgUrlData } = supabase.storage.from('monitoring-photos').getPublicUrl(imgPath)
+            savedUrls.push(`${imgUrlData.publicUrl}?t=${Date.now()}`)
+          } catch {
+            // skip individual image failures, keep going
+          }
         }
         if (savedUrls.length) updatePayload.image_urls = savedUrls
         savedImages++
@@ -658,6 +719,26 @@ export default function MonitoringArchive() {
     if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
   }
 
+  async function handlePhotoRefresh() {
+    const id = photoRefresh.datasetId.trim()
+    if (!id) return
+    setPhotoRefresh(s => ({ ...s, loading: true, message: null }))
+    try {
+      const res = await gasPost<{ ok?: boolean; error?: string; message?: string }>({
+        action: 'refreshPhotoUrls',
+        datasetId: id,
+      })
+      if (res.error) {
+        setPhotoRefresh(s => ({ ...s, loading: false, message: '오류: ' + res.error }))
+        return
+      }
+      setPhotoRefresh(s => ({ ...s, loading: false, message: res.message ?? '완료' }))
+      if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
+    } catch (e: unknown) {
+      setPhotoRefresh(s => ({ ...s, loading: false, message: '오류: ' + (e as Error).message }))
+    }
+  }
+
   return (
     <div className="page page--fill">
       <PageHeroBanner>
@@ -666,7 +747,7 @@ export default function MonitoringArchive() {
           description="업로드된 리뷰 콘텐츠의 썸네일과 영상을 아카이브합니다."
           actions={(
             <div style={{ display: 'flex', gap: 8 }}>
-              <button
+<button
                 className="page-banner-btn page-banner-btn--secondary"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 disabled={importing || reviewRows.length === 0}
@@ -677,7 +758,7 @@ export default function MonitoringArchive() {
               </button>
               {filteredRows.some(r =>
                 r.assets?.video_url?.includes('api.apify.com') ||
-                (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase'))
+                (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('monitoring-photos'))
               ) && (
                 <button
                   className="page-banner-btn page-banner-btn--secondary"
@@ -689,12 +770,55 @@ export default function MonitoringArchive() {
                   리뷰 저장
                 </button>
               )}
+              <button
+                className="page-banner-btn page-banner-btn--secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                title="Apify 데이터셋에서 사진 링크를 다시 가져옵니다"
+                onClick={() => setPhotoRefresh(s => ({ ...s, open: !s.open, message: null }))}
+              >
+                <ImageIcon size={14} />
+                사진 링크 갱신
+              </button>
             </div>
           )}
         />
       </PageHeroBanner>
 
-      {hasData && (
+      {photoRefresh.open && (
+        <div className="mon-arch-photo-refresh">
+          <span className="mon-arch-photo-refresh__label">Apify Dataset ID</span>
+          <input
+            className="mon-arch-photo-refresh__input"
+            type="text"
+            placeholder="예: abc123XYZ"
+            value={photoRefresh.datasetId}
+            onChange={e => setPhotoRefresh(s => ({ ...s, datasetId: e.target.value, message: null }))}
+            onKeyDown={e => { if (e.key === 'Enter') void handlePhotoRefresh() }}
+            disabled={photoRefresh.loading}
+            autoFocus
+          />
+          <button
+            className="cfg-btn"
+            disabled={photoRefresh.loading || !photoRefresh.datasetId.trim()}
+            onClick={() => void handlePhotoRefresh()}
+          >
+            {photoRefresh.loading ? <Spinner sm /> : <Download size={13} />}
+            가져오기
+          </button>
+          {photoRefresh.message && (
+            <span className={`mon-arch-photo-refresh__msg${photoRefresh.message.startsWith('오류') ? ' mon-arch-photo-refresh__msg--error' : ''}`}>
+              {photoRefresh.message}
+            </span>
+          )}
+          <button
+            className="mon-arch-photo-refresh__close"
+            onClick={() => setPhotoRefresh(s => ({ ...s, open: false, message: null, datasetId: '' }))}
+            aria-label="닫기"
+          ><X size={14} /></button>
+        </div>
+      )}
+
+{hasData && (
         <div className="mon-arch-summary">
           <SummaryStat icon={<Film size={15} />}         label="콘텐츠" value={`${fmtNum(filteredRows.length)}개`} accent="#0d9488" />
           <SummaryStat icon={<Eye size={15} />}          label="조회"   value={fmtNum(totals.views)}              accent="#2563eb" />
