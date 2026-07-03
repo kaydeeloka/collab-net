@@ -199,7 +199,7 @@ function Slide({
             <div className="rslide__outro-contact">
               <span className="rslide__outro-contact-label" style={{ lineHeight: 1 }}>{contactParts[0]}</span>
               <span className="rslide__outro-contact-divider" />
-              <span className="rslide__outro-contact-email" style={{ lineHeight: 1 }}>{contactParts.slice(1).join('|').trim()}</span>
+              <a className="rslide__outro-contact-email" href={`mailto:${contactParts.slice(1).join('|').trim()}`} style={{ lineHeight: 1 }}>{contactParts.slice(1).join('|').trim()}</a>
             </div>
           ) : (
             <div className="rslide__outro-caption">{captionValue}</div>

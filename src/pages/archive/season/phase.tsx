@@ -191,6 +191,8 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
 .rslide__np-cards { min-height: 0 !important; }
 .rslide__np-card { padding: 0.6cqw 1cqw !important; gap: 0.4cqw !important; }
 .rslide__np-card-bullet { font-size: 11px !important; line-height: 1.5 !important; }
+.rslide__kit-cell--concept { overflow: visible !important; }
+.rslide__kit-concept-text { font-size: 12px !important; line-height: 1.72 !important; overflow: visible !important; }
 </style>
 </head>
 <body><div class="report-slides">${slidesHtml}</div></body>
