@@ -3,10 +3,10 @@
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES
-  ('monitoring-thumbnails', 'monitoring-thumbnails', true, 5242880),
-  ('monitoring-videos', 'monitoring-videos', false, 104857600)
+  ('monitoring-thumbnails', 'monitoring-thumbnails', true,  5242880),
+  ('monitoring-videos',     'monitoring-videos',     true, 104857600)
 ON CONFLICT (id) DO UPDATE SET
-  public = EXCLUDED.public,
+  public          = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit;
 
 DROP POLICY IF EXISTS "monitoring_thumbnails_storage_all" ON storage.objects;

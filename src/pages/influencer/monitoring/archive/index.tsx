@@ -99,8 +99,12 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const isPhoto = !videoUrl && !!row.assets?.image_urls?.length
   const account = (row.handle || '').replace(/^@/, '')
   const [imgFailed, setImgFailed] = useState(false)
+  const [showVideo, setShowVideo] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const daysLeft = videoUrl ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
+
+  // Video is temporary (needs saving) if it's still an Apify KV URL.
+  const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
+  const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
 
   const thumb = thumbUrl && !imgFailed ? (
     <img src={thumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
@@ -114,17 +118,18 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   return (
     <div className="mon-arch-card">
       <div className="mon-arch-card__thumb">
-        {videoUrl && !videoError ? (
+        {/* Thumbnail is the default view — video loads only when toggled */}
+        {showVideo && videoUrl && !videoError ? (
           <div className="mon-arch-card__player">
             <video
               src={videoUrl}
               controls
               playsInline
+              autoPlay
               preload="metadata"
               className="mon-arch-card__video"
               onError={() => setVideoError(true)}
             />
-            {/* direct link fallback in case browser can't stream the URL */}
             <a
               href={videoUrl}
               target="_blank"
@@ -147,14 +152,30 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
             </span>
           )}
         </div>
+
+        {/* D-X badge — only when video is still on Apify CDN (not yet permanently saved) */}
         {daysLeft !== null && (
           <span className={`mon-arch-card__expiry${daysLeft === 0 ? ' mon-arch-card__expiry--expired' : daysLeft <= 2 ? ' mon-arch-card__expiry--warn' : ''}`}>
             {daysLeft === 0 ? '만료됨' : `D-${daysLeft}`}
           </span>
         )}
-        <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
-          {isPhoto ? <><ImageIcon size={11} strokeWidth={2} /> 사진</> : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
-        </span>
+
+        {/* Toggle pill: switches between thumbnail and video */}
+        {videoUrl ? (
+          <button
+            className={`mon-arch-card__media-toggle${showVideo ? ' mon-arch-card__media-toggle--video' : ''}`}
+            onClick={() => { setShowVideo(v => !v); if (videoError) setVideoError(false) }}
+            title={showVideo ? '썸네일 보기' : '영상 보기'}
+          >
+            {showVideo
+              ? <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>
+              : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+          </button>
+        ) : (
+          <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
+            {isPhoto ? <><ImageIcon size={11} strokeWidth={2} /> 사진</> : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+          </span>
+        )}
       </div>
 
       <div className="mon-arch-card__body">
@@ -218,6 +239,10 @@ export default function MonitoringArchive() {
   const [zipModal, setZipModal] = useState<{
     open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string
   }>({ open: false, total: 0, done: 0, status: 'running' })
+  const [videoUploadModal, setVideoUploadModal] = useState<{
+    open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string
+  }>({ open: false, total: 0, done: 0, status: 'running' })
+  const [uploadingVideos, setUploadingVideos] = useState(false)
 
   useEffect(() => {
     if (phaseLoading) return
@@ -376,6 +401,45 @@ export default function MonitoringArchive() {
     }
   }
 
+  async function handleUploadVideos() {
+    const toUpload = filteredRows.filter(r => r.assets?.video_url?.includes('api.apify.com'))
+    if (!toUpload.length) { showToast('영구 저장이 필요한 영상이 없습니다', 'info'); return }
+    setUploadingVideos(true)
+    setVideoUploadModal({ open: true, total: toUpload.length, done: 0, status: 'running' })
+    let uploaded = 0
+    let failed = 0
+    for (const row of toUpload) {
+      try {
+        const videoUrl = row.assets!.video_url!
+        const fetchRes = await fetch(videoUrl)
+        if (!fetchRes.ok) throw new Error(`fetch ${fetchRes.status}`)
+        const blob = await fetchRes.blob()
+        const path = `${row.id}.mp4`
+        const { error: uploadErr } = await supabase.storage
+          .from('monitoring-videos')
+          .upload(path, blob, { contentType: 'video/mp4', upsert: true })
+        if (uploadErr) throw uploadErr
+        const { data: urlData } = supabase.storage.from('monitoring-videos').getPublicUrl(path)
+        await supabase
+          .from('monitoring_assets')
+          .update({ video_url: urlData.publicUrl, updated_at: new Date().toISOString() })
+          .eq('monitoring_id', row.id)
+        uploaded++
+      } catch (e) {
+        console.error('Video upload error:', row.id, e)
+        failed++
+      }
+      setVideoUploadModal(m => ({ ...m, done: m.done + 1 }))
+    }
+    setVideoUploadModal(m => ({
+      ...m,
+      status: 'done',
+      message: `${uploaded}개 영상 영구 저장 완료` + (failed ? ` · ${failed}개 실패` : ''),
+    }))
+    setUploadingVideos(false)
+    if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
+  }
+
   return (
     <div className="page page--fill">
       <PageHeroBanner>
@@ -383,15 +447,28 @@ export default function MonitoringArchive() {
           title="리뷰 콘텐츠 아카이브"
           description="업로드된 리뷰 콘텐츠의 썸네일과 영상을 아카이브합니다."
           actions={(
-            <button
-              className="page-banner-btn page-banner-btn--secondary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              disabled={importing || reviewRows.length === 0}
-              onClick={() => { void handleImport() }}
-            >
-              {importing ? <Spinner sm /> : <DownloadCloud size={14} />}
-              데이터 가져오기
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="page-banner-btn page-banner-btn--secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                disabled={importing || reviewRows.length === 0}
+                onClick={() => { void handleImport() }}
+              >
+                {importing ? <Spinner sm /> : <DownloadCloud size={14} />}
+                데이터 가져오기
+              </button>
+              {filteredRows.some(r => r.assets?.video_url?.includes('api.apify.com')) && (
+                <button
+                  className="page-banner-btn page-banner-btn--secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  disabled={uploadingVideos}
+                  onClick={() => { void handleUploadVideos() }}
+                >
+                  {uploadingVideos ? <Spinner sm /> : <Film size={14} />}
+                  영상 저장
+                </button>
+              )}
+            </div>
           )}
         />
       </PageHeroBanner>
@@ -405,10 +482,10 @@ export default function MonitoringArchive() {
         </div>
       )}
 
-      {!loading && filteredRows.some(r => r.assets?.video_url) && (
+      {!loading && filteredRows.some(r => r.assets?.video_url?.includes('api.apify.com')) && (
         <div className="mon-arch-notice">
           <Clock size={13} className="mon-arch-notice__icon" />
-          영상 링크는 데이터 가져오기 후 <strong>7일 이내</strong>에 다운로드하세요. 기간이 지나면 링크가 만료되어 Apify에서 데이터를 다시 가져와야 합니다.
+          임시 영상 링크가 있습니다. <strong>7일 이내</strong>에 <strong>영상 저장</strong> 버튼을 눌러 영구 보관하세요. 기간이 지나면 Apify에서 다시 가져와야 합니다.
         </div>
       )}
 
@@ -523,6 +600,32 @@ export default function MonitoringArchive() {
           ) : (
             <div style={{ fontSize: 14, color: 'var(--gray-7)' }}>
               {zipModal.message}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={videoUploadModal.open}
+        onClose={() => videoUploadModal.status === 'done' && setVideoUploadModal(m => ({ ...m, open: false }))}
+        title="영상 영구 저장"
+      >
+        <div style={{ minWidth: 300, padding: '8px 0' }}>
+          {videoUploadModal.status === 'running' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--gray-6)', fontSize: 14, marginBottom: 12 }}>
+                <Spinner sm /> 영상 업로드 중… ({videoUploadModal.done}/{videoUploadModal.total})
+              </div>
+              <div className="mon-arch-progress">
+                <div
+                  className="mon-arch-progress__bar"
+                  style={{ width: `${videoUploadModal.total ? (videoUploadModal.done / videoUploadModal.total) * 100 : 0}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 14, color: 'var(--gray-7)' }}>
+              {videoUploadModal.message}
             </div>
           )}
         </div>

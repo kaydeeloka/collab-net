@@ -299,7 +299,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     setLoading(true)
     try {
       const monitoringSelect = `
-        id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
+        id, phase_id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
         monitoring_assets(cover_url, video_url, image_urls, updated_at),
         influencer_platform_id,
         influencer_platform!monitoring_influencer_platform_id_fkey(
@@ -324,6 +324,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         supabase
           .from('monitoring')
           .select(monitoringSelect)
+          .eq('phase_id', viewPhaseId)
           .order('date', { ascending: false }),
       ])
 
@@ -892,11 +893,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         }
         return true
       })
-    // upload filter is group-level → show influencer count (명) to match stat card
-    // 전체 → show individual row count (건)
-    return uploadFilter !== 'all'
-      ? filteredGroups.length
-      : filteredGroups.reduce((sum, rows) => sum + rows.length, 0)
+    return {
+      people: filteredGroups.length,
+      items:  filteredGroups.reduce((sum, rows) => sum + rows.length, 0),
+    }
   })()
 
   const thBase: React.CSSProperties = {
@@ -1303,9 +1303,11 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         >
           <input type="text" placeholder="인플루언서명, 핸들 검색..." value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, minWidth: 180, maxWidth: 320 }} />
-          <span style={{ fontSize: 13, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>
-            표시: <strong style={{ color: 'var(--yellow-text)' }}>{uploadDisplayCount}</strong>{uploadFilter !== 'all' ? '명' : '개'}
-          </span>
+          {uploadFilter !== 'not_uploaded' && (
+            <span style={{ fontSize: 13, color: 'var(--gray-5)', whiteSpace: 'nowrap' }}>
+              표시: <strong style={{ color: 'var(--yellow-text)' }}>{uploadDisplayCount.people}</strong>명 <strong style={{ color: 'var(--yellow-text)' }}>{uploadDisplayCount.items}</strong>개
+            </span>
+          )}
           <button
             type="button"
             className="cfg-btn cfg-btn--ghost"

@@ -80,3 +80,32 @@ function supabasePatch(table, matchQuery, payload) {
     prefer: 'return=minimal',
   });
 }
+
+/**
+ * Upload a binary blob to Supabase Storage and return the public URL.
+ * @param {string} bucket - bucket name (e.g. 'monitoring-thumbnails')
+ * @param {string} path   - object path inside the bucket (e.g. 'abc123.jpg')
+ * @param {GoogleAppsScript.Base.Blob} blob
+ * @param {string} contentType - MIME type
+ * @returns {string} public URL
+ */
+function supabaseStorageUpload(bucket, path, blob, contentType) {
+  var cfg = supabaseRequireConfig();
+  var res = UrlFetchApp.fetch(
+    cfg.url + '/storage/v1/object/' + bucket + '/' + path,
+    {
+      method            : 'POST',
+      headers           : {
+        Authorization : 'Bearer ' + cfg.key,
+        apikey        : cfg.key,
+        'Content-Type': contentType,
+        'x-upsert'    : 'true',
+      },
+      payload           : blob,
+      muteHttpExceptions: true,
+    }
+  );
+  var code = res.getResponseCode();
+  if (code >= 300) throw new Error('Storage upload failed (' + code + '): ' + res.getContentText().slice(0, 200));
+  return cfg.url + '/storage/v1/object/public/' + bucket + '/' + path;
+}

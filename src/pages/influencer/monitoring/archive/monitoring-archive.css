@@ -404,6 +404,38 @@
   background: rgba(37, 99, 235, .82);
 }
 
+/* Thumbnail / video toggle pill (bottom-right of thumb) */
+.mon-arch-card__media-toggle {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--white);
+  background: rgba(0, 0, 0, .55);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.mon-arch-card__media-toggle:hover {
+  background: rgba(0, 0, 0, .78);
+}
+.mon-arch-card__media-toggle--video {
+  background: rgba(20, 184, 166, .85);
+}
+.mon-arch-card__media-toggle--video:hover {
+  background: rgba(13, 148, 136, .95);
+}
+
 /* Body */
 .mon-arch-card__body {
   padding: 12px 12px 14px;

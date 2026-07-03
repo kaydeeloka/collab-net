@@ -733,9 +733,10 @@ function downloadVideoAssets(body) {
   var cfg     = supabaseConfig();
   var sbUrl   = cfg.url;
   var now     = new Date().toISOString();
-  var updated   = 0;   // monitoring_assets rows successfully saved
-  var noUrl     = 0;   // Apify items with neither cover nor video URL
-  var unmatched = 0;   // Apify items whose id matched no monitoring row
+  var updated       = 0;   // monitoring_assets rows successfully saved
+  var thumbUploaded = 0;   // covers permanently uploaded to Supabase Storage
+  var noUrl         = 0;   // Apify items with neither cover nor video URL
+  var unmatched     = 0;   // Apify items whose id matched no monitoring row
 
   items.forEach(function(item) {
     var rows = rowsByVideoId[String(item.id)];
@@ -750,15 +751,33 @@ function downloadVideoAssets(body) {
     if (isPhoto) {
       coverUrl  = (images.length ? images[0] : null) || item.coverImg || null;
       videoUrl  = null;
-      imageUrls = images.length ? images : null;   // all photos for download
+      imageUrls = images.length ? images : null;
     } else {
       coverUrl  = item.coverImg || (images.length ? images[0] : null) || null;
-      videoUrl  = _withApifyToken_(item.videoUrl || item.downloadUrl || null, token);
+      // Prefer Apify KV download URL (persistent with token) over TikTok CDN (expires within hours).
+      videoUrl  = _withApifyToken_(item.downloadUrl || item.videoUrl || null, token);
       imageUrls = null;
     }
     if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
 
     rows.forEach(function(row) {
+      // Auto-upload cover thumbnail to Supabase Storage for permanent access.
+      var finalCoverUrl    = coverUrl;
+      var coverDownloadUrl = _withApifyToken_(item.downloadCoverUrl, token);
+      if (coverDownloadUrl) {
+        try {
+          var imgRes = UrlFetchApp.fetch(coverDownloadUrl, { muteHttpExceptions: true });
+          if (imgRes.getResponseCode() === 200) {
+            var imgBlob = imgRes.getBlob();
+            imgBlob.setContentType('image/jpeg');
+            finalCoverUrl = supabaseStorageUpload('monitoring-thumbnails', row.id + '.jpg', imgBlob, 'image/jpeg');
+            thumbUploaded++;
+          }
+        } catch (e) {
+          Logger.log('썸네일 Supabase 업로드 오류 (' + row.id + '): ' + e);
+        }
+      }
+
       var res = UrlFetchApp.fetch(
         sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
         {
@@ -769,7 +788,7 @@ function downloadVideoAssets(body) {
           }),
           payload           : JSON.stringify({
             monitoring_id: row.id,
-            cover_url    : coverUrl,
+            cover_url    : finalCoverUrl,
             video_url    : videoUrl,
             image_urls   : imageUrls,
             updated_at   : now,
@@ -785,14 +804,15 @@ function downloadVideoAssets(body) {
   return {
     ok           : true,
     updated      : updated,
+    thumbUploaded: thumbUploaded,
     itemsReturned: items.length,
     tiktokRows   : tiktokRows.length,
     unmatched    : unmatched,
     noDownloadUrl: noUrl,
     unkeyedUrls  : unkeyedRows,
-    message: updated + '개 저장 · Apify 결과 ' + items.length + '개 · 매칭 실패 ' + unmatched
-      + '개 · 다운로드 URL 없음 ' + noUrl + '개 · URL 패턴 불일치 ' + unkeyedRows.length
-      + '개 (대상 ' + tiktokRows.length + '개)',
+    message: updated + '개 저장 · 썸네일 ' + thumbUploaded + '개 영구 저장 · Apify 결과 ' + items.length
+      + '개 · 매칭 실패 ' + unmatched + '개 · 다운로드 URL 없음 ' + noUrl
+      + '개 · URL 패턴 불일치 ' + unkeyedRows.length + '개 (대상 ' + tiktokRows.length + '개)',
   };
 }
 
