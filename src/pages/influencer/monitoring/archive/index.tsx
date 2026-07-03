@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X, Upload } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X, Upload, Camera } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
-import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -51,11 +50,11 @@ function triggerDownload(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url)
 }
 
-/** Returns days remaining before the 7-day Apify link expiry, or null if unknown. */
+/** Returns days remaining before the 3-day Apify link expiry, or null if unknown. */
 function videoLinkDaysLeft(assetsUpdatedAt: string | null | undefined): number | null {
   if (!assetsUpdatedAt) return null
   const daysPassed = Math.floor((Date.now() - new Date(assetsUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
-  return Math.max(0, 7 - daysPassed)
+  return Math.max(0, 3 - daysPassed)
 }
 
 function PlatformBadge({ platform }: { platform: string }) {
@@ -83,17 +82,20 @@ function StatPill({ icon, value }: { icon: React.ReactNode; value: number }) {
   )
 }
 
-function SummaryStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function SummaryStat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) {
   return (
-    <div className="mon-arch-summary__item">
+    <div className="mon-arch-summary__item" style={{ '--accent': accent } as React.CSSProperties}>
       <span className="mon-arch-summary__icon">{icon}</span>
-      <span className="mon-arch-summary__value">{value}</span>
-      <span className="mon-arch-summary__label">{label}</span>
+      <div className="mon-arch-summary__text">
+        <span className="mon-arch-summary__value">{value}</span>
+        <span className="mon-arch-summary__label">{label}</span>
+      </div>
     </div>
   )
 }
 
 function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: string }) {
+  const { showToast } = useToast()
   const thumbUrl = resolveMonitoringThumbnailUrl(row.assets)
   const videoUrl = row.assets?.video_url || null
   const isPhoto = !videoUrl && !!row.assets?.image_urls?.length
@@ -103,9 +105,40 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const [videoError, setVideoError] = useState(false)
   const [localThumbUrl, setLocalThumbUrl] = useState<string | null>(null)
   const [thumbUploading, setThumbUploading] = useState(false)
+  const [currentImageIdx, setCurrentImageIdx] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
-  async function handleThumbUpload(file: File) {
+  const imageUrls = row.assets?.image_urls ?? null
+  const imageCount = imageUrls?.length ?? 0
+  const hasCarousel = isPhoto && imageCount > 1
+
+  function handleCapture() {
+    const video = videoRef.current
+    if (!video || video.readyState < 2 || video.videoWidth === 0) {
+      showToast('영상이 아직 준비되지 않았습니다. 잠시 후 시도하세요.', 'info')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob(blob => {
+        if (!blob) {
+          showToast('캡처 실패 — 잠시 후 다시 시도하세요.', 'error')
+          return
+        }
+        void handleThumbUpload(new File([blob], 'capture.jpg', { type: 'image/jpeg' }), true)
+      }, 'image/jpeg', 0.92)
+    } catch {
+      showToast('캡처 실패 — 잠시 후 다시 시도하세요.', 'error')
+    }
+  }
+
+  async function handleThumbUpload(file: File, isCaptured = false) {
     setThumbUploading(true)
     try {
       const path = `${row.id}.jpg`
@@ -115,14 +148,17 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
       if (uploadErr) throw uploadErr
       const { data: urlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(path)
       const newUrl = `${urlData.publicUrl}?t=${Date.now()}`
-      await supabase
+      const { error: updateErr } = await supabase
         .from('monitoring_assets')
-        .update({ cover_url: urlData.publicUrl, image_urls: null, updated_at: new Date().toISOString() })
+        .update({ cover_url: newUrl, image_urls: null, updated_at: new Date().toISOString() })
         .eq('monitoring_id', row.id)
+      if (updateErr) throw updateErr
       setLocalThumbUrl(newUrl)
       setImgFailed(false)
+      showToast(isCaptured ? '프레임 캡처 완료 — 썸네일이 저장되었습니다.' : '썸네일이 업로드되었습니다.', 'success')
     } catch (e) {
       console.error('Thumbnail upload error:', e)
+      showToast('썸네일 저장에 실패했습니다.', 'error')
     } finally {
       setThumbUploading(false)
     }
@@ -132,7 +168,7 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
   const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
 
-  const displayThumbUrl = localThumbUrl ?? thumbUrl
+  const displayThumbUrl = localThumbUrl ?? (hasCarousel ? imageUrls![currentImageIdx] : thumbUrl)
   const thumb = displayThumbUrl && !imgFailed ? (
     <img src={displayThumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
   ) : (
@@ -149,7 +185,10 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
         {showVideo && videoUrl && !videoError ? (
           <div className="mon-arch-card__player">
             <video
+              key={videoUrl}
+              ref={videoRef}
               src={videoUrl}
+              crossOrigin="anonymous"
               controls
               playsInline
               autoPlay
@@ -157,18 +196,62 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
               className="mon-arch-card__video"
               onError={() => setVideoError(true)}
             />
-            <a
-              href={videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mon-arch-card__video-link"
-              title="영상 직접 열기"
+            <button
+              className="mon-arch-card__capture-btn"
+              onClick={handleCapture}
+              title="현재 프레임을 썸네일로 캡처"
+              disabled={thumbUploading}
             >
-              <ExternalLink size={13} />
-            </a>
+              {thumbUploading ? <Spinner sm /> : <Camera size={12} />}
+              캡처
+            </button>
           </div>
         ) : (
-          <div className="mon-arch-card__thumb-static">{thumb}</div>
+          <>
+            <div className="mon-arch-card__thumb-static">{thumb}</div>
+            {hasCarousel && (
+              <>
+                <button
+                  className="mon-arch-card__carousel-btn mon-arch-card__carousel-btn--prev"
+                  onClick={e => { e.stopPropagation(); setCurrentImageIdx(i => Math.max(0, i - 1)) }}
+                  disabled={currentImageIdx === 0}
+                >
+                  <ChevronUp size={14} style={{ transform: 'rotate(-90deg)' }} />
+                </button>
+                <button
+                  className="mon-arch-card__carousel-btn mon-arch-card__carousel-btn--next"
+                  onClick={e => { e.stopPropagation(); setCurrentImageIdx(i => Math.min(imageCount - 1, i + 1)) }}
+                  disabled={currentImageIdx === imageCount - 1}
+                >
+                  <ChevronUp size={14} style={{ transform: 'rotate(90deg)' }} />
+                </button>
+                <span className="mon-arch-card__carousel-counter">{currentImageIdx + 1}/{imageCount}</span>
+                <button
+                  className="mon-arch-card__carousel-set-thumb"
+                  disabled={thumbUploading}
+                  onClick={async e => {
+                    e.stopPropagation()
+                    const url = imageUrls![currentImageIdx]
+                    if (!url) return
+                    setThumbUploading(true)
+                    try {
+                      const res = await fetch(url)
+                      if (!res.ok) throw new Error('fetch failed')
+                      const blob = await res.blob()
+                      await handleThumbUpload(new File([blob], 'thumb.jpg', { type: 'image/jpeg' }))
+                    } catch {
+                      showToast('썸네일 설정에 실패했습니다.', 'error')
+                      setThumbUploading(false)
+                    }
+                  }}
+                  title="이 사진을 썸네일로 설정"
+                >
+                  {thumbUploading ? <Spinner sm /> : <ImageIcon size={11} />}
+                  썸네일 설정
+                </button>
+              </>
+            )}
+          </>
         )}
 
         <div className="mon-arch-card__thumb-top">
@@ -285,6 +368,7 @@ export default function MonitoringArchive() {
   const [brandKw, setBrandKw] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [brandFilter, setBrandFilter] = useState('all')
+  const [sortBy, setSortBy] = useState<'date' | 'views' | 'engagement'>('date')
   const [importing, setImporting] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [dlModal, setDlModal] = useState<{
@@ -294,8 +378,11 @@ export default function MonitoringArchive() {
     open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string
   }>({ open: false, total: 0, done: 0, status: 'running' })
   const [videoUploadModal, setVideoUploadModal] = useState<{
-    open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string; minimized: boolean
-  }>({ open: false, total: 0, done: 0, status: 'running', minimized: false })
+    open: boolean
+    videoTotal: number; videoDone: number
+    imageTotal: number; imageDone: number
+    status: 'running' | 'done'; message?: string; minimized: boolean
+  }>({ open: false, videoTotal: 0, videoDone: 0, imageTotal: 0, imageDone: 0, status: 'running', minimized: false })
   const [uploadingVideos, setUploadingVideos] = useState(false)
 
   useEffect(() => {
@@ -333,9 +420,14 @@ export default function MonitoringArchive() {
   const brandOptions = useMemo(() => {
     const seen = new Set<string>()
     reviewRows.forEach(r => { if (r.brand) seen.add(r.brand) })
+    const sorted = [...seen].sort((a, b) => {
+      if (a === 'mimuse') return -1
+      if (b === 'mimuse') return 1
+      return a.localeCompare(b)
+    })
     return [
       { value: 'all', label: '전체' },
-      ...[...seen].sort((a, b) => a.localeCompare(b)).map(b => ({ value: b, label: b })),
+      ...sorted.map(b => ({ value: b, label: b })),
     ]
   }, [reviewRows])
 
@@ -344,9 +436,16 @@ export default function MonitoringArchive() {
       brandFilter === 'all' || r.brand === brandFilter
     )
     const sorted = [...filtered]
-    sorted.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    if (sortBy === 'date') {
+      sorted.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    } else if (sortBy === 'views') {
+      sorted.sort((a, b) => b.views - a.views)
+    } else if (sortBy === 'engagement') {
+      const eng = (r: MonitoringRow) => r.views > 0 ? (r.likes + r.comments) / r.views : 0
+      sorted.sort((a, b) => eng(b) - eng(a))
+    }
     return sorted
-  }, [reviewRows, brandFilter])
+  }, [reviewRows, brandFilter, sortBy])
 
   const platformGroups = useMemo(() => (
     PLATFORM_BUCKETS
@@ -461,40 +560,100 @@ export default function MonitoringArchive() {
   }
 
   async function handleUploadVideos() {
-    const toUpload = filteredRows.filter(r => r.assets?.video_url?.includes('api.apify.com'))
-    if (!toUpload.length) { showToast('영구 저장이 필요한 영상이 없습니다', 'info'); return }
+    const needsVideo = (r: MonitoringRow) => !!r.assets?.video_url?.includes('api.apify.com')
+    const needsImage = (r: MonitoringRow) => { const u = r.assets?.image_urls?.[0]; return !!u && !u.includes('supabase') }
+
+    const videoRows = filteredRows.filter(needsVideo)
+    const imageRows = filteredRows.filter(r => needsImage(r) && !needsVideo(r))
+    const bothRows  = filteredRows.filter(r => needsVideo(r) && needsImage(r))
+
+    const totalVideos = videoRows.length + bothRows.length
+    const totalImages = imageRows.length + bothRows.length
+
+    if (!totalVideos && !totalImages) { showToast('저장할 콘텐츠가 없습니다', 'info'); return }
     setUploadingVideos(true)
-    setVideoUploadModal({ open: true, total: toUpload.length, done: 0, status: 'running', minimized: false })
-    let uploaded = 0
-    let failed = 0
-    for (const row of toUpload) {
+    setVideoUploadModal({ open: true, videoTotal: totalVideos, videoDone: 0, imageTotal: totalImages, imageDone: 0, status: 'running', minimized: false })
+
+    let savedVideos = 0; let failedVideos = 0
+    let savedImages = 0; let failedImages = 0
+
+    // Process rows that need video (+ possibly image too)
+    for (const row of [...videoRows, ...bothRows]) {
+      const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+      // Save video
       try {
-        const videoUrl = row.assets!.video_url!
-        const fetchRes = await fetch(videoUrl)
+        const fetchRes = await fetch(row.assets!.video_url!)
         if (!fetchRes.ok) throw new Error(`fetch ${fetchRes.status}`)
         const blob = await fetchRes.blob()
         const path = `${row.id}.mp4`
-        const { error: uploadErr } = await supabase.storage
-          .from('monitoring-videos')
-          .upload(path, blob, { contentType: 'video/mp4', upsert: true })
+        const { error: uploadErr } = await supabase.storage.from('monitoring-videos').upload(path, blob, { contentType: 'video/mp4', upsert: true })
         if (uploadErr) throw uploadErr
         const { data: urlData } = supabase.storage.from('monitoring-videos').getPublicUrl(path)
-        await supabase
-          .from('monitoring_assets')
-          .update({ video_url: urlData.publicUrl, updated_at: new Date().toISOString() })
-          .eq('monitoring_id', row.id)
-        uploaded++
+        updatePayload.video_url = urlData.publicUrl
+        savedVideos++
       } catch (e) {
         console.error('Video upload error:', row.id, e)
-        failed++
+        failedVideos++
       }
-      setVideoUploadModal(m => ({ ...m, done: m.done + 1 }))
+      setVideoUploadModal(m => ({ ...m, videoDone: m.videoDone + 1 }))
+
+      // Save all images if needed
+      if (needsImage(row)) {
+        try {
+          const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
+          const savedUrls: string[] = []
+          for (let i = 0; i < cdnUrls.length; i++) {
+            const imgRes = await fetch(cdnUrls[i])
+            if (!imgRes.ok) continue
+            const imgBlob = await imgRes.blob()
+            const imgPath = `${row.id}_${i}.jpg`
+            await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: 'image/jpeg', upsert: true })
+            const { data: imgUrlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
+            savedUrls.push(imgUrlData.publicUrl)
+          }
+          if (savedUrls.length) updatePayload.image_urls = savedUrls
+          savedImages++
+        } catch (e) {
+          console.warn('Image upload error:', row.id, e)
+          failedImages++
+        }
+        setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
+      }
+
+      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
     }
-    setVideoUploadModal(m => ({
-      ...m,
-      status: 'done',
-      message: `${uploaded}개 영상 영구 저장 완료` + (failed ? ` · ${failed}개 실패` : ''),
-    }))
+
+    // Process image-only rows
+    for (const row of imageRows) {
+      const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      try {
+        const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
+        const savedUrls: string[] = []
+        for (let i = 0; i < cdnUrls.length; i++) {
+          const imgRes = await fetch(cdnUrls[i])
+          if (!imgRes.ok) continue
+          const imgBlob = await imgRes.blob()
+          const imgPath = `${row.id}_${i}.jpg`
+          await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: 'image/jpeg', upsert: true })
+          const { data: imgUrlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
+          savedUrls.push(imgUrlData.publicUrl)
+        }
+        if (savedUrls.length) updatePayload.image_urls = savedUrls
+        savedImages++
+      } catch (e) {
+        console.warn('Image upload error:', row.id, e)
+        failedImages++
+      }
+      setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
+      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
+    }
+
+    const msg = [
+      totalVideos ? `영상 ${savedVideos}개` + (failedVideos ? ` (${failedVideos}개 실패)` : '') : null,
+      totalImages ? `사진 ${savedImages}개` + (failedImages ? ` (${failedImages}개 실패)` : '') : null,
+    ].filter(Boolean).join(' · ') + ' 저장 완료'
+    setVideoUploadModal(m => ({ ...m, status: 'done', message: msg }))
     setUploadingVideos(false)
     if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
   }
@@ -516,7 +675,10 @@ export default function MonitoringArchive() {
                 {importing ? <Spinner sm /> : <DownloadCloud size={14} />}
                 데이터 가져오기
               </button>
-              {filteredRows.some(r => r.assets?.video_url?.includes('api.apify.com')) && (
+              {filteredRows.some(r =>
+                r.assets?.video_url?.includes('api.apify.com') ||
+                (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase'))
+              ) && (
                 <button
                   className="page-banner-btn page-banner-btn--secondary"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -524,7 +686,7 @@ export default function MonitoringArchive() {
                   onClick={() => { void handleUploadVideos() }}
                 >
                   {uploadingVideos ? <Spinner sm /> : <Film size={14} />}
-                  영상 저장
+                  리뷰 저장
                 </button>
               )}
             </div>
@@ -534,31 +696,50 @@ export default function MonitoringArchive() {
 
       {hasData && (
         <div className="mon-arch-summary">
-          <SummaryStat icon={<Film size={15} />} label="콘텐츠" value={`${fmtNum(filteredRows.length)}개`} />
-          <SummaryStat icon={<Eye size={15} />} label="조회" value={fmtNum(totals.views)} />
-          <SummaryStat icon={<Heart size={15} />} label="좋아요" value={fmtNum(totals.likes)} />
-          <SummaryStat icon={<MessageCircle size={15} />} label="댓글" value={fmtNum(totals.comments)} />
+          <SummaryStat icon={<Film size={15} />}         label="콘텐츠" value={`${fmtNum(filteredRows.length)}개`} accent="#0d9488" />
+          <SummaryStat icon={<Eye size={15} />}          label="조회"   value={fmtNum(totals.views)}              accent="#2563eb" />
+          <SummaryStat icon={<Heart size={15} />}        label="좋아요" value={fmtNum(totals.likes)}              accent="#e11d48" />
+          <SummaryStat icon={<MessageCircle size={15} />} label="댓글"  value={fmtNum(totals.comments)}           accent="#d97706" />
         </div>
       )}
 
-      {!loading && filteredRows.some(r => r.assets?.video_url?.includes('api.apify.com')) && (
+      {!loading && filteredRows.some(r =>
+        r.assets?.video_url?.includes('api.apify.com') ||
+        (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase'))
+      ) && (
         <div className="mon-arch-notice">
           <Clock size={13} className="mon-arch-notice__icon" />
-          임시 영상 링크가 있습니다. <strong>7일 이내</strong>에 <strong>영상 저장</strong> 버튼을 눌러 영구 보관하세요. 기간이 지나면 Apify에서 다시 가져와야 합니다.
+          임시 CDN 링크가 있습니다. <strong>3일 이내</strong>에 <strong>리뷰 저장</strong> 버튼을 눌러 영구 보관하세요. 기간이 지나면 Apify에서 다시 가져와야 합니다.
         </div>
       )}
 
-      <FilterSegmentBar
-        label="브랜드"
-        ariaLabel="브랜드 필터"
-        value={brandFilter}
-        onChange={setBrandFilter}
-        className="mon-arch-filters"
-        style={{ marginBottom: 20 }}
-        options={brandOptions}
-      >
+      <div className="filters mon-arch-filters" style={{ marginBottom: 20 }}>
+        <label htmlFor="mon-brand-select">브랜드</label>
+        <select
+          id="mon-brand-select"
+          value={brandFilter}
+          onChange={e => setBrandFilter(e.target.value)}
+        >
+          {brandOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+
+        <div className="mon-arch-divider" />
+
+        <label htmlFor="mon-sort-select">정렬</label>
+        <select
+          id="mon-sort-select"
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as 'date' | 'views' | 'engagement')}
+        >
+          <option value="date">최신순</option>
+          <option value="views">조회순</option>
+          <option value="engagement">참여율순</option>
+        </select>
+
         {hasData && (
-          <div className="mon-arch-bar__right">
+          <>
             <span className="mon-arch-count">
               총 <strong>{fmtNum(filteredRows.length)}</strong>개
             </span>
@@ -572,9 +753,9 @@ export default function MonitoringArchive() {
               {zipping ? <Spinner sm /> : <Download size={13} />}
               다운로드
             </button>
-          </div>
+          </>
         )}
-      </FilterSegmentBar>
+      </div>
 
       {loading && (
         <div className="mon-arch-grid" aria-busy="true">
@@ -688,9 +869,7 @@ export default function MonitoringArchive() {
         <div className="mon-upload-toast">
           <div className="mon-upload-toast__header">
             <span className="mon-upload-toast__title">
-              {videoUploadModal.status === 'running'
-                ? `영상 업로드 중 (${videoUploadModal.done}/${videoUploadModal.total})`
-                : '영상 저장 완료'}
+              {videoUploadModal.status === 'running' ? '리뷰 저장 중…' : '리뷰 저장 완료'}
             </span>
             <div style={{ display: 'flex', gap: 2 }}>
               <button className="mon-upload-toast__btn" onClick={() => setVideoUploadModal(m => ({ ...m, minimized: !m.minimized }))}>
@@ -706,16 +885,30 @@ export default function MonitoringArchive() {
           {!videoUploadModal.minimized && (
             <div className="mon-upload-toast__body">
               {videoUploadModal.status === 'running' ? (
-                <div className="mon-arch-progress">
-                  <div
-                    className="mon-arch-progress__bar"
-                    style={{ width: `${videoUploadModal.total ? (videoUploadModal.done / videoUploadModal.total) * 100 : 0}%` }}
-                  />
-                </div>
+                <>
+                  <div className="mon-arch-progress" style={{ marginBottom: 8 }}>
+                    <div
+                      className="mon-arch-progress__bar"
+                      style={{ width: `${(videoUploadModal.videoTotal + videoUploadModal.imageTotal) > 0
+                        ? ((videoUploadModal.videoDone + videoUploadModal.imageDone) / (videoUploadModal.videoTotal + videoUploadModal.imageTotal)) * 100
+                        : 0}%` }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-5)', display: 'flex', gap: 12 }}>
+                    {videoUploadModal.videoTotal > 0 && <span>영상 {videoUploadModal.videoDone}/{videoUploadModal.videoTotal}개</span>}
+                    {videoUploadModal.imageTotal > 0 && <span>사진 {videoUploadModal.imageDone}/{videoUploadModal.imageTotal}개</span>}
+                  </div>
+                </>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-6)' }}>
                   <CheckCircle2 size={15} color="var(--teal-5)" style={{ flexShrink: 0 }} />
-                  {videoUploadModal.message}
+                  <span style={{ flex: 1 }}>{videoUploadModal.message}</span>
+                  <button
+                    onClick={() => setVideoUploadModal(m => ({ ...m, open: false }))}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, border: 'none', background: 'transparent', color: 'var(--gray-4)', cursor: 'pointer', borderRadius: 4, flexShrink: 0 }}
+                  >
+                    <X size={13} />
+                  </button>
                 </div>
               )}
             </div>

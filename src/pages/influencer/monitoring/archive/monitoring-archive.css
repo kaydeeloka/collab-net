@@ -4,31 +4,39 @@
 .mon-arch-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .mon-arch-summary__item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 18px;
   background: var(--white);
   border: 1px solid var(--surface-md);
   border-radius: var(--r);
   box-shadow: var(--sh-xs);
+  border-left: 3px solid var(--accent, var(--teal));
 }
 
 .mon-arch-summary__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
-  background: var(--teal-lt);
-  color: var(--teal-dk);
+  background: color-mix(in srgb, var(--accent, var(--teal)) 12%, transparent);
+  color: var(--accent, var(--teal));
   flex-shrink: 0;
+}
+
+.mon-arch-summary__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .mon-arch-summary__value {
@@ -36,15 +44,15 @@
   font-weight: 800;
   color: var(--ink);
   line-height: 1;
-  letter-spacing: -.4px;
+  letter-spacing: -.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .mon-arch-summary__label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--teal-dk);
-  margin-left: auto;
+  color: var(--gray-4);
+  letter-spacing: .01em;
 }
 
 /* ─────────────────────────────────────
@@ -78,17 +86,59 @@
    FILTER / SORT TOOLBAR
 ───────────────────────────────────── */
 .mon-arch-filters.filters {
-  gap: 14px;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-sm, #f8f9fa);
+  border: 1px solid var(--surface-md);
+  border-radius: var(--r);
+  box-shadow: none;
 }
 
-.mon-arch-bar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.mon-arch-filters.filters label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-4);
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding-right: 2px;
+}
+
+/* custom pill select — overrides .filters select */
+.mon-arch-filters.filters select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 5px 30px 5px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--surface-md);
+  background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 10px center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  min-width: 100px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.mon-arch-filters.filters select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(159,186,197,.18);
+  outline: none;
+}
+
+.mon-arch-filters.filters select:hover {
+  border-color: var(--gray-3);
+}
+
+.mon-arch-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--surface-md);
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .mon-arch-count {
+  margin-left: auto;
   font-size: 13px;
   font-weight: 600;
   color: var(--gray-5);
@@ -477,6 +527,89 @@
 }
 
 /* Thumbnail / video toggle pill (bottom-right of thumb) */
+/* ── photo carousel nav ── */
+.mon-arch-card__carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,.5);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s;
+}
+.mon-arch-card__carousel-btn:hover:not(:disabled) { background: rgba(0,0,0,.75); }
+.mon-arch-card__carousel-btn:disabled { opacity: .3; cursor: default; }
+.mon-arch-card__carousel-btn--prev { left: 8px; }
+.mon-arch-card__carousel-btn--next { right: 8px; }
+.mon-arch-card__carousel-counter {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white);
+  background: rgba(0,0,0,.5);
+  padding: 2px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.mon-arch-card__carousel-set-thumb {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white);
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.mon-arch-card__carousel-set-thumb:hover:not(:disabled) { background: rgba(20,184,166,.85); }
+.mon-arch-card__carousel-set-thumb:disabled { opacity: .65; cursor: not-allowed; }
+
+.mon-arch-card__capture-btn {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white);
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.mon-arch-card__capture-btn:hover:not(:disabled) { background: rgba(20,184,166,.85); }
+.mon-arch-card__capture-btn:disabled { opacity: .65; cursor: not-allowed; }
+
 .mon-arch-card__media-toggle {
   position: absolute;
   bottom: 8px;
