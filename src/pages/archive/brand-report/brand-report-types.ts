@@ -152,6 +152,8 @@ export const BRAND_DEFAULT_PAGE_ORDER: Array<{
   { type: 'best_review_detail' },
   { type: 'brand_mention' },
   { type: 'brand_mention_detail' },
+  { type: 'brand_mention_detail' },
+  { type: 'brand_mention_detail' },
   { type: 'outro' },
 ]
 

@@ -814,7 +814,6 @@ function BrandSlide({
               { label: '조회수',    key: 'bmdViews' },
               { label: '좋아요',    key: 'bmdLikes' },
               { label: '댓글',     key: 'bmdComments' },
-              { label: '추가 업로드', key: 'bmdAdditional', link: true },
             ]
             return (
               <div className="brslide__bmd">
