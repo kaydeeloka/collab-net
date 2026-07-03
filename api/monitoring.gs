@@ -810,9 +810,7 @@ function downloadVideoAssets(body) {
     unmatched    : unmatched,
     noDownloadUrl: noUrl,
     unkeyedUrls  : unkeyedRows,
-    message: updated + '개 저장 · 썸네일 ' + thumbUploaded + '개 영구 저장 · Apify 결과 ' + items.length
-      + '개 · 매칭 실패 ' + unmatched + '개 · 다운로드 URL 없음 ' + noUrl
-      + '개 · URL 패턴 불일치 ' + unkeyedRows.length + '개 (대상 ' + tiktokRows.length + '개)',
+    message: '저장 완료 ' + updated + '개 · 매칭 실패 ' + unmatched + '개 · 다운로드 URL 없음 ' + noUrl + '개 (대상 ' + tiktokRows.length + '개)',
   };
 }
 

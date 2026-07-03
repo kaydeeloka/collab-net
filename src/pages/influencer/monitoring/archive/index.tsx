@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import Modal from '@/components/Modal'
@@ -165,11 +165,11 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
           <button
             className={`mon-arch-card__media-toggle${showVideo ? ' mon-arch-card__media-toggle--video' : ''}`}
             onClick={() => { setShowVideo(v => !v); if (videoError) setVideoError(false) }}
-            title={showVideo ? '썸네일 보기' : '영상 보기'}
+            title={showVideo ? '썸네일로 전환' : '영상으로 전환'}
           >
             {showVideo
-              ? <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>
-              : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+              ? <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>
+              : <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>}
           </button>
         ) : (
           <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
@@ -234,14 +234,14 @@ export default function MonitoringArchive() {
   const [importing, setImporting] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [dlModal, setDlModal] = useState<{
-    open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string
-  }>({ open: false, urlCount: 0, status: 'running' })
+    open: boolean; urlCount: number; status: 'running' | 'done'; step: 'scraping' | 'saving'; updated?: number; message?: string
+  }>({ open: false, urlCount: 0, status: 'running', step: 'scraping' })
   const [zipModal, setZipModal] = useState<{
     open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string
   }>({ open: false, total: 0, done: 0, status: 'running' })
   const [videoUploadModal, setVideoUploadModal] = useState<{
-    open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string
-  }>({ open: false, total: 0, done: 0, status: 'running' })
+    open: boolean; total: number; done: number; status: 'running' | 'done'; message?: string; minimized: boolean
+  }>({ open: false, total: 0, done: 0, status: 'running', minimized: false })
   const [uploadingVideos, setUploadingVideos] = useState(false)
 
   useEffect(() => {
@@ -321,17 +321,22 @@ export default function MonitoringArchive() {
     const tiktokRows = reviewRows.filter(r => r.review_link?.includes('tiktok.com'))
     if (!tiktokRows.length) { showToast('가져올 TikTok URL이 없습니다', 'info'); return }
     setImporting(true)
-    setDlModal({ open: true, urlCount: tiktokRows.length, status: 'running' })
+    setDlModal({ open: true, urlCount: tiktokRows.length, status: 'running', step: 'scraping' })
+    const stepTimer = setTimeout(() => {
+      setDlModal(m => m.status === 'running' ? { ...m, step: 'saving' } : m)
+    }, 20000)
     try {
       const res = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
         action: 'downloadVideoAssets',
         rows: tiktokRows.map(r => ({ id: r.id, review_link: r.review_link })),
       })
-      if (res.error) { setDlModal(m => ({ ...m, status: 'done', message: '오류: ' + res.error })); return }
-      setDlModal(m => ({ ...m, status: 'done', updated: res.updated ?? 0, message: res.message }))
+      clearTimeout(stepTimer)
+      if (res.error) { setDlModal(m => ({ ...m, status: 'done', step: 'saving', message: '오류: ' + res.error })); return }
+      setDlModal(m => ({ ...m, status: 'done', step: 'saving', updated: res.updated ?? 0, message: res.message }))
       if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
     } catch (e: unknown) {
-      setDlModal(m => ({ ...m, status: 'done', message: '오류: ' + (e as Error).message }))
+      clearTimeout(stepTimer)
+      setDlModal(m => ({ ...m, status: 'done', step: 'saving', message: '오류: ' + (e as Error).message }))
     } finally {
       setImporting(false)
     }
@@ -405,7 +410,7 @@ export default function MonitoringArchive() {
     const toUpload = filteredRows.filter(r => r.assets?.video_url?.includes('api.apify.com'))
     if (!toUpload.length) { showToast('영구 저장이 필요한 영상이 없습니다', 'info'); return }
     setUploadingVideos(true)
-    setVideoUploadModal({ open: true, total: toUpload.length, done: 0, status: 'running' })
+    setVideoUploadModal({ open: true, total: toUpload.length, done: 0, status: 'running', minimized: false })
     let uploaded = 0
     let failed = 0
     for (const row of toUpload) {
@@ -566,14 +571,34 @@ export default function MonitoringArchive() {
         onClose={() => dlModal.status === 'done' && setDlModal(m => ({ ...m, open: false }))}
         title="데이터 가져오기"
       >
-        <div style={{ minWidth: 280, padding: '8px 0' }}>
-          {dlModal.status === 'running' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--gray-6)', fontSize: 14 }}>
-              <Spinner sm /> TikTok 콘텐츠 {dlModal.urlCount}개 가져오는 중…
-            </div>
-          ) : (
-            <div style={{ fontSize: 14, color: 'var(--gray-7)' }}>
-              {dlModal.message || `${dlModal.updated ?? 0}개 완료`}
+        <div style={{ minWidth: 300, padding: '8px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {([
+              { key: 'scraping', label: 'Apify 스크래핑' },
+              { key: 'saving',   label: '데이터베이스 저장' },
+              { key: 'done',     label: '완료' },
+            ] as const).map(({ key, label }, i) => {
+              const currentIdx = dlModal.status === 'done' ? 2 : (dlModal.step === 'saving' ? 1 : 0)
+              const isDone   = i < currentIdx || (i === currentIdx && dlModal.status === 'done')
+              const isActive = i === currentIdx && dlModal.status === 'running'
+              return (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isDone
+                    ? <CheckCircle2 size={16} color="var(--teal-5)" />
+                    : isActive
+                      ? <Spinner sm />
+                      : <Circle size={16} color="var(--gray-3)" />
+                  }
+                  <span style={{ fontSize: 14, color: isDone ? 'var(--gray-7)' : isActive ? 'var(--gray-7)' : 'var(--gray-4)', fontWeight: isActive ? 500 : 400 }}>
+                    {label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {dlModal.status === 'done' && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--gray-2)', fontSize: 12, color: 'var(--gray-5)' }}>
+              {dlModal.message || `저장 완료 ${dlModal.updated ?? 0}개`}
             </div>
           )}
         </div>
@@ -605,31 +630,44 @@ export default function MonitoringArchive() {
         </div>
       </Modal>
 
-      <Modal
-        open={videoUploadModal.open}
-        onClose={() => videoUploadModal.status === 'done' && setVideoUploadModal(m => ({ ...m, open: false }))}
-        title="영상 영구 저장"
-      >
-        <div style={{ minWidth: 300, padding: '8px 0' }}>
-          {videoUploadModal.status === 'running' ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--gray-6)', fontSize: 14, marginBottom: 12 }}>
-                <Spinner sm /> 영상 업로드 중… ({videoUploadModal.done}/{videoUploadModal.total})
-              </div>
-              <div className="mon-arch-progress">
-                <div
-                  className="mon-arch-progress__bar"
-                  style={{ width: `${videoUploadModal.total ? (videoUploadModal.done / videoUploadModal.total) * 100 : 0}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 14, color: 'var(--gray-7)' }}>
-              {videoUploadModal.message}
+      {videoUploadModal.open && (
+        <div className="mon-upload-toast">
+          <div className="mon-upload-toast__header">
+            <span className="mon-upload-toast__title">
+              {videoUploadModal.status === 'running'
+                ? `영상 업로드 중 (${videoUploadModal.done}/${videoUploadModal.total})`
+                : '영상 저장 완료'}
+            </span>
+            <div style={{ display: 'flex', gap: 2 }}>
+              <button className="mon-upload-toast__btn" onClick={() => setVideoUploadModal(m => ({ ...m, minimized: !m.minimized }))}>
+                {videoUploadModal.minimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {videoUploadModal.status === 'done' && (
+                <button className="mon-upload-toast__btn" onClick={() => setVideoUploadModal(m => ({ ...m, open: false }))}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+          {!videoUploadModal.minimized && (
+            <div className="mon-upload-toast__body">
+              {videoUploadModal.status === 'running' ? (
+                <div className="mon-arch-progress">
+                  <div
+                    className="mon-arch-progress__bar"
+                    style={{ width: `${videoUploadModal.total ? (videoUploadModal.done / videoUploadModal.total) * 100 : 0}%` }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-6)' }}>
+                  <CheckCircle2 size={15} color="var(--teal-5)" style={{ flexShrink: 0 }} />
+                  {videoUploadModal.message}
+                </div>
+              )}
             </div>
           )}
         </div>
-      </Modal>
+      )}
 
     </div>
   )

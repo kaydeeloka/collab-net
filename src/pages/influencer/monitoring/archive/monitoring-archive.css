@@ -101,6 +101,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ── floating upload toast (Google Drive style) ── */
+.mon-upload-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1200;
+  width: 320px;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.14), 0 1px 4px rgba(0,0,0,.08);
+  overflow: hidden;
+}
+.mon-upload-toast__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--gray-7);
+  color: var(--white);
+}
+.mon-upload-toast__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mon-upload-toast__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--white);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background .12s;
+}
+.mon-upload-toast__btn:hover { background: rgba(255,255,255,.18); }
+.mon-upload-toast__body {
+  padding: 14px 16px;
+}
+
 /* download progress (zip modal) */
 .mon-arch-progress {
   width: 100%;
