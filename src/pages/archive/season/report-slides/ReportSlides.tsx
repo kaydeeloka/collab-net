@@ -522,12 +522,8 @@ function Slide({
                           <div className="rslide__brd-ph">이미지</div>
                         )}
                         {!editMode && picked?.review_link && (
-                          <a
-                            href={picked.review_link}
-                            data-pdf-link={picked.review_link}
-                            className="rslide__brd-review-btn"
-                            onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(picked!.review_link!, '_blank', 'noopener,noreferrer') }}
-                          >
+                          <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
+                            data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
                             리뷰 보기
                           </a>
                         )}
@@ -547,7 +543,7 @@ function Slide({
                           <span className="rslide__brd-label">인플루언서</span>
                           <span className="rslide__brd-value rslide__brd-value--link">
                             {handleUrl
-                              ? <a href={handleUrl} data-pdf-link={handleUrl} className="rslide__brd-handle-link" onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(handleUrl!, '_blank', 'noopener,noreferrer') }}>{picked?.handle || '—'}</a>
+                              ? <a href={handleUrl} target="_blank" rel="noopener noreferrer" data-pdf-link={handleUrl} className="rslide__brd-handle-link">{picked?.handle || '—'}</a>
                               : (picked?.handle || '—')}
                           </span>
                           <span className="rslide__brd-label">팔로워</span>

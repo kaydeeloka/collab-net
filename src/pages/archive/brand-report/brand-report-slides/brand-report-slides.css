@@ -25,7 +25,7 @@
 
 /* ── Slide background ── */
 .brand-report-slides .rslide {
-  background-color: #EEF6FC;
+  background-color: #F8F6F6;
 }
 
 /* ── Cover title — single line ── */
@@ -43,7 +43,7 @@
 
 .brslide__cover-brand-suffix {
   font-size: 2.4cqw;
-  color: #1a3a4a;
+  color: #1a1a1a;
   white-space: nowrap;
   font-weight: 700;
   flex-shrink: 0;
@@ -54,44 +54,44 @@
   opacity: 1;
 }
 
-/* ── Brand report colour overrides (#8BAAB8 → #6AADEE, #648085 → #4A8EC8) ── */
+/* ── Brand report colour overrides (matches 결과 리포트 theme) ── */
 
 /* eng title text */
-.brand-report-slides .rslide__eng       { color: #6AADEE; }
-.brand-report-slides .rslide__eng-edit  { color: #6AADEE; }
+.brand-report-slides .rslide__eng       { color: #648085; }
+.brand-report-slides .rslide__eng-edit  { color: #648085; }
 
 /* stat box left accent */
-.brand-report-slides .rslide__stat-box  { border-left-color: #6AADEE; }
+.brand-report-slides .rslide__stat-box  { border-left-color: #8BAAB8; }
 
 /* section pills */
-.brand-report-slides .rslide__section-pill { background: #6AADEE; }
+.brand-report-slides .rslide__section-pill { background: #8BAAB8; }
 
 /* content performance cards */
-.brand-report-slides .rslide__cp-card-total { color: #6AADEE; }
-.brand-report-slides .rslide__cp-card-pct   { color: #6AADEE; }
-.brand-report-slides .rslide__cp-card-stat  { color: #6AADEE; }
+.brand-report-slides .rslide__cp-card-total { color: #8BAAB8; }
+.brand-report-slides .rslide__cp-card-pct   { color: #8BAAB8; }
+.brand-report-slides .rslide__cp-card-stat  { color: #8BAAB8; }
 .brand-report-slides .rslide__cp-progress { height: 0.6cqw; }
-.brand-report-slides .rslide__cp-progress-bar { background: #6AADEE; }
+.brand-report-slides .rslide__cp-progress-bar { background: #8BAAB8; }
 
 /* best review detail — labels & badges */
-.brand-report-slides .rslide__brd-badge--review  { background: #4A8EC8; }
-.brand-report-slides .rslide__brd-label          { background: #6AADEE; }
-.brand-report-slides .rslide__brd-edit-label     { background: #6AADEE; }
-.brand-report-slides .rslide__brd-handle-link    { color: #4A8EC8; }
-.brand-report-slides .rslide__brd-value--link    { color: #4A8EC8; }
+.brand-report-slides .rslide__brd-badge--review  { background: #648085; }
+.brand-report-slides .rslide__brd-label          { background: #8BAAB8; }
+.brand-report-slides .rslide__brd-edit-label     { background: #8BAAB8; }
+.brand-report-slides .rslide__brd-handle-link    { color: #648085; }
+.brand-report-slides .rslide__brd-value--link    { color: #648085; }
 
 /* brand mention pill */
-.brand-report-slides .rslide__bm-pill { background: #6AADEE; }
+.brand-report-slides .rslide__bm-pill { background: #8BAAB8; }
 
 /* brand table header */
-.brand-report-slides .rslide__table-head { background: #6AADEE; }
-.brand-report-slides .brslide__table th { background: #6AADEE; color: #fff; }
-.brand-report-slides .brslide__rl-table th { background: #6AADEE; color: #fff; }
-.brand-report-slides .brslide__bmd-stat-label { background: #6AADEE; color: #fff; }
+.brand-report-slides .rslide__table-head { background: #8BAAB8; }
+.brand-report-slides .brslide__table th { background: #8BAAB8; color: #fff; }
+.brand-report-slides .brslide__rl-table th { background: #8BAAB8; color: #fff; }
+.brand-report-slides .brslide__bmd-stat-label { background: #8BAAB8; color: #fff; }
 
 /* edit mode inputs */
-.brand-report-slides .rslide-edit      { border-bottom-color: #6AADEE; }
-.brand-report-slides .rslide__edit-badge { background: #6AADEE; }
+.brand-report-slides .rslide-edit      { border-bottom-color: #8BAAB8; }
+.brand-report-slides .rslide__edit-badge { background: #8BAAB8; }
 
 /* ── Outro contacts ── */
 .brslide__outro-contact {
@@ -118,7 +118,7 @@
 
 .brslide__outro-contact-email {
   font-size: 11px;
-  color: #4A8EC8;
+  color: #648085;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -145,14 +145,14 @@
 
 .brslide__outro-contact-email-edit {
   font-size: 11px;
-  color: #4A8EC8;
+  color: #648085;
   width: 14cqw;
 }
 
 .brslide__outro-contact-name-edit:focus,
 .brslide__outro-contact-email-edit:focus {
-  border-color: #6AADEE;
-  box-shadow: 0 0 0 2px rgba(106, 173, 238, 0.2);
+  border-color: #8BAAB8;
+  box-shadow: 0 0 0 2px rgba(139, 170, 184, 0.2);
 }
 
 /* ── Recovery cards — more compact ── */
@@ -184,12 +184,12 @@
 }
 
 .brslide__cp-auto-info {
-  background: #eef6fc;
-  border: 1px dashed #6AADEE;
+  background: #f5f3f3;
+  border: 1px dashed #8BAAB8;
   border-radius: 0.5cqw;
   padding: 1.2cqw 1.6cqw;
   font-size: 11px;
-  color: #4a7a90;
+  color: #648085;
   text-align: center;
   line-height: 1.6;
 }
@@ -360,7 +360,7 @@
 }
 
 .brslide__rl-url a {
-  color: #4a8fa8;
+  color: #648085;
   text-decoration: none;
   font-size: 9px;
 }

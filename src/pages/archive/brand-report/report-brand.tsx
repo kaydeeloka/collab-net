@@ -211,7 +211,7 @@ export default function ArchiveBrandReportBrand() {
 @page { size: 960px 540px; margin: 0; }
 *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
-.report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; overflow: visible !important; }
+.report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; padding: 0 !important; overflow: visible !important; }
 .rslide { width: 960px !important; height: 540px !important; flex-shrink: 0 !important; page-break-after: always; break-after: page; border-radius: 0 !important; overflow: hidden !important; transform: none !important; }
 .rslide__content-layer { height: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
 .rslide__np { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
@@ -229,14 +229,17 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
       if (!iframeDoc) { document.body.removeChild(iframe); showToast('PDF 출력 준비 중 오류가 발생했습니다.', 'error'); return }
       iframeDoc.open(); iframeDoc.write(printHtml); iframeDoc.close()
       iframe.addEventListener('load', () => {
-        iframeDoc.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(el => {
-          el.removeAttribute('href')
-          el.removeAttribute('onclick')
-          el.style.cursor = 'default'
-        })
         const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
         Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() }))).then(() => {
-          setTimeout(() => { iframe.contentWindow?.print(); setTimeout(() => document.body.removeChild(iframe), 1000) }, 200)
+          // Strip all id attributes so PDF viewer has no named destination to jump to
+          iframeDoc.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
+          setTimeout(() => {
+            iframe.contentWindow?.scrollTo(0, 0)
+            iframeDoc.documentElement.scrollTop = 0
+            iframeDoc.body.scrollTop = 0
+            iframe.contentWindow?.print()
+            setTimeout(() => document.body.removeChild(iframe), 1000)
+          }, 300)
         })
       })
     } catch (e) {

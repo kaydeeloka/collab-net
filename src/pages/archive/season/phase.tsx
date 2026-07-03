@@ -183,7 +183,7 @@ export default function ArchiveBrandReportPhase() {
 @page { size: 960px 540px; margin: 0; }
 *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
-.report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; overflow: visible !important; }
+.report-slides { display: flex !important; flex-direction: column !important; width: 960px !important; gap: 0 !important; padding: 0 !important; overflow: visible !important; }
 .rslide { width: 960px !important; height: 540px !important; flex-shrink: 0 !important; page-break-after: always; break-after: page; border-radius: 0 !important; overflow: hidden !important; transform: none !important; }
 .rslide__content-layer { height: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
 .rslide__np { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
@@ -214,13 +214,6 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
       iframeDoc.close()
 
       iframe.addEventListener('load', () => {
-        // Strip hrefs from review/handle links so PDF doesn't navigate away when clicked
-        iframeDoc.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(el => {
-          el.removeAttribute('href')
-          el.removeAttribute('onclick')
-          el.style.cursor = 'default'
-        })
-
         const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
         const waitAll = imgs.map(img =>
           img.complete

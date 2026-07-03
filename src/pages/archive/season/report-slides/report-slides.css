@@ -138,7 +138,7 @@
 .rslide__cover-layer {
   position: absolute;
   inset: 0;
-  padding: 20cqw 11cqw 7cqw 2cqw;
+  padding: 20cqw 5cqw 7cqw 5cqw;
   display: flex;
   flex-direction: column;
   gap: 0.6cqw;
@@ -168,7 +168,7 @@
 .rslide__content-layer {
   position: absolute;
   inset: 0;
-  padding: 3.5cqw 5cqw 6cqw 4.5cqw;
+  padding: 3.5cqw 5cqw 6cqw 5cqw;
   display: flex;
   flex-direction: column;
   overflow: hidden;
