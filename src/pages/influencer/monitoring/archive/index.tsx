@@ -249,7 +249,7 @@ function ArchiveCard({
   )
 
   return (
-    <div className="mon-arch-card">
+    <div className="mon-arch-card" data-platform={platformBucket(row.platform)}>
       <div className="mon-arch-card__thumb">
         {/* Thumbnail is the default view — video loads only when toggled */}
         {showVideo && videoUrl && !videoError ? (
@@ -283,7 +283,7 @@ function ArchiveCard({
                 disabled={thumbUploading || !!reportCapture}
               >
                 <Camera size={11} />
-                리포트+
+                리포트
               </button>
             )}
             {/* Slot picker overlay */}
@@ -387,7 +387,42 @@ function ArchiveCard({
         )}
 
         <div className="mon-arch-card__thumb-top">
-          <PlatformBadge platform={row.platform} />
+          {/* Toggle moved here — left slot replaces platform badge */}
+          {videoUrl ? (
+            <button
+              className={`mon-arch-card__media-toggle${showVideo ? ' mon-arch-card__media-toggle--video' : ''}`}
+              onClick={() => { setShowVideo(v => !v); if (videoError) setVideoError(false) }}
+              title={showVideo ? '썸네일로 전환' : '영상으로 전환'}
+            >
+              {showVideo
+                ? <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>
+                : <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>}
+            </button>
+          ) : hasCarousel ? (
+            <button
+              className={`mon-arch-card__media-toggle${photoViewMode === 'thumb' ? ' mon-arch-card__media-toggle--video' : ''}`}
+              onClick={() => {
+                if (photoViewMode === 'photo') {
+                  if (savedCoverIdx >= 0) setCurrentImageIdx(savedCoverIdx)
+                  setLocalThumbUrl(null)
+                  setPhotoViewMode('thumb')
+                } else {
+                  setPhotoViewMode('photo')
+                }
+              }}
+              title={photoViewMode === 'photo' ? '썸네일 편집 모드로 전환' : '사진 보기로 전환'}
+            >
+              {photoViewMode === 'photo'
+                ? <><ImageIcon size={11} strokeWidth={2} /> 사진 {imageCount}장</>
+                : <><Camera size={11} /> 썸네일</>}
+            </button>
+          ) : (
+            <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
+              {isPhoto
+                ? <><ImageIcon size={11} strokeWidth={2} /> 사진</>
+                : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
+            </span>
+          )}
           {row.brand && (
             <span className="mon-arch-card__brand" style={{ color: brandColor, borderColor: `${brandColor}66` }}>
               {row.brand}
@@ -427,44 +462,6 @@ function ArchiveCard({
               ? <Spinner sm />
               : <><Upload size={13} /> 썸네일 변경</>}
           </button>
-        )}
-
-        {/* Toggle pill: switches between thumbnail and video */}
-        {videoUrl ? (
-          <button
-            className={`mon-arch-card__media-toggle${showVideo ? ' mon-arch-card__media-toggle--video' : ''}`}
-            onClick={() => { setShowVideo(v => !v); if (videoError) setVideoError(false) }}
-            title={showVideo ? '썸네일로 전환' : '영상으로 전환'}
-          >
-            {showVideo
-              ? <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>
-              : <><ImageIcon size={11} strokeWidth={2} /> 썸네일</>}
-          </button>
-        ) : hasCarousel ? (
-          <button
-            className={`mon-arch-card__media-toggle${photoViewMode === 'thumb' ? ' mon-arch-card__media-toggle--video' : ''}`}
-            onClick={() => {
-              if (photoViewMode === 'photo') {
-                // Jump to the saved cover image so the user can see which one is stored
-                if (savedCoverIdx >= 0) setCurrentImageIdx(savedCoverIdx)
-                setLocalThumbUrl(null)
-                setPhotoViewMode('thumb')
-              } else {
-                setPhotoViewMode('photo')
-              }
-            }}
-            title={photoViewMode === 'photo' ? '썸네일 편집 모드로 전환' : '사진 보기로 전환'}
-          >
-            {photoViewMode === 'photo'
-              ? <><ImageIcon size={11} strokeWidth={2} /> 사진 {imageCount}장</>
-              : <><Camera size={11} /> 썸네일</>}
-          </button>
-        ) : (
-          <span className={`mon-arch-card__type mon-arch-card__type--${isPhoto ? 'photo' : 'video'}`}>
-            {isPhoto
-              ? <><ImageIcon size={11} strokeWidth={2} /> 사진</>
-              : <><Play size={11} fill="currentColor" strokeWidth={0} /> 영상</>}
-          </span>
         )}
       </div>
 

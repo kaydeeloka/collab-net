@@ -319,16 +319,19 @@
 .mon-arch-card {
   background: var(--white);
   border-radius: var(--r);
-  border: 1px solid var(--surface-md);
+  border: 1.5px solid var(--surface-md);
   overflow: hidden;
-  transition: box-shadow .18s, transform .18s, border-color .18s;
+  transition: box-shadow .18s, transform .18s;
   outline: none;
 }
+
+.mon-arch-card[data-platform="tiktok"]    { border-color: rgba(17, 17, 17, 0.55); }
+.mon-arch-card[data-platform="instagram"] { border-color: rgba(220, 39, 67, 0.5); }
+.mon-arch-card[data-platform="magazine"]  { border-color: rgba(91, 110, 225, 0.5); }
 
 .mon-arch-card:hover {
   box-shadow: var(--sh-md);
   transform: translateY(-3px);
-  border-color: var(--teal);
 }
 
 .mon-arch-card:focus-visible {
@@ -438,9 +441,6 @@
   transform: translate(-50%, -50%) scale(1.08);
 }
 
-.mon-arch-card:hover .mon-arch-card__thumb img {
-  transform: scale(1.04);
-}
 
 /* ── thumbnail upload overlay ── */
 .mon-arch-card__thumb-upload {
@@ -461,11 +461,13 @@
   font-weight: 600;
   font-family: inherit;
   opacity: 0;
+  pointer-events: none;
   transition: background .15s, opacity .15s;
 }
-.mon-arch-card__thumb:hover .mon-arch-card__thumb-upload {
-  background: rgba(0,0,0,.42);
+.mon-arch-card__thumb-upload:hover {
+  background: rgba(0,0,0,.52);
   opacity: 1;
+  pointer-events: auto;
 }
 .mon-arch-card__thumb-upload--loading {
   opacity: 1 !important;
@@ -566,9 +568,6 @@
 }
 
 .mon-arch-card__type {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
@@ -657,7 +656,7 @@
 .mon-arch-card__capture-btn {
   position: absolute;
   bottom: 8px;
-  left: 8px;
+  right: 8px;
   z-index: 3;
   display: inline-flex;
   align-items: center;
@@ -678,9 +677,7 @@
 .mon-arch-card__capture-btn:disabled { opacity: .65; cursor: not-allowed; }
 
 .mon-arch-card__media-toggle {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
+  pointer-events: auto;
   z-index: 3;
   display: inline-flex;
   align-items: center;
@@ -1014,7 +1011,7 @@
 ───────────────────────────────────── */
 .mon-arch-card__report-btn {
   position: absolute;
-  bottom: 68px;
+  bottom: 8px;
   left: 8px;
   z-index: 3;
   display: inline-flex;
