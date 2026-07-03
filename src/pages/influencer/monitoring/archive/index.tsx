@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X, Upload } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import Modal from '@/components/Modal'
@@ -101,13 +101,40 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const [imgFailed, setImgFailed] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [localThumbUrl, setLocalThumbUrl] = useState<string | null>(null)
+  const [thumbUploading, setThumbUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleThumbUpload(file: File) {
+    setThumbUploading(true)
+    try {
+      const path = `${row.id}.jpg`
+      const { error: uploadErr } = await supabase.storage
+        .from('monitoring-thumbnails')
+        .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true })
+      if (uploadErr) throw uploadErr
+      const { data: urlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(path)
+      const newUrl = `${urlData.publicUrl}?t=${Date.now()}`
+      await supabase
+        .from('monitoring_assets')
+        .update({ cover_url: urlData.publicUrl, image_urls: null, updated_at: new Date().toISOString() })
+        .eq('monitoring_id', row.id)
+      setLocalThumbUrl(newUrl)
+      setImgFailed(false)
+    } catch (e) {
+      console.error('Thumbnail upload error:', e)
+    } finally {
+      setThumbUploading(false)
+    }
+  }
 
   // Video is temporary (needs saving) if it's still an Apify KV URL.
   const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
   const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
 
-  const thumb = thumbUrl && !imgFailed ? (
-    <img src={thumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
+  const displayThumbUrl = localThumbUrl ?? thumbUrl
+  const thumb = displayThumbUrl && !imgFailed ? (
+    <img src={displayThumbUrl} alt={row.display_name || account} loading="lazy" referrerPolicy="no-referrer" onError={() => setImgFailed(true)} />
   ) : (
     <div className="mon-arch-card__thumb-empty">
       <InfluencerAvatar url={row.avatar_url} label={row.display_name || account} size={48} />
@@ -158,6 +185,33 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
           <span className={`mon-arch-card__expiry${daysLeft === 0 ? ' mon-arch-card__expiry--expired' : daysLeft <= 2 ? ' mon-arch-card__expiry--warn' : ''}`}>
             {daysLeft === 0 ? '만료됨' : `D-${daysLeft}`}
           </span>
+        )}
+
+        {/* Hidden file input for thumbnail replacement */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={e => {
+            const file = e.target.files?.[0]
+            if (file) void handleThumbUpload(file)
+            e.target.value = ''
+          }}
+        />
+
+        {/* Upload overlay — visible on hover when not in video mode */}
+        {!showVideo && (
+          <button
+            className={`mon-arch-card__thumb-upload${thumbUploading ? ' mon-arch-card__thumb-upload--loading' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            title="썸네일 변경"
+            disabled={thumbUploading}
+          >
+            {thumbUploading
+              ? <Spinner sm />
+              : <><Upload size={13} /> 썸네일 변경</>}
+          </button>
         )}
 
         {/* Toggle pill: switches between thumbnail and video */}
