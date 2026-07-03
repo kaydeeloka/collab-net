@@ -195,6 +195,33 @@
   border-color: var(--gray-3);
 }
 
+.mon-arch-best-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-md);
+  background: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-5);
+  cursor: pointer;
+  transition: all .15s;
+  letter-spacing: .01em;
+}
+
+.mon-arch-best-filter-btn--active {
+  background: #e6a817;
+  border-color: #e6a817;
+  color: #fff;
+}
+
+.mon-arch-best-filter-btn:not(.mon-arch-best-filter-btn--active):hover {
+  border-color: #e6a817;
+  color: #e6a817;
+}
+
 .mon-arch-divider {
   width: 1px;
   height: 20px;
@@ -728,6 +755,14 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--gray-8);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mon-arch-card__name-star {
+  color: #e6a817;
+  flex-shrink: 0;
 }
 
 .mon-arch-card__handle {
@@ -798,6 +833,44 @@
   background: var(--white);
   border-color: var(--teal);
   color: var(--teal-dk);
+}
+
+/* best review star button */
+.mon-arch-card__handle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mon-arch-card__star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--surface-md);
+  background: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gray-4);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all .15s;
+  letter-spacing: .01em;
+  line-height: 1;
+}
+
+.mon-arch-card__star-btn--active {
+  background: #e6a817;
+  border-color: #e6a817;
+  color: #fff;
+}
+
+.mon-arch-card__star-btn:not(.mon-arch-card__star-btn--active):hover {
+  border-color: #e6a817;
+  color: #e6a817;
 }
 
 /* per-row upload */

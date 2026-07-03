@@ -27,11 +27,13 @@ export interface MonitoringRow {
   repost:                  string | null
   review_link:             string | null
   assets:                  MonitoringAssets | null
+  followers:               number | null
   views:                   number
   likes:                   number
   comments:                number
   keywords:                string | null
   updated:                 string | null
+  best_review_picks:       boolean
   isPlaceholder?:          boolean
 }
 
@@ -201,8 +203,9 @@ function mapMonitoringRecord(m: any): MonitoringRow {
     influencer_platform_id:  m.influencer_platform_id,
     confirmed_influencer_id: ci?.id  || null,
     seq:                     ci?.seq  ?? null,
-    platform:                ip?.platform || '',
-    handle:                  ip?.handle   || '',
+    platform:                ip?.platform  || '',
+    handle:                  ip?.handle    || '',
+    followers:               ip?.followers ?? null,
     display_name:            ci?.influencers?.display_name || null,
     avatar_url:              ci?.influencers?.avatar_url || null,
     date:                    m.date,
@@ -217,17 +220,19 @@ function mapMonitoringRecord(m: any): MonitoringRow {
     comments:                m.comments || 0,
     keywords:                m.keywords,
     updated:                 m.updated,
+    best_review_picks:       m.best_review_picks ?? false,
   }
 }
 
-function buildPlaceholder(ci: any, ip: { id: string; platform: string; handle: string } | null): MonitoringRow {
+function buildPlaceholder(ci: any, ip: { id: string; platform: string; handle: string; followers?: number | null } | null): MonitoringRow {
   return {
     id:                      `placeholder-${ip?.id || ci.id}`,
     influencer_platform_id:  ip?.id ?? null,
     confirmed_influencer_id: ci.id,
     seq:                     ci.seq ?? null,
-    platform:                ip?.platform || '',
-    handle:                  ip?.handle || '',
+    platform:                ip?.platform  || '',
+    handle:                  ip?.handle    || '',
+    followers:               ip?.followers ?? null,
     display_name:            ci.influencers?.display_name ?? null,
     avatar_url:              ci.influencers?.avatar_url ?? null,
     date:                    null,
@@ -242,6 +247,7 @@ function buildPlaceholder(ci: any, ip: { id: string; platform: string; handle: s
     comments:                 0,
     keywords:                null,
     updated:                 null,
+    best_review_picks:       false,
     isPlaceholder:           true,
   }
 }
@@ -257,11 +263,11 @@ function sortGroupRows(group: MonitoringRow[]): MonitoringRow[] {
 
 export async function loadMonitoringData(phaseId: string): Promise<{ rows: MonitoringRow[]; confirmedCount: number }> {
   const monitoringSelect = `
-    id, date, media, content, brand, review_link, views, likes, comments, keywords, updated,
+    id, date, media, content, brand, review_link, views, likes, comments, keywords, updated, best_review_picks,
     monitoring_assets(cover_url, video_url, image_urls, updated_at),
     influencer_platform_id,
     influencer_platform!monitoring_influencer_platform_id_fkey(
-      platform, handle,
+      platform, handle, followers,
       confirmed_influencers(
         id, seq, repost,
         influencers(display_name, avatar_url)
@@ -275,7 +281,7 @@ export async function loadMonitoringData(phaseId: string): Promise<{ rows: Monit
       .select(`
         id, seq, repost,
         influencers(display_name, avatar_url),
-        influencer_platform(id, platform, handle)
+        influencer_platform(id, platform, handle, followers)
       `)
       .eq('phase_id', phaseId)
       .order('seq', { ascending: true, nullsFirst: false }),

@@ -37,6 +37,9 @@ export interface PageContent {
   brdCard1?: string
   brdCard2?: string
   brdCard3?: string
+  brdCard1Img?: string
+  brdCard2Img?: string
+  brdCard3Img?: string
   // next_project redesign
   npImageUrls?: string        // up to 4 URLs, newline-separated
   npConcept?: string          // multiline: 1st line = title, rest = detail

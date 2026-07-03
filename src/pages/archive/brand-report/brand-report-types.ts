@@ -41,6 +41,9 @@ export interface BrandPageContent {
   brdCard1?: string
   brdCard2?: string
   brdCard3?: string
+  brdCard1Img?: string
+  brdCard2Img?: string
+  brdCard3Img?: string
   // brand_mention_detail (one influencer per slide)
   bmdHandle?: string
   bmdFollowers?: string

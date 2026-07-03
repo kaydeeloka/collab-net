@@ -5,6 +5,7 @@ import {
   computeContentReport,
   loadMonitoringData,
   type ContentReport,
+  type MonitoringRow,
   type UploadChannelSegment,
 } from '@/lib/influencer/monitoring-data'
 import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/influencer/content-platforms'
@@ -13,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import { Star } from 'lucide-react'
 
 const SUFFIX_STYLE = { fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 } as const
 const CHANNEL_COLORS: Record<PlatformBucket, string> = {

@@ -46,6 +46,13 @@ function ET({
   )
 }
 
+function fmtK(n: number | null | undefined): string {
+  if (n == null) return '—'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return String(n)
+}
+
 // ── Section pill ──────────────────────────────────────────────────
 
 function SectionPill({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -133,7 +140,7 @@ function BrandSlide({
     input.click()
   }
 
-  async function handleImageUpload(field: 'imageUrl' | 'bmdImageUrl') {
+  async function handleImageUpload(field: 'imageUrl' | 'bmdImageUrl' | 'brdCard1Img' | 'brdCard2Img' | 'brdCard3Img') {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
@@ -631,35 +638,89 @@ function BrandSlide({
 
           {/* Best Review detail */}
           {page.type === 'best_review_detail' && (() => {
-            function parseBrdCard(raw?: string) {
-              const lines = (raw ?? '').split('\n')
-              return { handle: lines[0] ?? '', followers: lines[1] ?? '', comment: lines.slice(2).join('\n') }
+            function parseBrdCard(raw?: string): { rowId: string | null; comment: string } {
+              if (!raw) return { rowId: null, comment: '' }
+              try {
+                const p = JSON.parse(raw)
+                if (p && typeof p.rowId === 'string') return { rowId: p.rowId, comment: p.comment ?? '' }
+              } catch {}
+              const lines = raw.split('\n')
+              return { rowId: null, comment: lines.slice(2).join('\n') }
+            }
+            function setBrdCard(key: 'brdCard1' | 'brdCard2' | 'brdCard3', rowId: string | null, comment: string) {
+              setLocal(p => ({ ...p, [key]: JSON.stringify({ rowId, comment }) }))
             }
             const cardKeys = ['brdCard1', 'brdCard2', 'brdCard3'] as const
+            const imgKeys  = ['brdCard1Img', 'brdCard2Img', 'brdCard3Img'] as const
+            const pickRows = reviewRows
+            const bestRows = pickRows.filter(r => r.best_review_picks).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
             return (
               <div className="rslide__brd-grid">
                 {cardKeys.map((key, i) => {
-                  const d = parseBrdCard(local[key])
+                  const { rowId, comment } = parseBrdCard(local[key])
+                  const imgKey = imgKeys[i]
+                  const effectiveRowId = rowId ?? bestRows[i]?.id ?? null
+                  const picked = effectiveRowId ? pickRows.find(r => r.id === effectiveRowId) ?? null : null
+                  const handleUrl = picked?.handle ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}` : null
                   return (
                     <div key={i} className="rslide__brd-card">
-                      <div className="rslide__brd-media"><div className="rslide__brd-ph">이미지</div></div>
+                      <div className="rslide__brd-media">
+                        {editMode ? (
+                          <div className="rslide__img-upload-zone" onClick={() => handleImageUpload(imgKey)}>
+                            {uploading === imgKey ? (
+                              <div className="rslide__img-upload-loading">업로드 중...</div>
+                            ) : local[imgKey] ? (
+                              <>
+                                <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
+                                <div className="rslide__img-upload-overlay">변경</div>
+                              </>
+                            ) : (
+                              <div className="rslide__img-upload-empty">이미지</div>
+                            )}
+                          </div>
+                        ) : local[imgKey] ? (
+                          <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
+                        ) : (
+                          <div className="rslide__brd-ph">이미지</div>
+                        )}
+                        {!editMode && picked?.review_link && (
+                          <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
+                            data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
+                            리뷰 보기
+                          </a>
+                        )}
+                      </div>
                       {editMode ? (
                         <div className="rslide__brd-info-edit">
                           <span className="rslide__brd-edit-label">인플루언서</span>
-                          <ET value={d.handle} onChange={v => setLocal(p => ({ ...p, [key]: [v, d.followers, d.comment].join('\n') }))} onBlur={commit} placeholder="@handle" className="rslide__brd-edit-input" />
-                          <span className="rslide__brd-edit-label">팔로워</span>
-                          <ET value={d.followers} onChange={v => setLocal(p => ({ ...p, [key]: [d.handle, v, d.comment].join('\n') }))} onBlur={commit} placeholder="예: 7.4K" className="rslide__brd-edit-input" />
+                          <select
+                            className="rslide-edit rslide__brd-edit-input rslide__brd-picker"
+                            value={effectiveRowId ?? ''}
+                            onChange={e => { setBrdCard(key, e.target.value || null, comment); commit() }}
+                          >
+                            <option value="">— 선택 안 함 —</option>
+                            {pickRows.map(r => (
+                              <option key={r.id} value={r.id}>
+                                {r.best_review_picks ? '★ ' : ''}{r.handle}{r.date ? ` · ${r.date}` : ''} · {r.views.toLocaleString()}뷰
+                              </option>
+                            ))}
+                          </select>
                           <span className="rslide__brd-edit-label rslide__brd-edit-label--last">댓글 반응</span>
-                          <ET value={d.comment} onChange={v => setLocal(p => ({ ...p, [key]: [d.handle, d.followers, v].join('\n') }))} onBlur={commit} placeholder="댓글 반응 내용..." className="rslide__brd-edit-input rslide__brd-edit-input--area" multiline rows={4} />
+                          <ET value={comment} onChange={v => setBrdCard(key, rowId, v)} onBlur={commit}
+                            placeholder="댓글 반응 내용..." className="rslide__brd-edit-input rslide__brd-edit-input--area" multiline rows={4} />
                         </div>
                       ) : (
                         <div className="rslide__brd-info">
                           <span className="rslide__brd-label">인플루언서</span>
-                          <span className="rslide__brd-value">{d.handle || '—'}</span>
+                          <span className="rslide__brd-value rslide__brd-value--link">
+                            {handleUrl
+                              ? <a href={handleUrl} target="_blank" rel="noopener noreferrer" data-pdf-link={handleUrl} className="rslide__brd-handle-link">{picked?.handle || '—'}</a>
+                              : (picked?.handle || '—')}
+                          </span>
                           <span className="rslide__brd-label">팔로워</span>
-                          <span className="rslide__brd-value">{d.followers || '—'}</span>
+                          <span className="rslide__brd-value">{fmtK(picked?.followers)}</span>
                           <span className="rslide__brd-label rslide__brd-label--last">댓글 반응</span>
-                          <span className="rslide__brd-value rslide__brd-value--desc">{d.comment || '—'}</span>
+                          <span className="rslide__brd-value rslide__brd-value--desc">{comment || '—'}</span>
                         </div>
                       )}
                     </div>

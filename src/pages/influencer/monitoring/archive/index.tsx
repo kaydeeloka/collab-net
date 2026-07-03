@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import JSZip from 'jszip'
-import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X, Upload, Camera } from 'lucide-react'
+import { Eye, Heart, MessageCircle, Play, Download, DownloadCloud, Film, Archive, Image as ImageIcon, ExternalLink, Clock, CheckCircle2, Circle, ChevronDown, ChevronUp, X, Upload, Camera, Star } from 'lucide-react'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
@@ -102,12 +102,14 @@ function ArchiveCard({
   phaseId,
   reportBmGroupNames,
   onSaveToReportSlot,
+  onToggleBestReview,
 }: {
   row: MonitoringRow
   brandColor: string
   phaseId?: string
   reportBmGroupNames?: string[]
   onSaveToReportSlot?: (brandKey: string, ti: number, url: string) => Promise<boolean>
+  onToggleBestReview?: (row: MonitoringRow) => void
 }) {
   const { showToast } = useToast()
   const thumbUrl = resolveMonitoringThumbnailUrl(row.assets)
@@ -469,8 +471,23 @@ function ArchiveCard({
         <div className="mon-arch-card__creator">
           <InfluencerAvatar url={row.avatar_url} label={row.display_name || account} size={28} />
           <div className="mon-arch-card__creator-info">
-            <div className="mon-arch-card__name">{row.display_name || `@${account}`}</div>
-            <div className="mon-arch-card__handle">@{account}</div>
+            <div className="mon-arch-card__name">
+              {row.display_name || `@${account}`}
+              {row.best_review_picks && <Star size={10} fill="currentColor" className="mon-arch-card__name-star" />}
+            </div>
+            <div className="mon-arch-card__handle-row">
+              <span className="mon-arch-card__handle">@{account}</span>
+              {onToggleBestReview && (
+                <button
+                  className={`mon-arch-card__star-btn${row.best_review_picks ? ' mon-arch-card__star-btn--active' : ''}`}
+                  onClick={() => onToggleBestReview(row)}
+                  title={row.best_review_picks ? '베스트 리뷰 해제' : '베스트 리뷰로 선택'}
+                >
+                  <Star size={11} fill={row.best_review_picks ? 'currentColor' : 'none'} />
+                  베스트
+                </button>
+              )}
+            </div>
             {row.date && <div className="mon-arch-card__date">{formatKstDate(row.date)}</div>}
           </div>
         </div>
@@ -519,6 +536,7 @@ export default function MonitoringArchive() {
   const [loading, setLoading] = useState(true)
   const [brandFilter, setBrandFilter] = useState('all')
   const [sortBy, setSortBy] = useState<'date' | 'views' | 'engagement'>('date')
+  const [showBestFirst, setShowBestFirst] = useState(false)
   const [importing, setImporting] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [dlModal, setDlModal] = useState<{
@@ -605,8 +623,13 @@ export default function MonitoringArchive() {
       const eng = (r: MonitoringRow) => r.views > 0 ? (r.likes + r.comments) / r.views : 0
       sorted.sort((a, b) => eng(b) - eng(a))
     }
+    if (showBestFirst) {
+      const best = sorted.filter(r => r.best_review_picks)
+      const rest  = sorted.filter(r => !r.best_review_picks)
+      return [...best, ...rest]
+    }
     return sorted
-  }, [reviewRows, brandFilter, sortBy])
+  }, [reviewRows, brandFilter, sortBy, showBestFirst])
 
   const platformGroups = useMemo(() => (
     PLATFORM_BUCKETS
@@ -847,6 +870,17 @@ export default function MonitoringArchive() {
     return false
   }
 
+  async function handleToggleBestReview(row: MonitoringRow) {
+    const nowOn = !row.best_review_picks
+    if (nowOn && rows.filter(r => r.best_review_picks).length >= 3) {
+      showToast('베스트 리뷰는 최대 3개까지 선택할 수 있습니다', 'info')
+      return
+    }
+    const { error } = await supabase.from('monitoring').update({ best_review_picks: nowOn }).eq('id', row.id)
+    if (error) { showToast('저장 실패', 'error'); return }
+    setRows(prev => prev.map(r => r.id === row.id ? { ...r, best_review_picks: nowOn } : r))
+  }
+
   async function handlePhotoRefresh() {
     const id = photoRefresh.datasetId.trim()
     if (!id) return
@@ -990,6 +1024,16 @@ export default function MonitoringArchive() {
           <option value="engagement">참여율순</option>
         </select>
 
+        <button
+          type="button"
+          className={`mon-arch-best-filter-btn${showBestFirst ? ' mon-arch-best-filter-btn--active' : ''}`}
+          onClick={() => setShowBestFirst(v => !v)}
+          title="베스트 리뷰 상단 고정"
+        >
+          <Star size={12} fill={showBestFirst ? 'currentColor' : 'none'} />
+          베스트
+        </button>
+
         {hasData && (
           <>
             <span className="mon-arch-count">
@@ -1050,6 +1094,7 @@ export default function MonitoringArchive() {
                 phaseId={viewPhaseId || undefined}
                 reportBmGroupNames={reportBmGroupNames}
                 onSaveToReportSlot={handleSaveToReportSlot}
+                onToggleBestReview={handleToggleBestReview}
               />
             ))}
           </div>
