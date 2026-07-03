@@ -414,7 +414,7 @@ function BrandSlide({
                   {recoveryCards.map((card, i) => {
                     const isInfluencer = i === 0
                     const isContentCount = i === 2
-                    const barPct = isInfluencer ? infPct : card.pct
+                    const barPct = isInfluencer && card.pct === 0 ? infPct : card.pct
                     return (
                       <div key={i} className="rslide__cp-card">
                         <div className="rslide__cp-card-header">
@@ -434,14 +434,12 @@ function BrandSlide({
                                 setLocal(p => ({ ...p, cpRecoveryCards: updated.map(c => `${c.label}|${c.desc}|${c.pct}`).join('\n') }))
                               }}
                               onBlur={commit} placeholder="설명 입력" className="rslide__cp-card-desc-edit" />
-                            {!isInfluencer && (
-                              <ET value={String(card.pct)}
-                                onChange={v => {
-                                  const updated = recoveryCards.map((c, j) => j === i ? { ...c, pct: parseInt(v) || 0 } : c)
-                                  setLocal(p => ({ ...p, cpRecoveryCards: updated.map(c => `${c.label}|${c.desc}|${c.pct}`).join('\n') }))
-                                }}
-                                onBlur={commit} placeholder="진행률 (0-100)" className="rslide__cp-card-pct-edit" />
-                            )}
+                            <ET value={String(card.pct)}
+                              onChange={v => {
+                                const updated = recoveryCards.map((c, j) => j === i ? { ...c, pct: parseInt(v) || 0 } : c)
+                                setLocal(p => ({ ...p, cpRecoveryCards: updated.map(c => `${c.label}|${c.desc}|${c.pct}`).join('\n') }))
+                              }}
+                              onBlur={commit} placeholder="진행률 (0-100)" className="rslide__cp-card-pct-edit" />
                           </>
                         ) : (
                           <div className="rslide__cp-card-desc">
@@ -628,7 +626,7 @@ function BrandSlide({
           {/* Best Review grid */}
           {page.type === 'best_review' && (
             <div className="rslide__hl-grid">
-              {Array.from({ length: 14 }).map((_, i) => (
+              {Array.from({ length: 16 }).map((_, i) => (
                 <div key={i} className="rslide__hl-cell">
                   <div className="rslide__hl-ph">이미지</div>
                 </div>
@@ -642,7 +640,7 @@ function BrandSlide({
               if (!raw) return { rowId: null, comment: '' }
               try {
                 const p = JSON.parse(raw)
-                if (p && typeof p.rowId === 'string') return { rowId: p.rowId, comment: p.comment ?? '' }
+                if (p && 'rowId' in p) return { rowId: p.rowId ?? null, comment: p.comment ?? '' }
               } catch {}
               const lines = raw.split('\n')
               return { rowId: null, comment: lines.slice(2).join('\n') }

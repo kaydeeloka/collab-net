@@ -23,11 +23,6 @@
   min-height: 2.8cqw;
 }
 
-/* ── Slide background ── */
-.brand-report-slides .rslide {
-  background-color: #F8F6F6;
-}
-
 /* ── Cover title — single line ── */
 .brand-report-slides .rslide__cover-title {
   max-width: none;
@@ -54,44 +49,10 @@
   opacity: 1;
 }
 
-/* ── Brand report colour overrides (matches 결과 리포트 theme) ── */
-
-/* eng title text */
-.brand-report-slides .rslide__eng       { color: #648085; }
-.brand-report-slides .rslide__eng-edit  { color: #648085; }
-
-/* stat box left accent */
-.brand-report-slides .rslide__stat-box  { border-left-color: #8BAAB8; }
-
-/* section pills */
-.brand-report-slides .rslide__section-pill { background: #8BAAB8; }
-
-/* content performance cards */
-.brand-report-slides .rslide__cp-card-total { color: #8BAAB8; }
-.brand-report-slides .rslide__cp-card-pct   { color: #8BAAB8; }
-.brand-report-slides .rslide__cp-card-stat  { color: #8BAAB8; }
-.brand-report-slides .rslide__cp-progress { height: 0.6cqw; }
-.brand-report-slides .rslide__cp-progress-bar { background: #8BAAB8; }
-
-/* best review detail — labels & badges */
-.brand-report-slides .rslide__brd-badge--review  { background: #648085; }
-.brand-report-slides .rslide__brd-label          { background: #8BAAB8; }
-.brand-report-slides .rslide__brd-edit-label     { background: #8BAAB8; }
-.brand-report-slides .rslide__brd-handle-link    { color: #648085; }
-.brand-report-slides .rslide__brd-value--link    { color: #648085; }
-
-/* brand mention pill */
-.brand-report-slides .rslide__bm-pill { background: #8BAAB8; }
-
-/* brand table header */
-.brand-report-slides .rslide__table-head { background: #8BAAB8; }
+/* ── Brand-specific table headers (brslide__ components have no base colour) ── */
 .brand-report-slides .brslide__table th { background: #8BAAB8; color: #fff; }
 .brand-report-slides .brslide__rl-table th { background: #8BAAB8; color: #fff; }
 .brand-report-slides .brslide__bmd-stat-label { background: #8BAAB8; color: #fff; }
-
-/* edit mode inputs */
-.brand-report-slides .rslide-edit      { border-bottom-color: #8BAAB8; }
-.brand-report-slides .rslide__edit-badge { background: #8BAAB8; }
 
 /* ── Outro contacts ── */
 .brslide__outro-contact {
