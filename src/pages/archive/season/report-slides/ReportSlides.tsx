@@ -414,16 +414,33 @@ function Slide({
             )
           })()}
 
-          {/* Best review highlights — photo wall (placeholder) */}
-          {page.type === 'best_review' && (
-            <div className="rslide__hl-grid">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <div key={i} className="rslide__hl-cell">
-                  <div className="rslide__hl-ph">이미지</div>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Best review highlights — mimuse thumbnail grid */}
+          {page.type === 'best_review' && (() => {
+            const mimuseRows = reviewRows
+              .filter(r => (r.brand || '').toLowerCase() === 'mimuse')
+              .sort((a, b) => {
+                const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
+                const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
+                if (aThumb !== bThumb) return aThumb ? -1 : 1
+                return (b.views || 0) - (a.views || 0)
+              })
+              .slice(0, 14)
+            return (
+              <div className="rslide__hl-grid">
+                {Array.from({ length: 14 }).map((_, i) => {
+                  const r = mimuseRows[i]
+                  const thumbUrl = r ? resolveMonitoringThumbnailUrl(r.assets) : null
+                  return (
+                    <div key={i} className="rslide__hl-cell">
+                      {thumbUrl
+                        ? <img src={thumbUrl} className="rslide__hl-img" alt="" referrerPolicy="no-referrer" />
+                        : <div className="rslide__hl-ph">이미지</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Best review detail cards */}
           {page.type === 'best_review_detail' && (() => {
