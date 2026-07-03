@@ -1251,6 +1251,176 @@ td {
   justify-content: center;
 }
 
+/* ── Best review picks panel (monitoring report) ── */
+.mon-report-best-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.mon-report-best-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gray-2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--sh-xs);
+  position: relative;
+}
+
+.mon-report-best-card__rank {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fef3c7, #fbbf24);
+  font-size: 13px;
+  font-weight: 900;
+  color: #92400e;
+  z-index: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+
+.mon-report-best-card__thumb {
+  width: 100%;
+  aspect-ratio: 9/8;
+  overflow: hidden;
+  background: var(--gray-1);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.mon-report-best-card__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mon-report-best-card__thumb-empty {
+  width: 100%;
+  height: 100%;
+  background: var(--gray-2);
+}
+
+.mon-report-best-card__info {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.mon-report-best-card__creator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+
+.mon-report-best-card__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gray-2);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-5);
+}
+
+.mon-report-best-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mon-report-best-card__name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gray-8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.mon-report-best-card__handle {
+  font-size: 11px;
+  color: var(--gray-5);
+  font-weight: 500;
+}
+
+.mon-report-best-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--gray-2);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 10px 0 8px;
+}
+
+.mon-report-best-card__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-right: 1px solid var(--gray-2);
+  background: var(--surface-sm, #f8f9fa);
+}
+
+.mon-report-best-card__metric:last-child {
+  border-right: none;
+}
+
+.mon-report-best-card__metric-lbl {
+  font-size: 10px;
+  color: var(--gray-4);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.mon-report-best-card__metric-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gray-8);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+
+.mon-report-best-card__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 0;
+  border-radius: 8px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  text-decoration: none;
+  transition: background .15s;
+  letter-spacing: .01em;
+}
+
+.mon-report-best-card__link:hover { background: var(--teal-dk); }
+
 /* ─────────────────────────────────────
    EMPTY & LOADER
 ───────────────────────────────────── */

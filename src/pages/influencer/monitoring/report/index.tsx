@@ -189,9 +189,66 @@ function fmtAvg(n: number | null): string {
   return fmtNum(n)
 }
 
+function fmtK(n: number | null | undefined): string {
+  if (n == null) return '—'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return String(n)
+}
+
+function BestPickCard({ row, rank }: { row: MonitoringRow; rank: number }) {
+  const thumb = row.assets?.cover_url ?? row.assets?.image_urls?.[0] ?? null
+  const account = (row.handle || '').replace(/^@/, '')
+  const { label, style } = platformBadgeStyle(row.platform)
+  const avatarFallback = (row.display_name || account).replace(/^@/, '').slice(0, 1).toUpperCase()
+  return (
+    <div className="mon-report-best-card">
+      <div className="mon-report-best-card__rank">{rank}</div>
+      <div className="mon-report-best-card__thumb">
+        {thumb
+          ? <img src={thumb} alt="" referrerPolicy="no-referrer" />
+          : <div className="mon-report-best-card__thumb-empty" />}
+      </div>
+      <div className="mon-report-best-card__info">
+        <div className="mon-report-best-card__creator">
+          <div className="mon-report-best-card__avatar">
+            {row.avatar_url
+              ? <img src={row.avatar_url} alt="" referrerPolicy="no-referrer" />
+              : avatarFallback}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="mon-report-best-card__name">{row.display_name || `@${account}`}</div>
+            <div className="mon-report-best-card__handle">@{account}</div>
+          </div>
+          <span className={platformBadgeClass(row.platform)} style={{ ...style, display: 'inline-flex', flexShrink: 0 }}>{label}</span>
+        </div>
+        <div className="mon-report-best-card__metrics">
+          {[
+            { val: fmtK(row.followers),  lbl: '팔로워' },
+            { val: fmtNum(row.views),    lbl: '조회수' },
+            { val: fmtNum(row.likes),    lbl: '좋아요' },
+            { val: fmtNum(row.comments), lbl: '댓글'   },
+          ].map(({ val, lbl }) => (
+            <div key={lbl} className="mon-report-best-card__metric">
+              <span className="mon-report-best-card__metric-lbl">{lbl}</span>
+              <span className="mon-report-best-card__metric-val">{val}</span>
+            </div>
+          ))}
+        </div>
+        {row.review_link && (
+          <a href={row.review_link} target="_blank" rel="noopener noreferrer" className="mon-report-best-card__link">
+            ↗ 리뷰 보기
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function MonitoringReport() {
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [report, setReport]           = useState<ContentReport | null>(null)
+  const [allRows, setAllRows]         = useState<MonitoringRow[]>([])
   const [confirmedBrands, setConfirmedBrands] = useState<ConfirmedBrandKw[]>([])
   const [loading, setLoading]         = useState(true)
 
@@ -199,6 +256,7 @@ export default function MonitoringReport() {
     if (phaseLoading) return
     if (!viewPhaseId) {
       setReport(null)
+      setAllRows([])
       setLoading(false)
       return
     }
@@ -214,11 +272,16 @@ export default function MonitoringReport() {
           en:   (b.brand_en || '').toLowerCase(),
         }))
         setConfirmedBrands(brands)
+        setAllRows(rows)
         setReport(computeContentReport(rows, brands))
       })
       .catch(e => console.error('monitoring report load error:', e))
       .finally(() => setLoading(false))
   }, [viewPhaseId, phaseLoading])
+
+  const bestRows = allRows
+    .filter(r => r.best_review_picks && r.review_link?.startsWith('http'))
+    .sort((a, b) => b.views - a.views)
 
   const summary = report?.summary
 
@@ -389,7 +452,22 @@ export default function MonitoringReport() {
             <UploadChannelChart channels={report.uploadChannels} compact />
           </div>
 
-          <div className="section-title" style={{ marginBottom: 8 }}>Top 콘텐츠</div>
+          <div className="section-title" style={{ marginBottom: 16 }}>Top 콘텐츠</div>
+
+          {bestRows.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                <Star size={13} fill="currentColor" style={{ color: '#e6a817' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>베스트 리뷰 픽 Top 3</span>
+              </div>
+              <div className="mon-report-best-list">
+                {bestRows.map((row, i) => (
+                  <BestPickCard key={row.id} row={row} rank={i + 1} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-6)', marginBottom: 14 }}>조회수 상위 10건</div>
           <div>
             <ReportPanel>
