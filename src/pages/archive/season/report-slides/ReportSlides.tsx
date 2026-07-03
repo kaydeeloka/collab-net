@@ -159,6 +159,26 @@ function Slide({
     input.click()
   }
 
+  async function handleBmSlotUpload(brandKey: string, ti: number, currentOverrides: Record<string, string>) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const ovKey = `${brandKey}_${ti}`
+      setUploading(`bm_${ovKey}`)
+      const url = await uploadReportSlideImage(page.phase_id, file)
+      setUploading(null)
+      if (url) {
+        const next = { ...local, bmOverrides: JSON.stringify({ ...currentOverrides, [ovKey]: url }) }
+        setLocal(next)
+        onUpdate(next)
+      }
+    }
+    input.click()
+  }
+
   async function handleNpImageUpload(index: number, currentUrls: string[]) {
     const input = document.createElement('input')
     input.type = 'file'
@@ -501,43 +521,71 @@ function Slide({
               const lower = name.trim().toLowerCase()
               return [lower, monitoringBrandKey(name), lower.replace(/\s+/g, ''), lower.replace(/\s+/g, '-')]
             }
-            const groups: { nameEn: string; brandRows: MonitoringRow[] }[] = confirmedBrands.length > 0
+            const bmOvMap: Record<string, string> = (() => {
+              try { return JSON.parse(local.bmOverrides ?? '{}') } catch { return {} }
+            })()
+            const groups: { name: string; nameEn: string; brandRows: MonitoringRow[] }[] = confirmedBrands.length > 0
               ? confirmedBrands.slice(0, 4).map(({ name, nameEn }) => {
-                  // Match monitoring rows using all variants of both Korean name and English key
                   const variants = new Set([...brandVariants(name), ...brandVariants(nameEn)])
-                  const matched = reviewRows.filter(r => r.brand && variants.has(r.brand.toLowerCase()))
-                  return { nameEn, brandRows: matched }
+                  const matched = reviewRows
+                    .filter(r => r.brand && variants.has(r.brand.toLowerCase()))
+                    .sort((a, b) => {
+                      const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
+                      const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
+                      if (aThumb !== bThumb) return aThumb ? -1 : 1
+                      return (b.views || 0) - (a.views || 0)
+                    })
+                  return { name, nameEn, brandRows: matched }
                 })
               : [
-                  { nameEn: 'BRAND 1', brandRows: [] },
-                  { nameEn: 'BRAND 2', brandRows: [] },
-                  { nameEn: 'BRAND 3', brandRows: [] },
-                  { nameEn: 'BRAND 4', brandRows: [] },
+                  { name: 'brand1', nameEn: 'BRAND 1', brandRows: [] },
+                  { name: 'brand2', nameEn: 'BRAND 2', brandRows: [] },
+                  { name: 'brand3', nameEn: 'BRAND 3', brandRows: [] },
+                  { name: 'brand4', nameEn: 'BRAND 4', brandRows: [] },
                 ]
             return (
               <div className="rslide__bm-grid">
-                {groups.map(({ nameEn, brandRows }, gi) => {
-                  return (
+                {groups.map(({ name, nameEn, brandRows }, gi) => (
                   <div key={gi} className="rslide__bm-brand">
                     <div className="rslide__bm-pill">{nameEn}</div>
                     <div className="rslide__bm-thumbs">
                       {Array.from({ length: 4 }).map((_, ti) => {
+                        const ovKey = `${monitoringBrandKey(name)}_${ti}`
+                        const overrideUrl = bmOvMap[ovKey] ?? null
                         const row = brandRows[ti]
-                        const thumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
-                        const isVideo = row ? !!(row.assets?.video_url) : false
+                        const autoThumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
+                        const displayUrl = overrideUrl ?? autoThumb
+                        if (editMode) {
+                          return (
+                            <div
+                              key={ti}
+                              className="rslide__bm-thumb rslide__img-upload-zone"
+                              onClick={() => handleBmSlotUpload(monitoringBrandKey(name), ti, bmOvMap)}
+                            >
+                              {uploading === `bm_${ovKey}` ? (
+                                <div className="rslide__img-upload-loading">...</div>
+                              ) : displayUrl ? (
+                                <>
+                                  <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="rslide__bm-img" />
+                                  <div className="rslide__img-upload-overlay">변경</div>
+                                </>
+                              ) : (
+                                <div className="rslide__img-upload-empty" style={{ fontSize: '0.6cqw' }}>+</div>
+                              )}
+                            </div>
+                          )
+                        }
                         return (
                           <div key={ti} className="rslide__bm-thumb">
-                            {thumb
-                              ? <img src={thumb} alt="" referrerPolicy="no-referrer" className="rslide__bm-img" />
+                            {displayUrl
+                              ? <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="rslide__bm-img" />
                               : <div className="rslide__bm-ph" />}
-                            {isVideo && <div className="rslide__bm-play" />}
                           </div>
                         )
                       })}
                     </div>
                   </div>
-                  )
-                })}
+                ))}
               </div>
             )
           })()}

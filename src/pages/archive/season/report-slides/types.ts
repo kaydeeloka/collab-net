@@ -56,6 +56,8 @@ export interface PageContent {
   // content_performance
   cpRecoveryCards?: string  // "label|desc|pct" per line
   cpContentTypes?: string   // "title\ndesc" blocks separated by \n\n
+  // brand_mention manual slot overrides — JSON: { "gi_ti": "url" }
+  bmOverrides?: string
 }
 
 export interface ReportPage {

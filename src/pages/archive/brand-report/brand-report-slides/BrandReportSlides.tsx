@@ -113,6 +113,26 @@ function BrandSlide({
 
   function commit() { onUpdate(local) }
 
+  async function handleBmSlotUpload(ti: number, currentOverrides: Record<string, string>) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const ovKey = String(ti)
+      setUploading(`bm_${ovKey}`)
+      const url = await uploadReportSlideImage(page.phase_id, file)
+      setUploading(null)
+      if (url) {
+        const next = { ...local, bmOverrides: JSON.stringify({ ...currentOverrides, [ovKey]: url }) }
+        setLocal(next)
+        onUpdate(next)
+      }
+    }
+    input.click()
+  }
+
   async function handleImageUpload(field: 'imageUrl' | 'bmdImageUrl') {
     const input = document.createElement('input')
     input.type = 'file'
@@ -650,23 +670,49 @@ function BrandSlide({
           })()}
 
           {/* Brand Mention grid — filtered to this brand */}
-          {page.type === 'brand_mention' && (
-            <div className="brslide__bm-grid">
-              {Array.from({ length: 12 }).map((_, i) => {
-                const row = brandRows[i]
-                const thumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
-                const isVideo = row ? !!(row.assets?.video_url) : false
-                return (
-                  <div key={i} className="brslide__bm-thumb">
-                    {thumb
-                      ? <img src={thumb} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
-                      : <div className="brslide__bm-ph" />}
-                    {isVideo && <div className="rslide__bm-play" />}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {page.type === 'brand_mention' && (() => {
+            const bmOvMap: Record<string, string> = (() => {
+              try { return JSON.parse(local.bmOverrides ?? '{}') } catch { return {} }
+            })()
+            return (
+              <div className="brslide__bm-grid">
+                {Array.from({ length: 12 }).map((_, i) => {
+                  const ovKey = String(i)
+                  const overrideUrl = bmOvMap[ovKey] ?? null
+                  const row = brandRows[i]
+                  const autoThumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
+                  const displayUrl = overrideUrl ?? autoThumb
+                  if (editMode) {
+                    return (
+                      <div
+                        key={i}
+                        className="brslide__bm-thumb rslide__img-upload-zone"
+                        onClick={() => handleBmSlotUpload(i, bmOvMap)}
+                      >
+                        {uploading === `bm_${ovKey}` ? (
+                          <div className="rslide__img-upload-loading">...</div>
+                        ) : displayUrl ? (
+                          <>
+                            <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                            <div className="rslide__img-upload-overlay">변경</div>
+                          </>
+                        ) : (
+                          <div className="rslide__img-upload-empty" style={{ fontSize: '0.6cqw' }}>+</div>
+                        )}
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={i} className="brslide__bm-thumb">
+                      {displayUrl
+                        ? <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                        : <div className="brslide__bm-ph" />}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Brand Mention detail — one influencer per slide */}
           {page.type === 'brand_mention_detail' && (() => {

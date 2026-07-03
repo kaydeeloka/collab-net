@@ -50,6 +50,8 @@ export interface BrandPageContent {
   bmdAdditional?: string       // 추가 업로드 handle
   bmdCommentReaction?: string
   bmdImageUrl?: string
+  // brand_mention manual slot overrides — JSON: { "ti": "url" }
+  bmOverrides?: string
 }
 
 export interface BrandReportPage {

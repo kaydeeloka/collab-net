@@ -1010,6 +1010,138 @@
 }
 
 /* ─────────────────────────────────────
+   REPORT CAPTURE BUTTON & SLOT PICKER
+───────────────────────────────────── */
+.mon-arch-card__report-btn {
+  position: absolute;
+  bottom: 68px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white);
+  background: rgba(14, 116, 144, 0.85);
+  backdrop-filter: blur(2px);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.mon-arch-card__report-btn:hover:not(:disabled) { background: rgba(8, 145, 178, 0.95); }
+.mon-arch-card__report-btn:disabled { opacity: .65; cursor: not-allowed; }
+
+.mon-arch-card__report-picker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 12;
+  background: rgba(10, 14, 18, 0.94);
+  backdrop-filter: blur(6px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mon-arch-card__report-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.mon-arch-card__report-picker__title {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mon-arch-card__report-picker__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: background .12s;
+  flex-shrink: 0;
+}
+.mon-arch-card__report-picker__close:hover { background: rgba(255, 255, 255, 0.22); }
+
+.mon-arch-card__report-picker__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mon-arch-card__report-picker__brand {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  width: 64px;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mon-arch-card__report-picker__slots {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.mon-arch-card__report-picker__slot {
+  flex: 1;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+  font-family: inherit;
+}
+.mon-arch-card__report-picker__slot:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #fff;
+}
+.mon-arch-card__report-picker__slot:disabled { opacity: .45; cursor: not-allowed; }
+.mon-arch-card__report-picker__slot--saved {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #fff;
+}
+
+.mon-arch-card__report-picker__uploading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+}
+
+/* ─────────────────────────────────────
    RESPONSIVE
 ───────────────────────────────────── */
 @media (max-width: 768px) {

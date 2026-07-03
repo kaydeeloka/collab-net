@@ -12,6 +12,8 @@ import { fmtNum } from '@/lib/utils'
 import { formatKstDate } from '@/lib/kst-time'
 import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
+import { type ReportPage, type PageContent } from '@/pages/archive/season/report-slides/types'
+import { uploadReportSlideImage } from '@/pages/archive/season/report-slides/report-image-upload'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBadgeClass, platformBucket } from '@/lib/influencer/content-platforms'
 import { brandColorForKey, buildBrandKwsFromRows, monitoringBrandKey, MIMUSE_BRAND, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 import './monitoring-archive.css'
@@ -94,7 +96,19 @@ function SummaryStat({ icon, label, value, accent }: { icon: React.ReactNode; la
   )
 }
 
-function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: string }) {
+function ArchiveCard({
+  row,
+  brandColor,
+  phaseId,
+  reportBmGroupNames,
+  onSaveToReportSlot,
+}: {
+  row: MonitoringRow
+  brandColor: string
+  phaseId?: string
+  reportBmGroupNames?: string[]
+  onSaveToReportSlot?: (brandKey: string, ti: number, url: string) => Promise<boolean>
+}) {
   const { showToast } = useToast()
   const thumbUrl = resolveMonitoringThumbnailUrl(row.assets)
   const videoUrl = row.assets?.video_url || null
@@ -115,6 +129,10 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
   const [photoViewMode, setPhotoViewMode] = useState<'photo' | 'thumb'>('photo')
   // Tracks the cover_url actually saved (updated on save so the carousel can jump to it)
   const [savedCoverUrl, setSavedCoverUrl] = useState<string | null>(row.assets?.cover_url ?? null)
+  const [reportCapture, setReportCapture] = useState<{
+    uploading: boolean; url: string | null; slotKey: string | null
+  } | null>(null)
+  const [reportSaving, setReportSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -175,6 +193,42 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
     }
   }
 
+  async function handleReportCapture() {
+    if (!phaseId) { showToast('차수를 선택해 주세요.', 'info'); return }
+    const video = videoRef.current
+    if (!video || video.readyState < 2 || video.videoWidth === 0) {
+      showToast('영상이 아직 준비되지 않았습니다. 잠시 후 시도하세요.', 'info'); return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      setReportCapture({ uploading: true, url: null, slotKey: null })
+      canvas.toBlob(async blob => {
+        if (!blob) { showToast('캡처 실패', 'error'); setReportCapture(null); return }
+        const file = new File([blob], 'report-capture.jpg', { type: 'image/jpeg' })
+        const url = await uploadReportSlideImage(phaseId, file)
+        if (url) { setReportCapture({ uploading: false, url, slotKey: null }) }
+        else { showToast('캡처 업로드 실패', 'error'); setReportCapture(null) }
+      }, 'image/jpeg', 0.92)
+    } catch { showToast('캡처 실패', 'error'); setReportCapture(null) }
+  }
+
+  async function handleSlotSelect(gi: number, ti: number, brandKey: string, brandName: string) {
+    if (!reportCapture?.url || !onSaveToReportSlot) return
+    setReportSaving(true)
+    const ok = await onSaveToReportSlot(brandKey, ti, reportCapture.url)
+    setReportSaving(false)
+    if (ok) {
+      const key = `${brandKey}_${ti}`
+      setReportCapture(rc => rc ? { ...rc, slotKey: key } : null)
+      showToast(`${brandName} ${ti + 1}번 슬롯에 저장되었습니다`, 'success')
+      setTimeout(() => setReportCapture(null), 1500)
+    } else { showToast('저장 실패', 'error') }
+  }
+
   // Video is temporary (needs saving) if it's still an Apify KV URL.
   const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
   const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
@@ -216,11 +270,65 @@ function ArchiveCard({ row, brandColor }: { row: MonitoringRow; brandColor: stri
               className="mon-arch-card__capture-btn"
               onClick={handleCapture}
               title="현재 프레임을 썸네일로 캡처"
-              disabled={thumbUploading}
+              disabled={thumbUploading || !!reportCapture}
             >
               {thumbUploading ? <Spinner sm /> : <Camera size={12} />}
               캡처
             </button>
+            {reportBmGroupNames && reportBmGroupNames.length > 0 && phaseId && (
+              <button
+                className="mon-arch-card__report-btn"
+                onClick={handleReportCapture}
+                title="리포트 슬롯에 캡처 저장"
+                disabled={thumbUploading || !!reportCapture}
+              >
+                <Camera size={11} />
+                리포트+
+              </button>
+            )}
+            {/* Slot picker overlay */}
+            {reportCapture && (
+              <div className="mon-arch-card__report-picker">
+                {reportCapture.uploading ? (
+                  <div className="mon-arch-card__report-picker__uploading">
+                    <Spinner sm /> 캡처 업로드 중…
+                  </div>
+                ) : (
+                  <>
+                    <div className="mon-arch-card__report-picker__header">
+                      <span className="mon-arch-card__report-picker__title">슬롯 선택</span>
+                      <button className="mon-arch-card__report-picker__close" onClick={() => setReportCapture(null)}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                    {(reportBmGroupNames ?? []).slice(0, 4).map((name, gi) => {
+                      const brandKey = monitoringBrandKey(name)
+                      return (
+                        <div key={gi} className="mon-arch-card__report-picker__group">
+                          <span className="mon-arch-card__report-picker__brand">{gi + 1}. {name}</span>
+                          <div className="mon-arch-card__report-picker__slots">
+                            {Array.from({ length: 4 }).map((_, ti) => {
+                              const key = `${brandKey}_${ti}`
+                              const saved = reportCapture.slotKey === key
+                              return (
+                                <button
+                                  key={ti}
+                                  className={`mon-arch-card__report-picker__slot${saved ? ' mon-arch-card__report-picker__slot--saved' : ''}`}
+                                  disabled={reportSaving}
+                                  onClick={() => void handleSlotSelect(gi, ti, brandKey, name)}
+                                >
+                                  {ti + 1}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -432,6 +540,7 @@ export default function MonitoringArchive() {
   const [photoRefresh, setPhotoRefresh] = useState<{
     open: boolean; datasetId: string; loading: boolean; message: string | null
   }>({ open: false, datasetId: '', loading: false, message: null })
+  const [reportBmPage, setReportBmPage] = useState<ReportPage | null>(null)
   useEffect(() => {
     if (videoUploadModal.status !== 'done' || !videoUploadModal.open) return
     const t = setTimeout(() => setVideoUploadModal(m => ({ ...m, open: false })), 3000)
@@ -445,17 +554,19 @@ export default function MonitoringArchive() {
     let cancelled = false
     void (async () => {
       try {
-        const [data, brandsRes, kwsRes] = await Promise.all([
+        const [data, brandsRes, kwsRes, bmPageRes] = await Promise.all([
           loadMonitoringData(viewPhaseId),
           supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
           supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
             .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
+          supabase.from('report_pages').select('*').eq('phase_id', viewPhaseId).eq('type', 'brand_mention').maybeSingle(),
         ])
         if (cancelled) return
         setRows(data.rows)
         const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: '' }))
         setBrands(confirmed)
         setBrandKw(buildBrandKwsFromRows(kwsRes.data || [], confirmed).byBrand)
+        setReportBmPage(bmPageRes.data as ReportPage | null)
       } catch (e) {
         console.error('archive load error:', e)
       } finally {
@@ -719,6 +830,26 @@ export default function MonitoringArchive() {
     if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
   }
 
+  const reportBmGroupNames = useMemo(
+    () => brands.slice(0, 4).map(b => b.name),
+    [brands],
+  )
+
+  async function handleSaveToReportSlot(brandKey: string, ti: number, url: string): Promise<boolean> {
+    if (!reportBmPage) return false
+    const currentOverrides: Record<string, string> = (() => {
+      try { return JSON.parse(reportBmPage.content.bmOverrides ?? '{}') } catch { return {} }
+    })()
+    const key = `${brandKey}_${ti}`
+    const newContent: PageContent = {
+      ...reportBmPage.content,
+      bmOverrides: JSON.stringify({ ...currentOverrides, [key]: url }),
+    }
+    const { error } = await supabase.from('report_pages').update({ content: newContent }).eq('id', reportBmPage.id)
+    if (!error) { setReportBmPage({ ...reportBmPage, content: newContent }); return true }
+    return false
+  }
+
   async function handlePhotoRefresh() {
     const id = photoRefresh.datasetId.trim()
     if (!id) return
@@ -919,6 +1050,9 @@ export default function MonitoringArchive() {
                 key={row.id}
                 row={row}
                 brandColor={brandColorForKey(row.brand || '', brands, brandKw)}
+                phaseId={viewPhaseId || undefined}
+                reportBmGroupNames={reportBmGroupNames}
+                onSaveToReportSlot={handleSaveToReportSlot}
               />
             ))}
           </div>
