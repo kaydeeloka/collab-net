@@ -644,15 +644,31 @@ function BrandSlide({
           })()}
 
           {/* Best Review grid */}
-          {page.type === 'best_review' && (
-            <div className="rslide__hl-grid">
-              {Array.from({ length: 16 }).map((_, i) => (
-                <div key={i} className="rslide__hl-cell">
-                  <div className="rslide__hl-ph">이미지</div>
-                </div>
-              ))}
-            </div>
-          )}
+          {page.type === 'best_review' && (() => {
+            const hlRows = mimuseRows
+              .sort((a, b) => {
+                const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
+                const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
+                if (aThumb !== bThumb) return aThumb ? -1 : 1
+                return (b.views || 0) - (a.views || 0)
+              })
+              .slice(0, 16)
+            return (
+              <div className="rslide__hl-grid">
+                {Array.from({ length: 16 }).map((_, i) => {
+                  const r = hlRows[i]
+                  const thumbUrl = r ? resolveMonitoringThumbnailUrl(r.assets) : null
+                  return (
+                    <div key={i} className="rslide__hl-cell">
+                      {thumbUrl
+                        ? <img src={thumbUrl} className="rslide__hl-img" alt="" referrerPolicy="no-referrer" />
+                        : <div className="rslide__hl-ph">이미지</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Best Review detail */}
           {page.type === 'best_review_detail' && (() => {
