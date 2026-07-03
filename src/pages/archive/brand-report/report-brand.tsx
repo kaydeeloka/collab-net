@@ -229,6 +229,11 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
       if (!iframeDoc) { document.body.removeChild(iframe); showToast('PDF 출력 준비 중 오류가 발생했습니다.', 'error'); return }
       iframeDoc.open(); iframeDoc.write(printHtml); iframeDoc.close()
       iframe.addEventListener('load', () => {
+        iframeDoc.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(el => {
+          el.removeAttribute('href')
+          el.removeAttribute('onclick')
+          el.style.cursor = 'default'
+        })
         const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
         Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() }))).then(() => {
           setTimeout(() => { iframe.contentWindow?.print(); setTimeout(() => document.body.removeChild(iframe), 1000) }, 200)

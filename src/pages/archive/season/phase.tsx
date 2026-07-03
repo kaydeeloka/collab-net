@@ -214,6 +214,13 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
       iframeDoc.close()
 
       iframe.addEventListener('load', () => {
+        // Strip hrefs from review/handle links so PDF doesn't navigate away when clicked
+        iframeDoc.querySelectorAll<HTMLElement>('[data-pdf-link]').forEach(el => {
+          el.removeAttribute('href')
+          el.removeAttribute('onclick')
+          el.style.cursor = 'default'
+        })
+
         const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
         const waitAll = imgs.map(img =>
           img.complete

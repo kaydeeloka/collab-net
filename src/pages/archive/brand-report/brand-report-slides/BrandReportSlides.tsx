@@ -647,20 +647,25 @@ function BrandSlide({
               const lines = raw.split('\n')
               return { rowId: null, comment: lines.slice(2).join('\n') }
             }
-            function setBrdCard(key: 'brdCard1' | 'brdCard2' | 'brdCard3', rowId: string | null, comment: string) {
-              setLocal(p => ({ ...p, [key]: JSON.stringify({ rowId, comment }) }))
+            function setBrdComment(key: 'brdCard1' | 'brdCard2' | 'brdCard3', comment: string) {
+              setLocal(p => ({ ...p, [key]: JSON.stringify({ rowId: null, comment }) }))
             }
             const cardKeys = ['brdCard1', 'brdCard2', 'brdCard3'] as const
             const imgKeys  = ['brdCard1Img', 'brdCard2Img', 'brdCard3Img'] as const
-            const pickRows = reviewRows
-            const bestRows = pickRows.filter(r => r.best_review_picks).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+            const bestRows = reviewRows.filter(r => r.best_review_picks)
+              .sort((a, b) => b.views - a.views)
             return (
+              <>
+              {editMode && (
+                <div className="rslide__brd-note">
+                  모니터링 아카이브에서 ★ 베스트 버튼으로 최대 3명을 선택하면 자동으로 채워집니다.
+                </div>
+              )}
               <div className="rslide__brd-grid">
                 {cardKeys.map((key, i) => {
-                  const { rowId, comment } = parseBrdCard(local[key])
+                  const { comment } = parseBrdCard(local[key])
                   const imgKey = imgKeys[i]
-                  const effectiveRowId = rowId ?? bestRows[i]?.id ?? null
-                  const picked = effectiveRowId ? pickRows.find(r => r.id === effectiveRowId) ?? null : null
+                  const picked = bestRows[i] ?? null
                   const handleUrl = picked?.handle ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}` : null
                   return (
                     <div key={i} className="rslide__brd-card">
@@ -684,8 +689,12 @@ function BrandSlide({
                           <div className="rslide__brd-ph">이미지</div>
                         )}
                         {!editMode && picked?.review_link && (
-                          <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
-                            data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
+                          <a
+                            href={picked.review_link}
+                            data-pdf-link={picked.review_link}
+                            className="rslide__brd-review-btn"
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(picked!.review_link!, '_blank', 'noopener,noreferrer') }}
+                          >
                             리뷰 보기
                           </a>
                         )}
@@ -693,20 +702,11 @@ function BrandSlide({
                       {editMode ? (
                         <div className="rslide__brd-info-edit">
                           <span className="rslide__brd-edit-label">인플루언서</span>
-                          <select
-                            className="rslide-edit rslide__brd-edit-input rslide__brd-picker"
-                            value={effectiveRowId ?? ''}
-                            onChange={e => { setBrdCard(key, e.target.value || null, comment); commit() }}
-                          >
-                            <option value="">— 선택 안 함 —</option>
-                            {pickRows.map(r => (
-                              <option key={r.id} value={r.id}>
-                                {r.best_review_picks ? '★ ' : ''}{r.handle}{r.date ? ` · ${r.date}` : ''} · {r.views.toLocaleString()}뷰
-                              </option>
-                            ))}
-                          </select>
+                          <span className="rslide__brd-edit-input rslide__brd-edit-auto">
+                            {picked ? `${picked.handle}${picked.followers != null ? ` · ${fmtK(picked.followers)}` : ''}` : '— 베스트 픽 없음 —'}
+                          </span>
                           <span className="rslide__brd-edit-label rslide__brd-edit-label--last">댓글 반응</span>
-                          <ET value={comment} onChange={v => setBrdCard(key, rowId, v)} onBlur={commit}
+                          <ET value={comment} onChange={v => setBrdComment(key, v)} onBlur={commit}
                             placeholder="댓글 반응 내용..." className="rslide__brd-edit-input rslide__brd-edit-input--area" multiline rows={4} />
                         </div>
                       ) : (
@@ -714,7 +714,7 @@ function BrandSlide({
                           <span className="rslide__brd-label">인플루언서</span>
                           <span className="rslide__brd-value rslide__brd-value--link">
                             {handleUrl
-                              ? <a href={handleUrl} target="_blank" rel="noopener noreferrer" data-pdf-link={handleUrl} className="rslide__brd-handle-link">{picked?.handle || '—'}</a>
+                              ? <a href={handleUrl} data-pdf-link={handleUrl} className="rslide__brd-handle-link" onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(handleUrl, '_blank', 'noopener,noreferrer') }}>{picked?.handle || '—'}</a>
                               : (picked?.handle || '—')}
                           </span>
                           <span className="rslide__brd-label">팔로워</span>
@@ -727,6 +727,7 @@ function BrandSlide({
                   )
                 })}
               </div>
+              </>
             )
           })()}
 
