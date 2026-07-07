@@ -182,7 +182,7 @@ function BrandSlide({
       return { name, email }
     })
     return (
-      <div className="rslide">
+      <div className={`rslide${editMode ? ' rslide--edit' : ''}`}>
         <div className="rslide__outro-layer">
           {editMode ? (
             <ET value={local.title ?? 'E.O.D'} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit}
@@ -234,7 +234,7 @@ function BrandSlide({
   }
 
   return (
-    <div className="rslide">
+    <div className={`rslide${editMode ? ' rslide--edit' : ''}`}>
       {/* Logo */}
       {page.type === 'cover'
         ? <img src={LOGO} className="rslide__logo rslide__logo--cover" alt="" />
@@ -1054,7 +1054,7 @@ function BrandSlide({
 
 // ── Main export ───────────────────────────────────────────────────
 
-const SHARED_TYPES = new Set<string>(['cover', 'project_overview'])
+const SHARED_TYPES = new Set<string>(['cover', 'project_overview', 'review_list'])
 
 export default function BrandReportSlides({
   pages,
@@ -1090,7 +1090,20 @@ export default function BrandReportSlides({
   return (
     <div className="report-slides brand-report-slides">
       {sorted.map(page => {
-        const sharedPage = SHARED_TYPES.has(page.type) ? sharedPages.find(s => s.type === page.type) : undefined
+        const sharedPage = (() => {
+          if (!SHARED_TYPES.has(page.type)) return undefined
+          if (page.type === 'review_list') {
+            // Only share Mi Muse review lists; match by offset to support multiple pages
+            const subtitle = (page.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰'
+            if (!subtitle.includes('Mi Muse')) return undefined
+            const offset = (page.content as BrandPageContent).rlOffset ?? 0
+            return sharedPages.find(s =>
+              s.type === 'review_list' &&
+              ((s.content as BrandPageContent).rlOffset ?? 0) === offset
+            )
+          }
+          return sharedPages.find(s => s.type === page.type)
+        })()
         const effectivePage = sharedPage ?? page
         const handleUpdate = sharedPage && onUpdateShared
           ? (content: BrandPageContent) => onUpdateShared({ ...sharedPage, content })

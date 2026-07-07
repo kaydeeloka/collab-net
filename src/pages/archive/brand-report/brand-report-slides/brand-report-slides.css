@@ -107,7 +107,7 @@
 .brslide__outro-contact-email-edit {
   font-size: 11px;
   color: #648085;
-  width: 14cqw;
+  width: 20cqw;
 }
 
 .brslide__outro-contact-name-edit:focus,
@@ -278,6 +278,9 @@
   box-shadow: 0 0 0 2px rgba(100, 128, 133, 0.2);
 }
 
+/* ── Review list: tighten vertical space so 15 rows fit ── */
+.rslide:has(.brslide__rl) .rslide__content-layer { padding-bottom: 2cqw; }
+
 /* ── Review List ── */
 .brslide__rl {
   display: flex;
@@ -313,8 +316,24 @@
 }
 
 .brslide__rl-offset-edit {
-  font-size: 10px;
-  width: 3cqw;
+  font-size: 11px;
+  width: 3.5cqw;
+  min-width: 32px;
+  padding: 2px 4px;
+  border: 1px solid #b8cfd8 !important;
+  border-bottom: 1px solid #b8cfd8 !important;
+  border-bottom-style: solid !important;
+  border-radius: 4px;
+  background: #fff !important;
+  text-align: center;
+  color: #1a1a1a;
+}
+.brslide__rl-offset-edit:hover,
+.brslide__rl-offset-edit:focus {
+  border-color: #648085 !important;
+  background: #fff !important;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(100, 128, 133, 0.2);
 }
 
 .brslide__rl-table-wrap {
@@ -334,14 +353,14 @@
   background: #C8DCE4;
   color: #3a6475;
   font-weight: 600;
-  padding: 0.4cqw 0.5cqw;
+  padding: 0.25cqw 0.5cqw;
   text-align: center;
   border: 1px solid #b8cfd8;
   white-space: nowrap;
 }
 
 .brslide__rl-table td {
-  padding: 0.28cqw 0.5cqw;
+  padding: 0.18cqw 0.5cqw;
   border: 1px solid #e5edf0;
   background: #fff;
   vertical-align: middle;
@@ -589,8 +608,8 @@
   flex-shrink: 0;
   background: #C8DCE4;
   color: #3a6475;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   display: flex;
   align-items: center;
   justify-content: center;

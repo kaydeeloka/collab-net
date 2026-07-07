@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, FileText, GripVertical, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react'
+import { ExternalLink, FileText, GripVertical, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -448,12 +448,9 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     ))
   }
 
-  async function handleMovePageBy(id: string, dir: -1 | 1) {
-    const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
-    const idx = sorted.findIndex(p => p.id === id)
-    const newIdx = idx + dir
-    if (newIdx < 0 || newIdx >= sorted.length) return
-    await handleReorderPages(id, sorted[newIdx].id)
+  function scrollToSlide(idx: number) {
+    const slides = document.querySelectorAll('.report-slides .rslide')
+    slides[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function deleteReportPage(id: string, label: string) {
@@ -802,8 +799,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                         {sorted.map((page, idx) => (
                           <div
                             key={page.id}
+                            data-type={page.type}
                             className={`season-report__page-item${dragOverId === page.id ? ' season-report__page-item--over' : ''}${dragId === page.id ? ' season-report__page-item--dragging' : ''}`}
                             draggable
+                            onClick={() => scrollToSlide(idx)}
                             onDragStart={() => setDragId(page.id)}
                             onDragOver={e => { e.preventDefault(); setDragOverId(page.id) }}
                             onDrop={() => {
@@ -813,16 +812,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                             onDragEnd={() => { setDragId(null); setDragOverId(null) }}
                           >
                             <span className="season-report__page-drag"><GripVertical size={13} /></span>
-                            <span className="season-report__page-num">{idx + 1}</span>
                             <span className="season-report__page-label">{PAGE_TYPE_LABELS[page.type as PageType]}</span>
-                            <div className="season-report__page-arrows">
-                              <button type="button" disabled={idx === 0} onClick={() => void handleMovePageBy(page.id, -1)}>
-                                <ChevronUp size={11} />
-                              </button>
-                              <button type="button" disabled={idx === sorted.length - 1} onClick={() => void handleMovePageBy(page.id, 1)}>
-                                <ChevronDown size={11} />
-                              </button>
-                            </div>
                             <button
                               type="button"
                               className="season-report__page-delete"

@@ -213,7 +213,7 @@ function Slide({
     const captionValue = local.caption || DEFAULT_CONTACT
     const contactParts = captionValue.split('|').map(p => p.trim())
     return (
-      <div className="rslide">
+      <div className={`rslide${editMode ? ' rslide--edit' : ''}`}>
         <div className="rslide__outro-layer">
           {editMode ? (
             <ET value={local.title ?? 'E.O.D'} onChange={v => setLocal(p => ({ ...p, title: v }))} onBlur={commit} placeholder="E.O.D" className="rslide__outro-title-edit" />
@@ -239,7 +239,7 @@ function Slide({
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
 
   return (
-    <div className="rslide">
+    <div className={`rslide${editMode ? ' rslide--edit' : ''}`}>
 
       {/* ── Logo ── */}
       {page.type === 'cover'

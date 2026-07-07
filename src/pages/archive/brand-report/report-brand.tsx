@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, FileText, GripVertical, Pencil, Plus, X } from 'lucide-react'
+import { FileText, GripVertical, Pencil, Plus, X } from 'lucide-react'
 import { Navigate, useOutletContext, useParams } from 'react-router-dom'
 import { archiveBrandReportPath, archiveSectionPath, brandFromArchiveBrandSlug, isLegacyArchiveBrandIdSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
@@ -108,6 +108,32 @@ export default function ArchiveBrandReportBrand() {
         }
       }
 
+      // Ensure shared pages exist for Mi Muse review lists (matched by rlOffset)
+      const mimuseReviewSources = loaded
+        .filter(p => p.type === 'review_list' &&
+          ((p.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰').includes('Mi Muse'))
+        .sort((a, b) => a.order_index - b.order_index)
+      for (const [i, source] of mimuseReviewSources.entries()) {
+        const srcOffset = (source.content as BrandPageContent).rlOffset ?? 0
+        if (!shared.find(s =>
+          s.type === 'review_list' &&
+          ((s.content as BrandPageContent).rlOffset ?? 0) === srcOffset
+        )) {
+          const { data: newShared } = await supabase
+            .from('brand_report_pages')
+            .insert({
+              phase_id: phase.id,
+              brand_name: '__shared__',
+              order_index: sharedTypes.length + i,
+              type: 'review_list',
+              content: source.content,
+            })
+            .select()
+            .single()
+          if (newShared) shared = [...shared, newShared as BrandReportPage]
+        }
+      }
+
       setPages(loaded)
       setRows(monRows)
       setSharedPages(shared)
@@ -163,12 +189,9 @@ export default function ArchiveBrandReportBrand() {
     ))
   }
 
-  async function handleMoveBy(id: string, dir: -1 | 1) {
-    const sorted = [...pages].sort((a, b) => a.order_index - b.order_index)
-    const idx = sorted.findIndex(p => p.id === id)
-    const newIdx = idx + dir
-    if (newIdx < 0 || newIdx >= sorted.length) return
-    await handleReorder(id, sorted[newIdx].id)
+  function scrollToSlide(idx: number) {
+    const slides = document.querySelectorAll('.brand-report-slides .rslide')
+    slides[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function deletePage(id: string, label: string) {
@@ -280,24 +303,6 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
     <div className="archive-brand-report-panel">
       {/* Controls */}
       <div className="season-report__controls">
-        {editMode && (
-          <div className="season-report__download-wrap" ref={addMenuRef}>
-            <button type="button" className="cfg-btn cfg-btn--ghost" onClick={() => setAddOpen(o => !o)}>
-              <Plus size={13} />
-              추가
-            </button>
-            {addOpen && (
-              <div className="season-report__download-menu">
-                {BRAND_ADDABLE_TYPES.map(t => (
-                  <button key={t} type="button" className="season-report__download-item"
-                    onClick={() => { void addPage(t) }}>
-                    {BRAND_PAGE_TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <button
           type="button"
           className={`cfg-btn${editMode ? ' cfg-btn--blue' : ' cfg-btn--ghost'}`}
@@ -317,27 +322,36 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
         {/* Page list sidebar */}
         {editMode && (
           <div className="season-report__page-list">
+            <div className="season-report__page-add-wrap" ref={addMenuRef}>
+              <button type="button" className="season-report__page-add-btn" onClick={() => setAddOpen(o => !o)}>
+                <Plus size={12} />
+                슬라이드 추가
+              </button>
+              {addOpen && (
+                <div className="season-report__download-menu">
+                  {BRAND_ADDABLE_TYPES.map(t => (
+                    <button key={t} type="button" className="season-report__download-item"
+                      onClick={() => { void addPage(t) }}>
+                      {BRAND_PAGE_TYPE_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {sorted.map((page, idx) => (
               <div
                 key={page.id}
+                data-type={page.type}
                 className={`season-report__page-item${dragOverId === page.id ? ' season-report__page-item--over' : ''}${dragId === page.id ? ' season-report__page-item--dragging' : ''}`}
                 draggable
+                onClick={() => scrollToSlide(idx)}
                 onDragStart={() => setDragId(page.id)}
                 onDragOver={e => { e.preventDefault(); setDragOverId(page.id) }}
                 onDrop={() => { if (dragId) void handleReorder(dragId, page.id); setDragId(null); setDragOverId(null) }}
                 onDragEnd={() => { setDragId(null); setDragOverId(null) }}
               >
                 <span className="season-report__page-drag"><GripVertical size={13} /></span>
-                <span className="season-report__page-num">{idx + 1}</span>
                 <span className="season-report__page-label">{BRAND_PAGE_TYPE_LABELS[page.type as BrandPageType]}</span>
-                <div className="season-report__page-arrows">
-                  <button type="button" disabled={idx === 0} onClick={() => void handleMoveBy(page.id, -1)}>
-                    <ChevronUp size={11} />
-                  </button>
-                  <button type="button" disabled={idx === sorted.length - 1} onClick={() => void handleMoveBy(page.id, 1)}>
-                    <ChevronDown size={11} />
-                  </button>
-                </div>
                 <button type="button" className="season-report__page-delete"
                   onClick={e => { e.stopPropagation(); deletePage(page.id, BRAND_PAGE_TYPE_LABELS[page.type as BrandPageType]) }}>
                   <X size={11} />
@@ -348,6 +362,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
         )}
 
         {/* Slides */}
+
         <div className="season-report">
           <BrandReportSlides
             pages={pages}
