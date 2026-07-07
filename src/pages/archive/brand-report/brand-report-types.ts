@@ -42,7 +42,8 @@ export interface BrandPageContent {
   brdCard1?: string        // JSON { rowId, comment } for the comment
   brdCard1Img?: string     // manual image override
   // brand_mention_detail (one influencer per slide)
-  bmdHandle?: string
+  bmdPickIndex?: number        // which brand row to show (0 = first)
+  bmdHandle?: string           // kept for legacy / manual override
   bmdFollowers?: string
   bmdViews?: string
   bmdLikes?: string

@@ -828,15 +828,15 @@ function BrandSlide({
             )
           })()}
 
-          {/* Brand Mention detail — one influencer per slide */}
+          {/* Brand Mention detail — auto from brandRows */}
           {page.type === 'brand_mention_detail' && (() => {
-            const statRows: { label: string; key: keyof BrandPageContent; link?: boolean }[] = [
-              { label: '인플루언서', key: 'bmdHandle', link: true },
-              { label: '팔로워',    key: 'bmdFollowers' },
-              { label: '조회수',    key: 'bmdViews' },
-              { label: '좋아요',    key: 'bmdLikes' },
-              { label: '댓글',     key: 'bmdComments' },
-            ]
+            const pickIndex = local.bmdPickIndex ?? 0
+            const picked = brandRows[pickIndex] ?? null
+            const autoThumb = picked ? resolveMonitoringThumbnailUrl(picked.assets) : null
+            const imgUrl = local.bmdImageUrl || autoThumb
+            const handleUrl = picked?.handle
+              ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}`
+              : null
             return (
               <div className="brslide__bmd">
                 {/* Left: image */}
@@ -850,12 +850,17 @@ function BrandSlide({
                           <img src={local.bmdImageUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
                           <div className="rslide__img-upload-overlay">이미지 변경</div>
                         </>
+                      ) : autoThumb ? (
+                        <>
+                          <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                          <div className="rslide__img-upload-overlay">변경 (자동)</div>
+                        </>
                       ) : (
                         <div className="rslide__img-upload-empty">이미지</div>
                       )}
                     </div>
-                  ) : local.bmdImageUrl ? (
-                    <img src={local.bmdImageUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                  ) : imgUrl ? (
+                    <img src={imgUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
                   ) : (
                     <div className="rslide__ov-img-empty">이미지</div>
                   )}
@@ -864,17 +869,46 @@ function BrandSlide({
                 {/* Right: stats + comment reaction */}
                 <div className="brslide__bmd-right">
                   <div className="brslide__bmd-stats">
-                    {statRows.map(({ label, key }) => (
-                      <div key={label} className={`brslide__bmd-stat-row${key === 'bmdHandle' ? ' brslide__bmd-stat-row--handle' : ''}`}>
+                    {editMode && (
+                      <div className="brslide__bmd-stat-row">
+                        <div className="brslide__bmd-stat-label">순번</div>
+                        <select
+                          value={pickIndex}
+                          onChange={e => {
+                            const next = { ...local, bmdPickIndex: parseInt(e.target.value) || 0 }
+                            setLocal(next)
+                            onUpdate(next)
+                          }}
+                          className="brslide__bmd-stat-edit"
+                        >
+                          {brandRows.length > 0
+                            ? brandRows.map((r, i) => (
+                                <option key={i} value={i}>{i + 1}. {r.handle}</option>
+                              ))
+                            : <option value={0}>— 브랜드 언급 데이터 없음 —</option>
+                          }
+                        </select>
+                      </div>
+                    )}
+                    <div className="brslide__bmd-stat-row brslide__bmd-stat-row--handle">
+                      <div className="brslide__bmd-stat-label">인플루언서</div>
+                      <div className="brslide__bmd-stat-value">
+                        {picked?.handle
+                          ? (!editMode && handleUrl
+                              ? <a href={handleUrl} target="_blank" rel="noopener noreferrer" data-pdf-link={handleUrl} className="rslide__brd-handle-link">{picked.handle}</a>
+                              : picked.handle)
+                          : '—'}
+                      </div>
+                    </div>
+                    {([
+                      { label: '팔로워', val: fmtK(picked?.followers) },
+                      { label: '조회수', val: fmtK(picked?.views) },
+                      { label: '좋아요', val: fmtK(picked?.likes) },
+                      { label: '댓글',   val: fmtK(picked?.comments) },
+                    ] as { label: string; val: string }[]).map(({ label, val }) => (
+                      <div key={label} className="brslide__bmd-stat-row">
                         <div className="brslide__bmd-stat-label">{label}</div>
-                        {editMode ? (
-                          <ET value={(local[key] as string) ?? ''}
-                            onChange={v => setLocal(p => ({ ...p, [key]: v }))}
-                            onBlur={commit} placeholder={label}
-                            className="brslide__bmd-stat-edit" />
-                        ) : (
-                          <div className="brslide__bmd-stat-value">{(local[key] as string) || '—'}</div>
-                        )}
+                        <div className="brslide__bmd-stat-value">{val}</div>
                       </div>
                     ))}
                     <div className="brslide__bmd-stat-row brslide__bmd-stat-row--reaction">
