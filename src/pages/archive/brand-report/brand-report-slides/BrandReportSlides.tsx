@@ -793,10 +793,14 @@ function BrandSlide({
               try { return JSON.parse(local.bmRowIds ?? '{}') } catch { return {} }
             })()
 
-            // Brand thumbnails fill first (auto)
-            const autoItems = brandRows
-              .map(r => resolveMonitoringThumbnailUrl(r.assets))
-              .filter((u): u is string => !!u)
+            // Brand thumbnails fill first (auto), excluding manually removed rows
+            const autoExcluded: Set<string> = new Set((() => {
+              try { return JSON.parse(local.bmAutoExclude ?? '[]') as string[] } catch { return [] }
+            })())
+            const autoItemsAll = brandRows
+              .map(r => ({ url: resolveMonitoringThumbnailUrl(r.assets), id: r.id }))
+              .filter((item): item is { url: string; id: string } => !!item.url)
+            const autoItems = autoItemsAll.filter(item => !autoExcluded.has(item.id))
 
             // Captures fill the rest (sorted by key)
             const captureItems = Object.entries(bmOvMap)
@@ -810,6 +814,14 @@ function BrandSlide({
               const newOv = { ...bmOvMap }; delete newOv[bmKey]
               const newRid = { ...bmRowMap }; delete newRid[bmKey]
               const next = { ...local, bmOverrides: JSON.stringify(newOv), bmRowIds: JSON.stringify(newRid) }
+              setLocal(next)
+              onUpdate(next)
+            }
+
+            function clearAutoSlot(rowId: string) {
+              const exc = new Set(autoExcluded)
+              exc.add(rowId)
+              const next = { ...local, bmAutoExclude: JSON.stringify([...exc]) }
               setLocal(next)
               onUpdate(next)
             }
@@ -832,9 +844,20 @@ function BrandSlide({
                   {Array.from({ length: 14 }).map((_, i) => {
                     // First N slots: auto brand thumbnails
                     if (i < autoCount) {
+                      const item = autoItems[i]
                       return (
                         <div key={i} className="brslide__bm-thumb">
-                          <img src={autoItems[i]} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                          <img src={item.url} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                          {editMode && (
+                            <button
+                              type="button"
+                              className="brslide__bm-clear-btn"
+                              onClick={() => clearAutoSlot(item.id)}
+                              title="제거"
+                            >
+                              <X size={8} />
+                            </button>
+                          )}
                         </div>
                       )
                     }

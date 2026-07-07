@@ -18,7 +18,7 @@ import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBadgeCl
 import { brandColorForKey, buildBrandKwsFromRows, monitoringBrandKey, MIMUSE_BRAND, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 import './monitoring-archive.css'
 
-type BrandMentionPageMin = { id: string; brand_name: string; content: { bmOverrides?: string; bmRowIds?: string } }
+type BrandMentionPageMin = { id: string; brand_name: string; content: { bmOverrides?: string; bmRowIds?: string; bmAutoExclude?: string } }
 
 function sanitizeName(name: string) {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'file'
@@ -368,7 +368,7 @@ function ArchiveCard({
                                 key={page.id}
                                 type="button"
                                 className={`mon-arch-card__report-picker__brand-btn${isSaved ? ' mon-arch-card__report-picker__brand-btn--saved' : alreadyCaptured ? ' mon-arch-card__report-picker__brand-btn--recapture' : ''}`}
-                                disabled={reportSaving}
+                                disabled={reportSaving || (!alreadyCaptured && totalFilled >= 14)}
                                 onClick={() => void handleBrandReportSave(page.brand_name)}
                               >
                                 {isSaved ? '✓ 저장됨' : alreadyCaptured ? `↺ ${page.brand_name}` : page.brand_name}
@@ -642,6 +642,24 @@ export default function MonitoringArchive() {
     })()
     return () => { cancelled = true }
   }, [viewPhaseId, phaseLoading])
+
+  // Re-fetch brand mention pages when user returns to this tab (e.g. after editing brand report)
+  useEffect(() => {
+    if (!viewPhaseId) return
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return
+      void supabase
+        .from('brand_report_pages')
+        .select('id, brand_name, content')
+        .eq('phase_id', viewPhaseId)
+        .eq('type', 'brand_mention')
+        .then(({ data }) => {
+          if (data) setBrandMentionPages(data as BrandMentionPageMin[])
+        })
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [viewPhaseId])
 
   const reviewRows = useMemo(
     () => rows.filter(r => r.review_link?.startsWith('http')),
@@ -951,9 +969,12 @@ export default function MonitoringArchive() {
         page.brand_name.trim().toLowerCase().replace(/\s+/g, ''),
         ...(brandEn ? [brandEn.toLowerCase()] : []),
       ])
+      const excluded: Set<string> = new Set((() => {
+        try { return JSON.parse(page.content.bmAutoExclude ?? '[]') as string[] } catch { return [] }
+      })())
       const bRows = reviewRows.filter(r => r.brand && brandVariants.has(r.brand.toLowerCase()))
       result[page.brand_name] = Math.min(
-        bRows.filter(r => resolveMonitoringThumbnailUrl(r.assets)).length,
+        bRows.filter(r => resolveMonitoringThumbnailUrl(r.assets) && !excluded.has(r.id)).length,
         14,
       )
     }

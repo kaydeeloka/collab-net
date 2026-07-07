@@ -55,6 +55,8 @@ export interface BrandPageContent {
   bmOverrides?: string
   // tracks which monitoring row ID filled each slot — JSON: { "ti": "rowId" }
   bmRowIds?: string
+  // auto-thumbnail exclusions — JSON array of monitoring row IDs to hide from auto zone
+  bmAutoExclude?: string
 }
 
 export interface BrandReportPage {
