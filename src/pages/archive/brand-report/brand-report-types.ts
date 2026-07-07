@@ -53,6 +53,8 @@ export interface BrandPageContent {
   bmdImageUrl?: string
   // brand_mention manual slot overrides — JSON: { "ti": "url" }
   bmOverrides?: string
+  // tracks which monitoring row ID filled each slot — JSON: { "ti": "rowId" }
+  bmRowIds?: string
 }
 
 export interface BrandReportPage {

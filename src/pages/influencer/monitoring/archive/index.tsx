@@ -18,6 +18,8 @@ import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBadgeCl
 import { brandColorForKey, buildBrandKwsFromRows, monitoringBrandKey, MIMUSE_BRAND, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 import './monitoring-archive.css'
 
+type BrandMentionPageMin = { id: string; brand_name: string; content: { bmOverrides?: string; bmRowIds?: string } }
+
 function sanitizeName(name: string) {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'file'
 }
@@ -103,6 +105,9 @@ function ArchiveCard({
   reportBmGroupNames,
   onSaveToReportSlot,
   onToggleBestReview,
+  brandMentionPages,
+  brandAutoCount,
+  onSaveToBrandReportSlot,
 }: {
   row: MonitoringRow
   brandColor: string
@@ -110,6 +115,9 @@ function ArchiveCard({
   reportBmGroupNames?: string[]
   onSaveToReportSlot?: (brandKey: string, ti: number, url: string) => Promise<boolean>
   onToggleBestReview?: (row: MonitoringRow) => void
+  brandMentionPages?: BrandMentionPageMin[]
+  brandAutoCount?: Record<string, number>
+  onSaveToBrandReportSlot?: (brandName: string, url: string, rowId: string) => Promise<boolean>
 }) {
   const { showToast } = useToast()
   const thumbUrl = resolveMonitoringThumbnailUrl(row.assets)
@@ -135,6 +143,7 @@ function ArchiveCard({
     uploading: boolean; url: string | null; slotKey: string | null
   } | null>(null)
   const [reportSaving, setReportSaving] = useState(false)
+  const [brandReportSaved, setBrandReportSaved] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -231,6 +240,20 @@ function ArchiveCard({
     } else { showToast('저장 실패', 'error') }
   }
 
+  async function handleBrandReportSave(brandName: string) {
+    if (!reportCapture?.url || !onSaveToBrandReportSlot) return
+    setReportSaving(true)
+    const ok = await onSaveToBrandReportSlot(brandName, reportCapture.url, row.id)
+    setReportSaving(false)
+    if (ok) {
+      setBrandReportSaved(brandName)
+      showToast(`${brandName} 브랜드 리포트에 저장되었습니다`, 'success')
+      setTimeout(() => { setBrandReportSaved(null); setReportCapture(null) }, 1500)
+    } else {
+      showToast('저장 실패', 'error')
+    }
+  }
+
   // Video is temporary (needs saving) if it's still an Apify KV URL.
   const isVideoTemporary = videoUrl?.includes('api.apify.com') ?? false
   const daysLeft = isVideoTemporary ? videoLinkDaysLeft(row.assets?.assets_updated_at) : null
@@ -277,7 +300,7 @@ function ArchiveCard({
               {thumbUploading ? <Spinner sm /> : <Camera size={12} />}
               캡처
             </button>
-            {reportBmGroupNames && reportBmGroupNames.length > 0 && phaseId && (
+            {((reportBmGroupNames && reportBmGroupNames.length > 0) || (brandMentionPages && brandMentionPages.length > 0)) && phaseId && (
               <button
                 className="mon-arch-card__report-btn"
                 onClick={handleReportCapture}
@@ -298,7 +321,7 @@ function ArchiveCard({
                 ) : (
                   <>
                     <div className="mon-arch-card__report-picker__header">
-                      <span className="mon-arch-card__report-picker__title">슬롯 선택</span>
+                      <span className="mon-arch-card__report-picker__title">결과 리포트</span>
                       <button className="mon-arch-card__report-picker__close" onClick={() => setReportCapture(null)}>
                         <X size={12} />
                       </button>
@@ -327,6 +350,35 @@ function ArchiveCard({
                         </div>
                       )
                     })}
+                    {brandMentionPages && brandMentionPages.length > 0 && (
+                      <>
+                        <div className="mon-arch-card__report-picker__divider" />
+                        <div className="mon-arch-card__report-picker__section-label">브랜드별 리포트</div>
+                        <div className="mon-arch-card__report-picker__brand-btns">
+                          {brandMentionPages.map(page => {
+                            const overrides: Record<string, string> = (() => { try { return JSON.parse(page.content.bmOverrides ?? '{}') } catch { return {} } })()
+                            const rowIds: Record<string, string> = (() => { try { return JSON.parse(page.content.bmRowIds ?? '{}') } catch { return {} } })()
+                            const alreadyCaptured = Object.values(rowIds).includes(row.id)
+                            const filled = Object.values(overrides).filter(Boolean).length
+                            const autoFilled = brandAutoCount?.[page.brand_name] ?? 0
+                            const totalFilled = autoFilled + filled
+                            const isSaved = brandReportSaved === page.brand_name
+                            return (
+                              <button
+                                key={page.id}
+                                type="button"
+                                className={`mon-arch-card__report-picker__brand-btn${isSaved ? ' mon-arch-card__report-picker__brand-btn--saved' : alreadyCaptured ? ' mon-arch-card__report-picker__brand-btn--recapture' : ''}`}
+                                disabled={reportSaving}
+                                onClick={() => void handleBrandReportSave(page.brand_name)}
+                              >
+                                {isSaved ? '✓ 저장됨' : alreadyCaptured ? `↺ ${page.brand_name}` : page.brand_name}
+                                {!isSaved && <span className="mon-arch-card__report-picker__brand-count">{totalFilled}/14</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -553,6 +605,7 @@ export default function MonitoringArchive() {
   }>({ open: false, videoTotal: 0, videoDone: 0, imageTotal: 0, imageDone: 0, status: 'running', minimized: false })
   const [uploadingVideos, setUploadingVideos] = useState(false)
   const [reportBmPage, setReportBmPage] = useState<ReportPage | null>(null)
+  const [brandMentionPages, setBrandMentionPages] = useState<BrandMentionPageMin[]>([])
   useEffect(() => {
     if (videoUploadModal.status !== 'done' || !videoUploadModal.open) return
     const t = setTimeout(() => setVideoUploadModal(m => ({ ...m, open: false })), 3000)
@@ -566,19 +619,21 @@ export default function MonitoringArchive() {
     let cancelled = false
     void (async () => {
       try {
-        const [data, brandsRes, kwsRes, bmPageRes] = await Promise.all([
+        const [data, brandsRes, kwsRes, bmPageRes, bmBrandPagesRes] = await Promise.all([
           loadMonitoringData(viewPhaseId),
-          supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+          supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
           supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
             .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
           supabase.from('report_pages').select('*').eq('phase_id', viewPhaseId).eq('type', 'brand_mention').maybeSingle(),
+          supabase.from('brand_report_pages').select('id, brand_name, content').eq('phase_id', viewPhaseId).eq('type', 'brand_mention'),
         ])
         if (cancelled) return
         setRows(data.rows)
-        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: '' }))
+        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: (b.brand_en as string | null) ?? '' }))
         setBrands(confirmed)
         setBrandKw(buildBrandKwsFromRows(kwsRes.data || [], confirmed).byBrand)
         setReportBmPage(bmPageRes.data as ReportPage | null)
+        setBrandMentionPages((bmBrandPagesRes.data as BrandMentionPageMin[]) ?? [])
       } catch (e) {
         console.error('archive load error:', e)
       } finally {
@@ -847,6 +902,64 @@ export default function MonitoringArchive() {
     if (viewPhaseId) loadMonitoringData(viewPhaseId).then(({ rows: r }) => setRows(r)).catch(() => {})
   }
 
+  async function handleSaveToBrandReportSlot(brandName: string, url: string, rowId: string): Promise<boolean> {
+    const page = brandMentionPages.find(p => p.brand_name === brandName)
+    if (!page) return false
+    const overrides: Record<string, string> = (() => {
+      try { return JSON.parse(page.content.bmOverrides ?? '{}') } catch { return {} }
+    })()
+    const rowIds: Record<string, string> = (() => {
+      try { return JSON.parse(page.content.bmRowIds ?? '{}') } catch { return {} }
+    })()
+    // Reuse the same slot if this video already has one, otherwise find next empty
+    const existingSlot = Object.entries(rowIds).find(([, rid]) => rid === rowId)?.[0]
+    let targetSlot = existingSlot
+    if (targetSlot === undefined) {
+      for (let i = 0; i < 14; i++) {
+        if (!overrides[String(i)]) { targetSlot = String(i); break }
+      }
+      targetSlot ??= String(13)
+    }
+    const newOverrides = { ...overrides, [targetSlot]: url }
+    const newRowIds = { ...rowIds, [targetSlot]: rowId }
+    const { error } = await supabase
+      .from('brand_report_pages')
+      .update({ content: { ...page.content, bmOverrides: JSON.stringify(newOverrides), bmRowIds: JSON.stringify(newRowIds) } })
+      .eq('id', page.id)
+    if (!error) {
+      setBrandMentionPages(prev => prev.map(p =>
+        p.id === page.id
+          ? { ...p, content: { ...p.content, bmOverrides: JSON.stringify(newOverrides), bmRowIds: JSON.stringify(newRowIds) } }
+          : p
+      ))
+      return true
+    }
+    return false
+  }
+
+  // How many slots each brand's auto-thumbnails occupy (brandRows with thumbnails)
+  const brandAutoCount = useMemo(() => {
+    const result: Record<string, number> = {}
+    const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
+    for (const page of brandMentionPages) {
+      const b = brands.find(br => br.name === page.brand_name)
+      const brandKey = b?.key ?? monitoringBrandKey(page.brand_name)
+      const brandEn = b?.en ?? ''
+      const brandVariants = new Set([
+        page.brand_name.trim().toLowerCase(),
+        brandKey,
+        page.brand_name.trim().toLowerCase().replace(/\s+/g, ''),
+        ...(brandEn ? [brandEn.toLowerCase()] : []),
+      ])
+      const bRows = reviewRows.filter(r => r.brand && brandVariants.has(r.brand.toLowerCase()))
+      result[page.brand_name] = Math.min(
+        bRows.filter(r => resolveMonitoringThumbnailUrl(r.assets)).length,
+        14,
+      )
+    }
+    return result
+  }, [brandMentionPages, rows, brands])
+
   const reportBmGroupNames = useMemo(
     () => brands.slice(0, 4).map(b => b.name),
     [brands],
@@ -1031,6 +1144,9 @@ export default function MonitoringArchive() {
                 reportBmGroupNames={reportBmGroupNames}
                 onSaveToReportSlot={handleSaveToReportSlot}
                 onToggleBestReview={handleToggleBestReview}
+                brandMentionPages={brandMentionPages}
+                brandAutoCount={brandAutoCount}
+                onSaveToBrandReportSlot={handleSaveToBrandReportSlot}
               />
             ))}
           </div>

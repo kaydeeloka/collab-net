@@ -403,7 +403,7 @@
 /* ── Brand Mention grid (single brand) ── */
 .brslide__bm-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(2, 1fr);
   gap: 0.4cqw;
   flex: 1;
@@ -425,10 +425,110 @@
   display: block;
 }
 
+.brslide__bm-clear-btn {
+  position: absolute;
+  top: 0.2cqw;
+  right: 0.2cqw;
+  width: 1.4cqw;
+  height: 1.4cqw;
+  background: rgba(220, 38, 38, 0.85);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  padding: 0;
+}
+
+.brslide__bm-clear-btn:hover {
+  background: rgba(185, 28, 28, 0.95);
+}
+
 .brslide__bm-ph {
   width: 100%;
   height: 100%;
   background: linear-gradient(160deg, #d5e4ea 0%, #c4d8df 100%);
+}
+
+/* ── Brand Mention grid picker ── */
+.brslide__bm-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 50, 60, 0.55);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brslide__bm-picker-panel {
+  background: #fff;
+  border-radius: 0.5cqw;
+  padding: 0.8cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5cqw;
+  max-height: 80%;
+  width: 80%;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+
+.brslide__bm-picker-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3a6475;
+  flex-shrink: 0;
+}
+
+.brslide__bm-picker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5cqw;
+  overflow-y: auto;
+}
+
+.brslide__bm-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3cqw;
+  background: none;
+  border: 1px solid #d8eaee;
+  border-radius: 0.3cqw;
+  padding: 0.3cqw;
+  cursor: pointer;
+  width: 6cqw;
+}
+
+.brslide__bm-picker-item:hover {
+  border-color: #8BAAB8;
+  background: #f0f7fa;
+}
+
+.brslide__bm-picker-thumb {
+  width: 100%;
+  aspect-ratio: 9/16;
+  object-fit: cover;
+  border-radius: 0.2cqw;
+}
+
+.brslide__bm-picker-handle {
+  font-size: 7px;
+  color: #3a6475;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+}
+
+.brslide__bm-picker-empty {
+  font-size: 10px;
+  color: #aaa;
+  padding: 1cqw;
+  text-align: center;
+  width: 100%;
 }
 
 /* ── Brand Mention Detail ── */

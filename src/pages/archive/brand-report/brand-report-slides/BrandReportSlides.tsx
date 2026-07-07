@@ -112,6 +112,7 @@ function BrandSlide({
 }) {
   const [local, setLocal] = useState<BrandPageContent>(page.content)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [bmPickerSlot, setBmPickerSlot] = useState<number | null>(null)
 
   const currentJson = JSON.stringify(page.content)
   const [lastJson, setLastJson] = useState(currentJson)
@@ -783,47 +784,133 @@ function BrandSlide({
             )
           })()}
 
-          {/* Brand Mention grid — filtered to this brand */}
+          {/* Brand Mention grid — auto brand thumbnails first, then captures */}
           {page.type === 'brand_mention' && (() => {
             const bmOvMap: Record<string, string> = (() => {
               try { return JSON.parse(local.bmOverrides ?? '{}') } catch { return {} }
             })()
+            const bmRowMap: Record<string, string> = (() => {
+              try { return JSON.parse(local.bmRowIds ?? '{}') } catch { return {} }
+            })()
+
+            // Brand thumbnails fill first (auto)
+            const autoItems = brandRows
+              .map(r => resolveMonitoringThumbnailUrl(r.assets))
+              .filter((u): u is string => !!u)
+
+            // Captures fill the rest (sorted by key)
+            const captureItems = Object.entries(bmOvMap)
+              .filter(([, url]) => url)
+              .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+
+            const autoCount = Math.min(autoItems.length, 14)
+            const captureSlots = Math.max(0, 14 - autoCount)
+
+            function clearCaptureSlot(bmKey: string) {
+              const newOv = { ...bmOvMap }; delete newOv[bmKey]
+              const newRid = { ...bmRowMap }; delete newRid[bmKey]
+              const next = { ...local, bmOverrides: JSON.stringify(newOv), bmRowIds: JSON.stringify(newRid) }
+              setLocal(next)
+              onUpdate(next)
+            }
+
+            function savePickerCapture(thumb: string) {
+              // Find next empty bmOvMap key
+              let nextKey = '0'
+              for (let k = 0; k < 14; k++) {
+                if (!bmOvMap[String(k)]) { nextKey = String(k); break }
+              }
+              const next = { ...local, bmOverrides: JSON.stringify({ ...bmOvMap, [nextKey]: thumb }) }
+              setLocal(next)
+              onUpdate(next)
+              setBmPickerSlot(null)
+            }
+
             return (
-              <div className="brslide__bm-grid">
-                {Array.from({ length: 12 }).map((_, i) => {
-                  const ovKey = String(i)
-                  const overrideUrl = bmOvMap[ovKey] ?? null
-                  const row = brandRows[i]
-                  const autoThumb = row ? resolveMonitoringThumbnailUrl(row.assets) : null
-                  const displayUrl = overrideUrl ?? autoThumb
-                  if (editMode) {
+              <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <div className="brslide__bm-grid">
+                  {Array.from({ length: 14 }).map((_, i) => {
+                    // First N slots: auto brand thumbnails
+                    if (i < autoCount) {
+                      return (
+                        <div key={i} className="brslide__bm-thumb">
+                          <img src={autoItems[i]} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                        </div>
+                      )
+                    }
+                    // Remaining slots: captures
+                    const captureIdx = i - autoCount
+                    const [bmKey, captureUrl] = captureItems[captureIdx] ?? [null, null]
+                    if (editMode) {
+                      return (
+                        <div
+                          key={i}
+                          className="brslide__bm-thumb rslide__img-upload-zone"
+                          onClick={() => {
+                            if (captureUrl && bmKey) {
+                              handleBmSlotUpload(parseInt(bmKey), bmOvMap)
+                            } else {
+                              setBmPickerSlot(prev => prev === i ? null : i)
+                            }
+                          }}
+                        >
+                          {uploading === `bm_${bmKey}` ? (
+                            <div className="rslide__img-upload-loading">...</div>
+                          ) : captureUrl ? (
+                            <>
+                              <img src={captureUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                              <div className="rslide__img-upload-overlay">변경</div>
+                              <button
+                                type="button"
+                                className="brslide__bm-clear-btn"
+                                onClick={e => { e.stopPropagation(); if (bmKey) clearCaptureSlot(bmKey) }}
+                                title="제거"
+                              >
+                                <X size={8} />
+                              </button>
+                            </>
+                          ) : (
+                            <div className="rslide__img-upload-empty" style={{ fontSize: '0.6cqw' }}>
+                              {bmPickerSlot === i ? '×' : '+'}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                     return (
-                      <div
-                        key={i}
-                        className="brslide__bm-thumb rslide__img-upload-zone"
-                        onClick={() => handleBmSlotUpload(i, bmOvMap)}
-                      >
-                        {uploading === `bm_${ovKey}` ? (
-                          <div className="rslide__img-upload-loading">...</div>
-                        ) : displayUrl ? (
-                          <>
-                            <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
-                            <div className="rslide__img-upload-overlay">변경</div>
-                          </>
-                        ) : (
-                          <div className="rslide__img-upload-empty" style={{ fontSize: '0.6cqw' }}>+</div>
-                        )}
+                      <div key={i} className="brslide__bm-thumb">
+                        {captureUrl
+                          ? <img src={captureUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
+                          : <div className="brslide__bm-ph" />}
                       </div>
                     )
-                  }
-                  return (
-                    <div key={i} className="brslide__bm-thumb">
-                      {displayUrl
-                        ? <img src={displayUrl} alt="" referrerPolicy="no-referrer" className="brslide__bm-img" />
-                        : <div className="brslide__bm-ph" />}
+                  })}
+                </div>
+
+                {/* Thumbnail picker overlay for empty capture slots */}
+                {editMode && bmPickerSlot !== null && (
+                  <div className="brslide__bm-picker-backdrop" onClick={() => setBmPickerSlot(null)}>
+                    <div className="brslide__bm-picker-panel" onClick={e => e.stopPropagation()}>
+                      <div className="brslide__bm-picker-title">모니터링에서 선택</div>
+                      <div className="brslide__bm-picker-list">
+                        {rows.filter(r => resolveMonitoringThumbnailUrl(r.assets)).map(r => {
+                          const thumb = resolveMonitoringThumbnailUrl(r.assets)!
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              className="brslide__bm-picker-item"
+                              onClick={() => savePickerCapture(thumb)}
+                            >
+                              <img src={thumb} alt="" referrerPolicy="no-referrer" className="brslide__bm-picker-thumb" />
+                              <span className="brslide__bm-picker-handle">{r.handle}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                  )
-                })}
+                  </div>
+                )}
               </div>
             )
           })()}

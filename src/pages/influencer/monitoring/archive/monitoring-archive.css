@@ -1201,6 +1201,66 @@
   color: #fff;
 }
 
+.mon-arch-card__report-picker__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 6px 0;
+}
+
+.mon-arch-card__report-picker__section-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.mon-arch-card__report-picker__brand-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mon-arch-card__report-picker__brand-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mon-arch-card__report-picker__brand-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.mon-arch-card__report-picker__brand-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mon-arch-card__report-picker__brand-btn--saved {
+  background: #0d9488;
+  border-color: #0d9488;
+}
+
+.mon-arch-card__report-picker__brand-btn--recapture {
+  border-color: rgba(251, 191, 36, 0.6);
+  color: rgba(251, 191, 36, 0.9);
+}
+
+.mon-arch-card__report-picker__brand-count {
+  font-size: 9px;
+  opacity: 0.65;
+}
+
 .mon-arch-card__report-picker__uploading {
   display: flex;
   align-items: center;
