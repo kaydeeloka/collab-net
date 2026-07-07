@@ -173,10 +173,12 @@ export default function ArchiveBrandReportPhase() {
       }
 
       const slidesHtml = sourceSlidesEl.innerHTML
+      const pdfTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phase.name} 시딩 프로젝트 결과 리포트`
       const printHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
+<title>${pdfTitle}</title>
 <base href="${window.location.origin}/">
 <style>${cssTexts.join('\n')}</style>
 <style>
@@ -222,7 +224,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
         )
         Promise.all(waitAll).then(() => {
           setTimeout(() => {
+            const prevTitle = document.title
+            document.title = pdfTitle
             iframe.contentWindow?.print()
+            document.title = prevTitle
             setTimeout(() => document.body.removeChild(iframe), 1000)
           }, 200)
         })

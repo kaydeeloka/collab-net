@@ -202,9 +202,11 @@ export default function ArchiveBrandReportBrand() {
         }
       }
 
+      const pdfTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
       const printHtml = `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
+<title>${pdfTitle}</title>
 <base href="${window.location.origin}/">
 <style>${cssTexts.join('\n')}</style>
 <style>
@@ -219,6 +221,9 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
 .rslide__np-cards { min-height: 0 !important; }
 .rslide__np-card { padding: 0.6cqw 1cqw !important; gap: 0.4cqw !important; }
 .rslide__np-card-bullet { font-size: 11px !important; line-height: 1.5 !important; }
+.rslide:has(.brslide__rl) .rslide__content-layer { padding-bottom: 2cqw !important; }
+.brslide__rl-table td { padding-top: 0.18cqw !important; padding-bottom: 0.18cqw !important; }
+.brslide__rl-table th { padding-top: 0.25cqw !important; padding-bottom: 0.25cqw !important; }
 </style>
 </head><body><div class="report-slides brand-report-slides">${sourceSlidesEl.innerHTML}</div></body></html>`
 
@@ -237,7 +242,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
             iframe.contentWindow?.scrollTo(0, 0)
             iframeDoc.documentElement.scrollTop = 0
             iframeDoc.body.scrollTop = 0
+            const prevTitle = document.title
+            document.title = pdfTitle
             iframe.contentWindow?.print()
+            document.title = prevTitle
             setTimeout(() => document.body.removeChild(iframe), 1000)
           }, 300)
         })
