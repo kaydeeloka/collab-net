@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FileText, GripVertical, Pencil, Plus, X } from 'lucide-react'
+import { ChevronDown, FileText, GripVertical, Pencil, Plus, X } from 'lucide-react'
 import { Navigate, useOutletContext, useParams } from 'react-router-dom'
 import { archiveBrandReportPath, archiveSectionPath, brandFromArchiveBrandSlug, isLegacyArchiveBrandIdSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
@@ -32,11 +32,14 @@ export default function ArchiveBrandReportBrand() {
   const [sharedPages, setSharedPages] = useState<BrandReportPage[]>([])
   const [loading, setLoading] = useState(false)
   const [pdfDownloading, setPdfDownloading] = useState(false)
+  const [pptDownloading, setPptDownloading] = useState(false)
+  const [downloadOpen, setDownloadOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const addMenuRef = useRef<HTMLDivElement>(null)
+  const downloadMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!addOpen) return
@@ -48,6 +51,17 @@ export default function ArchiveBrandReportBrand() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [addOpen])
+
+  useEffect(() => {
+    if (!downloadOpen) return
+    function handleClick(e: MouseEvent) {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setDownloadOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [downloadOpen])
 
   const loadPages = useCallback(async () => {
     if (!phase?.id || !brand) return
@@ -108,15 +122,16 @@ export default function ArchiveBrandReportBrand() {
         }
       }
 
-      // Ensure shared pages exist for Mi Muse review lists (matched by rlOffset)
-      const mimuseReviewSources = loaded
-        .filter(p => p.type === 'review_list' &&
-          ((p.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰').includes('Mi Muse'))
+      // Ensure shared pages exist for all review lists (matched by subtitle+offset)
+      const reviewSources = loaded
+        .filter(p => p.type === 'review_list')
         .sort((a, b) => a.order_index - b.order_index)
-      for (const [i, source] of mimuseReviewSources.entries()) {
+      for (const [i, source] of reviewSources.entries()) {
+        const srcSubtitle = (source.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰'
         const srcOffset = (source.content as BrandPageContent).rlOffset ?? 0
         if (!shared.find(s =>
           s.type === 'review_list' &&
+          ((s.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰') === srcSubtitle &&
           ((s.content as BrandPageContent).rlOffset ?? 0) === srcOffset
         )) {
           const { data: newShared } = await supabase
@@ -280,6 +295,130 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
     }
   }
 
+  async function handleDownloadPpt() {
+    if (!brand || pptDownloading) return
+    if (editMode) { showToast('편집 모드를 종료한 후 다운로드해 주세요.', 'info'); return }
+    const sourceSlidesEl = document.querySelector<HTMLElement>('.brand-report-slides')
+    if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
+      showToast('슬라이드가 보이지 않습니다.', 'info'); return
+    }
+    setDownloadOpen(false)
+    setPptDownloading(true)
+    try {
+      const SKIP_TAGS = new Set(['button','select','option','input','textarea','script','style'])
+      const SLIDE_W = 10
+      const SLIDE_H = 5.625
+
+      const wrapper = document.createElement('div')
+      wrapper.style.cssText = 'position:fixed;top:-20000px;left:0;width:960px;'
+      const inner = document.createElement('div')
+      inner.className = 'report-slides brand-report-slides'
+      inner.style.cssText = 'padding:0!important;gap:0!important;'
+      inner.innerHTML = sourceSlidesEl.innerHTML
+      wrapper.appendChild(inner)
+      document.body.appendChild(wrapper)
+
+      const imgs = Array.from(wrapper.querySelectorAll<HTMLImageElement>('img'))
+      await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() })))
+
+      const slideEls = Array.from(wrapper.querySelectorAll<HTMLElement>('.rslide'))
+      const [{ default: html2canvasFn }, { default: PptxGenJS }] = await Promise.all([
+        import('html2canvas'),
+        import('pptxgenjs'),
+      ])
+
+      const prs = new PptxGenJS()
+      prs.defineLayout({ name: 'WIDE169', width: SLIDE_W, height: SLIDE_H })
+      prs.layout = 'WIDE169'
+
+      for (const slideEl of slideEls) {
+        const slideRect = slideEl.getBoundingClientRect()
+
+        // ── 1. Collect all leaf text nodes and their styles ──────────────
+        type TItem = { text: string; x: number; y: number; w: number; h: number; fontSize: number; colorHex: string; bold: boolean; italic: boolean; align: 'left' | 'center' | 'right' }
+        const textItems: TItem[] = []
+        const textEls: HTMLElement[] = []
+
+        function collectTexts(node: Element) {
+          for (const child of Array.from(node.childNodes)) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const txt = child.textContent?.trim()
+              if (!txt) continue
+              const par = child.parentElement
+              if (!par || SKIP_TAGS.has(par.tagName.toLowerCase())) continue
+              const cs = window.getComputedStyle(par)
+              if (cs.display === 'none' || cs.visibility === 'hidden') continue
+              const r = par.getBoundingClientRect()
+              if (r.width < 1 || r.height < 1) continue
+              const x = (r.left - slideRect.left) / slideRect.width * SLIDE_W
+              const y = (r.top - slideRect.top) / slideRect.height * SLIDE_H
+              const w = Math.max(0.05, r.width / slideRect.width * SLIDE_W)
+              const h = Math.max(0.05, r.height / slideRect.height * SLIDE_H)
+              if (x < -0.1 || y < -0.1 || x > SLIDE_W || y > SLIDE_H) continue
+              const m = cs.color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+              const colorHex = m ? [+m[1],+m[2],+m[3]].map(n=>n.toString(16).padStart(2,'0')).join('') : '000000'
+              textItems.push({
+                text: txt,
+                x: Math.max(0, x), y: Math.max(0, y),
+                w: Math.min(w, SLIDE_W - Math.max(0, x)),
+                h: Math.min(h, SLIDE_H - Math.max(0, y)),
+                fontSize: Math.max(6, Math.round(parseFloat(cs.fontSize) * 0.75)),
+                colorHex,
+                bold: parseInt(cs.fontWeight) >= 700,
+                italic: cs.fontStyle === 'italic',
+                align: cs.textAlign === 'center' ? 'center' : cs.textAlign === 'right' ? 'right' : 'left',
+              })
+              if (!textEls.includes(par)) textEls.push(par)
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              collectTexts(child as Element)
+            }
+          }
+        }
+        collectTexts(slideEl)
+
+        // ── 2. Hide text, capture background image ────────────────────────
+        const savedColors = textEls.map(el => el.style.color)
+        textEls.forEach(el => { el.style.color = 'transparent' })
+
+        const canvas = await html2canvasFn(slideEl, {
+          scale: 2, useCORS: true, allowTaint: true,
+          width: 960, height: 540, backgroundColor: null,
+        })
+        const bgUrl = canvas.toDataURL('image/png')
+
+        textEls.forEach((el, i) => { el.style.color = savedColors[i] })
+
+        // ── 3. Build PPT slide ────────────────────────────────────────────
+        const pptSlide = prs.addSlide()
+        pptSlide.addImage({ data: bgUrl, x: 0, y: 0, w: SLIDE_W, h: SLIDE_H })
+
+        for (const item of textItems) {
+          pptSlide.addText(item.text, {
+            x: item.x, y: item.y, w: item.w, h: item.h,
+            fontSize: item.fontSize,
+            color: item.colorHex,
+            bold: item.bold,
+            italic: item.italic,
+            align: item.align,
+            valign: 'middle',
+            margin: 0,
+            fill: { type: 'none' },
+            line: { type: 'none', pt: 0 },
+            wrap: true,
+          })
+        }
+      }
+
+      const pptTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
+      await prs.writeFile({ fileName: `${pptTitle}.pptx` })
+      document.body.removeChild(wrapper)
+    } catch (e) {
+      showToast(`PPT 오류: ${e instanceof Error ? e.message.slice(0, 80) : String(e)}`, 'error')
+    } finally {
+      setPptDownloading(false)
+    }
+  }
+
   if (!brand) {
     if (!phase) return null
     return <Navigate to={archiveSectionPath(phase, 'brand-report')} replace />
@@ -311,11 +450,30 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
           <Pencil size={13} />
           {editMode ? '편집 완료' : '편집'}
         </button>
-        <button type="button" className="cfg-btn cfg-btn--ghost" disabled={pdfDownloading}
-          onClick={() => { void handleDownloadPdf() }}>
-          <FileText size={13} />
-          {pdfDownloading ? 'PDF 생성 중…' : 'PDF 다운로드'}
-        </button>
+        <div className="season-report__download-wrap" ref={downloadMenuRef}>
+          <button
+            type="button"
+            className="cfg-btn cfg-btn--ghost"
+            disabled={pdfDownloading || pptDownloading}
+            onClick={() => setDownloadOpen(o => !o)}
+          >
+            <FileText size={13} />
+            {pdfDownloading ? 'PDF 생성 중…' : pptDownloading ? 'PPT 생성 중…' : '다운로드'}
+            <ChevronDown size={11} />
+          </button>
+          {downloadOpen && (
+            <div className="season-report__download-menu">
+              <button type="button" className="season-report__download-item"
+                onClick={() => { setDownloadOpen(false); void handleDownloadPdf() }}>
+                PDF 다운로드
+              </button>
+              <button type="button" className="season-report__download-item"
+                onClick={() => { void handleDownloadPpt() }}>
+                PPT 다운로드
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className={editMode ? 'season-report__edit-layout' : ''}>

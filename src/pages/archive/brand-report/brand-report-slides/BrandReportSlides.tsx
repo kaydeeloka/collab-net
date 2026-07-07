@@ -1093,12 +1093,12 @@ export default function BrandReportSlides({
         const sharedPage = (() => {
           if (!SHARED_TYPES.has(page.type)) return undefined
           if (page.type === 'review_list') {
-            // Only share Mi Muse review lists; match by offset to support multiple pages
+            // Match shared page by subtitle+offset to distinguish multiple review list pages
             const subtitle = (page.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰'
-            if (!subtitle.includes('Mi Muse')) return undefined
             const offset = (page.content as BrandPageContent).rlOffset ?? 0
             return sharedPages.find(s =>
               s.type === 'review_list' &&
+              ((s.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰') === subtitle &&
               ((s.content as BrandPageContent).rlOffset ?? 0) === offset
             )
           }
