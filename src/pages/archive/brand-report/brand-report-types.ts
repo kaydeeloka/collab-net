@@ -118,7 +118,7 @@ export const BRAND_DEFAULT_CONTENT: Record<BrandPageType, BrandPageContent> = {
   best_review_detail: {
     engTitle: 'Best Review Highlights',
     korTitle: '베스트 리뷰 하이라이트',
-    brdCard1: '', brdCard2: '', brdCard3: '',
+    brdCard1: '',
   },
   brand_mention: {
     engTitle: 'Brand Mention Highlights',
