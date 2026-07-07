@@ -30,7 +30,6 @@ function paginate<T>(items: T[], page: number) {
 interface ConfirmedBrand {
   id:              string
   brand_name:      string
-  brand_en:        string | null
   contact_name:    string | null
   position:        string | null
   email:           string | null
@@ -46,7 +45,6 @@ interface ConfirmedBrand {
 
 const EMPTY_FORM = {
   brand_name:      '',
-  brand_en:        '',
   contact_name:    '',
   position:        '',
   email:           '',
@@ -85,6 +83,8 @@ export default function BrandConfirmedManagement() {
   const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM })
   const [saving,   setSaving]   = useState(false)
 
+  const [brandEnMap, setBrandEnMap] = useState<Record<string, string | null>>({})
+
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -100,6 +100,13 @@ export default function BrandConfirmedManagement() {
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as ConfirmedBrand[])
+    const { data: bcData } = await supabase
+      .from('brand_contacts')
+      .select('brand_name, brand_en')
+      .eq('phase_id', selectedPhaseId)
+    const enMap: Record<string, string | null> = {}
+    ;(bcData ?? []).forEach((r: any) => { enMap[r.brand_name] = r.brand_en ?? null })
+    setBrandEnMap(enMap)
     setLoading(false)
     await refreshStats()
   }
@@ -110,7 +117,6 @@ export default function BrandConfirmedManagement() {
     const { error } = await supabase.from('confirmed_brands').insert({
       phase_id:        selectedPhaseId,
       brand_name:      addForm.brand_name.trim(),
-      brand_en:        addForm.brand_en.trim()        || null,
       contact_name:    addForm.contact_name.trim()    || null,
       position:        addForm.position.trim()        || null,
       email:           addForm.email.trim()           || null,
@@ -131,7 +137,6 @@ export default function BrandConfirmedManagement() {
     setEditId(r.id)
     setEditForm({
       brand_name:      r.brand_name,
-      brand_en:        r.brand_en        ?? '',
       contact_name:    r.contact_name    ?? '',
       position:        r.position        ?? '',
       email:           r.email           ?? '',
@@ -150,7 +155,6 @@ export default function BrandConfirmedManagement() {
     setSaving(true)
     const { error } = await supabase.from('confirmed_brands').update({
       brand_name:      editForm.brand_name.trim(),
-      brand_en:        editForm.brand_en.trim()        || null,
       contact_name:    editForm.contact_name.trim()    || null,
       position:        editForm.position.trim()        || null,
       email:           editForm.email.trim()           || null,
@@ -214,12 +218,6 @@ export default function BrandConfirmedManagement() {
           onChange={e => setForm({ ...form, brand_name: e.target.value })}
           placeholder="브랜드명 입력"
         />
-        <FormInput
-          label="브랜드 (영문)"
-          value={form.brand_en}
-          onChange={e => setForm({ ...form, brand_en: e.target.value })}
-          placeholder="Brand name in English"
-        />
       </FormGrid>
 
       <FormSection title="선택 입력" />
@@ -246,11 +244,6 @@ export default function BrandConfirmedManagement() {
           placeholder: '브랜드, 담당자, 이메일, 제품으로 검색...',
         }}
         count={filtered.length}
-        actions={
-          <Button variant="primary" onClick={() => { setEditId(''); setAddForm({ ...EMPTY_FORM }); setShowAdd(true) }}>
-            + 추가
-          </Button>
-        }
       />
 
       <div className="ui-panel">
@@ -297,7 +290,7 @@ export default function BrandConfirmedManagement() {
                       </div>
                     </td>
                     <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-6)' }}>
-                      {r.brand_en || <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                      {brandEnMap[r.brand_name] || <span style={{ color: 'var(--gray-3)' }}>—</span>}
                     </td>
                     <td style={{ padding: '0 12px', fontSize: 12 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -381,7 +374,7 @@ export default function BrandConfirmedManagement() {
               <ReportCard icon={<Info size={18} />} title="브랜드">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <ReportStat label="브랜드 (한국어)" value={viewRow.brand_name} />
-                  <ReportStat label="브랜드 (영문)" value={viewRow.brand_en || '—'} />
+                  <ReportStat label="브랜드 (영문)" value={brandEnMap[viewRow.brand_name] || '—'} />
                 </div>
               </ReportCard>
             </div>

@@ -1,37 +1,234 @@
 import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { Building2, Globe, Mail, Phone, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
-import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
+import { usePhase } from '@/contexts/PhaseContext'
+import Modal from '@/components/Modal'
+import Pagination from '@/components/Pagination'
+import HeaderFilterMenu, { type HeaderFilterOption } from '@/components/HeaderFilterMenu'
+import BrandDbPhaseImport from '@/components/BrandDbPhaseImport'
+import { DbTableRowSelect, DbTableSelectAll, DbSelectAllButton, dbTableRowClass } from '@/components/DbTableSelect'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
+import { FormTwoColumn } from '@/components/FormTwoColumn'
 import { StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
-interface Stats {
-  totalCount:     number
-  contactedCount: number
+const PAGE_SIZE = 25
+
+const CONTACT_FILTER_OPTIONS: HeaderFilterOption[] = [
+  { value: 'all',  label: '전체' },
+  { value: 'has',  label: '담당자 있음' },
+  { value: 'none', label: '담당자 없음' },
+]
+
+function paginate<T>(items: T[], page: number) {
+  const total = items.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safe = Math.min(page, totalPages)
+  const startIdx = (safe - 1) * PAGE_SIZE
+  return { pageItems: items.slice(startIdx, startIdx + PAGE_SIZE), total, totalPages, page: safe, startIdx, endIdx: Math.min(startIdx + PAGE_SIZE, total) }
 }
 
+interface BrandRow {
+  id:               string
+  brand_name:       string
+  brand_en:         string | null
+  company:          string | null
+  email:            string[] | null
+  telephone:        string | null
+  website:          string | null
+  product_category: string | null
+  overseas:         boolean
+  contacted:        boolean
+  phase_id:         string | null
+  source_phase_id:  string | null
+  created_at:       string
+  contact_name:     string | null
+  department:       string | null
+  position:         string | null
+  personal_email:   string[] | null
+  personal_phone:   string | null
+}
+
+const EMPTY_FORM = {
+  brand_name:       '',
+  brand_en:         '',
+  company:          '',
+  email:            [''],
+  telephone:        '',
+  website:          '',
+  product_category: '',
+  overseas:         false,
+  phase_id:         '',
+  contact_name:     '',
+  department:       '',
+  position:         '',
+  personal_email:   [''],
+  personal_phone:   '',
+}
+type Form = typeof EMPTY_FORM
+
 export default function BrandDb() {
-  const { selectedPhaseId } = usePhase()
-  const { showToast }       = useToast()
-  const [stats, setStats]             = useState<Stats | null>(null)
+  const { showToast, showConfirm } = useToast()
+  const { selectedPhaseId, phases } = usePhase()
+  const phaseNameById = Object.fromEntries(phases.map(p => [p.id, p.name]))
+  const navigate = useNavigate()
+
+  const [rows,        setRows]        = useState<BrandRow[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [search,      setSearch]      = useState('')
+  const [page,        setPage]        = useState(1)
+  const [selected,    setSelected]    = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [contactFilter, setContactFilter] = useState('all')
+  const [openFilter,    setOpenFilter]    = useState<'contact' | null>(null)
+
   const [sheetUpdating, setSheetUpdating] = useState(false)
   const [sheetUrl,      setSheetUrl]      = useState<string | null>(null)
 
-  useEffect(() => { loadStats() }, [selectedPhaseId])
+  const [showAdd, setShowAdd] = useState(false)
+  const [addForm, setAddForm] = useState<Form>({ ...EMPTY_FORM, email: [''] })
+  const [adding,  setAdding]  = useState(false)
 
-  async function loadStats() {
-    if (!selectedPhaseId) { setStats({ totalCount: 0, contactedCount: 0 }); return }
-    const { data } = await supabase
+  const [viewRow,  setViewRow]  = useState<BrandRow | null>(null)
+  const [showView, setShowView] = useState(false)
+
+  const [showEdit, setShowEdit] = useState(false)
+  const [editId,   setEditId]   = useState('')
+  const [editForm, setEditForm] = useState<Form>({ ...EMPTY_FORM, email: [''] })
+  const [saving,   setSaving]   = useState(false)
+
+  useEffect(() => { load() }, [selectedPhaseId])
+
+  async function load() {
+    if (!selectedPhaseId) { setRows([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error } = await supabase
       .from('brand_contacts')
-      .select('contacted')
+      .select('*')
       .eq('phase_id', selectedPhaseId)
-    const all = data ?? []
-    setStats({
-      totalCount:     all.length,
-      contactedCount: all.filter((r: any) => r.contacted).length,
+      .order('brand_name', { ascending: true })
+    if (error) { showToast(error.message, 'error'); setLoading(false); return }
+    setRows((data ?? []).map(r => ({
+      ...r,
+      email: Array.isArray(r.email)
+        ? r.email
+        : typeof r.email === 'string' && r.email ? [r.email] : null,
+      personal_email: Array.isArray(r.personal_email)
+        ? r.personal_email
+        : typeof r.personal_email === 'string' && r.personal_email ? [r.personal_email] : null,
+    })) as BrandRow[])
+    setLoading(false)
+  }
+
+  function cleanEmails(emails: string[]) {
+    const clean = emails.map(e => e.trim()).filter(Boolean)
+    return clean.length ? clean : null
+  }
+
+  async function addBrand() {
+    if (!addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()) return
+    setAdding(true)
+    const { error } = await supabase.from('brand_contacts').insert({
+      brand_name:       addForm.brand_name.trim(),
+      brand_en:         addForm.brand_en.trim()         || null,
+      company:          addForm.company.trim()          || null,
+      email:            cleanEmails(addForm.email),
+      telephone:        addForm.telephone.trim()        || null,
+      website:          addForm.website.trim()          || null,
+      product_category: addForm.product_category.trim() || null,
+      overseas:         addForm.overseas,
+      phase_id:         addForm.phase_id                || null,
+      contact_name:     addForm.contact_name.trim()     || null,
+      department:       addForm.department.trim()       || null,
+      position:         addForm.position.trim()         || null,
+      personal_email:   cleanEmails(addForm.personal_email),
+      personal_phone:   addForm.personal_phone.trim()   || null,
     })
+    if (error) { showToast(error.message, 'error'); setAdding(false); return }
+    showToast('브랜드가 추가되었습니다', 'success')
+    setShowAdd(false)
+    setAddForm({ ...EMPTY_FORM, email: [''], personal_email: [''], phase_id: selectedPhaseId ?? '' })
+    setAdding(false)
+    load()
+  }
+
+  function openView(r: BrandRow) { setViewRow(r); setShowView(true) }
+
+  function openEdit(r: BrandRow) {
+    setEditId(r.id)
+    setEditForm({
+      brand_name:       r.brand_name,
+      brand_en:         r.brand_en         ?? '',
+      company:          r.company          ?? '',
+      email:            r.email?.length ? r.email : [''],
+      telephone:        r.telephone        ?? '',
+      website:          r.website          ?? '',
+      product_category: r.product_category ?? '',
+      overseas:         r.overseas,
+      phase_id:         r.phase_id         ?? '',
+      contact_name:     r.contact_name     ?? '',
+      department:       r.department       ?? '',
+      position:         r.position         ?? '',
+      personal_email:   r.personal_email?.length ? r.personal_email : [''],
+      personal_phone:   r.personal_phone   ?? '',
+    })
+    setShowEdit(true)
+  }
+
+  async function saveEdit() {
+    setSaving(true)
+    const { error } = await supabase.from('brand_contacts').update({
+      brand_name:       editForm.brand_name.trim(),
+      brand_en:         editForm.brand_en.trim()         || null,
+      company:          editForm.company.trim()          || null,
+      email:            cleanEmails(editForm.email),
+      telephone:        editForm.telephone.trim()        || null,
+      website:          editForm.website.trim()          || null,
+      product_category: editForm.product_category.trim() || null,
+      overseas:         editForm.overseas,
+      phase_id:         editForm.phase_id                || null,
+      contact_name:     editForm.contact_name.trim()     || null,
+      department:       editForm.department.trim()       || null,
+      position:         editForm.position.trim()         || null,
+      personal_email:   cleanEmails(editForm.personal_email),
+      personal_phone:   editForm.personal_phone.trim()   || null,
+    }).eq('id', editId)
+    if (error) { showToast(error.message, 'error'); setSaving(false); return }
+    showToast('저장 완료', 'success')
+    setShowEdit(false)
+    setShowView(false)
+    setSaving(false)
+    load()
+  }
+
+  async function deleteRow(id: string) {
+    const { error } = await supabase.from('brand_contacts').delete().eq('id', id)
+    if (error) { showToast(error.message, 'error'); return }
+    setRows(prev => prev.filter(r => r.id !== id))
+    setShowView(false)
+  }
+
+  async function toggleContacted(id: string, current: boolean) {
+    const next = !current
+    const { error } = await supabase.from('brand_contacts').update({ contacted: next }).eq('id', id)
+    if (error) showToast(error.message, 'error')
+    else setRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
+  }
+
+  async function bulkMarkContacted() {
+    if (!selected.size) return
+    setBulkLoading(true)
+    const ids = Array.from(selected)
+    const { error } = await supabase.from('brand_contacts').update({ contacted: true }).in('id', ids)
+    if (!error) {
+      setRows(prev => prev.map(r => selected.has(r.id) ? { ...r, contacted: true } : r))
+      setSelected(new Set())
+      navigate('/brand/contact')
+    } else showToast(error.message, 'error')
+    setBulkLoading(false)
   }
 
   async function handleUpdateBrandSheet() {
@@ -50,6 +247,143 @@ export default function BrandDb() {
       setSheetUpdating(false)
     }
   }
+
+  const filtered = rows.filter(r => {
+    if (contactFilter === 'has'  && !r.contact_name) return false
+    if (contactFilter === 'none' && r.contact_name)  return false
+    if (!search) return true
+    const q = search.toLowerCase()
+    return [r.brand_name, r.company, r.telephone, r.website, r.product_category, r.contact_name, ...(r.email ?? [])]
+      .some(v => (v ?? '').toLowerCase().includes(q))
+  })
+  const sorted = [...filtered].sort((a, b) => {
+    if (a.contacted !== b.contacted) return a.contacted ? 1 : -1
+    return a.brand_name.localeCompare(b.brand_name, 'ko', { sensitivity: 'base' })
+  })
+  const pg = paginate(sorted, page)
+  const allFilteredSelected = sorted.length > 0 && sorted.every(r => selected.has(r.id))
+  const totalCount     = rows.length
+  const contactedCount = rows.filter(r => r.contacted).length
+
+  function toggleSelectAllFiltered() {
+    if (allFilteredSelected) {
+      setSelected(prev => { const next = new Set(prev); sorted.forEach(r => next.delete(r.id)); return next })
+    } else {
+      setSelected(prev => new Set([...prev, ...sorted.map(r => r.id)]))
+    }
+  }
+
+  const formField = (
+    label: string,
+    key: keyof Omit<Form, 'overseas' | 'email' | 'phase_id' | 'personal_email'>,
+    form: Form,
+    setForm: (f: Form) => void,
+    opts?: { placeholder?: string; required?: boolean; type?: string; multiline?: boolean }
+  ) => (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
+        {label}{opts?.required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+      </label>
+      {opts?.multiline ? (
+        <textarea
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          rows={2}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }}
+        />
+      ) : (
+        <input
+          type={opts?.type ?? 'text'}
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+        />
+      )}
+    </div>
+  )
+
+  const emailListEditor = (form: Form, setForm: (f: Form) => void, required?: boolean) => (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
+        이메일{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+      </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {form.email.map((e, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={e}
+              onChange={ev => { const next = [...form.email]; next[idx] = ev.target.value; setForm({ ...form, email: next }) }}
+              placeholder="contact@brand.com"
+              style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            />
+            {form.email.length > 1 && (
+              <button type="button"
+                onClick={() => setForm({ ...form, email: form.email.filter((_, i) => i !== idx) })}
+                style={{ padding: '5px 9px', fontSize: 13, lineHeight: 1, borderRadius: 6, border: '1px solid var(--gray-3)', background: '#fff0f0', color: '#c00', cursor: 'pointer', fontFamily: 'inherit' }}>
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button"
+          onClick={() => setForm({ ...form, email: [...form.email, ''] })}
+          style={{ alignSelf: 'flex-start', padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, border: '1.5px dashed var(--teal)', background: '#f0fdfa', color: 'var(--teal-dk)', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.2px' }}>
+          + 이메일 추가
+        </button>
+      </div>
+    </div>
+  )
+
+  const personalEmailListEditor = (form: Form, setForm: (f: Form) => void) => (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
+        개인 이메일
+      </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {form.personal_email.map((e, idx) => (
+          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={e}
+              onChange={ev => { const next = [...form.personal_email]; next[idx] = ev.target.value; setForm({ ...form, personal_email: next }) }}
+              placeholder="contact@brand.com"
+              style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+            />
+            {form.personal_email.length > 1 && (
+              <button type="button"
+                onClick={() => setForm({ ...form, personal_email: form.personal_email.filter((_, i) => i !== idx) })}
+                style={{ padding: '5px 9px', fontSize: 13, lineHeight: 1, borderRadius: 6, border: '1px solid var(--gray-3)', background: '#fff0f0', color: '#c00', cursor: 'pointer', fontFamily: 'inherit' }}>
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        <button type="button"
+          onClick={() => setForm({ ...form, personal_email: [...form.personal_email, ''] })}
+          style={{ alignSelf: 'flex-start', padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, border: '1.5px dashed var(--teal)', background: '#f0fdfa', color: 'var(--teal-dk)', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.2px' }}>
+          + 이메일 추가
+        </button>
+      </div>
+    </div>
+  )
+
+  const overseasToggle = (form: Form, setForm: (f: Form) => void) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px' }}>해외 진출 여부</label>
+      <button
+        type="button"
+        onClick={() => setForm({ ...form, overseas: !form.overseas })}
+        style={{
+          padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 20, cursor: 'pointer',
+          border: `1.5px solid ${form.overseas ? '#6ee7b7' : '#e2e8f0'}`,
+          background: form.overseas ? '#d1fae5' : '#f1f5f9',
+          color: form.overseas ? '#065f46' : '#94a3b8',
+        }}>
+        {form.overseas ? '✓ 있음' : '— 없음'}
+      </button>
+    </div>
+  )
 
   return (
     <div className="page page--fill">
@@ -75,21 +409,419 @@ export default function BrandDb() {
         />
       </PageHeroBanner>
 
-      {stats && (
-        <StatCards className="stat-cards--tall" columns="1fr 1fr" style={{ marginBottom: 20 }}>
-          <StatCard variant="metric" align="left" label="총 브랜드" value={stats.totalCount} unit="개" />
-          <StatCard
-            highlight variant="metric" align="left" label="컨택 예정"
-            value={stats.contactedCount} valueColor="var(--yellow-text)"
-            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>{' '}/ {stats.totalCount}</span>}
-            footer={`${stats.totalCount ? Math.round(stats.contactedCount / stats.totalCount * 100) : 0}% 완료율`}
-          />
-        </StatCards>
-      )}
+      <StatCards className="stat-cards--tall" columns="1fr 1fr" style={{ marginBottom: 20 }}>
+        <StatCard variant="metric" align="left" label="총 브랜드" value={totalCount} unit="개" />
+        <StatCard
+          highlight variant="metric" align="left" label="컨택 예정"
+          value={contactedCount} valueColor="var(--yellow-text)"
+          valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>{' '}/ {totalCount}</span>}
+          footer={`${totalCount ? Math.round(contactedCount / totalCount * 100) : 0}% 완료율`}
+        />
+      </StatCards>
 
       <div className="ftab-content">
-        <Outlet />
+        {/* Toolbar */}
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            placeholder="브랜드명, 이메일, 회사 명으로 검색..."
+            style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', width: 300, fontFamily: 'inherit' }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--gray-5)' }}>{filtered.length} 건</span>
+          <DbSelectAllButton
+            allSelected={allFilteredSelected}
+            disabled={sorted.length === 0}
+            onClick={toggleSelectAllFiltered}
+          />
+          {selected.size > 0 && (
+            <button
+              onClick={bulkMarkContacted}
+              disabled={bulkLoading}
+              style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: 'var(--blue-dk)', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+              {bulkLoading ? '처리 중...' : `일괄 컨택 (${selected.size}개)`}
+            </button>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <BrandDbPhaseImport onImported={load} />
+            <button
+              onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' }); setShowAdd(true) }}
+              style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal-dk)', color: '#fff', fontFamily: 'inherit' }}>
+              + DB 추가
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div style={{ background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'clip' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'scroll', maxHeight: 'calc(100vh - 260px)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1080 }}>
+              <colgroup>
+                <col style={{ width: 40 }} />
+                <col style={{ width: 185 }} />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 190 }} />
+                <col style={{ width: 160 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ minWidth: 160 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 100 }} />
+              </colgroup>
+              <thead>
+                <tr className="table-head-row">
+                  <th style={{ padding: '10px 8px', textAlign: 'center' }}>
+                    <DbTableSelectAll
+                      checked={pg.pageItems.length > 0 && pg.pageItems.every(r => selected.has(r.id))}
+                      indeterminate={pg.pageItems.some(r => selected.has(r.id)) && !pg.pageItems.every(r => selected.has(r.id))}
+                      onChange={checked => {
+                        if (checked) setSelected(prev => new Set([...prev, ...pg.pageItems.map(r => r.id)]))
+                        else setSelected(prev => { const next = new Set(prev); pg.pageItems.forEach(r => next.delete(r.id)); return next })
+                      }}
+                    />
+                  </th>
+                  <th style={{ padding: '10px 12px', textAlign: 'left' }}>브랜드명</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'left' }}>
+                    <HeaderFilterMenu
+                      label="담당자"
+                      value={contactFilter}
+                      options={CONTACT_FILTER_OPTIONS}
+                      onChange={v => { setContactFilter(v); setPage(1) }}
+                      open={openFilter === 'contact'}
+                      onOpenChange={open => setOpenFilter(open ? 'contact' : null)}
+                    />
+                  </th>
+                  {['이메일', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map(h => (
+                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
+                ) : pg.pageItems.map((r, i) => (
+                  <tr key={r.id} onClick={() => openView(r)}
+                    className={dbTableRowClass(selected.has(r.id), r.contacted)}
+                    style={{ borderBottom: '1px solid var(--gray-2)', cursor: 'pointer' }}>
+                    <td style={{ textAlign: 'center', padding: '0 8px', height: 50 }} onClick={e => e.stopPropagation()}>
+                      <DbTableRowSelect
+                        rowNumber={i + 1}
+                        checked={selected.has(r.id)}
+                        onChange={checked => {
+                          setSelected(prev => {
+                            const next = new Set(prev)
+                            if (checked) next.add(r.id); else next.delete(r.id)
+                            return next
+                          })
+                        }}
+                      />
+                    </td>
+
+                    {/* 브랜드명 */}
+                    <td style={{ padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-8)', wordBreak: 'break-word', lineHeight: 1.35 }}>
+                          {r.brand_name}
+                        </span>
+                        {r.brand_en && (
+                          <span style={{ fontSize: 11, color: 'var(--gray-5)', fontWeight: 400 }}>{r.brand_en}</span>
+                        )}
+                        {r.source_phase_id && (
+                          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, width: 'fit-content', background: '#eef8f7', color: 'var(--teal-dk)', borderRadius: 6, padding: '1px 6px' }}>
+                            {phaseNameById[r.source_phase_id] ?? '이전 차수'} 이관
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 담당자 */}
+                    <td style={{ padding: '6px 12px', fontSize: 12 }}>
+                      {r.contact_name ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, overflow: 'hidden' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--gray-7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.contact_name}</span>
+                            {r.position && <span style={{ fontSize: 10, color: 'var(--gray-5)', whiteSpace: 'nowrap', flexShrink: 0 }}>{r.position}</span>}
+                          </div>
+                          {r.department && <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>{r.department}</span>}
+                          {r.personal_email?.[0] && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                              <Mail size={10} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                              <a href={`mailto:${r.personal_email[0]}`} onClick={e => e.stopPropagation()}
+                                style={{ fontSize: 10, color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {r.personal_email[0]}
+                              </a>
+                            </div>
+                          )}
+                          {r.personal_phone && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Phone size={10} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                              <span style={{ fontSize: 10, color: 'var(--gray-6)' }}>{r.personal_phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    </td>
+
+                    {/* 이메일 */}
+                    <td style={{ padding: '0 12px', fontSize: 12 }}>
+                      {r.email?.length ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <a href={`mailto:${r.email[0]}`} onClick={e => e.stopPropagation()}
+                            style={{ color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                            {r.email[0]}
+                          </a>
+                          {r.email.length > 1 && (
+                            <span style={{ fontSize: 10, color: 'var(--gray-5)', fontWeight: 600 }}>+{r.email.length - 1} more</span>
+                          )}
+                        </div>
+                      ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    </td>
+
+                    {/* 회사 명 + 홈페이지 */}
+                    <td style={{ padding: '6px 12px', fontSize: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{ color: 'var(--gray-7)' }}>{r.company || <span style={{ color: 'var(--gray-3)' }}>—</span>}</span>
+                        {r.website && (
+                          <a
+                            href={r.website.startsWith('http') ? r.website : 'https://' + r.website}
+                            target="_blank" rel="noopener"
+                            onClick={e => e.stopPropagation()}
+                            style={{ fontSize: 10, color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          >
+                            ↗ {r.website.replace(/^https?:\/\//, '')}
+                          </a>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 내선번호 */}
+                    <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>
+                      {r.telephone || <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    </td>
+
+                    {/* 판매 제품 카테고리 */}
+                    <td style={{ padding: '6px 12px', fontSize: 12, color: 'var(--gray-7)', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      {r.product_category || <span style={{ color: 'var(--gray-3)' }}>—</span>}
+                    </td>
+
+                    {/* 해외 진출 */}
+                    <td style={{ padding: '0 12px', textAlign: 'center' }}>
+                      {r.overseas
+                        ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
+                        : <span style={{ fontSize: 11, color: 'var(--gray-4)' }}>—</span>}
+                    </td>
+
+                    {/* 컨택 대상 */}
+                    <td style={{ textAlign: 'center', padding: '0 8px' }} onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggleContacted(r.id, r.contacted)}
+                        style={{
+                          padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 20, cursor: 'pointer',
+                          border: `1.5px solid ${r.contacted ? '#6ee7b7' : '#e2e8f0'}`,
+                          background: r.contacted ? '#d1fae5' : '#f1f5f9',
+                          color: r.contacted ? '#065f46' : '#94a3b8',
+                        }}>
+                        {r.contacted ? '✓ 컨택' : '컨택'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={pg.page} totalPages={pg.totalPages} total={pg.total}
+            startIdx={pg.startIdx} endIdx={pg.endIdx}
+            onPrev={() => setPage(p => Math.max(1, p - 1))}
+            onNext={() => setPage(p => Math.min(pg.totalPages, p + 1))} />
+        </div>
       </div>
+
+      {/* ── Add Modal ── */}
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="브랜드 DB 추가" size="lg">
+        <FormTwoColumn
+          left={{
+            title: '브랜드 정보',
+            children: (
+              <>
+                {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
+                {formField('브랜드 영문명', 'brand_en', addForm, setAddForm, { placeholder: '예: MiMuse' })}
+                {emailListEditor(addForm, setAddForm, true)}
+                {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {formField('회사 명', 'company', addForm, setAddForm, { placeholder: '회사명 입력' })}
+                  {formField('내선번호', 'telephone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
+                </div>
+                {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품', multiline: true })}
+                {overseasToggle(addForm, setAddForm)}
+              </>
+            ),
+          }}
+          right={{
+            title: '담당자 정보 (선택)',
+            children: (
+              <>
+                {formField('성명', 'contact_name', addForm, setAddForm)}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {formField('부서', 'department', addForm, setAddForm, { multiline: true })}
+                  {formField('직급', 'position', addForm, setAddForm, { multiline: true })}
+                </div>
+                {formField('개인 전화번호', 'personal_phone', addForm, setAddForm, { type: 'tel' })}
+                {personalEmailListEditor(addForm, setAddForm)}
+              </>
+            ),
+          }}
+        />
+        <div className="modal-actions" style={{ marginTop: 20 }}>
+          <button className="modal-btn-cancel" onClick={() => setShowAdd(false)}>취소</button>
+          <button className="modal-btn-confirm" onClick={addBrand}
+            disabled={adding || !addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()}>
+            {adding ? '추가 중...' : '추가'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── View Modal ── */}
+      {viewRow && (
+        <Modal open={showView} onClose={() => setShowView(false)} title={`브랜드 정보 · ${viewRow.brand_name}`} size="lg">
+          <div style={{ background: 'var(--gray-0)', margin: '-4px -4px 0', padding: '4px 4px 0', borderRadius: '0 0 12px 12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <ReportCard icon={<Mail size={18} />} title="연락처">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                    {viewRow.email?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {viewRow.email.map((e, i) => (
+                          <a key={i} href={`mailto:${e}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{e}</a>
+                        ))}
+                      </div>
+                    ) : '—'}
+                  </div>
+                  {viewRow.personal_email?.length && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {viewRow.personal_email.map((e, i) => (
+                          <a key={i} href={`mailto:${e}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{e}</a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                    <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                    {viewRow.telephone || '—'}
+                  </div>
+                  {viewRow.personal_phone && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
+                      <Phone size={15} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                      <div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginRight: 6 }}>개인</span>
+                        {viewRow.personal_phone}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ReportCard>
+
+              <ReportCard icon={<Globe size={18} />} title="홈페이지">
+                <div style={{ fontSize: 13, color: 'var(--gray-7)', wordBreak: 'break-all' }}>
+                  {viewRow.website ? (
+                    <a
+                      href={viewRow.website.startsWith('http') ? viewRow.website : `https://${viewRow.website}`}
+                      target="_blank" rel="noopener" className="video-link" style={{ fontSize: 13, fontWeight: 600 }}
+                    >
+                      ↗ {viewRow.website}
+                    </a>
+                  ) : '—'}
+                </div>
+              </ReportCard>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <ReportCard icon={<Building2 size={18} />} title="브랜드 정보">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+                  <ReportStat label="브랜드 영문명" value={viewRow.brand_en || '—'} />
+                  <ReportStat label="회사 명" value={viewRow.company || '—'} />
+                  <ReportStat label="판매 제품" value={viewRow.product_category || '—'} />
+                  <ReportStat
+                    label="해외 진출"
+                    value={viewRow.overseas
+                      ? <span style={{ fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px' }}>있음</span>
+                      : '—'}
+                  />
+                </div>
+              </ReportCard>
+            </div>
+
+            <ReportCard icon={<User size={18} />} title="담당자">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, padding: '4px 0' }}>
+                <ReportStat label="성명" value={viewRow.contact_name || '—'} />
+                <ReportStat label="부서" value={viewRow.department || '—'} />
+                <ReportStat label="직급" value={viewRow.position || '—'} />
+              </div>
+            </ReportCard>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingBottom: 4 }}>
+              <button
+                type="button" className="modal-btn-cancel"
+                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                onClick={() => showConfirm('이 브랜드를 삭제하시겠습니까?', () => { void deleteRow(viewRow.id) })}
+              >
+                삭제
+              </button>
+              <div className="modal-actions" style={{ marginTop: 0 }}>
+                <button type="button" className="modal-btn-cancel" onClick={() => setShowView(false)}>닫기</button>
+                <button type="button" className="modal-btn-confirm" onClick={() => { setShowView(false); openEdit(viewRow) }}>✎ 편집</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Edit Modal ── */}
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="브랜드 정보 편집" size="lg">
+        <FormTwoColumn
+          left={{
+            title: '브랜드 정보',
+            children: (
+              <>
+                {formField('브랜드 명', 'brand_name', editForm, setEditForm, { required: true })}
+                {formField('브랜드 영문명', 'brand_en', editForm, setEditForm, { placeholder: '예: MiMuse' })}
+                {emailListEditor(editForm, setEditForm, true)}
+                {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {formField('회사 명', 'company', editForm, setEditForm)}
+                  {formField('내선번호', 'telephone', editForm, setEditForm)}
+                </div>
+                {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm, { multiline: true })}
+                {overseasToggle(editForm, setEditForm)}
+              </>
+            ),
+          }}
+          right={{
+            title: '담당자 정보 (선택)',
+            children: (
+              <>
+                {formField('성명', 'contact_name', editForm, setEditForm)}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {formField('부서', 'department', editForm, setEditForm, { multiline: true })}
+                  {formField('직급', 'position', editForm, setEditForm, { multiline: true })}
+                </div>
+                {formField('개인 전화번호', 'personal_phone', editForm, setEditForm, { type: 'tel' })}
+                {personalEmailListEditor(editForm, setEditForm)}
+              </>
+            ),
+          }}
+        />
+        <div className="modal-actions" style={{ marginTop: 20 }}>
+          <button className="modal-btn-cancel" onClick={() => setShowEdit(false)}>취소</button>
+          <button className="modal-btn-confirm" onClick={saveEdit}
+            disabled={saving || !editForm.brand_name.trim() || !editForm.email.some(e => e.trim()) || !editForm.website.trim()}>
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
