@@ -38,12 +38,9 @@ export interface BrandPageContent {
   rlSubtitle?: string          // "Mi Muse 리뷰" | "브랜드 개별 리뷰"
   rlOffset?: number            // row pagination start index
   // best_review_detail
-  brdCard1?: string
-  brdCard2?: string
-  brdCard3?: string
-  brdCard1Img?: string
-  brdCard2Img?: string
-  brdCard3Img?: string
+  brdPickIndex?: number    // which best pick (0=1st, 1=2nd, 2=3rd)
+  brdCard1?: string        // JSON { rowId, comment } for the comment
+  brdCard1Img?: string     // manual image override
   // brand_mention_detail (one influencer per slide)
   bmdHandle?: string
   bmdFollowers?: string

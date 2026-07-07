@@ -495,7 +495,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0.3cqw 0.5cqw;
+  padding: 1.2cqw 0.5cqw;
   line-height: 1.3;
 }
 
@@ -505,7 +505,15 @@
   color: #1a1a1a;
   display: flex;
   align-items: center;
-  padding: 0.3cqw 0.8cqw;
+  justify-content: center;
+  text-align: center;
+  padding: 1.2cqw 0.8cqw;
+}
+
+.brslide__bmd-stat-row--handle .brslide__bmd-stat-label,
+.brslide__bmd-stat-row--handle .brslide__bmd-stat-value {
+  padding-top: 1.6cqw;
+  padding-bottom: 1.6cqw;
 }
 
 .brslide__bmd-stat-edit {
@@ -536,6 +544,7 @@
   text-align: center;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 /* ── Edit controls (badge + delete button) ── */
