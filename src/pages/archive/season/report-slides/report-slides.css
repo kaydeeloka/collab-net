@@ -561,6 +561,15 @@
 .rslide__brd-media {
   position: relative;
   overflow: hidden;
+  display: flex;
+  gap: 0.3cqw;
+}
+
+/* Left thumbnail + right upload cells inside each brd card */
+.rslide__brd-media-cell {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
 .rslide__brd-img {

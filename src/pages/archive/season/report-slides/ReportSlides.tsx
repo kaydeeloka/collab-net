@@ -501,30 +501,42 @@ function Slide({
                   return (
                     <div key={i} className="rslide__brd-card">
                       <div className="rslide__brd-media">
-                        {editMode ? (
-                          <div className="rslide__img-upload-zone" onClick={() => handleImageUpload(imgKey)}>
-                            {uploading === imgKey ? (
-                              <div className="rslide__img-upload-loading">업로드 중...</div>
-                            ) : local[imgKey] ? (
-                              <>
-                                <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
-                                <div className="rslide__img-upload-overlay">변경</div>
-                              </>
-                            ) : (
-                              <div className="rslide__img-upload-empty">이미지</div>
-                            )}
-                          </div>
-                        ) : local[imgKey] ? (
-                          <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
-                        ) : (
-                          <div className="rslide__brd-ph">이미지</div>
-                        )}
-                        {!editMode && picked?.review_link && (
-                          <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
-                            data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
-                            리뷰 보기
-                          </a>
-                        )}
+                        {/* Left: auto thumbnail from monitoring */}
+                        <div className="rslide__brd-media-cell">
+                          {(() => {
+                            const autoThumb = picked ? resolveMonitoringThumbnailUrl(picked.assets) : null
+                            return autoThumb
+                              ? <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
+                              : <div className="rslide__brd-ph" />
+                          })()}
+                          {!editMode && picked?.review_link && (
+                            <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
+                              data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
+                              리뷰 보기
+                            </a>
+                          )}
+                        </div>
+                        {/* Right: user upload */}
+                        <div className="rslide__brd-media-cell">
+                          {editMode ? (
+                            <div className="rslide__img-upload-zone" onClick={() => handleImageUpload(imgKey)}>
+                              {uploading === imgKey ? (
+                                <div className="rslide__img-upload-loading">업로드 중...</div>
+                              ) : local[imgKey] ? (
+                                <>
+                                  <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
+                                  <div className="rslide__img-upload-overlay">변경</div>
+                                </>
+                              ) : (
+                                <div className="rslide__img-upload-empty">이미지</div>
+                              )}
+                            </div>
+                          ) : local[imgKey] ? (
+                            <img src={local[imgKey]} alt="" referrerPolicy="no-referrer" className="rslide__brd-img" />
+                          ) : (
+                            <div className="rslide__brd-ph" />
+                          )}
+                        </div>
                       </div>
                       {editMode ? (
                         <div className="rslide__brd-info-edit">
