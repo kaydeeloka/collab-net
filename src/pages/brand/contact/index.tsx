@@ -156,6 +156,11 @@ export default function BrandContact() {
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
   const noteTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
+  const [contactDateEditId, setContactDateEditId] = useState<string | null>(null)
+  const [replyDateEditId,   setReplyDateEditId]   = useState<string | null>(null)
+  const [sendCountEditId,   setSendCountEditId]   = useState<string | null>(null)
+  const [replyCountEditId,  setReplyCountEditId]  = useState<string | null>(null)
+
   const load = useCallback(async () => {
     if (!selectedPhaseId) {
       setRows([])
@@ -878,13 +883,93 @@ export default function BrandContact() {
                         <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {row.send_count > 0
-                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {row.send_count}차 발송{contactDateLabel ? ` ${contactDateLabel}` : ''}
+                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                  {sendCountEditId === key ? (
+                                    <input
+                                      type="number"
+                                      defaultValue={row.send_count}
+                                      autoFocus
+                                      min={0}
+                                      onClick={e => e.stopPropagation()}
+                                      onBlur={e => {
+                                        setSendCountEditId(null)
+                                        const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                                        if (v !== row.send_count) updateField(row, { send_count: v })
+                                      }}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                      style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #1d4ed8', background: 'transparent', color: '#1d4ed8', fontWeight: 700, outline: 'none', width: 28, padding: 0, fontFamily: 'inherit', textAlign: 'center' }}
+                                    />
+                                  ) : (
+                                    <button onClick={() => setSendCountEditId(key)} title="차수 편집"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #93c5fd', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#1d4ed8', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4 }}>
+                                      {row.send_count}
+                                    </button>
+                                  )}
+                                  차 발송
+                                  {contactDateEditId === key ? (
+                                    <input
+                                      type="date"
+                                      defaultValue={row.last_contact_at?.slice(0, 10) ?? ''}
+                                      autoFocus
+                                      onClick={e => e.stopPropagation()}
+                                      onBlur={e => {
+                                        setContactDateEditId(null)
+                                        if (e.target.value) updateField(row, { last_contact_at: `${e.target.value}T00:00:00+09:00` })
+                                      }}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                      style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #1d4ed8', background: 'transparent', color: '#1d4ed8', fontWeight: 700, outline: 'none', width: 90, padding: 0, fontFamily: 'inherit' }}
+                                    />
+                                  ) : (
+                                    <button onClick={() => setContactDateEditId(key)} title="날짜 편집"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #93c5fd', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#1d4ed8', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4, opacity: contactDateLabel ? 1 : 0.6 }}>
+                                      {contactDateLabel ?? '날짜'}
+                                    </button>
+                                  )}
                                 </span>
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                             {(row.reply_count ?? 0) > 0 && (
-                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {row.reply_count}차 회신{replyDateLabel ? ` ${replyDateLabel}` : ''}
+                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                {replyCountEditId === key ? (
+                                  <input
+                                    type="number"
+                                    defaultValue={row.reply_count}
+                                    autoFocus
+                                    min={0}
+                                    onClick={e => e.stopPropagation()}
+                                    onBlur={e => {
+                                      setReplyCountEditId(null)
+                                      const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                                      if (v !== row.reply_count) updateField(row, { reply_count: v })
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                    style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #d97706', background: 'transparent', color: '#d97706', fontWeight: 700, outline: 'none', width: 28, padding: 0, fontFamily: 'inherit', textAlign: 'center' }}
+                                  />
+                                ) : (
+                                  <button onClick={() => setReplyCountEditId(key)} title="차수 편집"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #fcd34d', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#d97706', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4 }}>
+                                    {row.reply_count}
+                                  </button>
+                                )}
+                                차 회신
+                                {replyDateEditId === key ? (
+                                  <input
+                                    type="date"
+                                    defaultValue={row.last_reply_at?.slice(0, 10) ?? ''}
+                                    autoFocus
+                                    onClick={e => e.stopPropagation()}
+                                    onBlur={e => {
+                                      setReplyDateEditId(null)
+                                      if (e.target.value) updateField(row, { last_reply_at: `${e.target.value}T00:00:00+09:00` })
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                    style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #d97706', background: 'transparent', color: '#d97706', fontWeight: 700, outline: 'none', width: 90, padding: 0, fontFamily: 'inherit' }}
+                                  />
+                                ) : (
+                                  <button onClick={() => setReplyDateEditId(key)} title="날짜 편집"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #fcd34d', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#d97706', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4, opacity: replyDateLabel ? 1 : 0.6 }}>
+                                    {replyDateLabel ?? '날짜'}
+                                  </button>
+                                )}
                               </span>
                             )}
                           </div>

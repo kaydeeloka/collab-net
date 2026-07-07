@@ -230,6 +230,10 @@ export default function Outreach() {
   const [syncProgress,    setSyncProgress]    = useState<{ checked: number; total: number; found: number } | null>(null)
   const [bulkMarking,     setBulkMarking]     = useState(false)
   const [showBulkPreview, setShowBulkPreview] = useState(false)
+  const [contactDateEditId, setContactDateEditId] = useState<string | null>(null)
+  const [replyDateEditId,   setReplyDateEditId]   = useState<string | null>(null)
+  const [sendCountEditId,   setSendCountEditId]   = useState<string | null>(null)
+  const [replyCountEditId,  setReplyCountEditId]  = useState<string | null>(null)
   const [templates,       setTemplates]       = useState<EmailTemplate[]>([])
 
   // ── Memo inline edits ──
@@ -902,63 +906,12 @@ export default function Outreach() {
                     <th style={{ ...thBase, minWidth: 110 }}>마지막 컨택 날짜</th>
                     {/* 비고 */}
                     <th style={{ ...thBase, minWidth: 180 }}>비고</th>
-                    {/* 컨택 차수 */}
-                    <th style={{ ...thBase, minWidth: 160 }}>
-                      <div ref={roundFilterRef} style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
-                        <span>컨택 차수</span>
-                        <button onClick={() => { setShowRoundFilter(p => !p); setShowStatusFilter(false) }}
-                          title="컨택 차수 필터"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, border: 'none', background: roundFilter ? '#1d4ed8' : 'transparent', color: roundFilter ? '#fff' : 'var(--gray-4)', cursor: 'pointer', padding: 0 }}>
-                          <ListFilter size={13} />
-                        </button>
-                        {showRoundFilter && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid var(--gray-3)', borderRadius: 8, padding: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 160, marginTop: 4 }}>
-                            <button type="button" onClick={() => { setRoundFilter(''); setShowRoundFilter(false); setPage(1) }}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: !roundFilter ? 700 : 500, background: !roundFilter ? '#dbeafe' : 'transparent', color: !roundFilter ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                              전체
-                            </button>
-                            <button type="button" onClick={() => { setRoundFilter('0'); setShowRoundFilter(false); setPage(1) }}
-                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', fontSize: 12, fontWeight: roundFilter === '0' ? 700 : 500, background: roundFilter === '0' ? '#dbeafe' : 'transparent', color: roundFilter === '0' ? '#1d4ed8' : 'var(--gray-7)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                              미컨택
-                            </button>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '4px 6px', borderTop: '1px solid var(--gray-2)' }}>
-                              <input
-                                type="number"
-                                min={1}
-                                placeholder="N"
-                                defaultValue={roundFilter && roundFilter !== '0' ? roundFilter : ''}
-                                key={`round-filter-${roundFilter}`}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    const v = Math.max(1, parseInt((e.target as HTMLInputElement).value, 10) || 0)
-                                    if (v > 0) { setRoundFilter(String(v)); setShowRoundFilter(false); setPage(1) }
-                                  }
-                                }}
-                                onBlur={e => {
-                                  const raw = e.target.value.trim()
-                                  if (!raw) return
-                                  const v = Math.max(1, parseInt(raw, 10) || 0)
-                                  if (v > 0) { setRoundFilter(String(v)); setShowRoundFilter(false); setPage(1) }
-                                }}
-                                style={{ width: 48, padding: '4px 6px', fontSize: 12, border: '1px solid var(--gray-3)', borderRadius: 6, outline: 'none' }}
-                              />
-                              <span style={{ fontSize: 11, color: 'var(--gray-6)', fontWeight: 600 }}>차 컨택</span>
-                            </div>
-                            {roundFilter && roundFilter !== '0' && (
-                              <div style={{ fontSize: 10, color: 'var(--blue-dk)', marginTop: 6, paddingLeft: 6 }}>
-                                필터: {formatContactCount(+roundFilter)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </th>
                     <th style={{ ...thBase, width: 88, textAlign: 'center' }}>관리</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pg.pageItems.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
+                    <tr><td colSpan={8} style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--gray-5)', fontSize: 13 }}>
                       컨택 대상으로 설정된 인플루언서가 없습니다.
                     </td></tr>
                   )}
@@ -1015,13 +968,93 @@ export default function Outreach() {
                         <td style={{ padding: '6px 10px', verticalAlign: 'middle' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             {count > 0
-                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {count}차 발송{contactDateLabel ? ` ${contactDateLabel}` : ''}
+                              ? <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '2px 7px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                  {sendCountEditId === inf.id ? (
+                                    <input
+                                      type="number"
+                                      defaultValue={count}
+                                      autoFocus
+                                      min={0}
+                                      onClick={e => e.stopPropagation()}
+                                      onBlur={e => {
+                                        setSendCountEditId(null)
+                                        const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                                        if (v !== count) updateField(inf.id, { contact_count: v })
+                                      }}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                      style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #1d4ed8', background: 'transparent', color: '#1d4ed8', fontWeight: 700, outline: 'none', width: 28, padding: 0, fontFamily: 'inherit', textAlign: 'center' }}
+                                    />
+                                  ) : (
+                                    <button onClick={() => setSendCountEditId(inf.id)} title="차수 편집"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #93c5fd', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#1d4ed8', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4 }}>
+                                      {count}
+                                    </button>
+                                  )}
+                                  차 발송
+                                  {contactDateEditId === inf.id ? (
+                                    <input
+                                      type="date"
+                                      defaultValue={inf.last_contact_at?.slice(0, 10) ?? ''}
+                                      autoFocus
+                                      onClick={e => e.stopPropagation()}
+                                      onBlur={e => {
+                                        setContactDateEditId(null)
+                                        if (e.target.value) updateField(inf.id, { last_contact_at: `${e.target.value}T00:00:00+09:00` })
+                                      }}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                      style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #1d4ed8', background: 'transparent', color: '#1d4ed8', fontWeight: 700, outline: 'none', width: 90, padding: 0, fontFamily: 'inherit' }}
+                                    />
+                                  ) : (
+                                    <button onClick={() => setContactDateEditId(inf.id)} title="날짜 편집"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #93c5fd', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#1d4ed8', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4, opacity: contactDateLabel ? 1 : 0.6 }}>
+                                      {contactDateLabel ?? '날짜'}
+                                    </button>
+                                  )}
                                 </span>
                               : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
                             {(inf.reply_count ?? 0) > 0 && (
-                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {inf.reply_count}차 회신{replyDateLabel ? ` ${replyDateLabel}` : ''}
+                              <span style={{ fontSize: 11, background: '#fef3c7', color: '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                {replyCountEditId === inf.id ? (
+                                  <input
+                                    type="number"
+                                    defaultValue={inf.reply_count ?? 0}
+                                    autoFocus
+                                    min={0}
+                                    onClick={e => e.stopPropagation()}
+                                    onBlur={e => {
+                                      setReplyCountEditId(null)
+                                      const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                                      if (v !== (inf.reply_count ?? 0)) updateField(inf.id, { reply_count: v })
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                    style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #d97706', background: 'transparent', color: '#d97706', fontWeight: 700, outline: 'none', width: 28, padding: 0, fontFamily: 'inherit', textAlign: 'center' }}
+                                  />
+                                ) : (
+                                  <button onClick={() => setReplyCountEditId(inf.id)} title="차수 편집"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #fcd34d', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#d97706', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4 }}>
+                                    {inf.reply_count}
+                                  </button>
+                                )}
+                                차 회신
+                                {replyDateEditId === inf.id ? (
+                                  <input
+                                    type="date"
+                                    defaultValue={inf.last_reply_at?.slice(0, 10) ?? ''}
+                                    autoFocus
+                                    onClick={e => e.stopPropagation()}
+                                    onBlur={e => {
+                                      setReplyDateEditId(null)
+                                      if (e.target.value) updateField(inf.id, { last_reply_at: `${e.target.value}T00:00:00+09:00` })
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                    style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #d97706', background: 'transparent', color: '#d97706', fontWeight: 700, outline: 'none', width: 90, padding: 0, fontFamily: 'inherit' }}
+                                  />
+                                ) : (
+                                  <button onClick={() => setReplyDateEditId(inf.id)} title="날짜 편집"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'pointer', border: '1px dashed #fcd34d', borderRadius: 4, padding: '0 3px', background: 'rgba(255,255,255,0.5)', color: '#d97706', fontWeight: 700, fontSize: 11, fontFamily: 'inherit', lineHeight: 1.4, opacity: replyDateLabel ? 1 : 0.6 }}>
+                                    {replyDateLabel ?? '날짜'}
+                                  </button>
+                                )}
                               </span>
                             )}
                           </div>
@@ -1036,13 +1069,6 @@ export default function Outreach() {
                             style={{ width: '100%', minWidth: 140, height: 34, fontSize: 12, padding: '4px 8px', border: '1px solid transparent', borderRadius: 6, background: memoVal ? 'var(--gray-0)' : 'transparent', outline: 'none', fontFamily: 'inherit', color: 'var(--gray-7)', cursor: 'text', resize: 'none', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto' }}
                             onFocus={e => { e.currentTarget.style.border = '1px solid var(--gray-3)'; e.currentTarget.style.background = '#fff' }}
                             onBlur={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = memoVal ? 'var(--gray-0)' : 'transparent' }}
-                          />
-                        </td>
-                        {/* 컨택 차수 */}
-                        <td style={{ padding: '0 10px', verticalAlign: 'middle' }}>
-                          <ContactCountEditor
-                            count={count}
-                            onChange={n => updateField(inf.id, { contact_count: n })}
                           />
                         </td>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
