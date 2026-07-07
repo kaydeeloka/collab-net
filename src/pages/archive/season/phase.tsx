@@ -166,7 +166,7 @@ export default function ArchiveBrandReportPhase() {
       return
     }
 
-    const sourceSlidesEl = document.querySelector<HTMLElement>('.report-slides')
+    const sourceSlidesEl = document.querySelector<HTMLElement>('.season-report .report-slides')
     if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
       showToast('슬라이드가 보이지 않습니다. 리포트 탭을 먼저 열어주세요.', 'info')
       return
@@ -258,7 +258,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
   async function handleDownloadPpt() {
     if (!phase || pptDownloading) return
     if (reportEditMode) { showToast('편집 모드를 종료한 후 다운로드해 주세요.', 'info'); return }
-    const sourceSlidesEl = document.querySelector<HTMLElement>('.report-slides')
+    const sourceSlidesEl = document.querySelector<HTMLElement>('.season-report .report-slides')
     if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
       showToast('슬라이드가 보이지 않습니다. 리포트 탭을 먼저 열어주세요.', 'info'); return
     }
@@ -291,10 +291,43 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
       prs.defineLayout({ name: 'WIDE169', width: SLIDE_W, height: SLIDE_H })
       prs.layout = 'WIDE169'
 
+      type TItem = { text: string; x: number; y: number; w: number; h: number; fontSize: number; colorHex: string; bold: boolean; italic: boolean; align: 'left' | 'center' | 'right' }
+      type OvImgItem = { el: HTMLElement; data: string; x: number; y: number; w: number; h: number }
+
+      function cssColorToHex(color: string, fallback: string) {
+        const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+        return m ? [+m[1],+m[2],+m[3]].map(n=>n.toString(16).padStart(2,'0')).join('') : fallback
+      }
+
       for (const slideEl of slideEls) {
         const slideRect = slideEl.getBoundingClientRect()
 
-        type TItem = { text: string; x: number; y: number; w: number; h: number; fontSize: number; colorHex: string; bold: boolean; italic: boolean; align: 'left' | 'center' | 'right' }
+        // ── 0. Capture product/kit image blocks as separate PPT layers ──────
+        const ovImgItems: OvImgItem[] = []
+
+        for (const sel of ['.rslide__ov-img-block', '.rslide__kit-img-cell']) {
+          const imgBlock = slideEl.querySelector<HTMLElement>(sel)
+          if (!imgBlock) continue
+          const imgInBlock = imgBlock.querySelector<HTMLImageElement>('img')
+          if (!imgInBlock || !imgInBlock.complete || imgInBlock.naturalWidth === 0) continue
+          const r = imgBlock.getBoundingClientRect()
+          if (r.width <= 1) continue
+          const x = Math.max(0, (r.left - slideRect.left) / slideRect.width * SLIDE_W)
+          const y = Math.max(0, (r.top - slideRect.top) / slideRect.height * SLIDE_H)
+          try {
+            const imgCanvas = await html2canvasFn(imgBlock, {
+              scale: 2, useCORS: true, allowTaint: true, backgroundColor: null,
+            })
+            ovImgItems.push({
+              el: imgBlock,
+              data: imgCanvas.toDataURL('image/png'),
+              x, y,
+              w: Math.min(r.width / slideRect.width * SLIDE_W, SLIDE_W - x),
+              h: Math.min(r.height / slideRect.height * SLIDE_H, SLIDE_H - y),
+            })
+          } catch { /* skip if canvas tainted */ }
+        }
+
         const textItems: TItem[] = []
         const textEls: HTMLElement[] = []
 
@@ -314,15 +347,14 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
               const w = Math.max(0.05, r.width / slideRect.width * SLIDE_W)
               const h = Math.max(0.05, r.height / slideRect.height * SLIDE_H)
               if (x < -0.1 || y < -0.1 || x > SLIDE_W || y > SLIDE_H) continue
-              const m = cs.color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-              const colorHex = m ? [+m[1],+m[2],+m[3]].map(n=>n.toString(16).padStart(2,'0')).join('') : '000000'
               textItems.push({
                 text: txt,
                 x: Math.max(0, x), y: Math.max(0, y),
                 w: Math.min(w, SLIDE_W - Math.max(0, x)),
                 h: Math.min(h, SLIDE_H - Math.max(0, y)),
                 fontSize: Math.max(6, Math.round(parseFloat(cs.fontSize) * 0.75)),
-                colorHex, bold: parseInt(cs.fontWeight) >= 700,
+                colorHex: cssColorToHex(cs.color, '000000'),
+                bold: parseInt(cs.fontWeight) >= 700,
                 italic: cs.fontStyle === 'italic',
                 align: cs.textAlign === 'center' ? 'center' : cs.textAlign === 'right' ? 'right' : 'left',
               })
@@ -334,25 +366,37 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
         }
         collectTexts(slideEl)
 
+        // ── Hide text + product img block, capture background ─────────────
         const savedColors = textEls.map(el => el.style.color)
         textEls.forEach(el => { el.style.color = 'transparent' })
 
+        const savedImgVis = ovImgItems.map(i => ({ vis: i.el.style.visibility }))
+        ovImgItems.forEach(i => { i.el.style.visibility = 'hidden' })
+
         const canvas = await html2canvasFn(slideEl, {
           scale: 2, useCORS: true, allowTaint: true,
-          width: 960, height: 540, backgroundColor: null,
+          width: 960, height: 540, backgroundColor: '#F8F6F6',
         })
         const bgUrl = canvas.toDataURL('image/png')
+
         textEls.forEach((el, i) => { el.style.color = savedColors[i] })
+        ovImgItems.forEach((img, i) => { img.el.style.visibility = savedImgVis[i].vis })
 
         const pptSlide = prs.addSlide()
         pptSlide.addImage({ data: bgUrl, x: 0, y: 0, w: SLIDE_W, h: SLIDE_H })
+
+        for (const ovImg of ovImgItems) {
+          pptSlide.addImage({ data: ovImg.data, x: ovImg.x, y: ovImg.y, w: ovImg.w, h: ovImg.h })
+        }
+
         for (const item of textItems) {
-          pptSlide.addText(item.text, {
+          const safeText = item.text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+          if (!safeText) continue
+          pptSlide.addText(safeText, {
             x: item.x, y: item.y, w: item.w, h: item.h,
             fontSize: item.fontSize, color: item.colorHex,
             bold: item.bold, italic: item.italic, align: item.align,
-            valign: 'middle', margin: 0,
-            fill: { type: 'none' }, line: { type: 'none', pt: 0 }, wrap: true,
+            valign: 'middle', margin: 0, wrap: true,
           })
         }
       }
@@ -873,32 +917,6 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
             ) : (
               <>
                 <div className="season-report__controls">
-                  {reportEditMode && (
-                    <div className="season-report__download-wrap" ref={addMenuRef}>
-                      <button
-                        type="button"
-                        className="cfg-btn cfg-btn--ghost"
-                        onClick={() => setAddOpen(o => !o)}
-                      >
-                        <Plus size={13} />
-                        추가
-                      </button>
-                      {addOpen && (
-                        <div className="season-report__download-menu">
-                          {(['best_review', 'best_review_detail'] as PageType[]).map(t => (
-                            <button
-                              key={t}
-                              type="button"
-                              className="season-report__download-item"
-                              onClick={() => { void addReportPage(t) }}
-                            >
-                              {PAGE_TYPE_LABELS[t]}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <button
                     type="button"
                     className={`cfg-btn${reportEditMode ? ' cfg-btn--blue' : ' cfg-btn--ghost'}`}
@@ -937,6 +955,26 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                     const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
                     return (
                       <div className="season-report__page-list">
+                        <div className="season-report__page-add-wrap" ref={addMenuRef}>
+                          <button type="button" className="season-report__page-add-btn" onClick={() => setAddOpen(o => !o)}>
+                            <Plus size={12} />
+                            슬라이드 추가
+                          </button>
+                          {addOpen && (
+                            <div className="season-report__download-menu">
+                              {(['best_review', 'best_review_detail'] as PageType[]).map(t => (
+                                <button
+                                  key={t}
+                                  type="button"
+                                  className="season-report__download-item"
+                                  onClick={() => { void addReportPage(t) }}
+                                >
+                                  {PAGE_TYPE_LABELS[t]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         {sorted.map((page, idx) => (
                           <div
                             key={page.id}

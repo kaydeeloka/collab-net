@@ -234,7 +234,7 @@ function BrandSlide({
   }
 
   return (
-    <div className={`rslide${editMode ? ' rslide--edit' : ''}`}>
+    <div className={`rslide${editMode ? ' rslide--edit' : ''}`} data-slide-type={page.type}>
       {/* Logo */}
       {page.type === 'cover'
         ? <img src={LOGO} className="rslide__logo rslide__logo--cover" alt="" />
