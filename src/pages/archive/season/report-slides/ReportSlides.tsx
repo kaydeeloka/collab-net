@@ -959,7 +959,9 @@ function Slide({
 
       {/* Edit mode indicator */}
       {editMode && (
-        <div className="rslide__edit-badge">편집 중</div>
+        <div className="rslide__edit-controls">
+          <div className="rslide__edit-badge">편집 중</div>
+        </div>
       )}
     </div>
   )

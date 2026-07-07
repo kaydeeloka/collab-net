@@ -1578,6 +1578,21 @@ textarea.rslide-edit {
 .rslide__url-edit           { font-size: 0.9cqw;  color: #666;    margin-bottom: 0.8cqw; }
 .rslide__caption-edit       { font-size: 0.9cqw;  color: #888; }
 
+/* ── Edit controls (badge positioned top-right) ── */
+.rslide__edit-controls {
+  position: absolute;
+  top: 1cqw;
+  right: 1cqw;
+  display: flex;
+  align-items: center;
+  gap: 0.4cqw;
+  z-index: 10;
+}
+
+.rslide__edit-controls .rslide__edit-badge {
+  position: static;
+}
+
 /* ── Edit badge ── */
 .rslide__edit-badge {
   background: #8BAAB8;

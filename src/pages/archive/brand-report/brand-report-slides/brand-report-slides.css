@@ -565,6 +565,8 @@
   min-height: 0;
   overflow: hidden;
   border-radius: 0.6cqw;
+  display: flex;
+  gap: 0.3cqw;
 }
 
 .brslide__bmd-img {

@@ -690,37 +690,46 @@ function BrandSlide({
             const picked = bestRows[pickIndex] ?? null
             const { comment } = parseBrdCard(local.brdCard1)
             const autoThumb = picked ? resolveMonitoringThumbnailUrl(picked.assets) : null
-            const imgUrl = local.brdCard1Img || autoThumb
             const handleUrl = picked?.handle
               ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}`
               : null
             return (
               <div className="brslide__bmd">
-                {/* Left: image */}
+                {/* Left: dual image block — auto thumbnail | upload */}
                 <div className="brslide__bmd-img-block">
-                  {editMode ? (
-                    <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('brdCard1Img')}>
-                      {uploading === 'brdCard1Img' ? (
-                        <div className="rslide__img-upload-loading">업로드 중...</div>
-                      ) : local.brdCard1Img ? (
-                        <>
-                          <img src={local.brdCard1Img} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                          <div className="rslide__img-upload-overlay">이미지 변경</div>
-                        </>
-                      ) : autoThumb ? (
-                        <>
-                          <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                          <div className="rslide__img-upload-overlay">변경 (자동)</div>
-                        </>
-                      ) : (
-                        <div className="rslide__img-upload-empty">이미지</div>
-                      )}
-                    </div>
-                  ) : imgUrl ? (
-                    <img src={imgUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                  ) : (
-                    <div className="rslide__ov-img-empty">이미지</div>
-                  )}
+                  {/* Left cell: auto thumbnail */}
+                  <div className="rslide__brd-media-cell">
+                    {autoThumb
+                      ? <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                      : <div className="rslide__ov-img-empty" />}
+                    {!editMode && picked?.review_link && (
+                      <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
+                        data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
+                        리뷰 보기
+                      </a>
+                    )}
+                  </div>
+                  {/* Right cell: user upload */}
+                  <div className="rslide__brd-media-cell">
+                    {editMode ? (
+                      <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('brdCard1Img')}>
+                        {uploading === 'brdCard1Img' ? (
+                          <div className="rslide__img-upload-loading">업로드 중...</div>
+                        ) : local.brdCard1Img ? (
+                          <>
+                            <img src={local.brdCard1Img} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                            <div className="rslide__img-upload-overlay">변경</div>
+                          </>
+                        ) : (
+                          <div className="rslide__img-upload-empty">이미지</div>
+                        )}
+                      </div>
+                    ) : local.brdCard1Img ? (
+                      <img src={local.brdCard1Img} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                    ) : (
+                      <div className="rslide__ov-img-empty" />
+                    )}
+                  </div>
                 </div>
 
                 {/* Right: stats + comment */}
@@ -943,37 +952,46 @@ function BrandSlide({
             const pickIndex = local.bmdPickIndex ?? 0
             const picked = brandRows[pickIndex] ?? null
             const autoThumb = picked ? resolveMonitoringThumbnailUrl(picked.assets) : null
-            const imgUrl = local.bmdImageUrl || autoThumb
             const handleUrl = picked?.handle
               ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}`
               : null
             return (
               <div className="brslide__bmd">
-                {/* Left: image */}
+                {/* Left: dual image block — auto thumbnail | upload */}
                 <div className="brslide__bmd-img-block">
-                  {editMode ? (
-                    <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('bmdImageUrl')}>
-                      {uploading === 'bmdImageUrl' ? (
-                        <div className="rslide__img-upload-loading">업로드 중...</div>
-                      ) : local.bmdImageUrl ? (
-                        <>
-                          <img src={local.bmdImageUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                          <div className="rslide__img-upload-overlay">이미지 변경</div>
-                        </>
-                      ) : autoThumb ? (
-                        <>
-                          <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                          <div className="rslide__img-upload-overlay">변경 (자동)</div>
-                        </>
-                      ) : (
-                        <div className="rslide__img-upload-empty">이미지</div>
-                      )}
-                    </div>
-                  ) : imgUrl ? (
-                    <img src={imgUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
-                  ) : (
-                    <div className="rslide__ov-img-empty">이미지</div>
-                  )}
+                  {/* Left cell: auto thumbnail */}
+                  <div className="rslide__brd-media-cell">
+                    {autoThumb
+                      ? <img src={autoThumb} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                      : <div className="rslide__ov-img-empty" />}
+                    {!editMode && picked?.review_link && (
+                      <a href={picked.review_link} target="_blank" rel="noopener noreferrer"
+                        data-pdf-link={picked.review_link} className="rslide__brd-review-btn">
+                        리뷰 보기
+                      </a>
+                    )}
+                  </div>
+                  {/* Right cell: user upload */}
+                  <div className="rslide__brd-media-cell">
+                    {editMode ? (
+                      <div className="rslide__img-upload-zone" onClick={() => handleImageUpload('bmdImageUrl')}>
+                        {uploading === 'bmdImageUrl' ? (
+                          <div className="rslide__img-upload-loading">업로드 중...</div>
+                        ) : local.bmdImageUrl ? (
+                          <>
+                            <img src={local.bmdImageUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                            <div className="rslide__img-upload-overlay">변경</div>
+                          </>
+                        ) : (
+                          <div className="rslide__img-upload-empty">이미지</div>
+                        )}
+                      </div>
+                    ) : local.bmdImageUrl ? (
+                      <img src={local.bmdImageUrl} alt="" referrerPolicy="no-referrer" className="brslide__bmd-img" />
+                    ) : (
+                      <div className="rslide__ov-img-empty" />
+                    )}
+                  </div>
                 </div>
 
                 {/* Right: stats + comment reaction */}
