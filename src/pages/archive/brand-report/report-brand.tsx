@@ -350,6 +350,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
             onUpdate={handleUpdatePage}
             sharedPages={sharedPages}
             onUpdateShared={handleUpdateSharedPage}
+            onDelete={(id) => {
+              const p = pages.find(x => x.id === id)
+              if (p) deletePage(id, BRAND_PAGE_TYPE_LABELS[p.type as BrandPageType])
+            }}
           />
         </div>
       </div>

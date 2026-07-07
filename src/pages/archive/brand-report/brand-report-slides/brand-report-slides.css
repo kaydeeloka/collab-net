@@ -537,3 +537,35 @@
   display: flex;
   align-items: center;
 }
+
+/* ── Edit controls (badge + delete button) ── */
+.rslide__edit-controls {
+  position: absolute;
+  top: 1cqw;
+  right: 1cqw;
+  display: flex;
+  align-items: center;
+  gap: 0.4cqw;
+  z-index: 10;
+}
+
+.rslide__edit-controls .rslide__edit-badge {
+  position: static;
+}
+
+.rslide__edit-delete {
+  background: rgba(220, 38, 38, 0.8);
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3cqw 0.5cqw;
+  line-height: 1;
+}
+
+.rslide__edit-delete:hover {
+  background: rgba(185, 28, 28, 0.95);
+}

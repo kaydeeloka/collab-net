@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 import { monitoringBrandKey } from '@/lib/influencer/monitoring-keywords'
 import type { MonitoringRow } from '@/lib/influencer/monitoring-data'
@@ -99,7 +100,7 @@ function platformLabel(p: string) {
 // ── Individual slide ──────────────────────────────────────────────
 
 function BrandSlide({
-  page, brandName, brandEn, editMode, rows, onUpdate,
+  page, brandName, brandEn, editMode, rows, onUpdate, onDelete,
 }: {
   page: BrandReportPage
   brandName: string
@@ -107,6 +108,7 @@ function BrandSlide({
   editMode: boolean
   rows: MonitoringRow[]
   onUpdate: (content: BrandPageContent) => void
+  onDelete?: () => void
 }) {
   const [local, setLocal] = useState<BrandPageContent>(page.content)
   const [uploading, setUploading] = useState<string | null>(null)
@@ -554,7 +556,8 @@ function BrandSlide({
           {page.type === 'review_list' && (() => {
             const subtitle = local.rlSubtitle ?? 'Mi Muse 리뷰'
             const isMimuse = subtitle.includes('Mi Muse') || subtitle.includes('mimuse')
-            const tableRows = (isMimuse ? mimuseRows : brandRows)
+            const allBrandReviewRows = reviewRows.filter(r => r.brand !== 'mimuse')
+            const tableRows = isMimuse ? mimuseRows : allBrandReviewRows
             const offset = local.rlOffset ?? 0
             const pageRows = tableRows.slice(offset, offset + ROWS_PER_PAGE)
             const isBrand = !isMimuse
@@ -872,7 +875,16 @@ function BrandSlide({
         </div>
       )}
 
-      {editMode && <div className="rslide__edit-badge">편집 중</div>}
+      {editMode && (
+        <div className="rslide__edit-controls">
+          <div className="rslide__edit-badge">편집 중</div>
+          {onDelete && (
+            <button type="button" className="rslide__edit-delete" onClick={onDelete} title="페이지 삭제">
+              <X size={10} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -890,6 +902,7 @@ export default function BrandReportSlides({
   onUpdate,
   sharedPages = [],
   onUpdateShared,
+  onDelete,
 }: {
   pages: BrandReportPage[]
   rows: MonitoringRow[]
@@ -899,6 +912,7 @@ export default function BrandReportSlides({
   onUpdate: (page: BrandReportPage) => Promise<void>
   sharedPages?: BrandReportPage[]
   onUpdateShared?: (page: BrandReportPage) => Promise<void>
+  onDelete?: (pageId: string) => void
 }) {
   const sorted = [...pages].sort((a, b) => a.order_index - b.order_index)
 
@@ -918,6 +932,7 @@ export default function BrandReportSlides({
         const handleUpdate = sharedPage && onUpdateShared
           ? (content: BrandPageContent) => onUpdateShared({ ...sharedPage, content })
           : (content: BrandPageContent) => onUpdate({ ...page, content })
+        const handleDelete = sharedPage ? undefined : () => onDelete?.(page.id)
         return (
           <BrandSlide
             key={page.id}
@@ -927,6 +942,7 @@ export default function BrandReportSlides({
             editMode={editMode}
             rows={rows}
             onUpdate={handleUpdate}
+            onDelete={handleDelete}
           />
         )
       })}
