@@ -1,46 +1,37 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { gasPost } from '@/lib/api'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
-import { PageTabs, StatCard, StatCards } from '@/components/ui'
+import { StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
 
 interface Stats {
-  generalCount:  number
-  personalCount: number
+  totalCount:     number
   contactedCount: number
 }
 
 export default function BrandDb() {
-  const { pathname } = useLocation()
-  const navigate     = useNavigate()
   const { selectedPhaseId } = usePhase()
   const { showToast }       = useToast()
   const [stats, setStats]             = useState<Stats | null>(null)
   const [sheetUpdating, setSheetUpdating] = useState(false)
   const [sheetUrl,      setSheetUrl]      = useState<string | null>(null)
 
-  const tabs = [
-    { path: '/brand/db/general',  label: '일반 DB'  },
-    { path: '/brand/db/personal', label: '퍼스널 DB' },
-  ]
-  const activeTab = tabs.find(t => pathname.startsWith(t.path))?.path ?? tabs[0].path
-
   useEffect(() => { loadStats() }, [selectedPhaseId])
 
   async function loadStats() {
-    if (!selectedPhaseId) { setStats({ generalCount: 0, personalCount: 0, contactedCount: 0 }); return }
-    const [{ data: general }, { data: personal }] = await Promise.all([
-      supabase.from('brand_general').select('contacted').eq('phase_id', selectedPhaseId),
-      supabase.from('brand_personal').select('contacted').eq('phase_id', selectedPhaseId),
-    ])
-    const generalCount   = general?.length ?? 0
-    const personalCount  = personal?.length ?? 0
-    const contactedCount = (general?.filter((r: any) => r.contacted).length ?? 0)
-                         + (personal?.filter((r: any) => r.contacted).length ?? 0)
-    setStats({ generalCount, personalCount, contactedCount })
+    if (!selectedPhaseId) { setStats({ totalCount: 0, contactedCount: 0 }); return }
+    const { data } = await supabase
+      .from('brand_contacts')
+      .select('contacted')
+      .eq('phase_id', selectedPhaseId)
+    const all = data ?? []
+    setStats({
+      totalCount:     all.length,
+      contactedCount: all.filter((r: any) => r.contacted).length,
+    })
   }
 
   async function handleUpdateBrandSheet() {
@@ -65,7 +56,7 @@ export default function BrandDb() {
       <PageHeroBanner>
         <PageHeroBannerContent
           title="브랜드 DB"
-          description="컨택 대상 브랜드의 담당자·연락처·상태를 일반 DB와 퍼스널 DB로 나누어 관리합니다."
+          description="컨택 대상 브랜드의 담당자·연락처·상태를 관리합니다."
           actions={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {sheetUrl && (
@@ -85,23 +76,16 @@ export default function BrandDb() {
       </PageHeroBanner>
 
       {stats && (
-        <StatCards className="stat-cards--tall" columns="1fr 1fr 1fr" style={{ marginBottom: 20 }}>
-          <StatCard variant="metric" align="left" label="총 일반 브랜드" value={stats.generalCount} unit="명" />
-          <StatCard variant="metric" align="left" label="총 퍼스널 브랜드" value={stats.personalCount} unit="명" />
+        <StatCards className="stat-cards--tall" columns="1fr 1fr" style={{ marginBottom: 20 }}>
+          <StatCard variant="metric" align="left" label="총 브랜드" value={stats.totalCount} unit="개" />
           <StatCard
             highlight variant="metric" align="left" label="컨택 예정"
             value={stats.contactedCount} valueColor="var(--yellow-text)"
-            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>{' '}/ {stats.generalCount + stats.personalCount}</span>}
-            footer={`${stats.generalCount + stats.personalCount ? Math.round(stats.contactedCount / (stats.generalCount + stats.personalCount) * 100) : 0}% 완료율`}
+            valueSuffix={<span style={{ fontSize: 13, color: 'var(--gray-5)', fontWeight: 500 }}>{' '}/ {stats.totalCount}</span>}
+            footer={`${stats.totalCount ? Math.round(stats.contactedCount / stats.totalCount * 100) : 0}% 완료율`}
           />
         </StatCards>
       )}
-
-      <PageTabs
-        tabs={tabs.map(t => ({ id: t.path, label: t.label }))}
-        active={activeTab}
-        onChange={path => navigate(path)}
-      />
 
       <div className="ftab-content">
         <Outlet />

@@ -35,10 +35,8 @@ export async function cancelInfluencerContact(
 
 export async function cancelBrandContact(
   id: string,
-  source: 'general' | 'personal',
 ): Promise<{ ok: boolean; error?: string }> {
-  const table = source === 'general' ? 'brand_general' : 'brand_personal'
-  const { error } = await supabase.from(table).update({ contacted: false }).eq('id', id)
+  const { error } = await supabase.from('brand_contacts').update({ contacted: false }).eq('id', id)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

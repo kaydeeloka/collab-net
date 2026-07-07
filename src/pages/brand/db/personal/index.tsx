@@ -257,19 +257,29 @@ export default function BrandDbPersonal() {
     key: keyof Omit<Form, 'overseas' | 'phase_id' | 'personal_email'>,
     form: Form,
     setForm: (f: Form) => void,
-    opts?: { placeholder?: string; required?: boolean; type?: string }
+    opts?: { placeholder?: string; required?: boolean; type?: string; multiline?: boolean }
   ) => (
     <div>
       <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
         {label}{opts?.required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
       </label>
-      <input
-        type={opts?.type ?? 'text'}
-        value={form[key] as string}
-        onChange={e => setForm({ ...form, [key]: e.target.value })}
-        placeholder={opts?.placeholder}
-        style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
-      />
+      {opts?.multiline ? (
+        <textarea
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          rows={3}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }}
+        />
+      ) : (
+        <input
+          type={opts?.type ?? 'text'}
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+        />
+      )}
     </div>
   )
 
@@ -342,7 +352,7 @@ export default function BrandDbPersonal() {
             {field('개인 전화번호',      'personal_phone',   form, setForm, { type: 'tel' })}
             {field('내선 번호',          'telephone',        form, setForm)}
             {field('대표 메일',          'rep_email',        form, setForm, { type: 'email' })}
-            {field('판매 제품 카테고리', 'product_category', form, setForm)}
+            {field('판매 제품 카테고리', 'product_category', form, setForm, { multiline: true })}
             {overseasBtn(form, setForm)}
           </>
         ),

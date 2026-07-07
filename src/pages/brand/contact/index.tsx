@@ -35,7 +35,6 @@ import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import { TableActionBar, TableTemplateSelect } from '@/components/StickyBar'
-import { FilterSegmentBar } from '@/components/FilterSegmentBar'
 import { DbTableRowSelect, DbTableSelectAll, dbTableRowClass } from '@/components/DbTableSelect'
 import { Button, StatCard, StatCards } from '@/components/ui'
 import { formatShortContactDate } from '@/lib/contact/contact-count'
@@ -51,16 +50,6 @@ function applyPlaceholders(text: string, row: { brand: string; name: string | nu
     .replace(/\{\{직함\}\}/g,     row.position || '')
 }
 
-const TYPES = ['일반', '퍼스널']
-const TYPE_FILTER_OPTIONS = [
-  { value: '전체', label: '전체' },
-  { value: '일반', label: '일반' },
-  { value: '퍼스널', label: '퍼스널' },
-]
-const TYPE_COLOR: Record<string, string> = {
-  '일반':   '#3b82f6',
-  '퍼스널': '#ec4899',
-}
 
 const STATUS_OPTIONS = [
   { value: '',         label: '컨택 예정', bg: '#e0f2fe', color: '#0369a1' },
@@ -78,7 +67,6 @@ const STATUS_FILTER_ALL = 'all'
 
 interface BrandRow {
   id:          string
-  source:      'general' | 'personal'
   brand:       string
   name:        string | null
   position:    string | null
@@ -122,7 +110,6 @@ export default function BrandContact() {
   const [rows,    setRows]    = useState<BrandRow[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [activeType,       setActiveType]       = useState('전체')
   const [searchQuery,      setSearchQuery]      = useState('')
   const [statusFilter,     setStatusFilter]     = useState(STATUS_FILTER_ALL)
   const [showStatusFilter, setShowStatusFilter] = useState(false)
@@ -168,33 +155,30 @@ export default function BrandContact() {
       return
     }
     setLoading(true)
-    const [{ data: gen, error: genErr }, { data: per, error: perErr }] = await Promise.all([
-      supabase.from('brand_general').select('id, brand_name, email, telephone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
-      supabase.from('brand_personal').select('id, brand_name, contact_name, position, personal_email, personal_phone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes').eq('contacted', true).eq('phase_id', selectedPhaseId).order('last_reply_at', { ascending: false, nullsFirst: false }),
-    ])
-    if (genErr) { showToast('일반 DB 오류: ' + genErr.message, 'error'); setLoading(false); return }
-    if (perErr) { showToast('퍼스널 DB 오류: ' + perErr.message, 'error'); setLoading(false); return }
-    const generalRows: BrandRow[] = (gen ?? []).map((r: any) => ({
-      id: r.id, source: 'general' as const,
-      brand: r.brand_name, name: null,
-      position: null,
-      email: Array.isArray(r.email) ? r.email[0] ?? null : r.email,
-      phone: r.telephone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
-      status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0,
-      last_contact_at: r.last_contact_at ?? null, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
-    }))
-    const personalRows: BrandRow[] = (per ?? []).map((r: any) => ({
-      id: r.id, source: 'personal' as const,
-      brand: r.brand_name, name: r.contact_name,
+    const { data, error } = await supabase
+      .from('brand_contacts')
+      .select('id, brand_name, contact_name, position, email, personal_email, personal_phone, telephone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes')
+      .eq('contacted', true)
+      .eq('phase_id', selectedPhaseId)
+      .order('last_reply_at', { ascending: false, nullsFirst: false })
+    if (error) { showToast('브랜드 DB 오류: ' + error.message, 'error'); setLoading(false); return }
+    const mapped: BrandRow[] = (data ?? []).map((r: any) => ({
+      id: r.id,
+      brand: r.brand_name,
+      name: r.contact_name ?? null,
       position: r.position ?? null,
-      email: Array.isArray(r.personal_email) ? r.personal_email[0] ?? null : r.personal_email,
-      phone: r.personal_phone ?? null, website: r.website ?? null, phase_id: r.phase_id ?? null,
+      email: Array.isArray(r.email) ? r.email[0] ?? null : (r.email ?? null),
+      phone: r.personal_phone ?? r.telephone ?? null,
+      website: r.website ?? null,
+      phase_id: r.phase_id ?? null,
       status: r.status ?? '',
-      send_count: r.send_count ?? 0, reply_count: r.reply_count ?? 0,
-      last_contact_at: r.last_contact_at ?? null, last_reply_at: r.last_reply_at ?? null, notes: r.notes,
+      send_count: r.send_count ?? 0,
+      reply_count: r.reply_count ?? 0,
+      last_contact_at: r.last_contact_at ?? null,
+      last_reply_at: r.last_reply_at ?? null,
+      notes: r.notes ?? null,
     }))
-    setRows([...generalRows, ...personalRows])
+    setRows(mapped)
     setLoading(false)
   }, [selectedPhaseId, showToast])
 
@@ -207,7 +191,7 @@ export default function BrandContact() {
 
   useEffect(() => {
     setPage(1)
-  }, [searchQuery, activeType, statusFilter])
+  }, [searchQuery, statusFilter])
 
   useEffect(() => {
     if (!showStatusFilter) return
@@ -224,9 +208,8 @@ export default function BrandContact() {
   }, [showStatusFilter])
 
   const recordSendAfterEmail = useCallback(async (row: BrandRow, sentAt: string) => {
-    const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
     const { data, error: readErr } = await supabase
-      .from(table)
+      .from('brand_contacts')
       .select('send_count')
       .eq('id', row.id)
       .single()
@@ -237,15 +220,14 @@ export default function BrandContact() {
       status: 'yes',
       last_contact_at: sentAt,
     }
-    const { error } = await supabase.from(table).update(patch).eq('id', row.id)
+    const { error } = await supabase.from('brand_contacts').update(patch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return false }
 
-    setRows(prev => prev.map(r => r.id === row.id && r.source === row.source ? { ...r, ...patch } : r))
+    setRows(prev => prev.map(r => r.id === row.id ? { ...r, ...patch } : r))
     return true
   }, [showToast])
 
   const updateField = useCallback(async (row: BrandRow, patch: Partial<BrandRow>) => {
-    const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
     const dbPatch: Record<string, unknown> = {}
     const REPLY_STATUSES = ['reply', 'positive', 'negative', 'reject', 'accept']
     if (patch.status !== undefined) {
@@ -267,9 +249,9 @@ export default function BrandContact() {
     if (patch.last_contact_at  !== undefined) dbPatch.last_contact_at  = patch.last_contact_at
     if (patch.last_reply_at    !== undefined) dbPatch.last_reply_at    = patch.last_reply_at
     if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
-    const { error } = await supabase.from(table).update(dbPatch).eq('id', row.id)
+    const { error } = await supabase.from('brand_contacts').update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
-    setRows(prev => prev.map(r => r.id === row.id && r.source === row.source ? { ...r, ...patch } : r))
+    setRows(prev => prev.map(r => r.id === row.id ? { ...r, ...patch } : r))
 
     // Auto-create confirmed_brands entry when status becomes 'accept'
     if (patch.status === 'accept' && row.status !== 'accept' && row.phase_id) {
@@ -363,9 +345,8 @@ export default function BrandContact() {
           const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
           if (!row || !isNewReply(row, reply)) continue
 
-          const table = row.source === 'general' ? 'brand_general' : 'brand_personal'
           const { data: fresh, error: readErr } = await supabase
-            .from(table)
+            .from('brand_contacts')
             .select('reply_count, status, last_contact_at, last_reply_at')
             .eq('id', row.id)
             .single()
@@ -382,7 +363,7 @@ export default function BrandContact() {
             statusUpdates++
           }
 
-          const { error } = await supabase.from(table).update(patch).eq('id', row.id)
+          const { error } = await supabase.from('brand_contacts').update(patch).eq('id', row.id)
           if (error) { showToast(error.message, 'error'); continue }
 
           newReplies++
@@ -417,17 +398,14 @@ export default function BrandContact() {
   }, [rows, showToast, load, applyDeliveryBounces])
 
   const updateNote = useCallback((row: BrandRow, value: string) => {
-    const key = row.id + row.source
-    setNoteEdits(prev => ({ ...prev, [key]: value }))
-    if (noteTimers.current[key]) clearTimeout(noteTimers.current[key])
-    noteTimers.current[key] = setTimeout(() => updateField(row, { notes: value }), 800)
+    setNoteEdits(prev => ({ ...prev, [row.id]: value }))
+    if (noteTimers.current[row.id]) clearTimeout(noteTimers.current[row.id])
+    noteTimers.current[row.id] = setTimeout(() => updateField(row, { notes: value }), 800)
   }, [updateField])
 
-  const rowKey = (r: BrandRow) => r.id + r.source
+  const rowKey = (r: BrandRow) => r.id
 
   const filtered = rows.filter(r => {
-    if (activeType === '일반'   && r.source !== 'general')  return false
-    if (activeType === '퍼스널' && r.source !== 'personal') return false
     if (statusFilter !== STATUS_FILTER_ALL && r.status !== statusFilter) return false
     if (!rowMatchesSearch(r, searchQuery)) return false
     return true
@@ -479,12 +457,12 @@ export default function BrandContact() {
     showConfirm(
       `${name} 컨택을 취소하고 브랜드 DB로 되돌리시겠습니까?`,
       async () => {
-        const result = await cancelBrandContact(row.id, row.source)
+        const result = await cancelBrandContact(row.id)
         if (!result.ok) {
           showToast(result.error || '컨택 취소 실패', 'error')
           return
         }
-        setRows(prev => prev.filter(r => !(r.id === row.id && r.source === row.source)))
+        setRows(prev => prev.filter(r => r.id !== row.id))
         setCheckedIds(prev => {
           const next = new Set(prev)
           next.delete(rowKey(row))
@@ -505,7 +483,7 @@ export default function BrandContact() {
       async () => {
         let failed = 0
         for (const row of targets) {
-          const result = await cancelBrandContact(row.id, row.source)
+          const result = await cancelBrandContact(row.id)
           if (!result.ok) failed++
         }
         if (failed) {
@@ -652,19 +630,6 @@ export default function BrandContact() {
             label="전체 컨택 리스트"
             value={rows.length}
             unit="건"
-            footer={(
-              <>
-                {TYPES.map((t, i) => {
-                  const count = rows.filter(r => t === '일반' ? r.source === 'general' : r.source === 'personal').length
-                  return (
-                    <span key={t}>
-                      {i > 0 && <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>}
-                      <span style={{ color: TYPE_COLOR[t] }}>{t} <strong>{count}</strong></span>
-                    </span>
-                  )
-                })}
-              </>
-            )}
           />
           <StatCard
             highlight
@@ -679,23 +644,16 @@ export default function BrandContact() {
         </StatCards>
       )}
 
-      {/* Filter bar */}
-      <FilterSegmentBar
-        label="유형"
-        ariaLabel="유형 필터"
-        value={activeType}
-        onChange={v => { setActiveType(v); setPage(1) }}
-        style={{ marginBottom: 16 }}
-        options={TYPE_FILTER_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-      >
+      {/* Search bar */}
+      <div style={{ marginBottom: 16 }}>
         <input
           type="text"
           placeholder="브랜드명, 담당자, 이메일 검색..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          style={{ flex: 1, minWidth: 180, maxWidth: 320 }}
+          style={{ width: 320, padding: '8px 14px', fontSize: 13, border: '1px solid var(--gray-3)', borderRadius: 8, outline: 'none', fontFamily: 'inherit' }}
         />
-      </FilterSegmentBar>
+      </div>
 
       {/* Table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--gray-3)', boxShadow: 'var(--shadow)' }}>
@@ -844,13 +802,12 @@ export default function BrandContact() {
                   {pg.pageItems.map((row, i) => {
                     const status = row.status ?? ''
                     const statusStyle = STATUS_STYLE[status] ?? STATUS_STYLE['']
-                    const typeColor = row.source === 'general' ? TYPE_COLOR['일반'] : TYPE_COLOR['퍼스널']
                     const key = rowKey(row)
                     const noteVal = noteEdits[key] !== undefined ? noteEdits[key] : (row.notes ?? '')
                     const contactDateLabel = formatShortContactDate(row.last_contact_at)
                     const replyDateLabel = formatShortContactDate(row.last_reply_at)
                     return (
-                      <tr key={key} className={dbTableRowClass(checkedIds.has(key))} style={{ borderBottom: '1px solid var(--gray-2)', borderLeft: `3px solid ${typeColor}`, minHeight: 48 }}>
+                      <tr key={key} className={dbTableRowClass(checkedIds.has(key))} style={{ borderBottom: '1px solid var(--gray-2)', minHeight: 48 }}>
                         <td style={{ padding: '0 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                           <DbTableRowSelect
                             rowNumber={i + 1}

@@ -31,7 +31,6 @@ import InfluencerMonitoringArchive from './pages/influencer/monitoring/archive'
 // BRAND — db
 import BrandDb         from './pages/brand/db'
 import BrandDbGeneral  from './pages/brand/db/general'
-import BrandDbPersonal from './pages/brand/db/personal'
 import BrandTemplate         from './pages/brand/template'
 import BrandContact          from './pages/brand/contact'
 // BRAND — confirmed
@@ -119,9 +118,9 @@ export default function App() {
 
                 {/* ── BRAND ── */}
                 <Route path="/brand/db" element={<BrandDb />}>
-                  <Route index element={<Navigate to="general" replace />} />
-                  <Route path="general"  element={<BrandDbGeneral />} />
-                  <Route path="personal" element={<BrandDbPersonal />} />
+                  <Route index element={<BrandDbGeneral />} />
+                  <Route path="general"  element={<Navigate to="/brand/db" replace />} />
+                  <Route path="personal" element={<Navigate to="/brand/db" replace />} />
                 </Route>
                 <Route path="/brand/contact"                        element={<BrandContact />} />
                 <Route path="/brand/template"                           element={<BrandTemplate />} />

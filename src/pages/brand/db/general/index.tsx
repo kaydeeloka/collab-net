@@ -46,7 +46,6 @@ interface BrandGeneral {
   position:         string | null
   personal_email:   string[] | null
   personal_phone:   string | null
-  rep_email:        string | null
 }
 
 const EMPTY_FORM = {
@@ -63,7 +62,6 @@ const EMPTY_FORM = {
   position:         '',
   personal_email:   [''],
   personal_phone:   '',
-  rep_email:        '',
 }
 type Form = typeof EMPTY_FORM
 
@@ -103,10 +101,11 @@ export default function BrandDbGeneral() {
     if (!selectedPhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
-      .from('brand_general')
+      .from('brand_contacts')
       .select('*')
       .eq('phase_id', selectedPhaseId)
       .order('brand_name', { ascending: true })
+    console.log('[brand_contacts] data:', data, 'error:', error, 'phase:', selectedPhaseId)
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []).map(r => ({
       ...r,
@@ -132,7 +131,7 @@ export default function BrandDbGeneral() {
   async function addBrand() {
     if (!addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()) return
     setAdding(true)
-    const { error } = await supabase.from('brand_general').insert({
+    const { error } = await supabase.from('brand_contacts').insert({
       brand_name:       addForm.brand_name.trim(),
       company:          addForm.company.trim()          || null,
       email:            cleanEmails(addForm.email),
@@ -146,7 +145,6 @@ export default function BrandDbGeneral() {
       position:         addForm.position.trim()         || null,
       personal_email:   cleanEmails(addForm.personal_email),
       personal_phone:   addForm.personal_phone.trim()   || null,
-      rep_email:        addForm.rep_email.trim()        || null,
     })
     if (error) { showToast(error.message, 'error'); setAdding(false); return }
     showToast('브랜드가 추가되었습니다', 'success')
@@ -177,14 +175,13 @@ export default function BrandDbGeneral() {
       position:         r.position         ?? '',
       personal_email:   r.personal_email?.length ? r.personal_email : [''],
       personal_phone:   r.personal_phone   ?? '',
-      rep_email:        r.rep_email        ?? '',
     })
     setShowEdit(true)
   }
 
   async function saveEdit() {
     setSaving(true)
-    const { error } = await supabase.from('brand_general').update({
+    const { error } = await supabase.from('brand_contacts').update({
       brand_name:       editForm.brand_name.trim(),
       company:          editForm.company.trim()          || null,
       email:            cleanEmails(editForm.email),
@@ -198,7 +195,6 @@ export default function BrandDbGeneral() {
       position:         editForm.position.trim()         || null,
       personal_email:   cleanEmails(editForm.personal_email),
       personal_phone:   editForm.personal_phone.trim()   || null,
-      rep_email:        editForm.rep_email.trim()        || null,
     }).eq('id', editId)
     if (error) { showToast(error.message, 'error'); setSaving(false); return }
     showToast('저장 완료', 'success')
@@ -209,7 +205,7 @@ export default function BrandDbGeneral() {
   }
 
   async function deleteRow(id: string) {
-    const { error } = await supabase.from('brand_general').delete().eq('id', id)
+    const { error } = await supabase.from('brand_contacts').delete().eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.filter(r => r.id !== id))
     setShowView(false)
@@ -217,7 +213,7 @@ export default function BrandDbGeneral() {
 
   async function toggleContacted(id: string, current: boolean) {
     const next = !current
-    const { error } = await supabase.from('brand_general').update({ contacted: next }).eq('id', id)
+    const { error } = await supabase.from('brand_contacts').update({ contacted: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
   }
@@ -226,7 +222,7 @@ export default function BrandDbGeneral() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('brand_general').update({ contacted: true }).in('id', ids)
+    const { error } = await supabase.from('brand_contacts').update({ contacted: true }).in('id', ids)
     if (!error) {
       setRows(prev => prev.map(r => selected.has(r.id) ? { ...r, contacted: true } : r))
       setSelected(new Set())
@@ -268,19 +264,29 @@ export default function BrandDbGeneral() {
     key: keyof Omit<Form, 'overseas' | 'email' | 'phase_id' | 'personal_email'>,
     form: Form,
     setForm: (f: Form) => void,
-    opts?: { placeholder?: string; required?: boolean; type?: string }
+    opts?: { placeholder?: string; required?: boolean; type?: string; multiline?: boolean }
   ) => (
     <div>
       <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.4px', display: 'block', marginBottom: 4 }}>
         {label}{opts?.required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
       </label>
-      <input
-        type={opts?.type ?? 'text'}
-        value={form[key] as string}
-        onChange={e => setForm({ ...form, [key]: e.target.value })}
-        placeholder={opts?.placeholder}
-        style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
-      />
+      {opts?.multiline ? (
+        <textarea
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          rows={3}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }}
+        />
+      ) : (
+        <input
+          type={opts?.type ?? 'text'}
+          value={form[key] as string}
+          onChange={e => setForm({ ...form, [key]: e.target.value })}
+          placeholder={opts?.placeholder}
+          style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--gray-3)', borderRadius: 8, fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+        />
+      )}
     </div>
   )
 
@@ -398,7 +404,7 @@ export default function BrandDbGeneral() {
           </button>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BrandDbPhaseImport table="brand_general" onImported={load} />
+          <BrandDbPhaseImport onImported={load} />
           <button
             onClick={() => { setAddForm({ ...EMPTY_FORM, email: [''], phase_id: selectedPhaseId ?? '' }); setShowAdd(true) }}
             style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: 'var(--teal)', color: '#fff', fontFamily: 'inherit' }}>
@@ -414,10 +420,9 @@ export default function BrandDbGeneral() {
             <colgroup>
               <col style={{ width: 40 }} />
               <col style={{ width: 160 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 210 }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 200 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 160 }} />
               <col style={{ width: 130 }} />
               <col style={{ minWidth: 160 }} />
               <col style={{ width: 90 }} />
@@ -446,7 +451,7 @@ export default function BrandDbGeneral() {
                     onOpenChange={open => setOpenFilter(open ? 'contact' : null)}
                   />
                 </th>
-                {['이메일', '홈페이지', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
+                {['이메일', '회사 명', '내선번호', '판매 제품 카테고리', '해외 진출', '컨택 대상'].map((h) => (
                   <th key={h} style={{ padding: '10px 12px', textAlign: 'left' }}>
                     {h}
                   </th>
@@ -455,9 +460,9 @@ export default function BrandDbGeneral() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>불러오는 중...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 48, color: 'var(--gray-5)' }}>등록된 브랜드가 없습니다.</td></tr>
               ) : pg.pageItems.map((r, i) => (
                 <tr key={r.id} onClick={() => openView(r)}
                   className={dbTableRowClass(selected.has(r.id), r.contacted)}
@@ -489,12 +494,30 @@ export default function BrandDbGeneral() {
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '0 12px', fontSize: 12 }}>
+                  <td style={{ padding: '6px 12px', fontSize: 12 }}>
                     {r.contact_name ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontWeight: 600, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.contact_name}</span>
-                        {(r.department || r.position) && (
-                          <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>{[r.department, r.position].filter(Boolean).join(' · ')}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, overflow: 'hidden' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--gray-7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.contact_name}</span>
+                          {r.position && <span style={{ fontSize: 10, color: 'var(--gray-5)', whiteSpace: 'nowrap', flexShrink: 0 }}>{r.position}</span>}
+                        </div>
+                        {r.department && (
+                          <span style={{ fontSize: 10, color: 'var(--gray-5)' }}>{r.department}</span>
+                        )}
+                        {r.personal_email?.[0] && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                            <Mail size={10} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                            <a href={`mailto:${r.personal_email[0]}`} onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 10, color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.personal_email[0]}
+                            </a>
+                          </div>
+                        )}
+                        {r.personal_phone && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Phone size={10} style={{ color: 'var(--gray-4)', flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, color: 'var(--gray-6)' }}>{r.personal_phone}</span>
+                          </div>
                         )}
                       </div>
                     ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
@@ -511,15 +534,23 @@ export default function BrandDbGeneral() {
                       </div>
                     ) : <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
-                  <td style={{ padding: '0 12px' }}>
-                    {r.website
-                      ? <a href={r.website.startsWith('http') ? r.website : 'https://' + r.website} target="_blank" rel="noopener"
-                          onClick={e => e.stopPropagation()} className="video-link" style={{ fontSize: 12 }}>↗ 방문</a>
-                      : <span style={{ fontSize: 12, color: 'var(--gray-3)' }}>—</span>}
+                  <td style={{ padding: '6px 12px', fontSize: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ color: 'var(--gray-7)' }}>{r.company || <span style={{ color: 'var(--gray-3)' }}>—</span>}</span>
+                      {r.website && (
+                        <a
+                          href={r.website.startsWith('http') ? r.website : 'https://' + r.website}
+                          target="_blank" rel="noopener"
+                          onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 10, color: '#1558b0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                          ↗ {r.website.replace(/^https?:\/\//, '')}
+                        </a>
+                      )}
+                    </div>
                   </td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.company || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
                   <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)' }}>{r.telephone || <span style={{ color: 'var(--gray-3)' }}>—</span>}</td>
-                  <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--gray-7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '6px 12px', fontSize: 12, color: 'var(--gray-7)', whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: 200 }}>
                     {r.product_category || <span style={{ color: 'var(--gray-3)' }}>—</span>}
                   </td>
                   <td style={{ padding: '0 12px', textAlign: 'center' }}>
@@ -562,7 +593,7 @@ export default function BrandDbGeneral() {
                 {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
                 {formField('회사 명', 'company', addForm, setAddForm, { placeholder: '회사명 입력' })}
                 {formField('내선번호', 'telephone', addForm, setAddForm, { placeholder: '02-1234-5678' })}
-                {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품' })}
+                {formField('판매 제품 카테고리', 'product_category', addForm, setAddForm, { placeholder: '예: 스킨케어, 색조화장품', multiline: true })}
                 {overseasToggle(addForm, setAddForm)}
               </>
             ),
@@ -576,7 +607,6 @@ export default function BrandDbGeneral() {
                 {formField('직급', 'position', addForm, setAddForm)}
                 {formField('개인 전화번호', 'personal_phone', addForm, setAddForm, { type: 'tel' })}
                 {personalEmailListEditor(addForm, setAddForm)}
-                {formField('대표 메일', 'rep_email', addForm, setAddForm, { type: 'email' })}
               </>
             ),
           }}
@@ -619,15 +649,6 @@ export default function BrandDbGeneral() {
                         {viewRow.personal_email.map((e, i) => (
                           <a key={i} href={`mailto:${e}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{e}</a>
                         ))}
-                      </div>
-                    </div>
-                  )}
-                  {viewRow.rep_email && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--gray-7)' }}>
-                      <Mail size={15} style={{ color: 'var(--gray-4)', flexShrink: 0, marginTop: 2 }} />
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-5)', marginBottom: 2 }}>대표 메일</div>
-                        <a href={`mailto:${viewRow.rep_email}`} style={{ color: 'var(--blue-dk)', textDecoration: 'none', wordBreak: 'break-all' }}>{viewRow.rep_email}</a>
                       </div>
                     </div>
                   )}
@@ -717,7 +738,7 @@ export default function BrandDbGeneral() {
                 {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
                 {formField('회사 명', 'company', editForm, setEditForm)}
                 {formField('내선번호', 'telephone', editForm, setEditForm)}
-                {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm)}
+                {formField('판매 제품 카테고리', 'product_category', editForm, setEditForm, { multiline: true })}
                 {overseasToggle(editForm, setEditForm)}
               </>
             ),
@@ -731,7 +752,6 @@ export default function BrandDbGeneral() {
                 {formField('직급', 'position', editForm, setEditForm)}
                 {formField('개인 전화번호', 'personal_phone', editForm, setEditForm, { type: 'tel' })}
                 {personalEmailListEditor(editForm, setEditForm)}
-                {formField('대표 메일', 'rep_email', editForm, setEditForm, { type: 'email' })}
               </>
             ),
           }}

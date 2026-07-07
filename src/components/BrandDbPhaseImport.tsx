@@ -4,43 +4,16 @@ import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
 
-type BrandTable = 'brand_general' | 'brand_personal'
+type PreviewRow = { brand_name: string; email: string[] | null; contact_name: string | null; contacted: boolean }
 
-type GeneralPreviewRow = { brand_name: string; email: string[] | null; contacted: boolean }
-type PersonalPreviewRow = { brand_name: string; contact_name: string | null; personal_email: string[] | null; contacted: boolean }
-
-function generalDedupKey(row: { brand_name?: string | null; email?: string[] | null }) {
-  const name = String(row.brand_name ?? '').trim().toLowerCase()
-  const email = Array.isArray(row.email) ? (row.email[0] ?? '').trim().toLowerCase() : ''
-  return `${name}|${email}`
-}
-
-function personalDedupKey(row: { brand_name?: string | null; contact_name?: string | null; personal_email?: string[] | null }) {
-  const name = String(row.brand_name ?? '').trim().toLowerCase()
+function dedupKey(row: { brand_name?: string | null; email?: string[] | null; contact_name?: string | null }) {
+  const name    = String(row.brand_name    ?? '').trim().toLowerCase()
+  const email   = Array.isArray(row.email) ? (row.email[0] ?? '').trim().toLowerCase() : ''
   const contact = String(row.contact_name ?? '').trim().toLowerCase()
-  const email = Array.isArray(row.personal_email) ? (row.personal_email[0] ?? '').trim().toLowerCase() : ''
-  return `${name}|${contact}|${email}`
+  return `${name}|${email}|${contact}`
 }
 
-function previewCounts<T extends { contacted: boolean }>(
-  current: T[],
-  source: T[],
-  dedupKey: (row: T) => string,
-  importContactedOnly: boolean,
-) {
-  const existingSet = new Set(current.map(r => dedupKey(r)))
-  const filtered = source.filter(r => !importContactedOnly || r.contacted === true)
-  const add = filtered.filter(r => !existingSet.has(dedupKey(r))).length
-  return { add, skip: filtered.length - add }
-}
-
-export default function BrandDbPhaseImport({
-  table,
-  onImported,
-}: {
-  table: BrandTable
-  onImported: () => void
-}) {
+export default function BrandDbPhaseImport({ onImported }: { onImported: () => void }) {
   const { selectedPhaseId, phases } = usePhase()
   const { showToast } = useToast()
 
@@ -61,133 +34,64 @@ export default function BrandDbPhaseImport({
 
   const loadImportPreview = useCallback(async () => {
     if (!selectedPhaseId || !importPhaseId) { setImportPreview(null); return }
-
-    if (table === 'brand_general') {
-      const [{ data: current }, { data: source }] = await Promise.all([
-        supabase.from('brand_general').select('brand_name, email, contacted').eq('phase_id', selectedPhaseId),
-        supabase.from('brand_general').select('brand_name, email, contacted').eq('phase_id', importPhaseId),
-      ])
-      setImportPreview(previewCounts(
-        (current ?? []) as GeneralPreviewRow[],
-        (source ?? []) as GeneralPreviewRow[],
-        generalDedupKey,
-        importContactedOnly,
-      ))
-      return
-    }
-
     const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('brand_personal').select('brand_name, contact_name, personal_email, contacted').eq('phase_id', selectedPhaseId),
-      supabase.from('brand_personal').select('brand_name, contact_name, personal_email, contacted').eq('phase_id', importPhaseId),
+      supabase.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', selectedPhaseId),
+      supabase.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', importPhaseId),
     ])
-    setImportPreview(previewCounts(
-      (current ?? []) as PersonalPreviewRow[],
-      (source ?? []) as PersonalPreviewRow[],
-      personalDedupKey,
-      importContactedOnly,
-    ))
-  }, [selectedPhaseId, importPhaseId, importContactedOnly, table])
+    const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
+    const filtered = (source ?? []).filter(r => !importContactedOnly || r.contacted === true)
+    const add = filtered.filter(r => !existingSet.has(dedupKey(r))).length
+    setImportPreview({ add, skip: filtered.length - add })
+  }, [selectedPhaseId, importPhaseId, importContactedOnly])
 
   useEffect(() => {
     if (!showModal) return
     void loadImportPreview()
   }, [showModal, loadImportPreview])
 
-  async function importGeneralFromPhase() {
-    const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('brand_general').select('brand_name, email').eq('phase_id', selectedPhaseId!),
-      supabase.from('brand_general').select('*').eq('phase_id', importPhaseId),
-    ])
-    const existingSet = new Set((current ?? []).map(r => generalDedupKey(r)))
-    return (source ?? [])
-      .filter(r => !importContactedOnly || r.contacted === true)
-      .filter(r => !existingSet.has(generalDedupKey(r)))
-      .map(r => ({
-        phase_id:        selectedPhaseId!,
-        source_phase_id: importPhaseId,
-        contacted:       false,
-        status:          '',
-        send_count:      0,
-        reply_count:     0,
-        notes:           null,
-        last_reply_at:   null,
-        brand_name:       r.brand_name,
-        company:          r.company ?? null,
-        email:            Array.isArray(r.email) ? r.email : r.email ? [r.email] : null,
-        telephone:        r.telephone ?? null,
-        website:          r.website ?? null,
-        product_category: r.product_category ?? null,
-        overseas:         r.overseas ?? false,
-      }))
-  }
-
-  async function importPersonalFromPhase() {
-    const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('brand_personal').select('brand_name, contact_name, personal_email').eq('phase_id', selectedPhaseId!),
-      supabase.from('brand_personal').select('*').eq('phase_id', importPhaseId),
-    ])
-    const existingSet = new Set((current ?? []).map(r => personalDedupKey(r)))
-    return (source ?? [])
-      .filter(r => !importContactedOnly || r.contacted === true)
-      .filter(r => !existingSet.has(personalDedupKey(r)))
-      .map(r => ({
-        phase_id:        selectedPhaseId!,
-        source_phase_id: importPhaseId,
-        contacted:       false,
-        status:          '',
-        send_count:      0,
-        reply_count:     0,
-        notes:           null,
-        last_reply_at:   null,
-        brand_name:       r.brand_name,
-        company:          r.company ?? null,
-        contact_name:     r.contact_name ?? null,
-        department:       r.department ?? null,
-        position:         r.position ?? null,
-        personal_email:   Array.isArray(r.personal_email)
-          ? r.personal_email
-          : r.personal_email ? [r.personal_email] : null,
-        personal_phone:   r.personal_phone ?? null,
-        website:          r.website ?? null,
-        rep_email:        r.rep_email ?? null,
-        telephone:        r.telephone ?? null,
-        product_category: r.product_category ?? null,
-        overseas:         r.overseas ?? false,
-      }))
-  }
-
   async function importFromPhase() {
     if (!selectedPhaseId || !importPhaseId) {
-      showToast('불러올 차수를 선택하세요.', 'error')
-      return
+      showToast('불러올 차수를 선택하세요.', 'error'); return
     }
     if (!importPreview?.add) {
-      showToast('추가할 브랜드가 없습니다.', 'error')
-      return
+      showToast('추가할 브랜드가 없습니다.', 'error'); return
     }
-
     setImporting(true)
     try {
-      if (table === 'brand_general') {
-        const rows = await importGeneralFromPhase()
-        if (!rows.length) {
-          showToast('추가할 브랜드가 없습니다.', 'error')
-          return
-        }
-        const { error } = await supabase.from('brand_general').insert(rows)
-        if (error) throw error
-        showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
-      } else {
-        const rows = await importPersonalFromPhase()
-        if (!rows.length) {
-          showToast('추가할 브랜드가 없습니다.', 'error')
-          return
-        }
-        const { error } = await supabase.from('brand_personal').insert(rows)
-        if (error) throw error
-        showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
-      }
-
+      const [{ data: current }, { data: source }] = await Promise.all([
+        supabase.from('brand_contacts').select('brand_name, email, contact_name').eq('phase_id', selectedPhaseId!),
+        supabase.from('brand_contacts').select('*').eq('phase_id', importPhaseId),
+      ])
+      const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
+      const rows = (source ?? [])
+        .filter(r => !importContactedOnly || r.contacted === true)
+        .filter(r => !existingSet.has(dedupKey(r)))
+        .map(r => ({
+          phase_id:        selectedPhaseId!,
+          source_phase_id: importPhaseId,
+          contacted:       false,
+          status:          '',
+          send_count:      0,
+          reply_count:     0,
+          notes:           null,
+          last_reply_at:   null,
+          brand_name:       r.brand_name,
+          company:          r.company          ?? null,
+          email:            Array.isArray(r.email) ? r.email : r.email ? [r.email] : null,
+          telephone:        r.telephone        ?? null,
+          website:          r.website          ?? null,
+          product_category: r.product_category ?? null,
+          overseas:         r.overseas         ?? false,
+          contact_name:     r.contact_name     ?? null,
+          department:       r.department       ?? null,
+          position:         r.position         ?? null,
+          personal_email:   Array.isArray(r.personal_email) ? r.personal_email : r.personal_email ? [r.personal_email] : null,
+          personal_phone:   r.personal_phone   ?? null,
+        }))
+      if (!rows.length) { showToast('추가할 브랜드가 없습니다.', 'error'); return }
+      const { error } = await supabase.from('brand_contacts').insert(rows)
+      if (error) throw error
+      showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
       setShowModal(false)
       onImported()
     } catch (e: unknown) {
