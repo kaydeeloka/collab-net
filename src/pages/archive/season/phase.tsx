@@ -173,6 +173,7 @@ export default function ArchiveBrandReportPhase() {
     }
 
     setPdfDownloading(true)
+    showToast('데이터와 이미지를 불러오는 중입니다. 잠시만 기다려주세요.', 'info')
     try {
       // Collect all CSS rules from the current page so slides render identically
       const cssTexts: string[] = []
@@ -229,29 +230,34 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
       iframeDoc.write(printHtml)
       iframeDoc.close()
 
-      iframe.addEventListener('load', () => {
-        const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
-        // Cap each image's wait — a handful of slow/unreachable external thumbnails
-        // (Instagram/TikTok CDN) shouldn't be able to stall the whole PDF indefinitely.
-        const IMG_TIMEOUT_MS = 4000
-        const waitAll = imgs.map(img =>
-          img.complete
-            ? Promise.resolve()
-            : Promise.race([
-                new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() }),
-                new Promise<void>(res => setTimeout(res, IMG_TIMEOUT_MS)),
-              ])
-        )
-        Promise.all(waitAll).then(() => {
-          setTimeout(() => {
-            const prevTitle = document.title
-            document.title = pdfTitle
-            iframe.contentWindow?.print()
-            document.title = prevTitle
-            setTimeout(() => document.body.removeChild(iframe), 1000)
-          }, 200)
-        })
+      // Wait for the iframe itself to finish loading before touching its contents —
+      // and, crucially, await this whole chain so `pdfDownloading` (and the loading
+      // popup gated on it) stays true for the real duration of the work, not just the
+      // synchronous setup above.
+      await new Promise<void>(resolve => {
+        iframe.addEventListener('load', () => resolve(), { once: true })
       })
+
+      const imgs = Array.from(iframeDoc.querySelectorAll<HTMLImageElement>('img'))
+      // Cap each image's wait — a handful of slow/unreachable external thumbnails
+      // (Instagram/TikTok CDN) shouldn't be able to stall the whole PDF indefinitely.
+      const IMG_TIMEOUT_MS = 4000
+      const waitAll = imgs.map(img =>
+        img.complete
+          ? Promise.resolve()
+          : Promise.race([
+              new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() }),
+              new Promise<void>(res => setTimeout(res, IMG_TIMEOUT_MS)),
+            ])
+      )
+      await Promise.all(waitAll)
+      await new Promise<void>(res => setTimeout(res, 200))
+
+      const prevTitle = document.title
+      document.title = pdfTitle
+      iframe.contentWindow?.print()
+      document.title = prevTitle
+      setTimeout(() => document.body.removeChild(iframe), 1000)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('PDF generation error:', msg, e)
@@ -267,6 +273,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     if (reportPages.length === 0) { showToast('슬라이드가 없습니다.', 'info'); return }
     setDownloadOpen(false)
     setPptDownloading(true)
+    showToast('데이터와 이미지를 불러오는 중입니다. 잠시만 기다려주세요.', 'info')
     try {
       const [{ default: PptxGenJS }, { SLIDE_BUILDERS }] = await Promise.all([
         import('pptxgenjs'),
@@ -836,11 +843,6 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                     )}
                   </div>
                 </div>
-                {pdfDownloading && (
-                  <div style={{ fontSize: 12, color: 'var(--gray-5)', textAlign: 'right', padding: '4px 12px 0' }}>
-                    데이터와 이미지를 불러오는 중입니다. 시간이 걸릴 수 있으니 잠시만 기다려주세요.
-                  </div>
-                )}
                 <div className={reportEditMode ? 'season-report__edit-layout' : ''}>
                   {reportEditMode && (() => {
                     const sorted = [...reportPages].sort((a, b) => a.order_index - b.order_index)
