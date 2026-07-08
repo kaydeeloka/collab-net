@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
-const CORRECT_PIN = 'US26'
+const CORRECT_PIN = '2626'
 
 export default function Lock() {
   const { isUnlocked, unlock } = useAuth()
