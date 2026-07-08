@@ -15,11 +15,18 @@ export interface SeasonBrandItem {
 export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem[]> {
   const { data: brands, error } = await supabase
     .from('confirmed_brands')
-    .select('id, brand_name, brand_en, product, product_en, website, description_en')
+    .select('id, brand_name, product, product_en, website, description_en')
     .eq('phase_id', phaseId)
     .order('brand_name')
 
   if (error || !brands?.length) return []
+
+  const { data: contacts } = await supabase
+    .from('brand_contacts')
+    .select('brand_name, brand_en')
+    .eq('phase_id', phaseId)
+  const brandEnByName = new Map<string, string | null>()
+  for (const c of contacts ?? []) brandEnByName.set(c.brand_name as string, (c.brand_en as string | null) ?? null)
 
   const ids = brands.map(b => b.id)
   const { data: assets } = await supabase
@@ -66,7 +73,7 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
       return {
         id: brand.id,
         brandName: brand.brand_name as string,
-        brandEn: (brand.brand_en as string | null) ?? null,
+        brandEn: brandEnByName.get(brand.brand_name as string) ?? null,
         product: brand.product as string | null,
         productEn: (brand.product_en as string | null) ?? null,
         website: brand.website as string | null,
