@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import './Lock.css'
 
 const CORRECT_PIN = '2626'
+const HINT_LINE_1 = '힌트: MiMuse 시작 연도의 마지막'
+const HINT_LINE_2 = '두 자리를 입력하세요'
 
 export default function Lock() {
   const { isUnlocked, unlock } = useAuth()
@@ -11,6 +14,7 @@ export default function Lock() {
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
   const [shake, setShake] = useState(false)
+  const [showHint, setShowHint] = useState(false)
 
   useEffect(() => {
     if (isUnlocked) {
@@ -25,11 +29,11 @@ export default function Lock() {
   }, [])
 
   function handleInput(v: string) {
-    const upper = v.toUpperCase().slice(0, 4)
-    setValue(upper)
+    const digits = v.replace(/\D/g, '').slice(0, 4)
+    setValue(digits)
     setError('')
-    if (upper.length === 4) {
-      setTimeout(() => checkPin(upper), 80)
+    if (digits.length === 4) {
+      setTimeout(() => checkPin(digits), 80)
     }
   }
 
@@ -41,67 +45,50 @@ export default function Lock() {
       navigate(dest, { replace: true })
     } else {
       setShake(true)
-      setError('Incorrect PIN. Please try again.')
+      setError('비밀번호가 올바르지 않습니다. 다시 시도해주세요.')
       setTimeout(() => { setValue(''); setShake(false); inputRef.current?.focus() }, 500)
     }
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #fffde7 0%, #f8f9fb 50%, #edf3f6 100%)',
-    }}>
-      <div style={{ textAlign: 'center', width: 320 }} onClick={() => inputRef.current?.focus()}>
-        <img src="/img/logo-black.svg" alt="MiMuse" style={{ height: 72, borderRadius: 20, marginBottom: 16 }} />
-        <p style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>beautyproject@cranecomm.com</p>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#333', marginBottom: 28 }}>
-          Your MiMuse Dashboard is locked
-        </h2>
+    <div className="lock-page">
+      <div className="lock-card" onClick={() => inputRef.current?.focus()}>
+        <img src="/img/logo-black.svg" alt="MiMuse" className="lock-logo" />
+        <p className="lock-email">beautyproject@cranecomm.com</p>
+        <h2 className="lock-title">MiMuse 대시보드 잠금 모드</h2>
 
-        <div
-          style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 12 }}
-          className={shake ? 'pin-shake' : ''}
-        >
+        <div className={`lock-pins${shake ? ' lock-pins--shake' : ''}`}>
           {[0, 1, 2, 3].map(i => {
             const filled = i < value.length
             const active = i === value.length
-            return (
-              <div key={i} style={{
-                width: 52, height: 60, borderRadius: 12,
-                border: shake ? '2px solid #ef4444' : active ? '2px solid #6a95a5' : '2px solid #e0e0e0',
-                background: filled ? '#6a95a5' : shake ? '#fee2e2' : '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 24, color: '#fff', fontWeight: 700,
-                transition: 'border-color .15s, background .15s',
-              }}>
-                {filled ? '●' : ''}
-              </div>
-            )
+            const cls = [
+              'lock-pin',
+              filled && 'lock-pin--filled',
+              active && !shake && 'lock-pin--active',
+              shake && 'lock-pin--error',
+            ].filter(Boolean).join(' ')
+            return <div key={i} className={cls}>{filled ? '●' : ''}</div>
           })}
         </div>
 
-        {error && <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {error && <p className="lock-error">{error}</p>}
 
         <input
           ref={inputRef}
           type="password"
+          inputMode="numeric"
           value={value}
           maxLength={4}
           autoComplete="off"
           onChange={e => handleInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && value.length === 4) checkPin(value) }}
-          style={{ opacity: 0, position: 'absolute', pointerEvents: 'none' }}
+          className="lock-hidden-input"
         />
 
-        <button
-          onClick={() => setError('Contact the dashboard administrator.')}
-          style={{
-            background: 'none', border: 'none', color: '#888', fontSize: 13,
-            cursor: 'pointer', marginTop: 12, textDecoration: 'underline',
-          }}
-        >
-          I forgot my Lock Mode password
+        <button className="lock-forgot" onClick={() => setShowHint(v => !v)}>
+          비밀번호를 잊으셨나요?
         </button>
+        {showHint && <p className="lock-hint">{HINT_LINE_1}<br />{HINT_LINE_2}</p>}
       </div>
     </div>
   )
