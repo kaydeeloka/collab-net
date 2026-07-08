@@ -619,17 +619,22 @@ export default function MonitoringArchive() {
     let cancelled = false
     void (async () => {
       try {
-        const [data, brandsRes, kwsRes, bmPageRes, bmBrandPagesRes] = await Promise.all([
+        const [data, brandsRes, kwsRes, bcRes, bmPageRes, bmBrandPagesRes] = await Promise.all([
           loadMonitoringData(viewPhaseId),
-          supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
+          supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
           supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
             .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
+          supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
           supabase.from('report_pages').select('*').eq('phase_id', viewPhaseId).eq('type', 'brand_mention').maybeSingle(),
           supabase.from('brand_report_pages').select('id, brand_name, content').eq('phase_id', viewPhaseId).eq('type', 'brand_mention'),
         ])
         if (cancelled) return
         setRows(data.rows)
-        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: (b.brand_en as string | null) ?? '' }))
+        const brandEnMap: Record<string, string> = {}
+        ;(bcRes.data || []).forEach((r: { brand_name: string; brand_en: string | null }) => {
+          if (r.brand_en) brandEnMap[r.brand_name] = r.brand_en.toLowerCase()
+        })
+        const confirmed = (brandsRes.data || []).map(b => ({ key: monitoringBrandKey(b.brand_name), name: b.brand_name, en: brandEnMap[b.brand_name] ?? '' }))
         setBrands(confirmed)
         setBrandKw(buildBrandKwsFromRows(kwsRes.data || [], confirmed).byBrand)
         setReportBmPage(bmPageRes.data as ReportPage | null)
@@ -725,17 +730,19 @@ export default function MonitoringArchive() {
 
   async function handleImport() {
     // Read the full review list (모든 업로드된 리뷰), not just the platform-filtered view.
-    const tiktokRows = reviewRows.filter(r => r.review_link?.includes('tiktok.com'))
-    if (!tiktokRows.length) { showToast('가져올 TikTok URL이 없습니다', 'info'); return }
+    const eligibleRows = reviewRows.filter(r =>
+      r.review_link?.includes('tiktok.com') || r.review_link?.includes('instagram.com')
+    )
+    if (!eligibleRows.length) { showToast('가져올 TikTok/Instagram URL이 없습니다', 'info'); return }
     setImporting(true)
-    setDlModal({ open: true, urlCount: tiktokRows.length, status: 'running', step: 'scraping' })
+    setDlModal({ open: true, urlCount: eligibleRows.length, status: 'running', step: 'scraping' })
     const stepTimer = setTimeout(() => {
       setDlModal(m => m.status === 'running' ? { ...m, step: 'saving' } : m)
     }, 20000)
     try {
       const res = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
         action: 'downloadVideoAssets',
-        rows: tiktokRows.map(r => ({ id: r.id, review_link: r.review_link })),
+        rows: eligibleRows.map(r => ({ id: r.id, review_link: r.review_link })),
       })
       clearTimeout(stepTimer)
       if (res.error) { setDlModal(m => ({ ...m, status: 'done', step: 'saving', message: '오류: ' + res.error })); return }

@@ -263,13 +263,18 @@ export default function MonitoringReport() {
     setLoading(true)
     Promise.all([
       loadMonitoringData(viewPhaseId),
-      supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
+      supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+      supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
     ])
-      .then(([{ rows }, brandsRes]) => {
+      .then(([{ rows }, brandsRes, bcRes]) => {
+        const brandEnMap: Record<string, string> = {}
+        ;(bcRes.data || []).forEach((r: { brand_name: string; brand_en: string | null }) => {
+          if (r.brand_en) brandEnMap[r.brand_name] = r.brand_en.toLowerCase()
+        })
         const brands: ConfirmedBrandKw[] = (brandsRes.data || []).map(b => ({
           key:  monitoringBrandKey(b.brand_name),
           name: b.brand_name,
-          en:   (b.brand_en || '').toLowerCase(),
+          en:   brandEnMap[b.brand_name] ?? '',
         }))
         setConfirmedBrands(brands)
         setAllRows(rows)

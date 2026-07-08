@@ -390,15 +390,20 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   async function loadKeywords() {
     if (!viewPhaseId) return
     try {
-      const [brandsRes, kwsRes] = await Promise.all([
-        supabase.from('confirmed_brands').select('brand_name, brand_en').eq('phase_id', viewPhaseId).order('brand_name'),
+      const [brandsRes, kwsRes, bcRes] = await Promise.all([
+        supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
         supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
           .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
+        supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
       ])
+      const brandEnMap: Record<string, string> = {}
+      ;(bcRes.data || []).forEach((r: { brand_name: string; brand_en: string | null }) => {
+        if (r.brand_en) brandEnMap[r.brand_name] = r.brand_en.toLowerCase()
+      })
       const confirmed: ConfirmedBrandKw[] = (brandsRes.data || []).map(b => ({
         key: monitoringBrandKey(b.brand_name),
         name: b.brand_name,
-        en: (b.brand_en || '').toLowerCase(),
+        en: brandEnMap[b.brand_name] || '',
       }))
       setConfirmedBrands(confirmed)
       const rows = kwsRes.data || []
@@ -755,17 +760,19 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   }
 
   async function handleUpdateMetadata(targetRows: MonRow[]) {
-    const tiktokRows = targetRows.filter(r => r.review_link?.includes('tiktok.com'))
-    if (!tiktokRows.length) {
-      showToast('업데이트할 TikTok URL이 없습니다', 'info')
+    const eligibleRows = targetRows.filter(r =>
+      r.review_link?.includes('tiktok.com') || r.review_link?.includes('instagram.com')
+    )
+    if (!eligibleRows.length) {
+      showToast('업데이트할 TikTok/Instagram URL이 없습니다', 'info')
       return
     }
     setMetaUpdating(true)
-    setMetaModal({ open: true, urlCount: tiktokRows.length, status: 'running' })
+    setMetaModal({ open: true, urlCount: eligibleRows.length, status: 'running' })
     try {
       const r = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
         action: 'updateVideoMetadata',
-        rows: tiktokRows.map(row => ({ id: row.id, review_link: row.review_link })),
+        rows: eligibleRows.map(row => ({ id: row.id, review_link: row.review_link })),
       })
       if (r.error) {
         setMetaModal(m => ({ ...m, status: 'done', message: '오류: ' + r.error }))
@@ -781,17 +788,19 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   }
 
   async function handleDownloadAssets(targetRows: MonRow[]) {
-    const tiktokRows = targetRows.filter(r => r.review_link?.includes('tiktok.com'))
-    if (!tiktokRows.length) {
-      showToast('다운로드할 TikTok URL이 없습니다', 'info')
+    const eligibleRows = targetRows.filter(r =>
+      r.review_link?.includes('tiktok.com') || r.review_link?.includes('instagram.com')
+    )
+    if (!eligibleRows.length) {
+      showToast('다운로드할 TikTok/Instagram URL이 없습니다', 'info')
       return
     }
     setAssetDownloading(true)
-    setAssetModal({ open: true, urlCount: tiktokRows.length, status: 'running' })
+    setAssetModal({ open: true, urlCount: eligibleRows.length, status: 'running' })
     try {
       const r = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
         action: 'downloadVideoAssets',
-        rows: tiktokRows.map(row => ({ id: row.id, review_link: row.review_link })),
+        rows: eligibleRows.map(row => ({ id: row.id, review_link: row.review_link })),
       })
       if (r.error) {
         setAssetModal(m => ({ ...m, status: 'done', message: '오류: ' + r.error }))
@@ -1689,9 +1698,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
             <>
               <Spinner lg />
               <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
-                TikTok 영상 <strong>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
+                콘텐츠 <strong>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>Apify 실행 중, 잠시 기다려 주세요.</div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>TikTok · Instagram Apify 실행 중, 잠시 기다려 주세요.</div>
             </>
           ) : (
             <>
@@ -1727,9 +1736,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
             <>
               <Spinner lg />
               <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
-                TikTok 영상 <strong>{assetModal.urlCount}개</strong> 다운로드 중…
+                콘텐츠 <strong>{assetModal.urlCount}개</strong> 다운로드 중…
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>썸네일 및 영상 URL 수집 중, 잠시 기다려 주세요.</div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>TikTok · Instagram 썸네일 및 영상 URL 수집 중, 잠시 기다려 주세요.</div>
             </>
           ) : (
             <>

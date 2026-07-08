@@ -565,98 +565,113 @@ function debugMonitoringSetup() {
   }
 }
 
-// ── Metadata update via truefetch/tiktok-video-downloader ────
+// ── Metadata update via Apify (TikTok + Instagram) ───────────
 
-var META_ACTOR = 'scrape-creators~best-tiktok-video-scraper';
+var TIKTOK_META_ACTOR = 'scrape-creators~best-tiktok-video-scraper';
+var IG_META_ACTOR = 'instaprism/instagram-media-downloader';
+
+function _igShortCode(url) {
+  var m = (url || '').match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  return m ? m[2] : null;
+}
+
+// Run an Apify actor and block until SUCCEEDED, then return items array.
+function _apifyRunAndWait(token, actorId, inputPayload, maxTries) {
+  maxTries = maxTries || 18;
+  var startRes = UrlFetchApp.fetch(
+    'https://api.apify.com/v2/acts/' + actorId + '/runs?token=' + token,
+    { method: 'post', contentType: 'application/json', payload: JSON.stringify(inputPayload), muteHttpExceptions: true }
+  );
+  var startData = (JSON.parse(startRes.getContentText()) || {}).data;
+  if (!startData) return { error: 'Apify 실행 시작 실패: ' + startRes.getContentText().slice(0, 200) };
+
+  var runId = startData.id, datasetId = startData.defaultDatasetId, status = startData.status, tries = 0;
+  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED' && tries < maxTries) {
+    Utilities.sleep(10000);
+    var poll = (JSON.parse(UrlFetchApp.fetch('https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token, { muteHttpExceptions: true }).getContentText()) || {}).data || {};
+    status = poll.status || status;
+    datasetId = poll.defaultDatasetId || datasetId;
+    tries++;
+  }
+  if (status !== 'SUCCEEDED') return { error: 'Apify 실행 실패 (상태: ' + status + ')' };
+  var items = JSON.parse(UrlFetchApp.fetch('https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500', { muteHttpExceptions: true }).getContentText());
+  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
+  return { ok: true, items: items };
+}
 
 function updateVideoMetadata(body) {
   var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
 
-  var inputRows = Array.isArray(body.rows) ? body.rows : [];
-  var tiktokRows = inputRows.filter(function(r) {
-    return r.review_link && r.review_link.indexOf('tiktok.com') !== -1;
-  });
-  if (!tiktokRows.length) return { error: 'TikTok URL이 없습니다.' };
+  var inputRows  = Array.isArray(body.rows) ? body.rows : [];
+  var tiktokRows = inputRows.filter(function(r) { return r.review_link && r.review_link.indexOf('tiktok.com')   !== -1; });
+  var igRows     = inputRows.filter(function(r) { return r.review_link && r.review_link.indexOf('instagram.com') !== -1; });
+  if (!tiktokRows.length && !igRows.length) return { error: '처리할 TikTok/Instagram URL이 없습니다.' };
 
-  // Build videoId → row map for matching results back (URL format: /video/{id})
-  var rowByVideoId = {};
-  tiktokRows.forEach(function(row) {
-    var m = (row.review_link || '').match(/\/video\/(\d+)/);
-    if (m) rowByVideoId[m[1]] = row;
-  });
+  var cfg = supabaseConfig(), sbUrl = cfg.url, now = new Date().toISOString();
+  var tiktokUpdated = 0, igUpdated = 0;
 
-  var startRes = UrlFetchApp.fetch(
-    'https://api.apify.com/v2/acts/' + META_ACTOR + '/runs?token=' + token,
-    {
-      method     : 'post',
-      contentType: 'application/json',
-      payload    : JSON.stringify({
-        videos               : tiktokRows.map(function(r) { return r.review_link; }),
-        shouldGetTranscript  : false,
-        shouldDownloadVideos : false,
-        shouldDownloadCovers : false,
-      }),
-      muteHttpExceptions: true,
+  // ── TikTok ──────────────────────────────────────────────────
+  if (tiktokRows.length) {
+    var rowByVideoId = {};
+    tiktokRows.forEach(function(row) {
+      var m = (row.review_link || '').match(/\/video\/(\d+)/);
+      if (m) rowByVideoId[m[1]] = row;
+    });
+    var tkRes = _apifyRunAndWait(token, TIKTOK_META_ACTOR, {
+      videos: tiktokRows.map(function(r) { return r.review_link; }),
+      shouldGetTranscript: false, shouldDownloadVideos: false, shouldDownloadCovers: false,
+    }, 18);
+    if (!tkRes.error) {
+      tkRes.items.forEach(function(item) {
+        var row = rowByVideoId[String(item.id)];
+        if (!row) return;
+        var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring?id=eq.' + row.id, {
+          method: 'patch', headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
+          payload: JSON.stringify({ views: item.playCount || 0, likes: item.likeCount || 0, comments: item.commentCount || 0, updated: now }),
+          muteHttpExceptions: true,
+        });
+        if (res.getResponseCode() < 300) tiktokUpdated++;
+      });
     }
-  );
-  var startData = (JSON.parse(startRes.getContentText()) || {}).data;
-  if (!startData) return { error: 'Apify 실행 시작 실패: ' + startRes.getContentText().slice(0, 200) };
-
-  var runId     = startData.id;
-  var datasetId = startData.defaultDatasetId;
-  var status    = startData.status;
-  var tries     = 0;
-
-  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED' && tries < 18) {
-    Utilities.sleep(10000);
-    var pollData = (JSON.parse(UrlFetchApp.fetch(
-      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
-      { muteHttpExceptions: true }
-    ).getContentText()) || {}).data || {};
-    status    = pollData.status           || status;
-    datasetId = pollData.defaultDatasetId || datasetId;
-    tries++;
   }
 
-  if (status !== 'SUCCEEDED') return { error: 'Apify 실행 실패 (상태: ' + status + ')' };
+  // ── Instagram ────────────────────────────────────────────────
+  if (igRows.length) {
+    var rowByShortCode = {};
+    igRows.forEach(function(row) {
+      var sc = _igShortCode(row.review_link);
+      if (sc) rowByShortCode[sc] = row;
+    });
+    var igRes = _apifyRunAndWait(token, IG_META_ACTOR, {
+      directUrls: igRows.map(function(r) { return r.review_link; }),
+      resultsType: 'posts', resultsLimit: igRows.length,
+    }, 18);
+    if (!igRes.error) {
+      igRes.items.forEach(function(item) {
+        var sc  = item.shortCode || _igShortCode(item.url || item.inputUrl || '');
+        var row = sc ? rowByShortCode[sc] : null;
+        if (!row) return;
+        var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring?id=eq.' + row.id, {
+          method: 'patch', headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
+          payload: JSON.stringify({
+            views:    item.videoViewCount || item.videoPlayCount || 0,
+            likes:    item.likesCount     || item.likes          || 0,
+            comments: item.commentsCount  || item.comments       || 0,
+            updated:  now,
+          }),
+          muteHttpExceptions: true,
+        });
+        if (res.getResponseCode() < 300) igUpdated++;
+      });
+    }
+  }
 
-  var items = JSON.parse(UrlFetchApp.fetch(
-    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500',
-    { muteHttpExceptions: true }
-  ).getContentText());
-  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
-
-  var cfg     = supabaseConfig();
-  var sbUrl   = cfg.url;
-  var now     = new Date().toISOString();
-  var updated = 0;
-
-  items.forEach(function(item) {
-    var row = rowByVideoId[String(item.id)];
-    if (!row) return;
-    var patchRes = UrlFetchApp.fetch(
-      sbUrl + '/rest/v1/monitoring?id=eq.' + row.id,
-      {
-        method : 'patch',
-        headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
-        payload: JSON.stringify({
-          views   : item.playCount    || 0,
-          likes   : item.likeCount    || 0,
-          comments: item.commentCount || 0,
-          updated : now,
-        }),
-        muteHttpExceptions: true,
-      }
-    );
-    if (patchRes.getResponseCode() < 300) updated++;
-  });
-
-  return {
-    ok     : true,
-    updated: updated,
-    message: updated + '개 영상 메타데이터 업데이트 완료 (TikTok ' + tiktokRows.length + '개 대상)',
-  };
+  var total = tiktokUpdated + igUpdated;
+  var parts = [];
+  if (tiktokRows.length) parts.push('TikTok ' + tiktokUpdated + '/' + tiktokRows.length + '개');
+  if (igRows.length)     parts.push('Instagram ' + igUpdated + '/' + igRows.length + '개');
+  return { ok: true, updated: total, message: parts.join(' · ') + ' 업데이트 완료' };
 }
 
 // ── Refresh photo CDN URLs from an existing Apify dataset ─────
@@ -744,145 +759,136 @@ function downloadVideoAssets(body) {
   var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
   if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
 
-  var inputRows = Array.isArray(body.rows) ? body.rows : [];
-  var tiktokRows = inputRows.filter(function(r) {
-    return r.review_link && r.review_link.indexOf('tiktok.com') !== -1;
-  });
-  if (!tiktokRows.length) return { error: 'TikTok URL이 없습니다.' };
+  var inputRows  = Array.isArray(body.rows) ? body.rows : [];
+  var tiktokRows = inputRows.filter(function(r) { return r.review_link && r.review_link.indexOf('tiktok.com')   !== -1; });
+  var igRows     = inputRows.filter(function(r) { return r.review_link && r.review_link.indexOf('instagram.com') !== -1; });
+  if (!tiktokRows.length && !igRows.length) return { error: '처리할 TikTok/Instagram URL이 없습니다.' };
 
-  // Map TikTok video/photo id → all rows that reference it (duplicates allowed).
-  var rowsByVideoId = {};
-  var unkeyedRows = [];
-  tiktokRows.forEach(function(row) {
-    var m = (row.review_link || '').match(/\/(?:video|photo)\/(\d+)/);
-    if (!m) { unkeyedRows.push(row.review_link); return; }
-    var id = m[1];
-    if (!rowsByVideoId[id]) rowsByVideoId[id] = [];
-    rowsByVideoId[id].push(row);
-  });
+  var cfg = supabaseConfig(), sbUrl = cfg.url, now = new Date().toISOString();
+  var updated = 0, thumbUploaded = 0, unmatched = 0, noUrl = 0;
 
-  var startRes = UrlFetchApp.fetch(
-    'https://api.apify.com/v2/acts/' + META_ACTOR + '/runs?token=' + token,
-    {
-      method     : 'post',
-      contentType: 'application/json',
-      payload    : JSON.stringify({
-        videos               : tiktokRows.map(function(r) { return r.review_link; }),
-        shouldGetTranscript  : false,
-        shouldDownloadVideos : true,
-        shouldDownloadCovers : true,
-      }),
-      muteHttpExceptions: true,
+  // ── TikTok ──────────────────────────────────────────────────
+  if (tiktokRows.length) {
+    var rowsByVideoId = {};
+    tiktokRows.forEach(function(row) {
+      var m = (row.review_link || '').match(/\/(?:video|photo)\/(\d+)/);
+      if (!m) return;
+      var id = m[1];
+      if (!rowsByVideoId[id]) rowsByVideoId[id] = [];
+      rowsByVideoId[id].push(row);
+    });
+
+    var tkRes = _apifyRunAndWait(token, TIKTOK_META_ACTOR, {
+      videos: tiktokRows.map(function(r) { return r.review_link; }),
+      shouldGetTranscript: false, shouldDownloadVideos: true, shouldDownloadCovers: true,
+    }, 30);
+
+    if (!tkRes.error) {
+      tkRes.items.forEach(function(item) {
+        var rows = rowsByVideoId[String(item.id)];
+        if (!rows || !rows.length) { unmatched++; return; }
+
+        var images  = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+        var isPhoto = (item.url || '').indexOf('/photo/') !== -1 || (images.length > 0 && !item.videoUrl);
+        var coverUrl, videoUrl, imageUrls;
+        if (isPhoto) {
+          coverUrl = (images.length ? images[0] : null) || item.coverImg || null;
+          videoUrl = null; imageUrls = images.length ? images : null;
+        } else {
+          coverUrl = item.coverImg || (images.length ? images[0] : null) || null;
+          videoUrl = _withApifyToken_(item.downloadUrl || item.videoUrl || null, token);
+          imageUrls = null;
+        }
+        if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
+
+        rows.forEach(function(row) {
+          var finalCoverUrl = coverUrl;
+          var coverDownloadUrl = _withApifyToken_(item.downloadCoverUrl, token);
+          if (coverDownloadUrl) {
+            try {
+              var imgRes = UrlFetchApp.fetch(coverDownloadUrl, { muteHttpExceptions: true });
+              if (imgRes.getResponseCode() === 200) {
+                var imgBlob = imgRes.getBlob();
+                imgBlob.setContentType('image/jpeg');
+                finalCoverUrl = supabaseStorageUpload('monitoring-thumbnails', row.id + '.jpg', imgBlob, 'image/jpeg');
+                thumbUploaded++;
+              }
+            } catch (e) { Logger.log('TK 썸네일 업로드 오류 (' + row.id + '): ' + e); }
+          }
+          var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id', {
+            method: 'POST',
+            headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }),
+            payload: JSON.stringify({ monitoring_id: row.id, cover_url: finalCoverUrl, video_url: videoUrl, image_urls: imageUrls, updated_at: now }),
+            muteHttpExceptions: true,
+          });
+          if (res.getResponseCode() < 300) updated++;
+          else Logger.log('TK monitoring_assets 오류: ' + res.getContentText());
+        });
+      });
     }
-  );
-  var startData = (JSON.parse(startRes.getContentText()) || {}).data;
-  if (!startData) return { error: 'Apify 실행 시작 실패: ' + startRes.getContentText().slice(0, 200) };
-
-  var runId     = startData.id;
-  var datasetId = startData.defaultDatasetId;
-  var status    = startData.status;
-  var tries     = 0;
-
-  while (status !== 'SUCCEEDED' && status !== 'FAILED' && status !== 'ABORTED' && tries < 30) {
-    Utilities.sleep(10000);
-    var pollData = (JSON.parse(UrlFetchApp.fetch(
-      'https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token,
-      { muteHttpExceptions: true }
-    ).getContentText()) || {}).data || {};
-    status    = pollData.status           || status;
-    datasetId = pollData.defaultDatasetId || datasetId;
-    tries++;
   }
 
-  if (status !== 'SUCCEEDED') return { error: 'Apify 실행 실패 (상태: ' + status + ')' };
-
-  var items = JSON.parse(UrlFetchApp.fetch(
-    'https://api.apify.com/v2/datasets/' + datasetId + '/items?token=' + token + '&limit=500',
-    { muteHttpExceptions: true }
-  ).getContentText());
-  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
-
-  var cfg     = supabaseConfig();
-  var sbUrl   = cfg.url;
-  var now     = new Date().toISOString();
-  var updated       = 0;   // monitoring_assets rows successfully saved
-  var thumbUploaded = 0;   // covers permanently uploaded to Supabase Storage
-  var noUrl         = 0;   // Apify items with neither cover nor video URL
-  var unmatched     = 0;   // Apify items whose id matched no monitoring row
-
-  items.forEach(function(item) {
-    var rows = rowsByVideoId[String(item.id)];
-    if (!rows || !rows.length) { unmatched++; return; }
-    // Prefer direct (token-free) CDN URLs; the Apify download* URLs are private (403 / insufficient-permissions).
-    // Photo posts (/photo/ URL, with an `images` array) still carry a slideshow videoUrl — ignore it and
-    // use the images as the media. Video posts use videoUrl.
-    var images  = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
-    var isPhoto = (item.url || '').indexOf('/photo/') !== -1 || (images.length > 0 && !item.videoUrl);
-
-    var coverUrl, videoUrl, imageUrls;
-    if (isPhoto) {
-      coverUrl  = (images.length ? images[0] : null) || item.coverImg || null;
-      videoUrl  = null;
-      imageUrls = images.length ? images : null;
-    } else {
-      coverUrl  = item.coverImg || (images.length ? images[0] : null) || null;
-      // Prefer Apify KV download URL (persistent with token) over TikTok CDN (expires within hours).
-      videoUrl  = _withApifyToken_(item.downloadUrl || item.videoUrl || null, token);
-      imageUrls = null;
-    }
-    if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
-
-    rows.forEach(function(row) {
-      // Auto-upload cover thumbnail to Supabase Storage for permanent access.
-      var finalCoverUrl    = coverUrl;
-      var coverDownloadUrl = _withApifyToken_(item.downloadCoverUrl, token);
-      if (coverDownloadUrl) {
-        try {
-          var imgRes = UrlFetchApp.fetch(coverDownloadUrl, { muteHttpExceptions: true });
-          if (imgRes.getResponseCode() === 200) {
-            var imgBlob = imgRes.getBlob();
-            imgBlob.setContentType('image/jpeg');
-            finalCoverUrl = supabaseStorageUpload('monitoring-thumbnails', row.id + '.jpg', imgBlob, 'image/jpeg');
-            thumbUploaded++;
-          }
-        } catch (e) {
-          Logger.log('썸네일 Supabase 업로드 오류 (' + row.id + '): ' + e);
-        }
-      }
-
-      var res = UrlFetchApp.fetch(
-        sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id',
-        {
-          method : 'POST',
-          headers: Object.assign({}, supabaseHeaders(), {
-            'Content-Type': 'application/json',
-            Prefer        : 'resolution=merge-duplicates',
-          }),
-          payload           : JSON.stringify({
-            monitoring_id: row.id,
-            cover_url    : finalCoverUrl,
-            video_url    : videoUrl,
-            image_urls   : imageUrls,
-            updated_at   : now,
-          }),
-          muteHttpExceptions: true,
-        }
-      );
-      if (res.getResponseCode() < 300) updated++;
-      else Logger.log('monitoring_assets upsert 오류: ' + res.getContentText());
+  // ── Instagram ────────────────────────────────────────────────
+  if (igRows.length) {
+    var igByShortCode = {};
+    igRows.forEach(function(row) {
+      var sc = _igShortCode(row.review_link);
+      if (!sc) return;
+      if (!igByShortCode[sc]) igByShortCode[sc] = [];
+      igByShortCode[sc].push(row);
     });
-  });
 
+    var igRes = _apifyRunAndWait(token, IG_META_ACTOR, {
+      directUrls: igRows.map(function(r) { return r.review_link; }),
+      resultsType: 'posts', resultsLimit: igRows.length,
+    }, 30);
+
+    if (!igRes.error) {
+      igRes.items.forEach(function(item) {
+        var sc   = item.shortCode || _igShortCode(item.url || item.inputUrl || '');
+        var rows = sc ? igByShortCode[sc] : null;
+        if (!rows || !rows.length) { unmatched++; return; }
+
+        var sidecar  = Array.isArray(item.sidecarItems) ? item.sidecarItems.map(function(s) { return s.displayUrl || null; }).filter(Boolean) : [];
+        var images   = Array.isArray(item.images) ? item.images.filter(Boolean) : sidecar;
+        var isVideo  = !!item.videoUrl;
+        var coverUrl = item.displayUrl || (images.length ? images[0] : null) || null;
+        var videoUrl = item.videoUrl || null;
+        var imageUrls = (!isVideo && images.length) ? images : null;
+        if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
+
+        rows.forEach(function(row) {
+          var finalCoverUrl = coverUrl;
+          if (coverUrl) {
+            try {
+              var imgRes = UrlFetchApp.fetch(coverUrl, { muteHttpExceptions: true });
+              if (imgRes.getResponseCode() === 200) {
+                var imgBlob = imgRes.getBlob();
+                imgBlob.setContentType('image/jpeg');
+                var uploaded = supabaseStorageUpload('monitoring-thumbnails', row.id + '.jpg', imgBlob, 'image/jpeg');
+                if (uploaded) { finalCoverUrl = uploaded; thumbUploaded++; }
+              }
+            } catch (e) { Logger.log('IG 썸네일 업로드 오류 (' + row.id + '): ' + e); }
+          }
+          var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id', {
+            method: 'POST',
+            headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }),
+            payload: JSON.stringify({ monitoring_id: row.id, cover_url: finalCoverUrl, video_url: videoUrl, image_urls: imageUrls, updated_at: now }),
+            muteHttpExceptions: true,
+          });
+          if (res.getResponseCode() < 300) updated++;
+          else Logger.log('IG monitoring_assets 오류: ' + res.getContentText());
+        });
+      });
+    }
+  }
+
+  var parts = [];
+  if (tiktokRows.length) parts.push('TikTok ' + tiktokRows.length + '개');
+  if (igRows.length)     parts.push('Instagram ' + igRows.length + '개');
   return {
-    ok           : true,
-    updated      : updated,
-    thumbUploaded: thumbUploaded,
-    itemsReturned: items.length,
-    tiktokRows   : tiktokRows.length,
-    unmatched    : unmatched,
-    noDownloadUrl: noUrl,
-    unkeyedUrls  : unkeyedRows,
-    message: '저장 완료 ' + updated + '개 · 매칭 실패 ' + unmatched + '개 · 다운로드 URL 없음 ' + noUrl + '개 (대상 ' + tiktokRows.length + '개)',
+    ok: true, updated: updated, thumbUploaded: thumbUploaded, unmatched: unmatched, noDownloadUrl: noUrl,
+    message: '저장 완료 ' + updated + '개 · 매칭 실패 ' + unmatched + '개 (대상 ' + parts.join(' · ') + ')',
   };
 }
 
