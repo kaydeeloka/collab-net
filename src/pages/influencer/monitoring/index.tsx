@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { BarChart2, Copy, Download, ExternalLink, FileText, Hash, Link2, Plus, RefreshCw, Video } from 'lucide-react'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
 import * as XLSX from 'xlsx'
@@ -195,8 +195,10 @@ export default function Monitoring() {
   const [editForm,       setEditForm]       = useState<{
     date: string; media: string; content: string; brand: string
     review_link: string; views: number; likes: number; comments: number
+    influencer_platform_id: string | null
   } | null>(null)
-  const [editSaving,     setEditSaving]     = useState(false)
+  const [editSaving,       setEditSaving]       = useState(false)
+  const [platformOptions,  setPlatformOptions]  = useState<{ id: string; platform: string; handle: string }[]>([])
   const [uploadPage,     setUploadPage]     = useState(1)
   const [listPage,       setListPage]       = useState(1)
   const MON_PAGE_SIZE = 25
@@ -514,14 +516,15 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   function rowToEditForm(r: MonRow) {
     return {
-      date:        r.date || '',
-      media:       r.media || '',
-      content:     r.content || '',
-      brand:       normalizeBrandToKey(r.brand || ''),
-      review_link: r.review_link || '',
-      views:       r.views || 0,
-      likes:       r.likes || 0,
-      comments:    r.comments || 0,
+      date:                    r.date || '',
+      media:                   r.media || '',
+      content:                 r.content || '',
+      brand:                   normalizeBrandToKey(r.brand || ''),
+      review_link:             r.review_link || '',
+      views:                   r.views || 0,
+      likes:                   r.likes || 0,
+      comments:                r.comments || 0,
+      influencer_platform_id:  r.influencer_platform_id,
     }
   }
 
@@ -557,6 +560,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     setModalGroupRows([])
     setModalEditing(false)
     setEditForm(null)
+    setPlatformOptions([])
   }
 
   function startEditing(r?: MonRow) {
@@ -642,6 +646,12 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     setModalRow(newRow)
     setModalEditing(true)
     setEditForm(rowToEditForm(newRow))
+    if (base.confirmed_influencer_id) {
+      void supabase.from('influencer_platform')
+        .select('id, platform, handle')
+        .eq('confirmed_influencer_id', base.confirmed_influencer_id)
+        .then(({ data }) => { if (data) setPlatformOptions(data) })
+    }
   }
 
   async function deleteReview(r: MonRow) {
@@ -671,14 +681,23 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         comments:    editForm.comments || 0,
       }
       if (isPlaceholderRow(modalRow)) {
-        if (!modalRow.influencer_platform_id) throw new Error('platform id missing')
+        const platformId = editForm.influencer_platform_id || modalRow.influencer_platform_id
+        if (!platformId) throw new Error('platform id missing')
+        const selectedPlatform = platformOptions.find(o => o.id === platformId)
         const { data, error } = await supabase
           .from('monitoring')
-          .insert({ influencer_platform_id: modalRow.influencer_platform_id, ...payload })
+          .insert({ influencer_platform_id: platformId, ...payload })
           .select('id')
           .single()
         if (error) throw error
-        const updated = { ...modalRow, ...payload, id: data.id, isPlaceholder: false }
+        const updated = {
+          ...modalRow,
+          ...payload,
+          id: data.id,
+          isPlaceholder: false,
+          influencer_platform_id: platformId,
+          ...(selectedPlatform ? { platform: selectedPlatform.platform, handle: selectedPlatform.handle } : {}),
+        }
         setRows(prev => prev.some(r => r.id === modalRow.id)
           ? prev.map(r => r.id === modalRow.id ? updated : r)
           : [updated, ...prev])
@@ -1693,14 +1712,17 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         onClose={() => setMetaModal(m => ({ ...m, open: false }))}
         title="메타데이터 업데이트"
       >
-        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+        <div style={{ padding: '8px 0 16px' }}>
           {metaModal.status === 'running' ? (
             <>
-              <Spinner lg />
-              <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
-                콘텐츠 <strong>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--gray-7)' }}>
+                <Spinner sm />
+                콘텐츠 <strong style={{ margin: '0 2px' }}>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>TikTok · Instagram Apify 실행 중, 잠시 기다려 주세요.</div>
+              <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: 'var(--gray-4)' }}>
+                TikTok · Instagram Apify 실행 중, 잠시 기다려 주세요.
+              </div>
+              <div className="task-progress"><div className="task-progress__fill" /></div>
             </>
           ) : (
             <>
@@ -1731,14 +1753,17 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         onClose={() => setAssetModal(m => ({ ...m, open: false }))}
         title="영상 다운로드"
       >
-        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+        <div style={{ padding: '8px 0 16px' }}>
           {assetModal.status === 'running' ? (
             <>
-              <Spinner lg />
-              <div style={{ marginTop: 16, fontSize: 14, color: 'var(--gray-6)' }}>
-                콘텐츠 <strong>{assetModal.urlCount}개</strong> 다운로드 중…
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--gray-7)' }}>
+                <Spinner sm />
+                콘텐츠 <strong style={{ margin: '0 2px' }}>{assetModal.urlCount}개</strong> 다운로드 중…
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-4)' }}>TikTok · Instagram 썸네일 및 영상 URL 수집 중, 잠시 기다려 주세요.</div>
+              <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: 'var(--gray-4)' }}>
+                TikTok · Instagram 썸네일 및 영상 URL 수집 중, 잠시 기다려 주세요.
+              </div>
+              <div className="task-progress"><div className="task-progress__fill" /></div>
             </>
           ) : (
             <>
@@ -1797,23 +1822,61 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               )}
             </div>
 
-            {modalGroupRows.length > 1 && (
-              <div className="mon-review-modal__selector">
-                <label className="modal-label" style={{ marginTop: 0 }}>리뷰 선택</label>
-                <select className="modal-input" value={modalRow.id}
-                  onChange={e => {
-                    const next = modalGroupRows.find(row => row.id === e.target.value)
-                    if (next) selectModalRow(next)
-                  }}>
-                  {modalGroupRows.map((row, i) => (
-                    <option key={row.id} value={row.id}>
-                      Review {i + 1}
-                      {isNewUnsavedRow(row) ? ' · 새 항목' : ''}
-                      {row.brand ? ` · ${confirmedBrands.find(b => b.key === row.brand!.toLowerCase())?.name || row.brand}` : ''}
-                      {row.date ? ` · ${fmtDate(row.date)}` : ''}
-                    </option>
-                  ))}
-                </select>
+            {(modalGroupRows.length > 1 || (modalEditing && isNewUnsavedRow(modalRow) && platformOptions.length > 0)) && (
+              <div style={{ display: 'flex', gap: 12 }}>
+                {modalGroupRows.length > 1 && (
+                  <div className="mon-review-modal__selector" style={{ flex: 1 }}>
+                    <label className="modal-label" style={{ marginTop: 0 }}>리뷰 선택</label>
+                    <select className="modal-input" value={modalRow.id}
+                      onChange={e => {
+                        const next = modalGroupRows.find(row => row.id === e.target.value)
+                        if (next) selectModalRow(next)
+                      }}>
+                      {(() => {
+                        const hasNew = modalGroupRows.some(r => isNewUnsavedRow(r))
+                        return modalGroupRows.map((row, i) => {
+                          const isNew = isNewUnsavedRow(row)
+                          const num   = isNew ? modalGroupRows.length : (hasNew ? i : i + 1)
+                          return (
+                            <option key={row.id} value={row.id}>
+                              Review {num}
+                              {isNew ? ' · 새 항목' : ''}
+                              {row.brand ? ` · ${confirmedBrands.find(b => b.key === row.brand!.toLowerCase())?.name || row.brand}` : ''}
+                              {row.date ? ` · ${fmtDate(row.date)}` : ''}
+                            </option>
+                          )
+                        })
+                      })()}
+                    </select>
+                  </div>
+                )}
+                {modalEditing && isNewUnsavedRow(modalRow) && platformOptions.length > 0 && editForm && (
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <label className="modal-label" style={{ marginTop: 0, marginBottom: 0 }}>플랫폼</label>
+                      <Link to="/influencer/confirmed" className="link-gray-teal"
+                        style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 500 }}>
+                        <ExternalLink size={9} />
+                        인플루언서 페이지에서 추가
+                      </Link>
+                    </div>
+                    <select className="modal-input"
+                      value={editForm.influencer_platform_id || ''}
+                      onChange={e => {
+                        const opt = platformOptions.find(o => o.id === e.target.value)
+                        if (!opt) return
+                        setEditForm(f => f ? { ...f, influencer_platform_id: opt.id } : f)
+                        setModalRow(prev => prev ? { ...prev, platform: opt.platform, handle: opt.handle, influencer_platform_id: opt.id } : prev)
+                      }}>
+                      {platformOptions.map(o => (
+                        <option key={o.id} value={o.id}>
+                          {platformBadgeStyle(o.platform).label}
+                          {o.handle ? ` · @${o.handle.replace(/^@/, '')}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1823,8 +1886,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   <ReportCard icon={<FileText size={16} />} title="리뷰 정보">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <ReportStat label="업로드일" value={fmtDate(modalRow.date)} />
-                      <ReportStat label="미디어" value={modalRow.media || '—'} />
-                      <ReportStat label="콘텐츠" value={modalRow.content || '—'} />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <ReportStat label="미디어" value={modalRow.media || '—'} />
+                        <ReportStat label="콘텐츠" value={modalRow.content || '—'} />
+                      </div>
                     </div>
                   </ReportCard>
 

@@ -265,6 +265,33 @@
   margin: 0 0 6px;
 }
 
+/* Indeterminate progress bar for long-running async tasks */
+.task-progress {
+  height: 3px;
+  background: var(--gray-3);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 22px;
+}
+.task-progress__fill {
+  height: 100%;
+  width: 30%;
+  background: var(--teal);
+  border-radius: 99px;
+  animation: task-progress-slide 1.8s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes task-progress-slide {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(450%); }
+}
+
+.link-gray-teal {
+  color: var(--gray-4);
+  text-decoration: none;
+  transition: color .15s;
+}
+.link-gray-teal:hover { color: var(--teal); }
+
 /* View/detail rows inside modals */
 .ui-detail-list {
   display: flex;
