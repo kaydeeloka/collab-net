@@ -214,8 +214,8 @@ export default function Monitoring() {
   const [contentFilter,    setContentFilter]    = useState('all')
   const [openFilter,       setOpenFilter]       = useState<'platform' | 'brand' | 'status' | 'media' | 'content' | null>(null)
   const [openListFilter,   setOpenListFilter]   = useState<'platform' | 'brand' | null>(null)
-  const [metaUpdating,     setMetaUpdating]     = useState(false)
-  const [metaModal,        setMetaModal]        = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
+  const [metaUpdating,     setMetaUpdating]     = useState<'tiktok' | 'instagram' | false>(false)
+  const [metaModal,        setMetaModal]        = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string; platform?: 'tiktok' | 'instagram' }>({ open: false, urlCount: 0, status: 'running' })
   const [assetDownloading, setAssetDownloading] = useState(false)
   const [assetModal,       setAssetModal]       = useState<{ open: boolean; urlCount: number; status: 'running' | 'done'; updated?: number; message?: string }>({ open: false, urlCount: 0, status: 'running' })
 
@@ -778,16 +778,16 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     stopPolling(); setRunPending(false); setScrapeMsg('')
   }
 
-  async function handleUpdateMetadata(targetRows: MonRow[]) {
-    const eligibleRows = targetRows.filter(r =>
-      r.review_link?.includes('tiktok.com') || r.review_link?.includes('instagram.com')
-    )
+  async function handleUpdateMetadata(targetRows: MonRow[], platform: 'tiktok' | 'instagram') {
+    const domain = platform === 'tiktok' ? 'tiktok.com' : 'instagram.com'
+    const label  = platform === 'tiktok' ? 'TikTok' : 'Instagram'
+    const eligibleRows = targetRows.filter(r => r.review_link?.includes(domain))
     if (!eligibleRows.length) {
-      showToast('업데이트할 TikTok/Instagram URL이 없습니다', 'info')
+      showToast(`업데이트할 ${label} URL이 없습니다`, 'info')
       return
     }
-    setMetaUpdating(true)
-    setMetaModal({ open: true, urlCount: eligibleRows.length, status: 'running' })
+    setMetaUpdating(platform)
+    setMetaModal({ open: true, urlCount: eligibleRows.length, status: 'running', platform })
     try {
       const r = await gasPost<{ ok?: boolean; error?: string; message?: string; updated?: number }>({
         action: 'updateVideoMetadata',
@@ -1354,11 +1354,20 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
             type="button"
             className="cfg-btn cfg-btn--ghost"
             style={{ marginLeft: 'auto' }}
-            disabled={metaUpdating || reviewRows.length === 0}
-            onClick={() => { void handleUpdateMetadata(reviewRows) }}
+            disabled={metaUpdating !== false || reviewRows.length === 0}
+            onClick={() => { void handleUpdateMetadata(reviewRows, 'tiktok') }}
           >
-            {metaUpdating ? <Spinner sm /> : <RefreshCw size={13} />}
-            {metaUpdating ? '업데이트 중…' : '메타데이터 업데이트'}
+            {metaUpdating === 'tiktok' ? <Spinner sm /> : <RefreshCw size={13} />}
+            {metaUpdating === 'tiktok' ? '업데이트 중…' : 'TikTok 업데이트'}
+          </button>
+          <button
+            type="button"
+            className="cfg-btn cfg-btn--ghost"
+            disabled={metaUpdating !== false || reviewRows.length === 0}
+            onClick={() => { void handleUpdateMetadata(reviewRows, 'instagram') }}
+          >
+            {metaUpdating === 'instagram' ? <Spinner sm /> : <RefreshCw size={13} />}
+            {metaUpdating === 'instagram' ? '업데이트 중…' : 'Instagram 업데이트'}
           </button>
         </FilterSegmentBar>
 
@@ -1380,8 +1389,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                 if (uploadFilter === 'not_uploaded' && anyLink) return false
               }
               if (platformFilter !== 'all') {
-                const bucket = platformBucket(g.rows[0]?.platform || '')
-                if (bucket !== platformFilter) return false
+                if (!g.rows.some(r => platformBucket(r.platform) === platformFilter)) return false
               }
               return true
             })
@@ -1481,9 +1489,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                     : pagedGroups.map((group, gi) => {
                       const groupIdx = uploadStartIdx + gi
                       const isLastGroup = gi === pagedGroups.length - 1
+                      const displayRows = platformFilter !== 'all' ? group.rows.filter(r => platformBucket(r.platform) === platformFilter) : group.rows
                       const account  = (group.rows[0].handle || '').replace(/^@/, '')
-                      const anyLink  = group.rows.some(r => r.review_link?.startsWith('http'))
-                      const bucket   = platformBucket(group.rows[0].platform)
+                      const anyLink  = displayRows.some(r => r.review_link?.startsWith('http'))
+                      const bucket   = platformFilter !== 'all' ? platformFilter : platformBucket(group.rows[0].platform)
                       const profileUrl  = bucket === 'tiktok'
                         ? `https://www.tiktok.com/@${account}`
                         : bucket === 'instagram'
@@ -1491,9 +1500,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                           : ''
                       const groupBorderStyle = !isLastGroup ? { borderBottom: '2px solid var(--gray-2)' } : {}
 
-                      return group.rows.map((r, ri) => {
+                      return displayRows.map((r, ri) => {
                         const isFirst  = ri === 0
-                        const isLast   = ri === group.rows.length - 1
+                        const isLast   = ri === displayRows.length - 1
                         const link     = r.review_link || ''
                         const hasLink  = !!link.startsWith('http')
                         const rowBrand = (r.brand || '').toLowerCase()
@@ -1505,14 +1514,14 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
                             {/* no. — only on first row of group, spans all rows */}
                             {isFirst && (
-                              <td rowSpan={group.rows.length} style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center', verticalAlign: 'middle', ...groupBorderStyle }}>
+                              <td rowSpan={displayRows.length} style={{ color: 'var(--gray-4)', fontSize: 11, textAlign: 'center', verticalAlign: 'middle', ...groupBorderStyle }}>
                                 {group.rows[0].seq ?? groupIdx + 1}
                               </td>
                             )}
 
                             {/* account — rowspan so handle shows once per influencer */}
                             {isFirst && (
-                              <td rowSpan={group.rows.length} onClick={() => openModal(r, group.rows, false)}
+                              <td rowSpan={displayRows.length} onClick={() => openModal(r, group.rows, false)}
                                 style={{ verticalAlign: 'middle', cursor: 'pointer', ...groupBorderStyle }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                                   <InfluencerAvatar
@@ -1525,9 +1534,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                                   {anyLink
                                     ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}>완료</span>
                                     : <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>미업로드</span>}
-                                  {group.rows.length > 1 && (
+                                  {displayRows.length > 1 && (
                                     <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, background: 'var(--blue-lt)', color: 'var(--blue-dk)', border: '1px solid var(--blue)' }}>
-                                      {group.rows.length}개
+                                      {displayRows.length}개
                                     </span>
                                   )}
                                 </div>
@@ -1710,7 +1719,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
       <Modal
         open={metaModal.open}
         onClose={() => setMetaModal(m => ({ ...m, open: false }))}
-        title="메타데이터 업데이트"
+        title={metaModal.platform === 'instagram' ? 'Instagram 메타데이터 업데이트' : 'TikTok 메타데이터 업데이트'}
       >
         <div style={{ padding: '8px 0 16px' }}>
           {metaModal.status === 'running' ? (
@@ -1720,12 +1729,12 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                 콘텐츠 <strong style={{ margin: '0 2px' }}>{metaModal.urlCount}개</strong> 메타데이터 수집 중…
               </div>
               <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: 'var(--gray-4)' }}>
-                TikTok · Instagram Apify 실행 중, 잠시 기다려 주세요.
+                {metaModal.platform === 'instagram' ? 'Instagram' : 'TikTok'} Apify 실행 중, 잠시 기다려 주세요.
               </div>
               <div className="task-progress"><div className="task-progress__fill" /></div>
             </>
           ) : (
-            <>
+            <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>
                 {metaModal.message?.startsWith('오류') ? '❌' : '✅'}
               </div>
@@ -1737,11 +1746,19 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               <div style={{ fontSize: 13, color: 'var(--gray-6)' }}>
                 {metaModal.message || '완료'}
               </div>
-            </>
+            </div>
           )}
         </div>
         {metaModal.status === 'done' && (
           <div className="modal-actions">
+            {metaModal.platform === 'instagram' && !metaModal.message?.startsWith('오류') && (
+              <button
+                className="modal-btn-cancel"
+                onClick={() => { setMetaModal(m => ({ ...m, open: false })); navigate('/influencer/monitoring/archive') }}
+              >
+                아카이브에서 저장
+              </button>
+            )}
             <button className="modal-btn-confirm" onClick={() => setMetaModal(m => ({ ...m, open: false }))}>확인</button>
           </div>
         )}
@@ -1766,7 +1783,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               <div className="task-progress"><div className="task-progress__fill" /></div>
             </>
           ) : (
-            <>
+            <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>
                 {assetModal.message?.startsWith('오류') ? '❌' : '✅'}
               </div>
@@ -1778,7 +1795,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
               <div style={{ fontSize: 13, color: 'var(--gray-6)' }}>
                 {assetModal.message || '완료'}
               </div>
-            </>
+            </div>
           )}
         </div>
         {assetModal.status === 'done' && (

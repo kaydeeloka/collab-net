@@ -145,10 +145,10 @@ function _getAllKeywordsFlat(phaseId) {
 
 // ── Apify Scrape ─────────────────────────────────────────────
 
-const MON_ACTOR        = 'clockworks~tiktok-profile-scraper';
-const MON_SCRAPE_LIMIT = 50;
-const MON_VIDEOS_PER   = 50;
-const MON_LOOKBACK_DAYS = 7;
+var MON_ACTOR        = 'clockworks~tiktok-profile-scraper';
+var MON_SCRAPE_LIMIT = 50;
+var MON_VIDEOS_PER   = 50;
+var MON_LOOKBACK_DAYS = 7;
 
 // 실행 버튼 클릭일 = MON_START (today KST), MON_END = 7일 전 → Apify: newer than END, older than START
 function _monitoringScrapeDateRange_() {
@@ -568,7 +568,7 @@ function debugMonitoringSetup() {
 // ── Metadata update via Apify (TikTok + Instagram) ───────────
 
 var TIKTOK_META_ACTOR = 'scrape-creators~best-tiktok-video-scraper';
-var IG_META_ACTOR = 'instaprism/instagram-media-downloader';
+var IG_META_ACTOR = 'hpix~instagram-scraper';
 
 function _igShortCode(url) {
   var m = (url || '').match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
@@ -644,27 +644,51 @@ function updateVideoMetadata(body) {
       if (sc) rowByShortCode[sc] = row;
     });
     var igRes = _apifyRunAndWait(token, IG_META_ACTOR, {
-      directUrls: igRows.map(function(r) { return r.review_link; }),
-      resultsType: 'posts', resultsLimit: igRows.length,
+      posts: igRows.map(function(r) { return r.review_link; }),
+      scrape_detailed_data: true,
     }, 18);
-    if (!igRes.error) {
-      igRes.items.forEach(function(item) {
-        var sc  = item.shortCode || _igShortCode(item.url || item.inputUrl || '');
-        var row = sc ? rowByShortCode[sc] : null;
-        if (!row) return;
-        var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring?id=eq.' + row.id, {
-          method: 'patch', headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
-          payload: JSON.stringify({
-            views:    item.videoViewCount || item.videoPlayCount || 0,
-            likes:    item.likesCount     || item.likes          || 0,
-            comments: item.commentsCount  || item.comments       || 0,
-            updated:  now,
-          }),
+    if (igRes.error) {
+      Logger.log('IG metadata error: ' + igRes.error);
+      return { ok: false, updated: 0, message: 'Instagram 오류: ' + igRes.error };
+    }
+    Logger.log('IG items returned: ' + igRes.items.length);
+    Logger.log('IG rowByShortCode keys: ' + JSON.stringify(Object.keys(rowByShortCode)));
+    if (igRes.items.length > 0) Logger.log('IG first item keys: ' + JSON.stringify(Object.keys(igRes.items[0])));
+    igRes.items.forEach(function(item) {
+      var d   = item.metadata || {};
+      var s   = item.stats  || {};
+      var sc  = d.shortcode || _igShortCode(d.post_url || '');
+      Logger.log('IG item shortcode: ' + sc + ' | matched: ' + !!rowByShortCode[sc]);
+      var row = sc ? rowByShortCode[sc] : null;
+      if (!row) return;
+
+      // Update stats
+      var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring?id=eq.' + row.id, {
+        method: 'patch', headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
+        payload: JSON.stringify({
+          views:    s.play_count    || 0,
+          likes:    s.like_count    || 0,
+          comments: s.comment_count || 0,
+          updated:  now,
+        }),
+        muteHttpExceptions: true,
+      });
+      Logger.log('IG PATCH status: ' + res.getResponseCode() + ' | ' + res.getContentText().slice(0, 100));
+      if (res.getResponseCode() < 300) igUpdated++;
+
+      // Also save assets so downloadVideoAssets doesn't need to re-run the actor
+      var isVideo  = d.is_video === true;
+      var coverUrl = d.display_url || item.image || null;
+      var videoUrl = isVideo ? (d.video_url || null) : null;
+      if (coverUrl || videoUrl) {
+        UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id', {
+          method: 'POST',
+          headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }),
+          payload: JSON.stringify({ monitoring_id: row.id, cover_url: coverUrl, video_url: videoUrl, updated_at: now }),
           muteHttpExceptions: true,
         });
-        if (res.getResponseCode() < 300) igUpdated++;
-      });
-    }
+      }
+    });
   }
 
   var total = tiktokUpdated + igUpdated;
@@ -839,22 +863,21 @@ function downloadVideoAssets(body) {
     });
 
     var igRes = _apifyRunAndWait(token, IG_META_ACTOR, {
-      directUrls: igRows.map(function(r) { return r.review_link; }),
-      resultsType: 'posts', resultsLimit: igRows.length,
+      posts: igRows.map(function(r) { return r.review_link; }),
+      scrape_detailed_data: true,
     }, 30);
 
     if (!igRes.error) {
       igRes.items.forEach(function(item) {
-        var sc   = item.shortCode || _igShortCode(item.url || item.inputUrl || '');
+        var d    = item.metadata || {};
+        var sc   = d.shortcode || _igShortCode(d.post_url || '');
         var rows = sc ? igByShortCode[sc] : null;
         if (!rows || !rows.length) { unmatched++; return; }
 
-        var sidecar  = Array.isArray(item.sidecarItems) ? item.sidecarItems.map(function(s) { return s.displayUrl || null; }).filter(Boolean) : [];
-        var images   = Array.isArray(item.images) ? item.images.filter(Boolean) : sidecar;
-        var isVideo  = !!item.videoUrl;
-        var coverUrl = item.displayUrl || (images.length ? images[0] : null) || null;
-        var videoUrl = item.videoUrl || null;
-        var imageUrls = (!isVideo && images.length) ? images : null;
+        var isVideo   = d.is_video === true;
+        var coverUrl  = d.display_url || item.image || null;
+        var videoUrl  = isVideo ? (d.video_url || null) : null;
+        var imageUrls = null;
         if (!coverUrl && !videoUrl && !imageUrls) { noUrl++; return; }
 
         rows.forEach(function(row) {
@@ -892,6 +915,80 @@ function downloadVideoAssets(body) {
   };
 }
 
+function reprocessIgRun(body) {
+  body = body || {};
+  var runId = (body.runId || '').trim();
+  var inputRows = Array.isArray(body.rows) ? body.rows : [];
+  if (!runId) return { error: 'runId가 필요합니다.' };
+
+  var token = PropertiesService.getScriptProperties().getProperty('APIFY_TOKEN');
+  if (!token) return { error: 'APIFY_TOKEN이 설정되지 않았습니다.' };
+
+  // Get dataset from existing run (no new actor call)
+  var runRes = UrlFetchApp.fetch('https://api.apify.com/v2/actor-runs/' + runId + '?token=' + token, { muteHttpExceptions: true });
+  var runData = (JSON.parse(runRes.getContentText()) || {}).data;
+  if (!runData) return { error: 'Run 조회 실패: ' + runRes.getContentText().slice(0, 200) };
+  if (runData.status !== 'SUCCEEDED') return { error: 'Run 상태: ' + runData.status };
+
+  var items = JSON.parse(UrlFetchApp.fetch(
+    'https://api.apify.com/v2/datasets/' + runData.defaultDatasetId + '/items?token=' + token + '&limit=500',
+    { muteHttpExceptions: true }
+  ).getContentText());
+  if (!Array.isArray(items)) return { error: '결과 데이터 형식 오류' };
+
+  Logger.log('재처리 items: ' + items.length);
+
+  // Build shortcode map from input rows (or fetch all IG rows from Supabase if none provided)
+  var cfg = supabaseConfig(), sbUrl = cfg.url, now = new Date().toISOString();
+  var igRows = inputRows.filter(function(r) { return r.review_link && r.review_link.indexOf('instagram.com') !== -1; });
+  if (!igRows.length) {
+    var monRes = UrlFetchApp.fetch(
+      sbUrl + '/rest/v1/monitoring?select=id,review_link&review_link=ilike.*instagram*&limit=500',
+      { headers: supabaseHeaders(), muteHttpExceptions: true }
+    );
+    igRows = JSON.parse(monRes.getContentText()) || [];
+  }
+
+  var rowByShortCode = {};
+  igRows.forEach(function(row) {
+    var sc = _igShortCode(row.review_link);
+    if (sc) rowByShortCode[sc] = row;
+  });
+  Logger.log('rowByShortCode keys: ' + JSON.stringify(Object.keys(rowByShortCode)));
+
+  var updated = 0, unmatched = 0;
+  items.forEach(function(item) {
+    var d   = item.metadata || {};
+    var s   = item.stats    || {};
+    var sc  = d.shortcode || _igShortCode(d.post_url || '');
+    var row = sc ? rowByShortCode[sc] : null;
+    Logger.log('item shortcode: ' + sc + ' | matched: ' + !!row);
+    if (!row) { unmatched++; return; }
+
+    var res = UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring?id=eq.' + row.id, {
+      method: 'patch', headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json' }),
+      payload: JSON.stringify({ views: s.play_count || 0, likes: s.like_count || 0, comments: s.comment_count || 0, updated: now }),
+      muteHttpExceptions: true,
+    });
+    Logger.log('PATCH ' + row.id + ': ' + res.getResponseCode());
+
+    var isVideo  = d.is_video === true;
+    var coverUrl = d.display_url || item.image || null;
+    var videoUrl = isVideo ? (d.video_url || null) : null;
+    if (coverUrl || videoUrl) {
+      UrlFetchApp.fetch(sbUrl + '/rest/v1/monitoring_assets?on_conflict=monitoring_id', {
+        method: 'POST',
+        headers: Object.assign({}, supabaseHeaders(), { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }),
+        payload: JSON.stringify({ monitoring_id: row.id, cover_url: coverUrl, video_url: videoUrl, updated_at: now }),
+        muteHttpExceptions: true,
+      });
+    }
+    if (res.getResponseCode() < 300) updated++;
+  });
+
+  return { ok: true, updated: updated, unmatched: unmatched, message: '재처리 완료 ' + updated + '개 업데이트 · ' + unmatched + '개 매칭 실패' };
+}
+
 // ── Router ────────────────────────────────────────────────────
 
 function routeMonitoring(action, p, body) {
@@ -907,6 +1004,7 @@ function routeMonitoring(action, p, body) {
     case 'updateVideoMetadata'     : return updateVideoMetadata(body || {});
     case 'downloadVideoAssets'     : return downloadVideoAssets(body || {});
     case 'refreshPhotoUrls'        : return refreshPhotoUrls(body || {});
+    case 'reprocessIgRun'          : return reprocessIgRun(body || {});
     default                        : return null;
   }
 }

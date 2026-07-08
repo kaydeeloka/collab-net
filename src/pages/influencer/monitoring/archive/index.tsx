@@ -589,7 +589,7 @@ export default function MonitoringArchive() {
   const [brandFilter, setBrandFilter] = useState('all')
   const [sortBy, setSortBy] = useState<'date' | 'views' | 'engagement'>('date')
   const [showBestFirst, setShowBestFirst] = useState(false)
-  const [importing, setImporting] = useState(false)
+  const [importing, setImporting] = useState<false | 'tiktok' | 'instagram'>(false)
   const [zipping, setZipping] = useState(false)
   const [dlModal, setDlModal] = useState<{
     open: boolean; urlCount: number; status: 'running' | 'done'; step: 'scraping' | 'saving'; updated?: number; message?: string
@@ -728,13 +728,11 @@ export default function MonitoringArchive() {
 
   const hasData = !loading && filteredRows.length > 0
 
-  async function handleImport() {
-    // Read the full review list (모든 업로드된 리뷰), not just the platform-filtered view.
-    const eligibleRows = reviewRows.filter(r =>
-      r.review_link?.includes('tiktok.com') || r.review_link?.includes('instagram.com')
-    )
-    if (!eligibleRows.length) { showToast('가져올 TikTok/Instagram URL이 없습니다', 'info'); return }
-    setImporting(true)
+  async function handleImport(platform: 'tiktok' | 'instagram') {
+    const domain = platform === 'tiktok' ? 'tiktok.com' : 'instagram.com'
+    const eligibleRows = reviewRows.filter(r => r.review_link?.includes(domain))
+    if (!eligibleRows.length) { showToast(`가져올 ${platform === 'tiktok' ? 'TikTok' : 'Instagram'} URL이 없습니다`, 'info'); return }
+    setImporting(platform)
     setDlModal({ open: true, urlCount: eligibleRows.length, status: 'running', step: 'scraping' })
     const stepTimer = setTimeout(() => {
       setDlModal(m => m.status === 'running' ? { ...m, step: 'saving' } : m)
@@ -823,13 +821,16 @@ export default function MonitoringArchive() {
   async function handleUploadVideos() {
     const needsVideo = (r: MonitoringRow) => !!r.assets?.video_url?.includes('api.apify.com')
     const needsImage = (r: MonitoringRow) => { const u = r.assets?.image_urls?.[0]; return !!u && !u.includes('monitoring-photos') }
+    const needsCover = (r: MonitoringRow) => { const u = r.assets?.cover_url; return !!u && !u.includes('supabase') }
 
     const videoRows = filteredRows.filter(needsVideo)
     const imageRows = filteredRows.filter(r => needsImage(r) && !needsVideo(r))
     const bothRows  = filteredRows.filter(r => needsVideo(r) && needsImage(r))
+    const coverRows = filteredRows.filter(r => needsCover(r) && !needsVideo(r) && !needsImage(r))
 
-    const totalVideos = videoRows.length + bothRows.length
-    const totalImages = imageRows.length + bothRows.length
+    const coverVideoRows = coverRows.filter(r => { const u = r.assets?.video_url; return !!u && !u.includes('supabase') })
+    const totalVideos = videoRows.length + bothRows.length + coverVideoRows.length
+    const totalImages = imageRows.length + bothRows.length + coverRows.length
 
     if (!totalVideos && !totalImages) { showToast('저장할 콘텐츠가 없습니다', 'info'); return }
     setUploadingVideos(true)
@@ -915,6 +916,50 @@ export default function MonitoringArchive() {
         failedImages++
       }
       setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
+      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
+    }
+
+    // Process Instagram rows: upload CDN cover → monitoring-thumbnails, CDN video → monitoring-videos
+    for (const row of coverRows) {
+      const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+      // Upload thumbnail
+      try {
+        const imgRes = await fetch(row.assets!.cover_url!)
+        if (imgRes.ok) {
+          const imgBlob = await imgRes.blob()
+          const imgPath = `${row.id}.jpg`
+          await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+          const { data: urlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
+          updatePayload.cover_url = urlData.publicUrl
+          savedImages++
+        } else { failedImages++ }
+      } catch (e) {
+        console.warn('Cover upload error:', row.id, e)
+        failedImages++
+      }
+      setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
+
+      // Upload video if present and not yet in Supabase
+      const igVideo = row.assets?.video_url
+      if (igVideo && !igVideo.includes('supabase')) {
+        try {
+          const videoRes = await fetch(igVideo)
+          if (!videoRes.ok) throw new Error(`fetch ${videoRes.status}`)
+          const videoBlob = await videoRes.blob()
+          const videoPath = `${row.id}.mp4`
+          const { error: uploadErr } = await supabase.storage.from('monitoring-videos').upload(videoPath, videoBlob, { contentType: 'video/mp4', upsert: true })
+          if (uploadErr) throw uploadErr
+          const { data: vUrlData } = supabase.storage.from('monitoring-videos').getPublicUrl(videoPath)
+          updatePayload.video_url = vUrlData.publicUrl
+          savedVideos++
+        } catch (e) {
+          console.error('IG video upload error:', row.id, e)
+          failedVideos++
+        }
+        setVideoUploadModal(m => ({ ...m, videoDone: m.videoDone + 1 }))
+      }
+
       await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
     }
 
@@ -1031,15 +1076,25 @@ export default function MonitoringArchive() {
 <button
                 className="page-banner-btn page-banner-btn--secondary"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                disabled={importing || reviewRows.length === 0}
-                onClick={() => { void handleImport() }}
+                disabled={importing !== false || reviewRows.length === 0}
+                onClick={() => { void handleImport('tiktok') }}
               >
-                {importing ? <Spinner sm /> : <DownloadCloud size={14} />}
-                데이터 가져오기
+                {importing === 'tiktok' ? <Spinner sm /> : <DownloadCloud size={14} />}
+                TikTok 가져오기
+              </button>
+              <button
+                className="page-banner-btn page-banner-btn--secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                disabled={importing !== false || reviewRows.length === 0}
+                onClick={() => { void handleImport('instagram') }}
+              >
+                {importing === 'instagram' ? <Spinner sm /> : <DownloadCloud size={14} />}
+                Instagram 가져오기
               </button>
               {filteredRows.some(r =>
                 r.assets?.video_url?.includes('api.apify.com') ||
-                (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('monitoring-photos'))
+                (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('monitoring-photos')) ||
+                (!!r.assets?.cover_url && !r.assets.cover_url.includes('supabase'))
               ) && (
                 <button
                   className="page-banner-btn page-banner-btn--secondary"
@@ -1068,11 +1123,12 @@ export default function MonitoringArchive() {
 
       {!loading && filteredRows.some(r =>
         r.assets?.video_url?.includes('api.apify.com') ||
-        (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase'))
+        (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase')) ||
+        (!!r.assets?.cover_url && !r.assets.cover_url.includes('supabase'))
       ) && (
         <div className="mon-arch-notice">
           <Clock size={13} className="mon-arch-notice__icon" />
-          임시 CDN 링크가 있습니다. <strong>3일 이내</strong>에 <strong>리뷰 저장</strong> 버튼을 눌러 영구 보관하세요. 기간이 지나면 Apify에서 다시 가져와야 합니다.
+          임시 CDN 링크가 있습니다. <strong>리뷰 저장</strong> 버튼을 눌러 영구 보관하세요. 기간이 지나면 콘텐츠를 다시 가져와야 합니다.
         </div>
       )}
 
