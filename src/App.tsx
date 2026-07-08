@@ -5,6 +5,7 @@ import { PhaseProvider, usePhase } from '@/contexts/PhaseContext'
 import RequireAuth from '@/components/RequireAuth'
 import Layout from '@/components/Layout'
 import Spinner from '@/components/Spinner'
+import SessionWarningModal from '@/components/SessionWarningModal'
 import { archiveSectionPath } from '@/pages/archive/archive-slug'
 
 import Lock        from './pages/Lock'
@@ -87,6 +88,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SessionWarningModal />
         <PhaseProvider>
         <ToastProvider>
           <Routes>

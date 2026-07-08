@@ -25,7 +25,7 @@ const GROUPS: SideGroup[] = [
     children: [
       {
         to: '/trend/beauty-news',
-        label: '뷰티 뉴스',
+        label: '뷰티 뉴스 브리핑',
         activeWhen: p => p === '/trend/beauty-news' || p.startsWith('/trend/beauty-news-archive'),
       },
       { to: '/trend/tiktok', label: '틱톡 트렌드 분석' },

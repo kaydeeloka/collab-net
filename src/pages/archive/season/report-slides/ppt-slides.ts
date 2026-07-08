@@ -203,9 +203,22 @@ async function buildKitCompositionSlide(prs: pptxgen, page: ReportPage) {
   // top-right: concept
   const conceptX = CONTENT_BOX.x + leftW + gapX
   addSectionPill(slide, c.kitConceptTitle || '2026 VOL.1 콘셉트', { x: conceptX, y: CONTENT_BOX.y + IN.cqw(1.2), w: undefined, h: 0.24 })
-  slide.addText(c.kitConceptText ?? '', {
-    x: conceptX, y: CONTENT_BOX.y + IN.cqw(1.2) + 0.24 + IN.cqw(0.9), w: rightW, h: topH - IN.cqw(1.2) * 2 - 0.24 - IN.cqw(0.9),
-    fontFace: FONT.REG, fontSize: 10.5, color: COLORS.gray3, valign: 'top', lineSpacingMultiple: 1.85,
+  const conceptTextY = CONTENT_BOX.y + IN.cqw(1.2) + 0.24 + IN.cqw(0.9)
+  const conceptTextH = topH - IN.cqw(1.2) * 2 - 0.24 - IN.cqw(0.9)
+  const conceptText = c.kitConceptText ?? ''
+  // The concept text box shares its row height with the image cell (fixed 2:1 grid), so it
+  // can't grow like the other slides' rows — shrink the font instead of letting long copy
+  // overflow into the composition cards below.
+  let conceptFontPt = 10.5
+  while (
+    conceptFontPt > 7 &&
+    estimateLineCount(conceptText, rightW, conceptFontPt) * (conceptFontPt / 72) * 1.85 > conceptTextH
+  ) {
+    conceptFontPt -= 0.5
+  }
+  slide.addText(conceptText, {
+    x: conceptX, y: conceptTextY, w: rightW, h: conceptTextH,
+    fontFace: FONT.REG, fontSize: conceptFontPt, color: COLORS.gray3, valign: 'top', lineSpacingMultiple: 1.85,
   })
 
   // bottom row: two composition cells

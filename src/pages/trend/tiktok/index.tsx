@@ -609,7 +609,7 @@ export default function TiktokTrend() {
       <PageTabs
         tabs={[
           { id: 'week', label: '이번 주 트렌드' },
-          { id: 'archive', label: '지난 주 아카이브' },
+          { id: 'archive', label: '아카이브' },
         ]}
         active={activeTab}
         onChange={setActiveTab}

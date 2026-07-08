@@ -309,6 +309,80 @@ export default function Dashboard() {
         })()}
       </PageHeroBanner>
 
+      {/* ── Trend ── */}
+      <div style={{
+        background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
+        padding: '18px 22px', marginBottom: 28,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TrendingUp size={15} color="#10b981" />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>오늘의 트렌드 요약</span>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {/* 뷰티 뉴스 */}
+          <div style={{
+            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            border: '1.5px solid var(--teal-lt)', minHeight: 110,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뷰티 뉴스 트렌드 키워드</div>
+              <Link to="/trend/beauty-news" style={{
+                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
+                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
+                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
+                transition: 'background .15s',
+              }}>뉴스 브리핑 보기 →</Link>
+            </div>
+            {newsKeywords.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {newsKeywords.map(kw => (
+                  <div key={kw.tag}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{kw.tag}</div>
+                    <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.55 }}>{kw.explanation}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>저장된 트렌드 키워드가 없습니다.</div>
+            )}
+          </div>
+
+          {/* 틱톡 트렌드 */}
+          <div style={{
+            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            border: '1.5px solid var(--teal-lt)', minHeight: 110,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>틱톡 트렌드 분석</div>
+              <Link to="/trend/tiktok" style={{
+                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
+                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
+                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
+                transition: 'background .15s',
+              }}>틱톡 트렌드 보기 →</Link>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {TIKTOK_HASHTAGS_PREVIEW.map(h => {
+                const volColor = h.volume === 'HIGH' ? { bg: '#dcfce7', text: '#16a34a' }
+                  : h.volume === 'RISING' ? { bg: '#ffedd5', text: '#ea580c' }
+                  : { bg: '#dbeafe', text: '#2563eb' }
+                return (
+                  <span key={h.tag} style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12,
+                    background: volColor.bg, color: volColor.text,
+                  }}>{h.tag}</span>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--gray-3)', marginTop: 2 }}>May 26–29, 2026 · US TikTok Beauty</div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Status cards 2×2 ── */}
       {(() => {
         const cards = [
@@ -375,80 +449,6 @@ export default function Dashboard() {
           </div>
         )
       })()}
-
-      {/* ── Trend ── */}
-      <div style={{
-        background: 'var(--gray-0)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)',
-        padding: '18px 22px', marginBottom: 8,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TrendingUp size={15} color="#10b981" />
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-7)' }}>오늘의 트렌드</span>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          {/* 뷰티 뉴스 */}
-          <div style={{
-            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
-            display: 'flex', flexDirection: 'column', gap: 10,
-            border: '1.5px solid var(--teal-lt)', minHeight: 110,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>뷰티 뉴스 트렌드 키워드</div>
-              <Link to="/trend/beauty-news" style={{
-                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
-                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
-                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
-                transition: 'background .15s',
-              }}>뉴스 브리핑 보기 →</Link>
-            </div>
-            {newsKeywords.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {newsKeywords.map(kw => (
-                  <div key={kw.tag}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>{kw.tag}</div>
-                    <div style={{ fontSize: 11, color: 'var(--gray-5)', lineHeight: 1.55 }}>{kw.explanation}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: 'var(--gray-4)' }}>저장된 트렌드 키워드가 없습니다.</div>
-            )}
-          </div>
-
-          {/* 틱톡 트렌드 */}
-          <div style={{
-            flex: 1, background: 'var(--gray-0)', borderRadius: 10, padding: '20px 22px',
-            display: 'flex', flexDirection: 'column', gap: 10,
-            border: '1.5px solid var(--teal-lt)', minHeight: 110,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--teal-dk)', letterSpacing: '-0.3px' }}>틱톡 트렌드 분석</div>
-              <Link to="/trend/tiktok" style={{
-                fontSize: 11, fontWeight: 700, color: 'var(--teal-dk)',
-                background: 'var(--blue-lt)', border: '1px solid var(--teal-lt)',
-                borderRadius: 20, padding: '3px 10px', textDecoration: 'none',
-                transition: 'background .15s',
-              }}>틱톡 트렌드 보기 →</Link>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {TIKTOK_HASHTAGS_PREVIEW.map(h => {
-                const volColor = h.volume === 'HIGH' ? { bg: '#dcfce7', text: '#16a34a' }
-                  : h.volume === 'RISING' ? { bg: '#ffedd5', text: '#ea580c' }
-                  : { bg: '#dbeafe', text: '#2563eb' }
-                return (
-                  <span key={h.tag} style={{
-                    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12,
-                    background: volColor.bg, color: volColor.text,
-                  }}>{h.tag}</span>
-                )
-              })}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-3)', marginTop: 2 }}>May 26–29, 2026 · US TikTok Beauty</div>
-          </div>
-        </div>
-      </div>
 
     </div>
   )
