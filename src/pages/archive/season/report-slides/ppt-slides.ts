@@ -4,8 +4,8 @@ import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-stora
 import { monitoringBrandKey } from '@/lib/influencer/monitoring-keywords'
 import type { ReportPage, PageType } from './types'
 import {
-  IN, SLIDE_W, SLIDE_H, FONT, COLORS, CONTENT_BOX, LOGO_PATH, LOGO_ASPECT,
-  addImageOrPlaceholder, addSectionPill, addRoundedCard,
+  IN, SLIDE_W, SLIDE_H, FONT, COLORS, CONTENT_BOX, LOGO_ASPECT,
+  addImageOrPlaceholder, addSectionPill, addRoundedCard, addLogoImage,
   addBulletList, addChevronConnector, addProgressBar, addDoughnutChart, addLegend,
   addContentChrome, estimateLineCount, addSanitizedSlide,
 } from '../../ppt-native'
@@ -34,7 +34,7 @@ async function buildCoverSlide(prs: pptxgen, page: ReportPage) {
   slide.background = { color: COLORS.bg }
 
   const logoW = 3.5
-  slide.addImage({ path: LOGO_PATH, x: -0.2, y: 0.6, w: logoW, h: logoW * LOGO_ASPECT })
+  addLogoImage(slide, { x: -0.2, y: 0.6, w: logoW, h: logoW * LOGO_ASPECT })
 
   slide.addText('© CRANECOMMUNICATIONS', {
     x: 0.22, y: SLIDE_H - 0.45, w: 4, h: 0.25,

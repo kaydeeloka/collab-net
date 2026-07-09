@@ -42,9 +42,13 @@ export const COLORS = {
 
 export const CARD_SHADOW = { type: 'outer' as const, color: '000000', opacity: 0.05, blur: 8, offset: 2, angle: 90 }
 
-export const LOGO_PATH = '/img/logo-report.svg'
-/** Logo SVG is 2121x928 -> h/w aspect ratio, used since pptxgenjs needs explicit w/h for SVG. */
-export const LOGO_ASPECT = 928 / 2121
+/** PNG, not the original SVG — pptxgenjs's native SVG `addImage()` embedding (blip +
+ *  asvg:svgBlip extLst) has repeated, longstanding PowerPoint "needs repair" bugs (see
+ *  gitbrent/PptxGenJS #522, #1150, #1449); a plain raster embed uses the same reliable
+ *  codepath every other image in this report already goes through. */
+export const LOGO_PATH = '/img/logo-report.png'
+/** Logo is 6628x2900 -> h/w aspect ratio, used since pptxgenjs needs explicit w/h. */
+export const LOGO_ASPECT = 2900 / 6628
 
 /** Control characters illegal in XML 1.0 text content (everything except tab/LF/CR).
  *  A single one of these — e.g. a stray vertical-tab (0x0B) left over from a Windows
@@ -96,7 +100,7 @@ export async function fetchImageAsBase64(url: string | null | undefined): Promis
     if (!res.ok) return null
     const blob = await res.blob()
     const bitmap = await createImageBitmap(blob)
-    const MAX_DIM = 1600
+    const MAX_DIM = 1200
     const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height))
     const w = Math.max(1, Math.round(bitmap.width * scale))
     const h = Math.max(1, Math.round(bitmap.height * scale))
@@ -111,10 +115,15 @@ export async function fetchImageAsBase64(url: string | null | undefined): Promis
     ctx.fillRect(0, 0, w, h)
     ctx.drawImage(bitmap, 0, 0, w, h)
     bitmap.close()
-    return canvas.toDataURL('image/jpeg', 0.85)
+    return canvas.toDataURL('image/jpeg', 0.75)
   } catch {
     return null
   }
+}
+
+/** Places the MiMuse logo (a plain PNG — see LOGO_PATH) at the given box. */
+export function addLogoImage(slide: Slide, opts: { x: number; y: number; w: number; h: number }) {
+  slide.addImage({ path: LOGO_PATH, x: opts.x, y: opts.y, w: opts.w, h: opts.h })
 }
 
 export function addPlaceholderRect(slide: Slide, x: number, y: number, w: number, h: number, label = '이미지') {
@@ -174,7 +183,13 @@ export function addSectionPill(
   return { w, h }
 }
 
-/** Reusable white/tinted rounded card with hairline border + soft shadow. */
+/** Reusable white/tinted rounded card with hairline border.
+ *  No drop shadow — confirmed by isolated single-shape bisection (2026-07-09) that
+ *  pptxgenjs's `shadow: CARD_SHADOW` (an `outerShdw` effect) on a roundRect, and *only*
+ *  that, is what makes PowerPoint flag the file as needing repair. A single card with the
+ *  shadow reproduced it every time; the identical card with `shadow: false` never did,
+ *  across many isolated shape-count/content variations. See CARD_SHADOW for the effect
+ *  definition kept around in case a future pptxgenjs version fixes this. */
 export function addRoundedCard(
   slide: Slide,
   opts: {
@@ -189,7 +204,6 @@ export function addRoundedCard(
     rectRadius: opts.radius ?? 0.06,
     fill: { color: opts.fill ?? 'FFFFFF', transparency: opts.fillTransparency ?? 12 },
     line: { color: opts.line ?? COLORS.hairline, transparency: opts.lineTransparency ?? 93, width: 0.75 },
-    shadow: opts.shadow === false ? undefined : CARD_SHADOW,
   })
 }
 
@@ -269,25 +283,47 @@ export function addProgressBar(
   }
 }
 
-/** Native doughnut chart (channel split) — legend is drawn separately to match the exact layout. */
+/** Doughnut chart (channel split), rendered to a canvas and embedded as a PNG rather than a
+ *  native pptxgenjs chart (`addChart` embeds a whole separate chart XML part + an Excel
+ *  workbook part) — one more complex OOXML subsystem this report doesn't need, and one more
+ *  surface for a PowerPoint "needs repair" prompt. Legend is drawn separately to match layout. */
 export function addDoughnutChart(
   slide: Slide,
   segments: { label: string; pct: number; color: string }[],
   opts: { x: number; y: number; w: number; h: number },
 ) {
-  slide.addChart(
-    'doughnut',
-    [{ name: 'Channel', labels: segments.map(s => s.label), values: segments.map(s => s.pct) }],
-    {
-      x: opts.x, y: opts.y, w: opts.w, h: opts.h,
-      chartColors: segments.map(s => s.color),
-      holeSize: 62,
-      showLegend: false,
-      showPercent: false,
-      showValue: false,
-      dataBorder: { pt: 2, color: COLORS.bg },
-    },
-  )
+  const DPR = 2
+  const pxW = Math.round(opts.w * 96 * DPR)
+  const pxH = Math.round(opts.h * 96 * DPR)
+  const canvas = document.createElement('canvas')
+  canvas.width = pxW
+  canvas.height = pxH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const cx = pxW / 2
+  const cy = pxH / 2
+  const outerR = Math.min(pxW, pxH) / 2
+  const holeR = outerR * 0.62
+  const total = segments.reduce((sum, seg) => sum + seg.pct, 0) || 1
+  let angle = -Math.PI / 2
+  for (const seg of segments) {
+    const sweep = (seg.pct / total) * Math.PI * 2
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.arc(cx, cy, outerR, angle, angle + sweep)
+    ctx.closePath()
+    ctx.fillStyle = `#${seg.color}`
+    ctx.fill()
+    angle += sweep
+  }
+  // Punch a transparent hole to turn the pie into a doughnut.
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath()
+  ctx.arc(cx, cy, holeR, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalCompositeOperation = 'source-over'
+
+  slide.addImage({ data: canvas.toDataURL('image/png'), x: opts.x, y: opts.y, w: opts.w, h: opts.h })
 }
 
 /** Manual legend to sit beside the doughnut (colored dot + label + pct), matching `.rslide__cp-legend`. */
@@ -318,10 +354,7 @@ export function addLegend(
 export function addContentChrome(slide: Slide, engTitle: string | undefined, korTitle: string | undefined) {
   slide.background = { color: COLORS.bg }
   const logoW = 1.1
-  slide.addImage({
-    path: LOGO_PATH,
-    x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * LOGO_ASPECT,
-  })
+  addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * LOGO_ASPECT })
   slide.addText(engTitle ?? '', {
     x: 0.5, y: 0.35, w: 7.5, h: 0.3,
     fontFace: FONT.REG, fontSize: 13, color: COLORS.teal,

@@ -255,14 +255,16 @@ export default function BrandContact() {
 
     // Auto-create confirmed_brands entry when status becomes 'accept'
     if (patch.status === 'accept' && row.status !== 'accept' && row.phase_id) {
-      const { data: existing } = await supabase
+      const { data: existing, error: lookupError } = await supabase
         .from('confirmed_brands')
         .select('id')
         .eq('phase_id', row.phase_id)
         .eq('brand_name', row.brand)
         .maybeSingle()
-      if (!existing) {
-        await supabase.from('confirmed_brands').insert({
+      if (lookupError) {
+        showToast(`확정 브랜드 확인 실패: ${lookupError.message}`, 'error')
+      } else if (!existing) {
+        const { error: insertError } = await supabase.from('confirmed_brands').insert({
           phase_id:     row.phase_id,
           brand_name:   row.brand,
           contact_name: row.name,
@@ -271,6 +273,9 @@ export default function BrandContact() {
           phone:        row.phone,
           website:      row.website,
         })
+        if (insertError) {
+          showToast(`확정 브랜드 등록 실패: ${insertError.message}`, 'error')
+        }
       }
     }
   }, [showToast])

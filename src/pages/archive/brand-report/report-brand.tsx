@@ -18,6 +18,7 @@ import {
   type BrandReportPage,
 } from './brand-report-types'
 import BrandReportSlides from './brand-report-slides/BrandReportSlides'
+import { addSanitizedSlide } from '../ppt-native'
 
 export default function ArchiveBrandReportBrand() {
   const { brandSlug } = useParams<{ brandSlug: string }>()
@@ -424,18 +425,20 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
         ovImgItems.forEach((img, i) => { img.el.style.visibility = savedImgVis[i].vis })
 
         // ── 3. Build PPT slide ────────────────────────────────────────────
-        const pptSlide = prs.addSlide()
+        // addSanitizedSlide (not prs.addSlide()) so any control character that slips into
+        // DB free text still gets stripped before it reaches the slide XML — see ppt-native.ts.
+        const pptSlide = addSanitizedSlide(prs)
         pptSlide.addImage({ data: bgUrl, x: 0, y: 0, w: SLIDE_W, h: SLIDE_H })
 
         // Product image block as a separate PPT layer
         for (const ovImg of ovImgItems) {
+          if (![ovImg.x, ovImg.y, ovImg.w, ovImg.h].every(Number.isFinite)) continue
           pptSlide.addImage({ data: ovImg.data, x: ovImg.x, y: ovImg.y, w: ovImg.w, h: ovImg.h })
         }
 
         for (const item of textItems) {
-          const safeText = item.text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-          if (!safeText) continue
-          pptSlide.addText(safeText, {
+          if (![item.x, item.y, item.w, item.h, item.fontSize].every(Number.isFinite)) continue
+          pptSlide.addText(item.text, {
             x: item.x, y: item.y, w: item.w, h: item.h,
             fontSize: item.fontSize,
             color: item.colorHex,
