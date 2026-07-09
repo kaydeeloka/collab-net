@@ -17,13 +17,17 @@ export const IN = {
 export const SLIDE_W = 10
 export const SLIDE_H = 5.625
 
-/** 나눔휴먼OTF weights are installed as distinct font families (Regular/Bold/ExtraBold), not
- *  one family toggled via the `bold` flag — the old 'NanumHumanEB' string didn't match any
- *  installed font at all. */
+/** Only one 나눔휴먼 weight is actually installed — 'NanumHuman OTF Regular' (confirmed via
+ *  System.Drawing.Text.InstalledFontCollection; there is no separate Bold/ExtraBold font file
+ *  at all). Using any other name (incl. the old 'NanumHumanEB' and '나눔휴먼OTF ExtraBold')
+ *  doesn't match an installed font, so PowerPoint silently substitutes Calibri/Arial — which
+ *  renders Latin text fine but has no Hangul glyphs, showing "tofu" boxes for Korean text only.
+ *  Weight is instead selected via the `bold` text option (PowerPoint synthesizes it), same as
+ *  every other Bold/ExtraBold call site in this file. */
 export const FONT = {
-  EB: '나눔휴먼OTF ExtraBold',
-  BOLD: '나눔휴먼OTF Bold',
-  REG: '나눔휴먼OTF Regular',
+  EB: 'NanumHuman OTF Regular',
+  BOLD: 'NanumHuman OTF Regular',
+  REG: 'NanumHuman OTF Regular',
   SANS: 'Arial',
 }
 
@@ -421,11 +425,11 @@ export function addContentChrome(slide: Slide, engTitle: string | undefined, kor
   addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * LOGO_ASPECT })
   slide.addText(engTitle ?? '', {
     x: 0.5, y: 0.35, w: 7.5, h: 0.3,
-    fontFace: FONT.BOLD, fontSize: 13, color: COLORS.teal,
+    fontFace: FONT.BOLD, bold: true, fontSize: 13, color: COLORS.teal,
   })
   slide.addText(korTitle ?? '', {
     x: 0.5, y: 0.63, w: 8.5, h: 0.4,
-    fontFace: FONT.EB, fontSize: 19, color: COLORS.ink,
+    fontFace: FONT.EB, bold: true, fontSize: 19, color: COLORS.ink,
   })
 }
 

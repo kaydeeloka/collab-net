@@ -45,7 +45,7 @@ async function buildCoverSlide(prs: pptxgen, page: ReportPage) {
   if (title) {
     slide.addText(title, {
       x: 0.5, y: 2.0, w: 9.0 * 0.55, h: 2.925,
-      fontFace: FONT.EB, fontSize: IN.cqwPt(2.8), color: COLORS.ink,
+      fontFace: FONT.EB, bold: true, fontSize: IN.cqwPt(2.8), color: COLORS.ink,
       valign: 'top', lineSpacingMultiple: 1.3,
     })
   }

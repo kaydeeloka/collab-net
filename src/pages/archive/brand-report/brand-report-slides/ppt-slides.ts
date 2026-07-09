@@ -66,7 +66,7 @@ async function buildCoverSlide(prs: pptxgen, page: BrandReportPage, ctx: Builder
   const title = `${titlePrefix} _ ${brandSuffix}`
   slide.addText(title, {
     x: 0.5, y: 2.0, w: 9.0 * 0.7, h: 2.925,
-    fontFace: FONT.EB, fontSize: IN.cqwPt(2.4), color: COLORS.ink,
+    fontFace: FONT.EB, bold: true, fontSize: IN.cqwPt(2.4), color: COLORS.ink,
     valign: 'top', lineSpacingMultiple: 1.3,
   })
 }
@@ -318,7 +318,7 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   const logoW = 1.1
   addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * (2900 / 6628) })
   slide.addText(c.engTitle ?? '', {
-    x: 0.5, y: 0.35, w: 7.5, h: 0.3, fontFace: FONT.BOLD, fontSize: 13, color: COLORS.teal,
+    x: 0.5, y: 0.35, w: 7.5, h: 0.3, fontFace: FONT.BOLD, bold: true, fontSize: 13, color: COLORS.teal,
   })
 
   const subtitle = c.rlSubtitle ?? 'Mi Muse 리뷰'
@@ -333,7 +333,7 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   const isBrand = !isMimuse
 
   slide.addText(`${c.korTitle ?? ''} — ${subtitle}`, {
-    x: 0.5, y: 0.63, w: 8.5, h: 0.4, fontFace: FONT.EB, fontSize: 19, color: COLORS.ink,
+    x: 0.5, y: 0.63, w: 8.5, h: 0.4, fontFace: FONT.EB, bold: true, fontSize: 19, color: COLORS.ink,
   })
 
   const headers = isBrand
