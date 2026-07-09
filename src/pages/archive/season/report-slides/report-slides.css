@@ -563,7 +563,7 @@
   overflow: hidden;
   display: flex;
   align-items: flex-start;
-  gap: 0.3cqw;
+  gap: 0;
 }
 
 /* Left thumbnail + right upload cells inside each brd card — 9:16 dual grid (matches

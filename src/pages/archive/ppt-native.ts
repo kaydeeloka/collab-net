@@ -255,6 +255,66 @@ export function addBulletList(
   )
 }
 
+/** Simple data table (header row + body rows), drawn as manual rect+text cells rather than
+ *  pptxgenjs's native `addTable()` — every other grid/card in this report is built the same
+ *  hand-drawn way, and it keeps table rendering on the one OOXML codepath (shapes + text) that's
+ *  actually been verified not to trigger PowerPoint's repair dialog (see addRoundedCard). */
+export function addDataTable(
+  slide: Slide,
+  opts: {
+    x: number; y: number; w: number; h: number
+    headers: string[]
+    rows: (string | { text: string; hyperlink?: string; align?: 'left' | 'center' | 'right' })[][]
+    colWidths?: number[]
+    fontSize?: number
+    headerFontSize?: number
+    totalRowIndices?: number[]
+    align?: 'left' | 'center' | 'right'
+  },
+) {
+  const headerH = Math.min(0.28, opts.h * 0.25)
+  const rowCount = opts.rows.length
+  const bodyH = opts.h - headerH
+  const rowH = rowCount > 0 ? bodyH / rowCount : 0
+  const cols = opts.headers.length
+  const widths = opts.colWidths ?? Array(cols).fill(1 / cols)
+  const colX: number[] = []
+  let acc = opts.x
+  for (const wFrac of widths) { colX.push(acc); acc += wFrac * opts.w }
+
+  slide.addShape('rect', {
+    x: opts.x, y: opts.y, w: opts.w, h: headerH,
+    fill: { color: COLORS.badgeBg }, line: { color: 'B8CFD8', width: 0.5 },
+  })
+  opts.headers.forEach((h, ci) => {
+    slide.addText(h, {
+      x: colX[ci], y: opts.y, w: widths[ci] * opts.w, h: headerH,
+      align: 'center', valign: 'middle', fontFace: FONT.REG, fontSize: opts.headerFontSize ?? opts.fontSize ?? 9,
+      bold: true, color: COLORS.badgeTx,
+    })
+  })
+
+  opts.rows.forEach((row, ri) => {
+    const y = opts.y + headerH + ri * rowH
+    const isTotal = opts.totalRowIndices?.includes(ri) ?? false
+    const zebra = ri % 2 === 1
+    slide.addShape('rect', {
+      x: opts.x, y, w: opts.w, h: rowH,
+      fill: { color: isTotal ? 'E8F2F5' : zebra ? 'F5F9FA' : 'FFFFFF' },
+      line: { color: 'E5EDF0', width: 0.5 },
+    })
+    row.forEach((cell, ci) => {
+      const cellObj = typeof cell === 'string' ? { text: cell } : cell
+      slide.addText(cellObj.text, {
+        x: colX[ci], y, w: widths[ci] * opts.w, h: rowH,
+        align: cellObj.align ?? opts.align ?? 'center', valign: 'middle',
+        fontFace: FONT.REG, fontSize: opts.fontSize ?? 9, bold: isTotal, color: COLORS.ink,
+        hyperlink: cellObj.hyperlink ? { url: cellObj.hyperlink } : undefined,
+      })
+    })
+  })
+}
+
 /** "›" chevron glyph used between connected process-step cards. */
 export function addChevronConnector(slide: Slide, opts: { x: number; y: number; w: number; h: number }) {
   slide.addText('›', {

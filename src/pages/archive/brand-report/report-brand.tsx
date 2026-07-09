@@ -18,7 +18,6 @@ import {
   type BrandReportPage,
 } from './brand-report-types'
 import BrandReportSlides from './brand-report-slides/BrandReportSlides'
-import { addSanitizedSlide } from '../ppt-native'
 
 export default function ArchiveBrandReportBrand() {
   const { brandSlug } = useParams<{ brandSlug: string }>()
@@ -299,162 +298,49 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
   async function handleDownloadPpt() {
     if (!brand || pptDownloading) return
     if (editMode) { showToast('편집 모드를 종료한 후 다운로드해 주세요.', 'info'); return }
-    const sourceSlidesEl = document.querySelector<HTMLElement>('.brand-report-slides')
-    if (!sourceSlidesEl || sourceSlidesEl.querySelectorAll('.rslide').length === 0) {
-      showToast('슬라이드가 보이지 않습니다.', 'info'); return
-    }
+    if (pages.length === 0) { showToast('슬라이드가 없습니다.', 'info'); return }
     setDownloadOpen(false)
     setPptDownloading(true)
+    showToast('데이터와 이미지를 불러오는 중입니다. 잠시만 기다려주세요.', 'info')
     try {
-      const SKIP_TAGS = new Set(['button','select','option','input','textarea','script','style'])
-      const SLIDE_W = 10
-      const SLIDE_H = 5.625
-
-      const wrapper = document.createElement('div')
-      wrapper.style.cssText = 'position:fixed;top:-20000px;left:0;width:960px;'
-      const inner = document.createElement('div')
-      inner.className = 'report-slides brand-report-slides'
-      inner.style.cssText = 'padding:0!important;gap:0!important;'
-      inner.innerHTML = sourceSlidesEl.innerHTML
-      wrapper.appendChild(inner)
-      document.body.appendChild(wrapper)
-
-      const imgs = Array.from(wrapper.querySelectorAll<HTMLImageElement>('img'))
-      await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res() })))
-
-      const slideEls = Array.from(wrapper.querySelectorAll<HTMLElement>('.rslide'))
-      const [{ default: html2canvasFn }, { default: PptxGenJS }] = await Promise.all([
-        import('html2canvas'),
+      const [{ default: PptxGenJS }, { SLIDE_BUILDERS }] = await Promise.all([
         import('pptxgenjs'),
+        import('./brand-report-slides/ppt-slides'),
       ])
-
       const prs = new PptxGenJS()
-      prs.defineLayout({ name: 'WIDE169', width: SLIDE_W, height: SLIDE_H })
+      prs.defineLayout({ name: 'WIDE169', width: 10, height: 5.625 })
       prs.layout = 'WIDE169'
 
-      type TItem = { text: string; x: number; y: number; w: number; h: number; fontSize: number; colorHex: string; bold: boolean; italic: boolean; align: 'left' | 'center' | 'right' }
-      type OvImgItem = { el: HTMLElement; data: string; x: number; y: number; w: number; h: number }
-
-      function cssColorToHex(color: string, fallback: string) {
-        const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
-        return m ? [+m[1],+m[2],+m[3]].map(n=>n.toString(16).padStart(2,'0')).join('') : fallback
-      }
-
-      for (const slideEl of slideEls) {
-        const slideRect = slideEl.getBoundingClientRect()
-        // ── 0. Capture product/kit image blocks as separate PPT layers ──────
-        const ovImgItems: OvImgItem[] = []
-
-        for (const sel of ['.rslide__ov-img-block', '.rslide__kit-img-cell']) {
-          const imgBlock = slideEl.querySelector<HTMLElement>(sel)
-          if (!imgBlock) continue
-          const imgInBlock = imgBlock.querySelector<HTMLImageElement>('img')
-          // Skip if no img loaded — a missing/broken image would give a white blob (the block has white bg)
-          if (!imgInBlock || !imgInBlock.complete || imgInBlock.naturalWidth === 0) continue
-          const r = imgBlock.getBoundingClientRect()
-          if (r.width <= 1) continue
-          const x = Math.max(0, (r.left - slideRect.left) / slideRect.width * SLIDE_W)
-          const y = Math.max(0, (r.top - slideRect.top) / slideRect.height * SLIDE_H)
-          try {
-            const imgCanvas = await html2canvasFn(imgBlock, {
-              scale: 2, useCORS: true, allowTaint: true, backgroundColor: null,
-            })
-            ovImgItems.push({
-              el: imgBlock,
-              data: imgCanvas.toDataURL('image/png'),
-              x, y,
-              w: Math.min(r.width / slideRect.width * SLIDE_W, SLIDE_W - x),
-              h: Math.min(r.height / slideRect.height * SLIDE_H, SLIDE_H - y),
-            })
-          } catch { /* skip if canvas tainted */ }
+      // Same shared-page substitution BrandReportSlides.tsx does for on-screen rendering:
+      // cover/project_overview/review_list are edited once and shared across every brand.
+      const SHARED_TYPES = new Set<BrandPageType>(['cover', 'project_overview', 'review_list'])
+      const sorted = [...pages].sort((a, b) => a.order_index - b.order_index).map(page => {
+        if (!SHARED_TYPES.has(page.type)) return page
+        if (page.type === 'review_list') {
+          const subtitle = page.content.rlSubtitle ?? 'Mi Muse 리뷰'
+          const offset = page.content.rlOffset ?? 0
+          return sharedPages.find(s =>
+            s.type === 'review_list' &&
+            (s.content.rlSubtitle ?? 'Mi Muse 리뷰') === subtitle &&
+            (s.content.rlOffset ?? 0) === offset,
+          ) ?? page
         }
+        return sharedPages.find(s => s.type === page.type) ?? page
+      })
 
-        // ── 1. Collect all leaf text nodes and their styles ──────────────
-        const textItems: TItem[] = []
-        const textEls: HTMLElement[] = []
-
-        function collectTexts(node: Element) {
-          for (const child of Array.from(node.childNodes)) {
-            if (child.nodeType === Node.TEXT_NODE) {
-              const txt = child.textContent?.trim()
-              if (!txt) continue
-              const par = child.parentElement
-              if (!par || SKIP_TAGS.has(par.tagName.toLowerCase())) continue
-              const cs = window.getComputedStyle(par)
-              if (cs.display === 'none' || cs.visibility === 'hidden') continue
-              const r = par.getBoundingClientRect()
-              if (r.width < 1 || r.height < 1) continue
-              const x = (r.left - slideRect.left) / slideRect.width * SLIDE_W
-              const y = (r.top - slideRect.top) / slideRect.height * SLIDE_H
-              const w = Math.max(0.05, r.width / slideRect.width * SLIDE_W)
-              const h = Math.max(0.05, r.height / slideRect.height * SLIDE_H)
-              if (x < -0.1 || y < -0.1 || x > SLIDE_W || y > SLIDE_H) continue
-              textItems.push({
-                text: txt,
-                x: Math.max(0, x), y: Math.max(0, y),
-                w: Math.min(w, SLIDE_W - Math.max(0, x)),
-                h: Math.min(h, SLIDE_H - Math.max(0, y)),
-                fontSize: Math.max(6, Math.round(parseFloat(cs.fontSize) * 0.75)),
-                colorHex: cssColorToHex(cs.color, '000000'),
-                bold: parseInt(cs.fontWeight) >= 700,
-                italic: cs.fontStyle === 'italic',
-                align: cs.textAlign === 'center' ? 'center' : cs.textAlign === 'right' ? 'right' : 'left',
-              })
-              if (!textEls.includes(par)) textEls.push(par)
-            } else if (child.nodeType === Node.ELEMENT_NODE) {
-              collectTexts(child as Element)
-            }
-          }
-        }
-        collectTexts(slideEl)
-
-        // ── 2. Hide text + product img block, capture background ──────────
-        const savedColors = textEls.map(el => el.style.color)
-        textEls.forEach(el => { el.style.color = 'transparent' })
-
-        const savedImgVis = ovImgItems.map(i => ({ vis: i.el.style.visibility }))
-        ovImgItems.forEach(i => { i.el.style.visibility = 'hidden' })
-
-        const canvas = await html2canvasFn(slideEl, {
-          scale: 2, useCORS: true, allowTaint: true,
-          width: 960, height: 540, backgroundColor: '#F8F6F6',
-        })
-        const bgUrl = canvas.toDataURL('image/png')
-
-        textEls.forEach((el, i) => { el.style.color = savedColors[i] })
-        ovImgItems.forEach((img, i) => { img.el.style.visibility = savedImgVis[i].vis })
-
-        // ── 3. Build PPT slide ────────────────────────────────────────────
-        // addSanitizedSlide (not prs.addSlide()) so any control character that slips into
-        // DB free text still gets stripped before it reaches the slide XML — see ppt-native.ts.
-        const pptSlide = addSanitizedSlide(prs)
-        pptSlide.addImage({ data: bgUrl, x: 0, y: 0, w: SLIDE_W, h: SLIDE_H })
-
-        // Product image block as a separate PPT layer
-        for (const ovImg of ovImgItems) {
-          if (![ovImg.x, ovImg.y, ovImg.w, ovImg.h].every(Number.isFinite)) continue
-          pptSlide.addImage({ data: ovImg.data, x: ovImg.x, y: ovImg.y, w: ovImg.w, h: ovImg.h })
-        }
-
-        for (const item of textItems) {
-          if (![item.x, item.y, item.w, item.h, item.fontSize].every(Number.isFinite)) continue
-          pptSlide.addText(item.text, {
-            x: item.x, y: item.y, w: item.w, h: item.h,
-            fontSize: item.fontSize,
-            color: item.colorHex,
-            bold: item.bold,
-            italic: item.italic,
-            align: item.align,
-            valign: 'middle',
-            margin: 0,
-            wrap: true,
-          })
+      const ctx = { rows, brandName: brand.brandName, brandEn: brand.brandEn ?? undefined }
+      for (const page of sorted) {
+        const builder = SLIDE_BUILDERS[page.type]
+        if (!builder) continue
+        try {
+          await builder(prs, page, ctx)
+        } catch (e) {
+          console.error(`PPT slide build failed (type="${page.type}")`, e)
         }
       }
 
       const pptTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
       await prs.writeFile({ fileName: `${pptTitle}.pptx` })
-      document.body.removeChild(wrapper)
     } catch (e) {
       showToast(`PPT 오류: ${e instanceof Error ? e.message.slice(0, 80) : String(e)}`, 'error')
     } finally {

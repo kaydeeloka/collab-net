@@ -567,7 +567,7 @@
   border-radius: 0.6cqw;
   display: flex;
   align-items: flex-start;
-  gap: 0.3cqw;
+  gap: 0;
 }
 
 .brslide__bmd-img {

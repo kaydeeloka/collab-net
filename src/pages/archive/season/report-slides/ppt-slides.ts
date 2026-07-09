@@ -385,7 +385,7 @@ async function buildBestReviewDetailSlide(prs: pptxgen, page: ReportPage, ctx: B
   const cardW = (CONTENT_BOX.w - gap * 2) / 3
   const infoH = 1.2
   const cardX0 = CONTENT_BOX.x
-  const mediaGap = IN.cqw(0.3)
+  const mediaGap = 0
   const mediaSlotW = (cardW - mediaGap) / 2
   const mediaAreaH = CONTENT_BOX.h - infoH
   // Dual media grid sized to a 9:16 frame per cell (matches native TikTok video shape); fit
