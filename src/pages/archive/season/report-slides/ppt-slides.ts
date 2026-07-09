@@ -384,8 +384,16 @@ async function buildBestReviewDetailSlide(prs: pptxgen, page: ReportPage, ctx: B
   const gap = IN.cqw(1.2)
   const cardW = (CONTENT_BOX.w - gap * 2) / 3
   const infoH = 1.2
-  const mediaH = CONTENT_BOX.h - infoH
   const cardX0 = CONTENT_BOX.x
+  const mediaGap = IN.cqw(0.3)
+  const mediaSlotW = (cardW - mediaGap) / 2
+  const mediaAreaH = CONTENT_BOX.h - infoH
+  // Dual media grid sized to a 9:16 frame per cell (matches native TikTok video shape); fit
+  // within whichever of slot-width/area-height is the binding constraint, then center within
+  // the slot the old full-bleed thumbnail used to fill.
+  const mediaW = Math.min(mediaSlotW, mediaAreaH * (9 / 16))
+  const mediaH = mediaW * (16 / 9)
+  const cardH = mediaH + infoH
 
   const jobs: Promise<void>[] = []
   cardKeys.forEach((key, i) => {
@@ -393,13 +401,12 @@ async function buildBestReviewDetailSlide(prs: pptxgen, page: ReportPage, ctx: B
     const picked = bestRows[i] ?? null
     const { comment } = parseBrdCard(c[key])
 
-    addRoundedCard(slide, { x, y: CONTENT_BOX.y, w: cardW, h: CONTENT_BOX.h, radius: 0.05 })
+    addRoundedCard(slide, { x, y: CONTENT_BOX.y, w: cardW, h: cardH, radius: 0.05 })
 
-    const mediaGap = IN.cqw(0.3)
-    const mediaCellW = (cardW - mediaGap) / 2
+    const mediaXOffset = (mediaSlotW - mediaW) / 2
     const autoThumb = picked ? resolveMonitoringThumbnailUrl(picked.assets) : null
-    jobs.push(addImageOrPlaceholder(slide, autoThumb, { x, y: CONTENT_BOX.y, w: mediaCellW, h: mediaH }))
-    jobs.push(addImageOrPlaceholder(slide, c[imgKeys[i]], { x: x + mediaCellW + mediaGap, y: CONTENT_BOX.y, w: mediaCellW, h: mediaH }))
+    jobs.push(addImageOrPlaceholder(slide, autoThumb, { x: x + mediaXOffset, y: CONTENT_BOX.y, w: mediaW, h: mediaH }))
+    jobs.push(addImageOrPlaceholder(slide, c[imgKeys[i]], { x: x + mediaSlotW + mediaGap + mediaXOffset, y: CONTENT_BOX.y, w: mediaW, h: mediaH }))
 
     const infoY = CONTENT_BOX.y + mediaH
     const labelW = cardW * 0.32

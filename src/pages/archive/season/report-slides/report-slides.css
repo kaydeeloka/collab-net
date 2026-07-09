@@ -562,12 +562,16 @@
   position: relative;
   overflow: hidden;
   display: flex;
+  align-items: flex-start;
   gap: 0.3cqw;
 }
 
-/* Left thumbnail + right upload cells inside each brd card */
+/* Left thumbnail + right upload cells inside each brd card — 9:16 dual grid (matches
+   native TikTok video shape) */
 .rslide__brd-media-cell {
   flex: 1;
+  aspect-ratio: 9 / 16;
+  max-width: 100%;
   position: relative;
   overflow: hidden;
 }
