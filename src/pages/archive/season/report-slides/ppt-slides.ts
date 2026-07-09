@@ -402,15 +402,18 @@ async function buildBestReviewDetailSlide(prs: pptxgen, page: ReportPage, ctx: B
     jobs.push(addImageOrPlaceholder(slide, c[imgKeys[i]], { x: x + mediaCellW + mediaGap, y: CONTENT_BOX.y, w: mediaCellW, h: mediaH }))
 
     const infoY = CONTENT_BOX.y + mediaH
-    const rowH = infoH / 3
     const labelW = cardW * 0.32
-    const infoRows: { label: string; value: string; link?: string }[] = [
-      { label: '인플루언서', value: picked?.handle || '—', link: picked?.handle ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}` : undefined },
-      { label: '팔로워', value: fmtK(picked?.followers) },
-      { label: '댓글 반응', value: comment || '—' },
+    // 댓글 반응 is free-text and wraps to multiple lines, while 인플루언서/팔로워 are always
+    // a single short line — give it most of the row budget instead of splitting evenly.
+    const infoRows: { label: string; value: string; link?: string; weight: number }[] = [
+      { label: '인플루언서', value: picked?.handle || '—', link: picked?.handle ? `https://www.tiktok.com/@${picked.handle.replace(/^@/, '')}` : undefined, weight: 0.65 },
+      { label: '팔로워', value: fmtK(picked?.followers), weight: 0.65 },
+      { label: '댓글 반응', value: comment || '—', weight: 1.7 },
     ]
+    const totalWeight = infoRows.reduce((sum, r) => sum + r.weight, 0)
+    let y = infoY
     infoRows.forEach((row, ri) => {
-      const y = infoY + ri * rowH
+      const rowH = infoH * (row.weight / totalWeight)
       slide.addShape('rect', { x, y, w: labelW, h: rowH, fill: { color: COLORS.accent }, line: { type: 'none' } })
       slide.addText(row.label, {
         x, y, w: labelW, h: rowH, align: 'center', valign: 'middle',
@@ -422,6 +425,7 @@ async function buildBestReviewDetailSlide(prs: pptxgen, page: ReportPage, ctx: B
         fontFace: FONT.REG, fontSize: 8.25, color: COLORS.ink,
         hyperlink: row.link ? { url: row.link } : undefined,
       })
+      y += rowH
     })
   })
   await Promise.all(jobs)
