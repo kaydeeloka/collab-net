@@ -14,7 +14,7 @@ const { chromium } = require('playwright');
     page.waitForEvent('download', { timeout: 60000 }),
     page.getByText('PPT 다운로드', { exact: true }).click(),
   ]);
-  await download.saveAs('C:/Users/user/AppData/Local/Temp/urlfix_check.pptx');
+  await download.saveAs('C:/Users/user/AppData/Local/Temp/repost_check.pptx');
   console.log('SAVED');
   await browser.close();
 })();

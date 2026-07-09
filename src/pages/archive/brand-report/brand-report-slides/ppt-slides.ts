@@ -348,9 +348,11 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
     ? ['No.', '플랫폼', '계정', '조회수', '좋아요', '댓글', 'Repost', '포스팅 URL']
     : ['No.', '플랫폼', '계정', '조회수', '좋아요', '댓글', '포스팅 URL']
   // 조회수/좋아요/댓글 are short numbers — narrow them so 포스팅 URL gets enough room for a
-  // cleaned video URL (see cleanVideoUrl) to fit on one line without wrapping.
+  // cleaned video URL (see cleanVideoUrl) to fit on one line without wrapping. Repost is a
+  // single glyph (O/▲) — narrow it too and give the reclaimed width to 계정 (handle), which
+  // otherwise wraps to 2 lines for longer handles.
   const colWidths = isBrand
-    ? [0.05, 0.09, 0.13, 0.06, 0.06, 0.06, 0.09, 0.46]
+    ? [0.05, 0.09, 0.17, 0.06, 0.06, 0.06, 0.09, 0.42]
     : [0.05, 0.1, 0.15, 0.06, 0.06, 0.06, 0.52]
 
   const rows = pageRows.length > 0
