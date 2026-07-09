@@ -17,9 +17,13 @@ export const IN = {
 export const SLIDE_W = 10
 export const SLIDE_H = 5.625
 
+/** 나눔휴먼OTF weights are installed as distinct font families (Regular/Bold/ExtraBold), not
+ *  one family toggled via the `bold` flag — the old 'NanumHumanEB' string didn't match any
+ *  installed font at all. */
 export const FONT = {
-  EB: 'NanumHumanEB',
-  REG: 'NanumHuman',
+  EB: '나눔휴먼OTF ExtraBold',
+  BOLD: '나눔휴먼OTF Bold',
+  REG: '나눔휴먼OTF Regular',
   SANS: 'Arial',
 }
 
@@ -417,7 +421,7 @@ export function addContentChrome(slide: Slide, engTitle: string | undefined, kor
   addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * LOGO_ASPECT })
   slide.addText(engTitle ?? '', {
     x: 0.5, y: 0.35, w: 7.5, h: 0.3,
-    fontFace: FONT.REG, fontSize: 13, color: COLORS.teal,
+    fontFace: FONT.BOLD, fontSize: 13, color: COLORS.teal,
   })
   slide.addText(korTitle ?? '', {
     x: 0.5, y: 0.63, w: 8.5, h: 0.4,

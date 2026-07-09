@@ -158,7 +158,7 @@ async function buildProjectOverviewSlide(prs: pptxgen, page: BrandReportPage) {
     addSectionPill(slide, row.label, { x: tableX, y: rowY, w: IN.cqw(10), h: 0.24 })
     slide.addText(row.value ?? '', {
       x: tableX + IN.cqw(10) + IN.cqw(1), y: rowY, w: tableW - IN.cqw(11), h: rowH,
-      fontFace: FONT.REG, fontSize: 14 * 0.75, color: COLORS.ink, valign: 'top', lineSpacingMultiple: 1.5,
+      fontFace: FONT.REG, fontSize: rowFontPt, color: COLORS.ink, valign: 'top', lineSpacingMultiple: 1.5,
     })
     rowY += rowH + rowGap
   }
@@ -318,7 +318,7 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   const logoW = 1.1
   addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * (2900 / 6628) })
   slide.addText(c.engTitle ?? '', {
-    x: 0.5, y: 0.35, w: 7.5, h: 0.3, fontFace: FONT.REG, fontSize: 13, color: COLORS.teal,
+    x: 0.5, y: 0.35, w: 7.5, h: 0.3, fontFace: FONT.BOLD, fontSize: 13, color: COLORS.teal,
   })
 
   const subtitle = c.rlSubtitle ?? 'Mi Muse 리뷰'

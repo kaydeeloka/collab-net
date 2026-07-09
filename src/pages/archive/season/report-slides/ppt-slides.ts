@@ -149,7 +149,7 @@ async function buildProjectOverviewSlide(prs: pptxgen, page: ReportPage) {
     addSectionPill(slide, row.label, { x: tableX, y: rowY, w: IN.cqw(10), h: 0.24 })
     slide.addText(row.value ?? '', {
       x: tableX + IN.cqw(10) + IN.cqw(1), y: rowY, w: tableW - IN.cqw(11), h: rowH,
-      fontFace: FONT.REG, fontSize: 14 * 0.75, color: COLORS.ink, valign: 'top', lineSpacingMultiple: 1.5,
+      fontFace: FONT.REG, fontSize: rowFontPt, color: COLORS.ink, valign: 'top', lineSpacingMultiple: 1.5,
     })
     rowY += rowH + rowGap
   }
