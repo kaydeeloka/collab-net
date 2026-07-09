@@ -21,7 +21,6 @@ import {
   removeCollectionImg,
   uploadCollectionImg,
 } from './season-collection-images'
-import { brandNameToSlug } from '@/pages/brand/confirmed/archive/slug'
 import { useArchivePhase } from '../use-archive-phase'
 import { designCoverPath } from '../design/design-archive-images'
 
@@ -62,8 +61,6 @@ function ProductCard({
   const primaryTitle = productEn || productKo || brand.brandName
   const secondaryTitle = productEn && productKo ? productKo : null
   const desc = (brand.description?.trim() || defaultBrandDesc(brand))
-  const archiveSlug = encodeURIComponent(brandNameToSlug(brand.brandName))
-  const archivePath = `/brand/confirmed/archive/${archiveSlug}`
 
   return (
     <article className="season-collection__product">
@@ -85,12 +82,6 @@ function ProductCard({
         </div>
         <h3 className="season-collection__product-title">{primaryTitle}</h3>
         <p className="season-collection__product-desc">{desc}</p>
-        {editMode && (
-          <Link to={archivePath} className="season-collection__archive-link">
-            <ExternalLink size={12} />
-            브랜드 자료 아카이브에서 편집
-          </Link>
-        )}
       </div>
     </article>
   )
@@ -784,7 +775,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
                 {editMode && (
                   <span className="season-collection__kit-edit-hint">
                     브랜드별 제품 정보는{' '}
-                    <Link to="/brand/confirmed/archive">자료 아카이브</Link>
+                    <Link to="/brand/confirmed/archive">
+                      <ExternalLink size={12} />
+                      자료 아카이브
+                    </Link>
                     에서 수정할 수 있습니다.
                   </span>
                 )}
