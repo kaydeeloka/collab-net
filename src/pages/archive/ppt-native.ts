@@ -290,6 +290,8 @@ export function addDataTable(
   let acc = opts.x
   for (const wFrac of widths) { colX.push(acc); acc += wFrac * opts.w }
 
+  const fontSize = opts.fontSize ?? 9
+
   slide.addShape('rect', {
     x: opts.x, y: opts.y, w: opts.w, h: headerH,
     fill: { color: COLORS.badgeBg }, line: { color: 'B8CFD8', width: 0.5 },
@@ -297,7 +299,7 @@ export function addDataTable(
   opts.headers.forEach((h, ci) => {
     slide.addText(h, {
       x: colX[ci], y: opts.y, w: widths[ci] * opts.w, h: headerH,
-      align: 'center', valign: 'middle', fontFace: FONT.REG, fontSize: opts.headerFontSize ?? opts.fontSize ?? 9,
+      align: 'center', valign: 'middle', fontFace: FONT.REG, fontSize: opts.headerFontSize ?? fontSize,
       bold: true, color: COLORS.badgeTx,
     })
   })
@@ -316,7 +318,7 @@ export function addDataTable(
       slide.addText(cellObj.text, {
         x: colX[ci], y, w: widths[ci] * opts.w, h: rowH,
         align: cellObj.align ?? opts.align ?? 'center', valign: 'middle',
-        fontFace: FONT.REG, fontSize: opts.fontSize ?? 9, bold: isTotal, color: COLORS.ink,
+        fontFace: FONT.REG, fontSize, bold: isTotal, color: COLORS.ink,
         hyperlink: cellObj.hyperlink ? { url: cellObj.hyperlink } : undefined,
       })
     })

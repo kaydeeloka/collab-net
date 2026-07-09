@@ -36,6 +36,14 @@ function reviewRowsOf(rows: MonitoringRow[]) {
   return rows.filter(r => r.review_link?.startsWith('http'))
 }
 
+/** Strips tracking query params (e.g. TikTok's `?is_from_webapp=1&sender_device=pc&web_id=...`)
+ *  — the bare video URL still opens fine and is short enough to fit one table row without
+ *  wrapping, instead of the long tracking URL that used to spill onto a 2nd line. */
+function cleanVideoUrl(url: string): string {
+  const qIdx = url.indexOf('?')
+  return qIdx >= 0 ? url.slice(0, qIdx) : url
+}
+
 function brandRowsOf(ctx: BuilderCtx) {
   const lower = ctx.brandName.trim().toLowerCase()
   const variants = new Set([
@@ -339,9 +347,11 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   const headers = isBrand
     ? ['No.', '플랫폼', '계정', '조회수', '좋아요', '댓글', 'Repost', '포스팅 URL']
     : ['No.', '플랫폼', '계정', '조회수', '좋아요', '댓글', '포스팅 URL']
+  // 조회수/좋아요/댓글 are short numbers — narrow them so 포스팅 URL gets enough room for a
+  // cleaned video URL (see cleanVideoUrl) to fit on one line without wrapping.
   const colWidths = isBrand
-    ? [0.05, 0.09, 0.13, 0.09, 0.09, 0.08, 0.09, 0.38]
-    : [0.05, 0.1, 0.15, 0.1, 0.1, 0.09, 0.41]
+    ? [0.05, 0.09, 0.13, 0.06, 0.06, 0.06, 0.09, 0.46]
+    : [0.05, 0.1, 0.15, 0.06, 0.06, 0.06, 0.52]
 
   const rows = pageRows.length > 0
     ? pageRows.map((row, i) => {
@@ -354,13 +364,15 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
           row.comments > 0 ? String(row.comments) : '—',
         ]
         if (isBrand) base.push(row.repost ?? '—')
-        base.push(row.review_link ? { text: row.review_link, hyperlink: row.review_link, align: 'left' as const } as unknown as string : '—')
+        base.push(row.review_link ? { text: cleanVideoUrl(row.review_link), hyperlink: row.review_link, align: 'left' as const } as unknown as string : '—')
         return base
       })
     : [[{ text: '데이터 없음', align: 'center' as const } as unknown as string, ...Array(headers.length - 1).fill('')]]
 
+  // Extend a little past CONTENT_BOX's usual bottom edge — this slide has no bottom content
+  // competing for space, so the review table can use more of the slide for row breathing room.
   addDataTable(slide, {
-    x: CONTENT_BOX.x, y: CONTENT_BOX.y, w: CONTENT_BOX.w, h: CONTENT_BOX.h,
+    x: CONTENT_BOX.x, y: CONTENT_BOX.y, w: CONTENT_BOX.w, h: SLIDE_H - CONTENT_BOX.y - 0.25,
     headers, rows, colWidths, fontSize: 7.5, headerFontSize: 8,
   })
 }
