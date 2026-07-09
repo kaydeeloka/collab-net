@@ -260,6 +260,61 @@ function syncOneEmsTrackingFrom17Track(trackingId) {
   }
 }
 
+// Registers every not-yet-registered EMS number for a phase with 17track in a single batch
+// call (register17Track already accepts an array), then marks each accepted row 'Y' so a
+// later 동기화 (status sync) never re-registers it. Does not fetch tracking status/history —
+// that stays the job of syncAllEmsTrackingFrom17Track / the 동기화 button.
+function registerAllEmsTracking(phaseId) {
+  if (!phaseId) return { ok: false, error: 'phaseId가 필요합니다.' };
+  try {
+    var confirmed = supabaseGet(
+      '/rest/v1/confirmed_influencers?phase_id=eq.' + encodeURIComponent(phaseId)
+      + '&select=id,ems_tracking(id,ems_number,registered_17track)',
+    );
+    if (!Array.isArray(confirmed)) return { ok: false, error: 'confirmed_influencers 조회 실패' };
+
+    var numberToId = {};
+    var alreadyRegistered = 0, skipped = 0;
+    confirmed.forEach(function(ci) {
+      var ems = (ci.ems_tracking || [])[0];
+      if (!ems || !ems.id) return;
+      var number = (ems.ems_number || '').toString().trim();
+      if (!number) { skipped++; return; }
+      if (_isRegistered17Track(ems.registered_17track)) { alreadyRegistered++; return; }
+      numberToId[number] = ems.id;
+    });
+
+    var numbers = Object.keys(numberToId);
+    if (!numbers.length) {
+      return { ok: true, registered: 0, alreadyRegistered: alreadyRegistered, skipped: skipped, failed: 0, errors: [] };
+    }
+
+    var reg = register17Track(numbers);
+    if (!reg.ok && !(reg.accepted || []).length) {
+      return { ok: false, error: reg.error || '17track 등록 실패' };
+    }
+
+    var registered = 0, failed = 0, errors = [];
+    (reg.accepted || []).forEach(function(item) {
+      var number = (item.number || '').toString().trim();
+      var trackingId = numberToId[number];
+      if (!trackingId) return;
+      var res = supabasePatch('ems_tracking', 'id=eq.' + encodeURIComponent(trackingId), { registered_17track: 'Y' });
+      if (res.ok) registered++;
+      else { failed++; errors.push(number + ': Supabase 업데이트 실패'); }
+    });
+    (reg.rejected || []).forEach(function(item) {
+      failed++;
+      var msg = item.error && item.error.message ? item.error.message : '등록 거부';
+      errors.push((item.number || '?') + ': ' + msg);
+    });
+
+    return { ok: true, registered: registered, alreadyRegistered: alreadyRegistered, skipped: skipped, failed: failed, errors: errors.slice(0, 10) };
+  } catch (e) {
+    return { ok: false, error: e.toString() };
+  }
+}
+
 function syncAllEmsTrackingFrom17Track(phaseId) {
   if (!phaseId) return { ok: false, error: 'phaseId가 필요합니다.' };
   try {
@@ -577,6 +632,7 @@ function routeEms(action, p, body) {
     case 'register17Track':       return register17Track(b.numbers || (b.number ? [b.number] : []));
     case 'syncOneEmsTracking':    return syncOneEmsTrackingFrom17Track(b.trackingId || b.tracking_id);
     case 'syncAllEmsTracking':    return syncAllEmsTrackingFrom17Track(b.phaseId || b.phase_id);
+    case 'registerAllEmsTracking': return registerAllEmsTracking(b.phaseId || b.phase_id);
     case 'debug17TrackRaw':       return debug17TrackRaw(b.number || (p && p.number));
     default:                      return null;
   }

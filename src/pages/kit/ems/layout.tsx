@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { gasPost } from '@/lib/api'
+import { useToast } from '@/contexts/ToastContext'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems/ems-errors'
 import { isEmsDelivered, isEmsInTransit } from '@/lib/ems/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import Spinner from '@/components/Spinner'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+
+interface RegisterAllResult {
+  ok: boolean; error?: string
+  registered?: number; alreadyRegistered?: number; skipped?: number; failed?: number; errors?: string[]
+}
 
 interface EmsStats {
   total:            number
@@ -129,11 +136,14 @@ function EmsStatsCards({ stats }: { stats: EmsStats }) {
 export default function EmsLayout() {
   const { pathname } = useLocation()
   const navigate     = useNavigate()
+  const { showToast } = useToast()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const activeTab    = pathname.startsWith('/kit/ems/errors') ? '/kit/ems/errors' : '/kit/ems'
   const [stats, setStats]             = useState<EmsStats | null>(null)
   const [loading, setLoading]         = useState(true)
   const [reshipVersion, setReshipVersion] = useState(0)
+  const [trackingVersion, setTrackingVersion] = useState(0)
+  const [registerAllLoading, setRegisterAllLoading] = useState(false)
 
   const loadStats = useCallback(async () => {
     setLoading(true)
@@ -151,6 +161,29 @@ export default function EmsLayout() {
     setReshipVersion(v => v + 1)
   }, [])
 
+  // Registers every not-yet-registered tracking number with 17track (registered_17track != 'Y')
+  // in one batch call, marking each 'Y' on success — so the 배송 추적 tab's own 17track 동기화
+  // button never re-registers the same number twice.
+  async function registerAllTo17Track() {
+    if (!viewPhaseId) return
+    setRegisterAllLoading(true)
+    try {
+      const res = await gasPost<RegisterAllResult>({
+        action: 'registerAllEmsTracking',
+        phaseId: viewPhaseId,
+      })
+      if (!res.ok) throw new Error(res.error || '등록 실패')
+      const msg = `등록 완료 · 신규 ${res.registered ?? 0}, 기등록 ${res.alreadyRegistered ?? 0}, 실패 ${res.failed ?? 0}`
+      showToast(msg, (res.failed ?? 0) > 0 ? 'info' : 'success')
+      if (res.errors?.length) showToast(res.errors.slice(0, 3).join('\n'), 'error')
+      await loadStats()
+      setTrackingVersion(v => v + 1)
+    } catch (e: unknown) {
+      showToast((e as Error).message, 'error')
+    }
+    setRegisterAllLoading(false)
+  }
+
   return (
     <div className="page page--fill">
       <PageHeroBanner>
@@ -158,9 +191,20 @@ export default function EmsLayout() {
           title="EMS 글로벌 배송 추적"
           description="확정 인플루언서의 배송 주소·EMS 운송장 번호·배송 상태를 통합 관리합니다."
           actions={(
-            <button type="button" className="page-banner-btn page-banner-btn--secondary" onClick={loadStats}>
-              <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
-            </button>
+            <>
+              <button
+                type="button"
+                className="page-banner-btn page-banner-btn--secondary"
+                onClick={registerAllTo17Track}
+                disabled={registerAllLoading || !viewPhaseId}
+                title="아직 17track에 등록되지 않은 등기번호를 일괄 등록합니다 (상태 갱신 없음)"
+              >
+                {registerAllLoading ? '등록 중...' : '17track 등록하기'}
+              </button>
+              <button type="button" className="page-banner-btn page-banner-btn--secondary" onClick={loadStats}>
+                <span style={{ color: 'var(--blue-dk)' }}>↻</span> 새로고침
+              </button>
+            </>
           )}
         />
       </PageHeroBanner>
@@ -177,7 +221,7 @@ export default function EmsLayout() {
       />
 
       <div style={{ paddingTop: 16 }}>
-        <Outlet context={{ refreshStats: loadStats, notifyReshipChange, reshipVersion }} />
+        <Outlet context={{ refreshStats: loadStats, notifyReshipChange, reshipVersion, trackingVersion }} />
       </div>
     </div>
   )

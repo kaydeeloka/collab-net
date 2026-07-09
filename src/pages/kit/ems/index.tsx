@@ -69,7 +69,7 @@ const RESHIP_FILTER_OPTIONS: HeaderFilterOption[] = [
 
 export default function Ems() {
   const { showToast } = useToast()
-  const { refreshStats, notifyReshipChange } = useEmsLayout()
+  const { refreshStats, notifyReshipChange, trackingVersion } = useEmsLayout()
   const { viewPhaseId, loading: phaseLoading } = usePhase()
   const [rows,    setRows]    = useState<EmsRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -112,6 +112,11 @@ export default function Ems() {
     if (!phaseLoading && viewPhaseId) loadEms()
     if (!phaseLoading && !viewPhaseId) { setRows([]); setLoading(false) }
   }, [viewPhaseId, phaseLoading])
+
+  // Silent reload after the 17track 등록하기 button (in EmsLayout) registers new numbers.
+  useEffect(() => {
+    if (trackingVersion > 0 && !phaseLoading && viewPhaseId) loadEms({ silent: true })
+  }, [trackingVersion])
 
   useEffect(() => { setPage(1) }, [searchQuery, filterStatus, filterReship])
 
@@ -411,6 +416,7 @@ export default function Ems() {
               className="modal-btn-confirm"
               onClick={syncAllFrom17Track}
               disabled={syncAllLoading || !viewPhaseId}
+              title="등록된 등기번호의 최신 배송 상태를 가져옵니다"
               style={{ padding: '6px 14px', fontSize: 12, whiteSpace: 'nowrap' }}
             >
               {syncAllLoading ? '17track 동기화 중...' : '17track 동기화'}

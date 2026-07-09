@@ -4,6 +4,7 @@ export interface EmsLayoutContext {
   refreshStats:       () => Promise<void>
   notifyReshipChange: () => void
   reshipVersion:      number
+  trackingVersion:    number
 }
 
 export function useEmsLayout() {
