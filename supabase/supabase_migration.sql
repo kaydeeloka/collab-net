@@ -1,25 +1,46 @@
 -- ============================================================
 --  MiMuse Supabase Schema — fresh project bootstrap
 --  Run once in Supabase SQL Editor on a new account.
+--  Synced against live 21-table schema dump, 2026-07-09.
+--
+--  데이터 흐름 (쉽게 설명):
+--
+--  [인플루언서]
+--    인플루언서 발굴(influencers) → 확정(confirmed_influencers)
+--    → SNS 계정 연결(influencer_platform) → 게시물 모니터링(monitoring)
+--    확정된 인플루언서 → 배송 추적(ems_tracking) → 재배송(ems_reshipments)
+--
+--  [브랜드]
+--    브랜드 컨택(brand_contacts)에서 "수락"으로 바뀌면
+--    → 확정 브랜드(confirmed_brands)로 자동 등록됨
+--    확정 브랜드 → 자료 아카이브 탭(confirmed_brand_assets: 로고/제품사진/전성분표)
+--    확정 브랜드 → 브랜드별 리포트(brand_report_pages)
+--
+--  [시즌 리포트]
+--    모니터링 데이터(monitoring) → 결과 리포트(report_pages)
 -- ============================================================
 
 -- Drop existing objects (reverse dependency order)
-DROP TABLE IF EXISTS outreach_messages       CASCADE;
+DROP TABLE IF EXISTS report_pages            CASCADE;
+DROP TABLE IF EXISTS brand_report_pages      CASCADE;
+DROP TABLE IF EXISTS design_archive_files    CASCADE;
+DROP TABLE IF EXISTS design_archive_folders  CASCADE;
 DROP TABLE IF EXISTS confirmed_brand_assets  CASCADE;
-DROP TABLE IF EXISTS monitoring_assets       CASCADE;
-DROP TABLE IF EXISTS monitoring              CASCADE;
-DROP TABLE IF EXISTS influencer_platform     CASCADE;
-DROP TABLE IF EXISTS ems_reshipments         CASCADE;
-DROP TABLE IF EXISTS ems_tracking            CASCADE;
-DROP TABLE IF EXISTS confirmed_influencers   CASCADE;
 DROP TABLE IF EXISTS confirmed_brands        CASCADE;
+DROP TABLE IF EXISTS brand_contacts          CASCADE;
 DROP TABLE IF EXISTS brand_personal          CASCADE;
 DROP TABLE IF EXISTS brand_general           CASCADE;
+DROP TABLE IF EXISTS email_recipients        CASCADE;
+DROP TABLE IF EXISTS beauty_news_archives    CASCADE;
+DROP TABLE IF EXISTS monitoring_keywords     CASCADE;
+DROP TABLE IF EXISTS monitoring_assets       CASCADE;
+DROP TABLE IF EXISTS monitoring              CASCADE;
+DROP TABLE IF EXISTS ems_reshipments         CASCADE;
+DROP TABLE IF EXISTS ems_tracking            CASCADE;
+DROP TABLE IF EXISTS influencer_platform     CASCADE;
+DROP TABLE IF EXISTS confirmed_influencers   CASCADE;
 DROP TABLE IF EXISTS influencers             CASCADE;
 DROP TABLE IF EXISTS email_templates         CASCADE;
-DROP TABLE IF EXISTS monitoring_keywords     CASCADE;
-DROP TABLE IF EXISTS beauty_news_archives    CASCADE;
-DROP TABLE IF EXISTS email_recipients        CASCADE;
 DROP TABLE IF EXISTS app_config              CASCADE;
 DROP TABLE IF EXISTS tiers                   CASCADE;
 DROP TABLE IF EXISTS phases                  CASCADE;
@@ -97,7 +118,7 @@ RETURNS UUID AS $$
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
---  Email Templates (before outreach_messages FK)
+--  Email Templates
 -- ============================================================
 CREATE TABLE email_templates (
   id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -151,25 +172,6 @@ CREATE INDEX idx_influencers_tier       ON influencers(tier_id);
 CREATE INDEX idx_influencers_source_phase ON influencers(source_phase_id);
 CREATE INDEX idx_influencers_last_reply ON influencers(last_reply_at DESC NULLS LAST);
 CREATE INDEX idx_influencers_contacted  ON influencers(phase_id, contacted) WHERE contacted = true;
-
--- ============================================================
---  Outreach Messages
--- ============================================================
-CREATE TABLE outreach_messages (
-  id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at          TIMESTAMPTZ DEFAULT now(),
-  influencer_id       UUID        NOT NULL REFERENCES influencers(id) ON DELETE CASCADE,
-  direction           TEXT        NOT NULL,
-  subject             TEXT,
-  body                TEXT        NOT NULL,
-  sent_at             TIMESTAMPTZ DEFAULT now(),
-  template_name       TEXT,
-  template_id         UUID        REFERENCES email_templates(id) ON DELETE SET NULL,
-  outlook_message_id  TEXT
-);
-
-CREATE INDEX idx_outreach_messages_influencer ON outreach_messages(influencer_id);
-CREATE INDEX idx_outreach_messages_sent_at    ON outreach_messages(sent_at);
 
 -- ============================================================
 --  Confirmed Influencers
@@ -275,7 +277,8 @@ CREATE TABLE monitoring (
   comments                INTEGER     DEFAULT 0,
   keywords                TEXT,
   updated                 DATE,
-  phase_id                UUID        REFERENCES phases(id) ON DELETE CASCADE
+  phase_id                UUID        REFERENCES phases(id) ON DELETE CASCADE,
+  best_review_picks       BOOLEAN     DEFAULT false
 );
 
 CREATE INDEX idx_monitoring_platform ON monitoring(influencer_platform_id);
@@ -283,14 +286,17 @@ CREATE INDEX idx_monitoring_brand    ON monitoring(brand);
 CREATE INDEX idx_monitoring_date     ON monitoring(date);
 CREATE INDEX idx_monitoring_phase    ON monitoring(phase_id);
 
+-- Thumbnail/video assets per monitoring row (1:1) — cover_url/video_url are
+-- Supabase Storage public URLs (monitoring-thumbnails / monitoring-videos buckets),
+-- image_urls holds the full gallery for multi-image posts.
 CREATE TABLE monitoring_assets (
-  id                   UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  monitoring_id        UUID        NOT NULL UNIQUE REFERENCES monitoring(id) ON DELETE CASCADE,
-  thumbnail_source_url TEXT,
-  thumbnail_path       TEXT,
-  video_path           TEXT,
-  created_at           TIMESTAMPTZ DEFAULT now(),
-  updated_at           TIMESTAMPTZ DEFAULT now()
+  id             UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  monitoring_id  UUID        NOT NULL UNIQUE REFERENCES monitoring(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  updated_at     TIMESTAMPTZ DEFAULT now(),
+  cover_url      TEXT,
+  video_url      TEXT,
+  image_urls     JSONB
 );
 
 CREATE INDEX idx_monitoring_assets_monitoring ON monitoring_assets(monitoring_id);
@@ -343,60 +349,39 @@ CREATE TABLE email_recipients (
 );
 
 -- ============================================================
---  Brand Contacts
+--  Brand Contacts — single merged table (replaces the older
+--  brand_general + brand_personal split; distinguished per-row
+--  by which of company/contact_name is populated in the UI).
 -- ============================================================
-CREATE TABLE brand_general (
-  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  company          TEXT,
-  email            TEXT[],
-  brand_name       TEXT,
-  website          TEXT,
-  product_category TEXT,
-  overseas         BOOLEAN     NOT NULL DEFAULT false,
-  created_at       TIMESTAMPTZ DEFAULT now(),
-  contacted        BOOLEAN     NOT NULL DEFAULT false,
-  status           TEXT        NOT NULL DEFAULT '',
-  send_count       INTEGER     NOT NULL DEFAULT 0,
-  notes            TEXT,
-  reply_count      INTEGER,
-  telephone        TEXT,
-  phase_id         UUID        NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
-  last_reply_at    TIMESTAMPTZ,
-  source_phase_id  UUID        REFERENCES phases(id) ON DELETE SET NULL,
-  last_contact_at  TIMESTAMPTZ
+CREATE TABLE brand_contacts (
+  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  phase_id          UUID        DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
+  source_phase_id   UUID        REFERENCES phases(id) ON DELETE SET NULL,
+  brand_name        TEXT        NOT NULL,
+  brand_en          TEXT,
+  company           TEXT,
+  email             TEXT[],
+  telephone         TEXT,
+  website           TEXT,
+  product_category  TEXT,
+  overseas          BOOLEAN     NOT NULL DEFAULT false,
+  contact_name      TEXT,
+  department        TEXT,
+  position          TEXT,
+  personal_email    TEXT[],
+  personal_phone    TEXT,
+  status            TEXT        DEFAULT '',
+  contacted         BOOLEAN     NOT NULL DEFAULT false,
+  send_count        INTEGER     DEFAULT 0,
+  reply_count       INTEGER     DEFAULT 0,
+  last_contact_at   TIMESTAMPTZ,
+  last_reply_at     TIMESTAMPTZ,
+  notes             TEXT
 );
 
-CREATE INDEX idx_brand_general_phase        ON brand_general(phase_id);
-CREATE INDEX idx_brand_general_source_phase ON brand_general(source_phase_id);
-
-CREATE TABLE brand_personal (
-  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  company          TEXT,
-  contact_name     TEXT,
-  department       TEXT,
-  position         TEXT,
-  personal_email   TEXT[],
-  personal_phone   TEXT,
-  website          TEXT,
-  rep_email        TEXT,
-  telephone        TEXT,
-  product_category TEXT,
-  overseas         BOOLEAN     NOT NULL DEFAULT false,
-  contacted        BOOLEAN     NOT NULL DEFAULT false,
-  status           TEXT        NOT NULL DEFAULT '',
-  send_count       INTEGER     NOT NULL DEFAULT 0,
-  notes            TEXT,
-  created_at       TIMESTAMPTZ DEFAULT now(),
-  reply_count      INTEGER,
-  phase_id         UUID        NOT NULL DEFAULT get_active_phase_id() REFERENCES phases(id) ON DELETE CASCADE,
-  brand_name       TEXT,
-  last_reply_at    TIMESTAMPTZ,
-  source_phase_id  UUID        REFERENCES phases(id) ON DELETE SET NULL,
-  last_contact_at  TIMESTAMPTZ
-);
-
-CREATE INDEX idx_brand_personal_phase        ON brand_personal(phase_id);
-CREATE INDEX idx_brand_personal_source_phase ON brand_personal(source_phase_id);
+CREATE INDEX idx_brand_contacts_phase        ON brand_contacts(phase_id);
+CREATE INDEX idx_brand_contacts_source_phase ON brand_contacts(source_phase_id);
 
 -- ============================================================
 --  Confirmed Brands + Assets
@@ -441,17 +426,19 @@ CREATE INDEX idx_confirmed_brand_assets_brand_cat
   ON confirmed_brand_assets(confirmed_brand_id, category);
 
 -- ============================================================
---  Design archive — user folders + files per phase
+--  Design archive — user folders (nestable) + files per phase
 -- ============================================================
 CREATE TABLE design_archive_folders (
-  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  phase_id    UUID        NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
-  name        TEXT        NOT NULL,
-  sort_order  INTEGER     DEFAULT 0,
-  created_at  TIMESTAMPTZ DEFAULT now()
+  id                UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  phase_id          UUID        NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+  name              TEXT        NOT NULL,
+  sort_order        INTEGER     DEFAULT 0,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  parent_folder_id  UUID        REFERENCES design_archive_folders(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_design_archive_folders_phase ON design_archive_folders(phase_id);
+CREATE INDEX idx_design_archive_folders_phase  ON design_archive_folders(phase_id);
+CREATE INDEX idx_design_archive_folders_parent ON design_archive_folders(parent_folder_id);
 
 CREATE TABLE design_archive_files (
   id            UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -465,6 +452,39 @@ CREATE TABLE design_archive_files (
 );
 
 CREATE INDEX idx_design_archive_files_folder ON design_archive_files(folder_id);
+
+-- ============================================================
+--  Report Pages — season 결과 리포트 slide content (editable pages)
+--  NOTE: phase_id is TEXT (not UUID/FK) to match the live schema.
+-- ============================================================
+CREATE TABLE report_pages (
+  id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  phase_id     TEXT        NOT NULL,
+  order_index  INTEGER     NOT NULL,
+  type         TEXT        NOT NULL,
+  content      JSONB       DEFAULT '{}',
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  updated_at   TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_report_pages_phase ON report_pages(phase_id, order_index);
+
+-- ============================================================
+--  Brand Report Pages — per-brand 브랜드별 리포트 slide content.
+--  brand_name = '__shared__' rows hold pages reused across every brand
+--  (cover/project_overview/review_list) for a phase.
+-- ============================================================
+CREATE TABLE brand_report_pages (
+  id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  phase_id     UUID        NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
+  brand_name   TEXT        NOT NULL,
+  order_index  INTEGER     NOT NULL,
+  type         TEXT        NOT NULL,
+  content      JSONB       DEFAULT '{}',
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_brand_report_pages_phase_brand ON brand_report_pages(phase_id, brand_name, order_index);
 
 -- ============================================================
 --  Storage Buckets
@@ -503,7 +523,6 @@ ALTER TABLE tiers                 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_templates       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE influencers           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE outreach_messages     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_influencers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE influencer_platform   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ems_tracking          ENABLE ROW LEVEL SECURITY;
@@ -513,21 +532,22 @@ ALTER TABLE monitoring_assets     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE monitoring_keywords   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE beauty_news_archives  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_recipients      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE brand_general         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE brand_personal        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE brand_contacts        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_brands      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_brand_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE design_archive_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE design_archive_files   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_pages           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE brand_report_pages     ENABLE ROW LEVEL SECURITY;
 
 DO $$ DECLARE tbl TEXT;
 BEGIN
   FOREACH tbl IN ARRAY ARRAY[
-    'phases','tiers','app_config','email_templates','influencers','outreach_messages',
+    'phases','tiers','app_config','email_templates','influencers',
     'confirmed_influencers','influencer_platform','ems_tracking','ems_reshipments',
     'monitoring','monitoring_assets','monitoring_keywords','beauty_news_archives',
-    'email_recipients','brand_general','brand_personal','confirmed_brands','confirmed_brand_assets',
-    'design_archive_folders','design_archive_files'
+    'email_recipients','brand_contacts','confirmed_brands','confirmed_brand_assets',
+    'design_archive_folders','design_archive_files','report_pages','brand_report_pages'
   ]
   LOOP
     EXECUTE format(

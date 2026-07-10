@@ -9,6 +9,7 @@ import { usePhase } from '@/contexts/PhaseContext'
 import StickyBar, { type StickyBarGroup, type StickyBarNavChild, type StickyBarNavSubChild } from '@/components/StickyBar'
 import Modal from '@/components/Modal'
 import { archivePhaseSlugFromPath, archiveSectionFromPath, archiveSectionPath, isArchiveDetailPath, phaseFromArchiveSlug } from '@/pages/archive/archive-slug'
+import { setGlobalArchivePhase } from '@/pages/archive/archive-phase-sync'
 import { formatKstShortDate } from '@/lib/kst-time'
 
 interface NavSubChild extends StickyBarNavSubChild {}
@@ -150,6 +151,18 @@ export default function Layout() {
 
   async function switchPhase(id: string) {
     if (!id || id === activeDbId) return
+
+    const archiveSection = archiveSectionFromPath(pathname)
+    const isArchiveDetail = archiveSection != null && archivePhaseSlugFromPath(pathname) != null
+    if (isArchiveDetail && archiveSection) {
+      const phase = phaseList.find(p => p.id === id)
+      if (phase) {
+        await setGlobalArchivePhase(phase, archiveSection, ctxSwitchPhase, navigate)
+        showToast(`「${phase.name}」 전환 완료`, 'success')
+        return
+      }
+    }
+
     await ctxSwitchPhase(id)
     showToast(`「${phaseList.find(p => p.id === id)?.name}」 전환 완료`, 'success')
   }
@@ -421,7 +434,7 @@ export default function Layout() {
         {phaseList.length > 0 && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-4)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>차수 목록</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 234, overflowY: 'auto' }}>
               {phaseList.map(p => {
                 const isActive  = p.id === activePhaseId
                 const isViewing = p.id === viewPhaseId

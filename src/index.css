@@ -466,6 +466,8 @@ a { text-decoration: none; }
   border-radius: var(--r-lg);
   box-shadow: var(--sh-md);
   z-index: 200;
+  max-height: 216px;
+  overflow-y: auto;
 }
 
 .sticky-bar__phase-option {
