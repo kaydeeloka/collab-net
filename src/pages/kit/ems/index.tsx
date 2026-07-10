@@ -51,7 +51,7 @@ interface TrackingEvent {
 }
 
 interface TrackingDetail {
-  ok: boolean; error?: string; pending?: boolean
+  ok: boolean; error?: string; pending?: boolean; notRegistered?: boolean
   carrier?: string; statusLabel?: string; statusColor?: string
   lastTime?: string; history?: TrackingEvent[]
 }
@@ -512,7 +512,7 @@ export default function Ems() {
                                 {row.ems_number ? (
                                   <div>
                                     <span
-                                      onClick={() => openDetail(row.ems_number!)}
+                                      onClick={() => openDetail(row.ems_number!, row.registered_17track)}
                                       style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline' }}
                                     >{row.ems_number}</span>
                                     <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
@@ -635,7 +635,7 @@ export default function Ems() {
                       viewRow.ems_number ? (
                         <div>
                           <span
-                            onClick={() => openDetail(viewRow.ems_number!)}
+                            onClick={() => openDetail(viewRow.ems_number!, viewRow.registered_17track)}
                             style={{ fontFamily: 'monospace', color: 'var(--blue-dk)', cursor: 'pointer', textDecoration: 'underline', display: 'block', marginBottom: 4 }}
                           >{viewRow.ems_number}</span>
                           <div style={{ display: 'flex', gap: 10 }}>
@@ -757,10 +757,17 @@ export default function Ems() {
         )}
         {!detailLoading && detailData && !detailData.ok && (
           <div style={{ padding: '16px 0' }}>
-            <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-              maxHeight: 200, overflowY: 'auto', background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
-              {detailData.error}
-            </div>
+            {detailData.notRegistered ? (
+              <div style={{ fontSize: 13, color: 'var(--gray-6)', marginBottom: 14, lineHeight: 1.6, background: '#fff8e1', borderRadius: 8, padding: '12px 14px' }}>
+                아직 17track에 등록되지 않은 운송장입니다.<br />
+                EMS 페이지 상단의 <b>「17track 등록하기」</b> 버튼으로 먼저 등록해 주세요.
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--gray-5)', marginBottom: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                maxHeight: 200, overflowY: 'auto', background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
+                {detailData.error}
+              </div>
+            )}
             <a href={`https://t.17track.net/en#nums=${encodeURIComponent(detailNum)}`} target="_blank"
               style={{ display: 'inline-block', background: '#1e88e5', color: '#fff', padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
               ↗ 17track에서 조회

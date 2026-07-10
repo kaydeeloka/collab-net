@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Download } from 'lucide-react'
+import { Download, User, MapPin } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { kstToday } from '@/lib/kst-time'
@@ -9,6 +9,7 @@ import Spinner from '@/components/Spinner'
 import Pagination from '@/components/Pagination'
 import Modal from '@/components/Modal'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
+import { ReportCard, ReportStat } from '@/components/ReportCard'
 
 interface EmsDataRow {
   id:              string
@@ -218,30 +219,6 @@ const inputStyle: CSSProperties = {
   fontSize: 13,
   outline: 'none',
   fontFamily: 'inherit',
-}
-
-const labelStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: 'var(--gray-5)',
-  textTransform: 'uppercase',
-  letterSpacing: '.4px',
-  marginBottom: 4,
-}
-
-const valueStyle: CSSProperties = {
-  fontSize: 14,
-  color: 'var(--gray-8)',
-  lineHeight: 1.5,
-}
-
-function ViewField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <div style={labelStyle}>{label}</div>
-      <div style={{ ...valueStyle, fontFamily: mono ? 'monospace' : undefined, fontSize: mono ? 13 : 14 }}>{value || '—'}</div>
-    </div>
-  )
 }
 
 export default function EmsData() {
@@ -460,27 +437,38 @@ export default function EmsData() {
       <Modal
         open={!!modalRow}
         onClose={closeModal}
+        size="lg"
         title={modalRow ? `EMS 발송 정보 · seq ${modalRow.seq ?? '—'}` : ''}
       >
         {modalRow && editForm && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {!editing ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
-                <ViewField label="받는 분 이름 (Name)" value={modalRow.name} />
-                <ViewField label="E-mail (필수사항)" value={modalRow.email || ''} />
-                <ViewField label="국가 (Country)" value={modalRow.country || ''} />
-                <ViewField label="우편번호 (ZipCode)" value={modalRow.zip || ''} mono />
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <ViewField label="주소 Line 1" value={modalRow.address_line_1 || ''} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <ViewField label="주소 Line 2" value={modalRow.address_line_2 || ''} />
-                </div>
-                <ViewField label="도시 (City)" value={modalRow.city || ''} />
-                <ViewField label="주/도 (State)" value={modalRow.state || ''} />
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <ViewField label="연락처 (Mobile No.)" value={formatPhoneDisplay(modalRow)} mono />
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <ReportCard icon={<User size={16} />} title="수신자 정보">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <ReportStat label="이름" value={modalRow.name || '—'} />
+                    <ReportStat label="이메일" value={
+                      modalRow.email
+                        ? <a href={`mailto:${modalRow.email}`} style={{ color: 'var(--blue-dk)' }}>{modalRow.email}</a>
+                        : '—'
+                    } />
+                    <ReportStat label="연락처" value={
+                      <span style={{ fontFamily: 'monospace' }}>{formatPhoneDisplay(modalRow)}</span>
+                    } />
+                  </div>
+                </ReportCard>
+
+                <ReportCard icon={<MapPin size={16} />} title="배송 주소">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <ReportStat label="주소" value={
+                      [modalRow.address_line_1, modalRow.address_line_2].filter(Boolean).join(' ') || '—'
+                    } />
+                    <ReportStat label="도시 · 주/도 · 우편번호" value={
+                      [modalRow.city, [modalRow.state, modalRow.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'
+                    } />
+                    <ReportStat label="국가" value={modalRow.country || '—'} />
+                  </div>
+                </ReportCard>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
