@@ -73,7 +73,7 @@ export default function Dashboard() {
         `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${contactTotal}명</span></div><div class="fstat-lbl">발송 완료</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
         `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${total}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${INFLUENCER_SEARCH_TARGET}명</span></div><div class="fstat-lbl">서치 완료</div></div>` +
-        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
+        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명 (${recruitPct}%)</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
       )
     } catch (e: unknown) { setStatsListup(statError((e as Error).message)) }
   }, [viewPhaseId, activeDbId])
@@ -81,16 +81,21 @@ export default function Dashboard() {
   const loadOutreachStats = useCallback(async () => {
     if (!activeDbId) return
     try {
-      const { data } = await supabase.from('brand_contacts').select('contacted, status').eq('phase_id', activeDbId)
+      const [{ data }, { count: confirmedBrandCount }] = await Promise.all([
+        supabase.from('brand_contacts').select('contacted, status').eq('phase_id', activeDbId),
+        supabase.from('confirmed_brands').select('*', { count: 'exact', head: true }).eq('phase_id', activeDbId),
+      ])
       const all          = data ?? []
       const contacted    = all.filter((r: any) => r.contacted)
       const total        = contacted.length
       const sent         = contacted.filter((r: any) => r.status === 'yes').length
-      const targetCnt    = contacted.filter((r: any) => !r.status || r.status === '').length
+      const replied      = all.filter((r: any) => ['reply', 'positive', 'negative', 'accept'].includes(r.status)).length
+      const confirmedBrands = confirmedBrandCount ?? 0
       setStatsOutreach(
         `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}개</span></div><div class="fstat-lbl">발송</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${targetCnt}</div><div class="fstat-lbl">컨택 예정</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${all.length}</div><div class="fstat-lbl">전체 브랜드 DB</div></div>`
+        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
+        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${all.length}</div><div class="fstat-lbl">전체 브랜드 DB</div></div>` +
+        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmedBrands}</div><div class="fstat-lbl">확정 브랜드</div></div>`
       )
     } catch (e: unknown) { setStatsOutreach(statError((e as Error).message)) }
   }, [activeDbId])
