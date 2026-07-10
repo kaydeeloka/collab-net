@@ -16,7 +16,6 @@ const FEATURE_ROUTERS = [
   routeTcmListup,
   routeOutlook,
   routeMonitoring,
-  routeTrend,
   routeBeautyNews,
   routeEms,
   routeSheets,

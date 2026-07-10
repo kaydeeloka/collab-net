@@ -353,7 +353,7 @@ function ArchiveCard({
                     {brandMentionPages && brandMentionPages.length > 0 && (
                       <>
                         <div className="mon-arch-card__report-picker__divider" />
-                        <div className="mon-arch-card__report-picker__section-label">브랜드별 리포트</div>
+                        <div className="mon-arch-card__report-picker__section-label">브랜드 리포트</div>
                         <div className="mon-arch-card__report-picker__brand-btns">
                           {brandMentionPages.map(page => {
                             const overrides: Record<string, string> = (() => { try { return JSON.parse(page.content.bmOverrides ?? '{}') } catch { return {} } })()

@@ -186,10 +186,18 @@ export default function Ems() {
     setLoading(false)
   }
 
-  async function openDetail(emsNum: string) {
+  async function openDetail(emsNum: string, registered17Track?: string | null) {
     setDetailNum(emsNum)
     setDetailData(null)
     setShowDetailModal(true)
+
+    // Already know client-side it's not registered — skip the API round-trip
+    // and go straight to the "please register" prompt.
+    if (!registered17Track || registered17Track.toUpperCase() !== 'Y') {
+      setDetailData({ ok: false, notRegistered: true, error: 'Please register inside 17track first.' })
+      return
+    }
+
     setDetailLoading(true)
     try {
       const res = await gasPost<TrackingDetail>({ action: 'get17TrackInfo', number: emsNum })
