@@ -1364,7 +1364,7 @@ export default function Listup() {
                   disabled={apifyLoading || apifyTierIdx === null || !selectedKeywords.length}
                   onClick={runTcmSearch}
                 >
-                  Find Creators (TCM)
+                  탐색 시작
                 </button>
                 {apifyLoading && (
                   <span className="listup-search-bar__timer">
@@ -1403,12 +1403,12 @@ export default function Listup() {
                   <div className="listup-empty-title">
                     {apifyLoading
                       ? 'TCM 탐색 중...'
-                      : '티어와 키워드를 선택하고 Find Creators를 누르세요'}
+                      : '티어와 키워드를 선택하고 탐색 시작을 누르세요'}
                   </div>
                   <div className="listup-empty-desc">
                     {apifyLoading
                       ? 'TCM 키워드 탐색 후 프로필 메타데이터를 수집합니다. 수 분 소요될 수 있습니다.'
-                      : '위 표에서 티어를 클릭해 선택하고 Find Creators로 탐색을 시작하세요.'}
+                      : '위 표에서 티어를 클릭해 선택하고 탐색을 시작하세요.'}
                   </div>
                 </div>
               )}

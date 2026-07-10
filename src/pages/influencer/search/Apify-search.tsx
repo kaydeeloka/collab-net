@@ -989,14 +989,14 @@ export default function Listup() {
                       ? (apifyStatus || 'Apify 탐색 중...')
                       : apifyStatus && !apifyStatus.startsWith('Apify 탐색')
                         ? apifyStatus
-                        : '티어를 선택하고 Find Creators를 누르세요'}
+                        : '티어를 선택하고 탐색 시작을 누르세요'}
                 </div>
                 <div className="listup-empty-desc" style={{ whiteSpace: 'pre-line' }}>
                   {apifyProcessing
                     ? 'Apify 데이터를 가져와 필터를 적용하고 있습니다. 잠시만 기다려 주세요.'
                     : apifyPolling
                       ? 'Apify에서 TikTok 크리에이터를 탐색하고 있습니다. 2~5분 소요됩니다.'
-                      : '위 표에서 티어를 클릭해 선택하고 Find Creators로 Apify 탐색을 시작합니다.\n이미 완료된 Run이 있으면 Run/Dataset ID를 입력해 필터 적용을 누르세요.'}
+                      : '위 표에서 티어를 클릭해 선택하고 탐색 시작 하세요.\n이미 완료된 Run이 있으면 Run/Dataset ID를 입력해 필터 적용을 누르세요.'}
                 </div>
               </div>
             )}
