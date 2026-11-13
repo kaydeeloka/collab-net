@@ -4,7 +4,7 @@ import { Navigate, useOutletContext, useParams } from 'react-router-dom'
 import { archiveBrandReportPath, archiveSectionPath, brandFromArchiveBrandSlug, isLegacyArchiveBrandIdSlug } from '../archive-slug'
 import { useArchivePhase } from '../use-archive-phase'
 import { useToast } from '@/contexts/ToastContext'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
 import Spinner from '@/components/Spinner'
 import type { ArchiveBrandReportOutletContext } from './layout'
@@ -68,14 +68,14 @@ export default function ArchiveBrandReportBrand() {
     setLoading(true)
     try {
       const [{ data }, { rows: monRows }, { data: sharedData }] = await Promise.all([
-        supabase
+        demoDb
           .from('brand_report_pages')
           .select('*')
           .eq('phase_id', phase.id)
           .eq('brand_name', brand.brandName)
           .order('order_index'),
         loadMonitoringData(phase.id),
-        supabase
+        demoDb
           .from('brand_report_pages')
           .select('*')
           .eq('phase_id', phase.id)
@@ -95,7 +95,7 @@ export default function ArchiveBrandReportBrand() {
           type,
           content: { ...BRAND_DEFAULT_CONTENT[type], ...extra },
         }))
-        const { data: newPages } = await supabase
+        const { data: newPages } = await demoDb
           .from('brand_report_pages')
           .insert(inserts)
           .select()
@@ -107,7 +107,7 @@ export default function ArchiveBrandReportBrand() {
       for (const t of sharedTypes) {
         if (!shared.find(p => p.type === t)) {
           const source = loaded.find(p => p.type === t)
-          const { data: newShared } = await supabase
+          const { data: newShared } = await demoDb
             .from('brand_report_pages')
             .insert({
               phase_id: phase.id,
@@ -127,14 +127,14 @@ export default function ArchiveBrandReportBrand() {
         .filter(p => p.type === 'review_list')
         .sort((a, b) => a.order_index - b.order_index)
       for (const [i, source] of reviewSources.entries()) {
-        const srcSubtitle = (source.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰'
+        const srcSubtitle = (source.content as BrandPageContent).rlSubtitle ?? 'CollabNet 리뷰'
         const srcOffset = (source.content as BrandPageContent).rlOffset ?? 0
         if (!shared.find(s =>
           s.type === 'review_list' &&
-          ((s.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰') === srcSubtitle &&
+          ((s.content as BrandPageContent).rlSubtitle ?? 'CollabNet 리뷰') === srcSubtitle &&
           ((s.content as BrandPageContent).rlOffset ?? 0) === srcOffset
         )) {
-          const { data: newShared } = await supabase
+          const { data: newShared } = await demoDb
             .from('brand_report_pages')
             .insert({
               phase_id: phase.id,
@@ -160,12 +160,12 @@ export default function ArchiveBrandReportBrand() {
   useEffect(() => { void loadPages() }, [loadPages])
 
   async function handleUpdatePage(page: BrandReportPage) {
-    await supabase.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
+    await demoDb.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
     setPages(prev => prev.map(p => p.id === page.id ? page : p))
   }
 
   async function handleUpdateSharedPage(page: BrandReportPage) {
-    await supabase.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
+    await demoDb.from('brand_report_pages').update({ content: page.content }).eq('id', page.id)
     setSharedPages(prev => prev.map(p => p.id === page.id ? page : p))
   }
 
@@ -173,7 +173,7 @@ export default function ArchiveBrandReportBrand() {
     if (!phase?.id || !brand) return
     setAddOpen(false)
     const maxOrder = pages.reduce((m, p) => Math.max(m, p.order_index), -1)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('brand_report_pages')
       .insert({
         phase_id: phase.id,
@@ -200,7 +200,7 @@ export default function ArchiveBrandReportBrand() {
     const updated = reordered.map((p, i) => ({ ...p, order_index: i }))
     setPages(updated)
     await Promise.all(updated.map(p =>
-      supabase.from('brand_report_pages').update({ order_index: p.order_index }).eq('id', p.id)
+      demoDb.from('brand_report_pages').update({ order_index: p.order_index }).eq('id', p.id)
     ))
   }
 
@@ -212,7 +212,7 @@ export default function ArchiveBrandReportBrand() {
   function deletePage(id: string, label: string) {
     showConfirm(`「${label}」 페이지를 삭제하시겠습니까?`, () => {
       void (async () => {
-        const { error } = await supabase.from('brand_report_pages').delete().eq('id', id)
+        const { error } = await demoDb.from('brand_report_pages').delete().eq('id', id)
         if (error) { showToast(error.message, 'error'); return }
         setPages(prev => prev.filter(p => p.id !== id))
       })()
@@ -240,7 +240,7 @@ export default function ArchiveBrandReportBrand() {
         }
       }
 
-      const pdfTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
+      const pdfTitle = `[CollabNet] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
       const printHtml = `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
@@ -317,11 +317,11 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
       const sorted = [...pages].sort((a, b) => a.order_index - b.order_index).map(page => {
         if (!SHARED_TYPES.has(page.type)) return page
         if (page.type === 'review_list') {
-          const subtitle = page.content.rlSubtitle ?? 'Mi Muse 리뷰'
+          const subtitle = page.content.rlSubtitle ?? 'CollabNet 리뷰'
           const offset = page.content.rlOffset ?? 0
           return sharedPages.find(s =>
             s.type === 'review_list' &&
-            (s.content.rlSubtitle ?? 'Mi Muse 리뷰') === subtitle &&
+            (s.content.rlSubtitle ?? 'CollabNet 리뷰') === subtitle &&
             (s.content.rlOffset ?? 0) === offset,
           ) ?? page
         }
@@ -339,7 +339,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #EEF6FC; }
         }
       }
 
-      const pptTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
+      const pptTitle = `[CollabNet] 미국 뷰티 인플루언서 대상 ${phaseName} 시딩 프로젝트 결과 리포트_${brand.brandName}`
       await prs.writeFile({ fileName: `${pptTitle}.pptx` })
     } catch (e) {
       showToast(`PPT 오류: ${e instanceof Error ? e.message.slice(0, 80) : String(e)}`, 'error')

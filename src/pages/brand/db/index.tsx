@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, Globe, Mail, Phone, User } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -105,7 +105,7 @@ export default function BrandDb() {
   async function load() {
     if (!selectedPhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('brand_contacts')
       .select('*')
       .eq('phase_id', selectedPhaseId)
@@ -131,7 +131,7 @@ export default function BrandDb() {
   async function addBrand() {
     if (!addForm.brand_name.trim() || !addForm.email.some(e => e.trim()) || !addForm.website.trim()) return
     setAdding(true)
-    const { error } = await supabase.from('brand_contacts').insert({
+    const { error } = await demoDb.from('brand_contacts').insert({
       brand_name:       addForm.brand_name.trim(),
       brand_en:         addForm.brand_en.trim()         || null,
       company:          addForm.company.trim()          || null,
@@ -180,7 +180,7 @@ export default function BrandDb() {
 
   async function saveEdit() {
     setSaving(true)
-    const { error } = await supabase.from('brand_contacts').update({
+    const { error } = await demoDb.from('brand_contacts').update({
       brand_name:       editForm.brand_name.trim(),
       brand_en:         editForm.brand_en.trim()         || null,
       company:          editForm.company.trim()          || null,
@@ -205,7 +205,7 @@ export default function BrandDb() {
   }
 
   async function deleteRow(id: string) {
-    const { error } = await supabase.from('brand_contacts').delete().eq('id', id)
+    const { error } = await demoDb.from('brand_contacts').delete().eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.filter(r => r.id !== id))
     setShowView(false)
@@ -213,7 +213,7 @@ export default function BrandDb() {
 
   async function toggleContacted(id: string, current: boolean) {
     const next = !current
-    const { error } = await supabase.from('brand_contacts').update({ contacted: next }).eq('id', id)
+    const { error } = await demoDb.from('brand_contacts').update({ contacted: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, contacted: next } : r))
   }
@@ -222,7 +222,7 @@ export default function BrandDb() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('brand_contacts').update({ contacted: true }).in('id', ids)
+    const { error } = await demoDb.from('brand_contacts').update({ contacted: true }).in('id', ids)
     if (!error) {
       setRows(prev => prev.map(r => selected.has(r.id) ? { ...r, contacted: true } : r))
       setSelected(new Set())
@@ -644,8 +644,8 @@ export default function BrandDb() {
             title: '브랜드 정보',
             children: (
               <>
-                {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: MiMuse' })}
-                {formField('브랜드 영문명', 'brand_en', addForm, setAddForm, { placeholder: '예: MiMuse' })}
+                {formField('브랜드 명', 'brand_name', addForm, setAddForm, { required: true, placeholder: '예: CollabNet' })}
+                {formField('브랜드 영문명', 'brand_en', addForm, setAddForm, { placeholder: '예: CollabNet' })}
                 {emailListEditor(addForm, setAddForm, true)}
                 {formField('홈페이지', 'website', addForm, setAddForm, { required: true, placeholder: 'https://www.brand.com' })}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -787,7 +787,7 @@ export default function BrandDb() {
             children: (
               <>
                 {formField('브랜드 명', 'brand_name', editForm, setEditForm, { required: true })}
-                {formField('브랜드 영문명', 'brand_en', editForm, setEditForm, { placeholder: '예: MiMuse' })}
+                {formField('브랜드 영문명', 'brand_en', editForm, setEditForm, { placeholder: '예: CollabNet' })}
                 {emailListEditor(editForm, setEditForm, true)}
                 {formField('홈페이지', 'website', editForm, setEditForm, { required: true })}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>

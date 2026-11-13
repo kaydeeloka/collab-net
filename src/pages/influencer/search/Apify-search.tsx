@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { gasPost } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
-import { matchesKstDate, supabaseNow } from '@/lib/kst-time'
+import { demoDb } from '@/lib/local-db'
+import { matchesKstDate, demoDbNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -114,7 +114,7 @@ interface ApifyCreator {
 }
 
 function saveConfig(key: string, value: unknown) {
-  supabase.from('app_config').upsert({ key, value, updated_at: supabaseNow() }).then()
+  demoDb.from('app_config').upsert({ key, value, updated_at: demoDbNow() }).then()
 }
 
 function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
@@ -208,7 +208,7 @@ export default function Listup() {
   // Load config once on mount
   useEffect(() => {
     ;(async () => {
-      const { data: cfg } = await supabase
+      const { data: cfg } = await demoDb
         .from('app_config')
         .select('key, value')
         .in('key', ['tiers', 'kbeauty_keywords', 'beauty_keywords', 'filter_conditions', 'search_filters'])
@@ -232,8 +232,8 @@ export default function Listup() {
   async function loadDashStats() {
     if (!viewPhaseId) return
     const [{ data: infData }, { count: confirmedCount }] = await Promise.all([
-      supabase.from('influencers').select('contacted, tiers(rank)').eq('phase_id', viewPhaseId),
-      supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId),
+      demoDb.from('influencers').select('contacted, tiers(rank)').eq('phase_id', viewPhaseId),
+      demoDb.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId),
     ])
     if (!infData) return
     let total = 0, contacted = 0
@@ -263,7 +263,7 @@ export default function Listup() {
 
   async function fetchExistingHandles() {
     if (!viewPhaseId) return []
-    const { data } = await supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId)
+    const { data } = await demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId)
     return (data ?? []).map(r => r.handle)
   }
 
@@ -417,14 +417,14 @@ export default function Listup() {
     if (!viewPhaseId) return
     setDbLoaded(true)
     setDbLoading(true)
-    const { data, error } = await supabase.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', viewPhaseId).order('created_at', { ascending: false })
+    const { data, error } = await demoDb.from('influencers').select('*, tiers(rank, label, category)').eq('phase_id', viewPhaseId).order('created_at', { ascending: false })
     if (error) { setDbLoading(false); return }
     setInfluencers(data ?? [])
     setDbLoading(false)
   }
 
   async function deleteInfluencer(id: string) {
-    const { error } = await supabase.from('influencers').delete().eq('id', id)
+    const { error } = await demoDb.from('influencers').delete().eq('id', id)
     if (error) { alert('오류: ' + error.message); return }
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
   }
@@ -435,7 +435,7 @@ export default function Listup() {
     // only allow toggling off if status is exactly 'target'; advanced statuses can't be cleared here
     if (inf.status && inf.status !== 'target') return
     const newStatus = inf.status === 'target' ? '' : 'target'
-    const { error } = await supabase.from('influencers').update({ status: newStatus }).eq('id', id)
+    const { error } = await demoDb.from('influencers').update({ status: newStatus }).eq('id', id)
     if (error) return
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r))
   }
@@ -444,7 +444,7 @@ export default function Listup() {
     if (!selected.size) return
     setBulkLoading(true)
     const ids = Array.from(selected)
-    const { error } = await supabase.from('influencers').update({ status: 'target' }).in('id', ids)
+    const { error } = await demoDb.from('influencers').update({ status: 'target' }).in('id', ids)
     if (!error) {
       setInfluencers(prev => prev.map(inf => selected.has(inf.id) ? { ...inf, status: 'target' } : inf))
       setSelected(new Set())
@@ -458,8 +458,8 @@ export default function Listup() {
     setApifyLoading(true)
 
     const [{ data: tierRow }, { data: existing }] = await Promise.all([
-      supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
-      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
+      demoDb.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle(),
+      demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId),
     ])
     const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
 
@@ -491,7 +491,7 @@ export default function Listup() {
       return
     }
 
-    const { error, data } = await supabase
+    const { error, data } = await demoDb
       .from('influencers')
       .upsert(rows, { onConflict: 'phase_id,handle', ignoreDuplicates: true })
       .select('*, tiers(rank, label, category)')

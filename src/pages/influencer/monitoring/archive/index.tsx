@@ -6,7 +6,7 @@ import Modal from '@/components/Modal'
 import Spinner from '@/components/Spinner'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { fmtNum } from '@/lib/utils'
 import { formatKstDate } from '@/lib/kst-time'
@@ -15,7 +15,7 @@ import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-stora
 import { type ReportPage, type PageContent } from '@/pages/archive/season/report-slides/types'
 import { uploadReportSlideImage } from '@/pages/archive/season/report-slides/report-image-upload'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeStyle, platformBadgeClass, platformBucket } from '@/lib/influencer/content-platforms'
-import { brandColorForKey, buildBrandKwsFromRows, monitoringBrandKey, MIMUSE_BRAND, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
+import { brandColorForKey, buildBrandKwsFromRows, monitoringBrandKey, COLLABNET_BRAND, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 import './monitoring-archive.css'
 
 type BrandMentionPageMin = { id: string; brand_name: string; content: { bmOverrides?: string; bmRowIds?: string; bmAutoExclude?: string } }
@@ -182,13 +182,13 @@ function ArchiveCard({
     setThumbUploading(true)
     try {
       const path = `${row.id}.jpg`
-      const { error: uploadErr } = await supabase.storage
+      const { error: uploadErr } = await demoDb.storage
         .from('monitoring-thumbnails')
         .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true })
       if (uploadErr) throw uploadErr
-      const { data: urlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(path)
+      const { data: urlData } = demoDb.storage.from('monitoring-thumbnails').getPublicUrl(path)
       const newUrl = `${urlData.publicUrl}?t=${Date.now()}`
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await demoDb
         .from('monitoring_assets')
         .update({ cover_url: newUrl, updated_at: new Date().toISOString() })
         .eq('monitoring_id', row.id)
@@ -414,7 +414,7 @@ function ArchiveCard({
                       if (!url) return
                       setThumbUploading(true)
                       try {
-                        const { error } = await supabase
+                        const { error } = await demoDb
                           .from('monitoring_assets')
                           .update({ cover_url: url, updated_at: new Date().toISOString() })
                           .eq('monitoring_id', row.id)
@@ -621,12 +621,12 @@ export default function MonitoringArchive() {
       try {
         const [data, brandsRes, kwsRes, bcRes, bmPageRes, bmBrandPagesRes] = await Promise.all([
           loadMonitoringData(viewPhaseId),
-          supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
-          supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
-            .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
-          supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
-          supabase.from('report_pages').select('*').eq('phase_id', viewPhaseId).eq('type', 'brand_mention').maybeSingle(),
-          supabase.from('brand_report_pages').select('id, brand_name, content').eq('phase_id', viewPhaseId).eq('type', 'brand_mention'),
+          demoDb.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+          demoDb.from('monitoring_keywords').select('brand, keywords, phase_id')
+            .or(`and(phase_id.is.null,brand.eq.${COLLABNET_BRAND}),phase_id.eq.${viewPhaseId}`),
+          demoDb.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
+          demoDb.from('report_pages').select('*').eq('phase_id', viewPhaseId).eq('type', 'brand_mention').maybeSingle(),
+          demoDb.from('brand_report_pages').select('id, brand_name, content').eq('phase_id', viewPhaseId).eq('type', 'brand_mention'),
         ])
         if (cancelled) return
         setRows(data.rows)
@@ -653,7 +653,7 @@ export default function MonitoringArchive() {
     if (!viewPhaseId) return
     const handler = () => {
       if (document.visibilityState !== 'visible') return
-      void supabase
+      void demoDb
         .from('brand_report_pages')
         .select('id, brand_name, content')
         .eq('phase_id', viewPhaseId)
@@ -675,8 +675,8 @@ export default function MonitoringArchive() {
     const seen = new Set<string>()
     reviewRows.forEach(r => { if (r.brand) seen.add(r.brand) })
     const sorted = [...seen].sort((a, b) => {
-      if (a === 'mimuse') return -1
-      if (b === 'mimuse') return 1
+      if (a === 'collabnet') return -1
+      if (b === 'collabnet') return 1
       return a.localeCompare(b)
     })
     return [
@@ -821,14 +821,14 @@ export default function MonitoringArchive() {
   async function handleUploadVideos() {
     const needsVideo = (r: MonitoringRow) => !!r.assets?.video_url?.includes('api.apify.com')
     const needsImage = (r: MonitoringRow) => { const u = r.assets?.image_urls?.[0]; return !!u && !u.includes('monitoring-photos') }
-    const needsCover = (r: MonitoringRow) => { const u = r.assets?.cover_url; return !!u && !u.includes('supabase') }
+    const needsCover = (r: MonitoringRow) => { const u = r.assets?.cover_url; return !!u && !u.includes('demoDb') }
 
     const videoRows = filteredRows.filter(needsVideo)
     const imageRows = filteredRows.filter(r => needsImage(r) && !needsVideo(r))
     const bothRows  = filteredRows.filter(r => needsVideo(r) && needsImage(r))
     const coverRows = filteredRows.filter(r => needsCover(r) && !needsVideo(r) && !needsImage(r))
 
-    const coverVideoRows = coverRows.filter(r => { const u = r.assets?.video_url; return !!u && !u.includes('supabase') })
+    const coverVideoRows = coverRows.filter(r => { const u = r.assets?.video_url; return !!u && !u.includes('demoDb') })
     const totalVideos = videoRows.length + bothRows.length + coverVideoRows.length
     const totalImages = imageRows.length + bothRows.length + coverRows.length
 
@@ -849,9 +849,9 @@ export default function MonitoringArchive() {
         if (!fetchRes.ok) throw new Error(`fetch ${fetchRes.status}`)
         const blob = await fetchRes.blob()
         const path = `${row.id}.mp4`
-        const { error: uploadErr } = await supabase.storage.from('monitoring-videos').upload(path, blob, { contentType: 'video/mp4', upsert: true })
+        const { error: uploadErr } = await demoDb.storage.from('monitoring-videos').upload(path, blob, { contentType: 'video/mp4', upsert: true })
         if (uploadErr) throw uploadErr
-        const { data: urlData } = supabase.storage.from('monitoring-videos').getPublicUrl(path)
+        const { data: urlData } = demoDb.storage.from('monitoring-videos').getPublicUrl(path)
         updatePayload.video_url = urlData.publicUrl
         savedVideos++
       } catch (e) {
@@ -863,7 +863,7 @@ export default function MonitoringArchive() {
       // Save all images if needed
       if (needsImage(row)) {
         try {
-          const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
+          const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('demoDb'))
           const savedUrls: string[] = []
           for (let i = 0; i < cdnUrls.length; i++) {
             try {
@@ -871,8 +871,8 @@ export default function MonitoringArchive() {
               if (!imgRes.ok) continue
               const imgBlob = await imgRes.blob()
               const imgPath = `${row.id}_${i}.jpg`
-              await supabase.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
-              const { data: imgUrlData } = supabase.storage.from('monitoring-photos').getPublicUrl(imgPath)
+              await demoDb.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+              const { data: imgUrlData } = demoDb.storage.from('monitoring-photos').getPublicUrl(imgPath)
               savedUrls.push(`${imgUrlData.publicUrl}?t=${Date.now()}`)
             } catch {
               // skip individual image failures, keep going
@@ -887,14 +887,14 @@ export default function MonitoringArchive() {
         setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
       }
 
-      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
+      await demoDb.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
     }
 
     // Process image-only rows
     for (const row of imageRows) {
       const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
       try {
-        const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('supabase'))
+        const cdnUrls = row.assets!.image_urls!.filter(u => u && !u.includes('demoDb'))
         const savedUrls: string[] = []
         for (let i = 0; i < cdnUrls.length; i++) {
           try {
@@ -902,8 +902,8 @@ export default function MonitoringArchive() {
             if (!imgRes.ok) continue
             const imgBlob = await imgRes.blob()
             const imgPath = `${row.id}_${i}.jpg`
-            await supabase.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
-            const { data: imgUrlData } = supabase.storage.from('monitoring-photos').getPublicUrl(imgPath)
+            await demoDb.storage.from('monitoring-photos').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+            const { data: imgUrlData } = demoDb.storage.from('monitoring-photos').getPublicUrl(imgPath)
             savedUrls.push(`${imgUrlData.publicUrl}?t=${Date.now()}`)
           } catch {
             // skip individual image failures, keep going
@@ -916,7 +916,7 @@ export default function MonitoringArchive() {
         failedImages++
       }
       setVideoUploadModal(m => ({ ...m, imageDone: m.imageDone + 1 }))
-      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
+      await demoDb.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
     }
 
     // Process Instagram rows: upload CDN cover → monitoring-thumbnails, CDN video → monitoring-videos
@@ -929,8 +929,8 @@ export default function MonitoringArchive() {
         if (imgRes.ok) {
           const imgBlob = await imgRes.blob()
           const imgPath = `${row.id}.jpg`
-          await supabase.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
-          const { data: urlData } = supabase.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
+          await demoDb.storage.from('monitoring-thumbnails').upload(imgPath, imgBlob, { contentType: imgBlob.type || 'image/jpeg', upsert: true })
+          const { data: urlData } = demoDb.storage.from('monitoring-thumbnails').getPublicUrl(imgPath)
           updatePayload.cover_url = urlData.publicUrl
           savedImages++
         } else { failedImages++ }
@@ -942,15 +942,15 @@ export default function MonitoringArchive() {
 
       // Upload video if present and not yet in Supabase
       const igVideo = row.assets?.video_url
-      if (igVideo && !igVideo.includes('supabase')) {
+      if (igVideo && !igVideo.includes('demoDb')) {
         try {
           const videoRes = await fetch(igVideo)
           if (!videoRes.ok) throw new Error(`fetch ${videoRes.status}`)
           const videoBlob = await videoRes.blob()
           const videoPath = `${row.id}.mp4`
-          const { error: uploadErr } = await supabase.storage.from('monitoring-videos').upload(videoPath, videoBlob, { contentType: 'video/mp4', upsert: true })
+          const { error: uploadErr } = await demoDb.storage.from('monitoring-videos').upload(videoPath, videoBlob, { contentType: 'video/mp4', upsert: true })
           if (uploadErr) throw uploadErr
-          const { data: vUrlData } = supabase.storage.from('monitoring-videos').getPublicUrl(videoPath)
+          const { data: vUrlData } = demoDb.storage.from('monitoring-videos').getPublicUrl(videoPath)
           updatePayload.video_url = vUrlData.publicUrl
           savedVideos++
         } catch (e) {
@@ -960,7 +960,7 @@ export default function MonitoringArchive() {
         setVideoUploadModal(m => ({ ...m, videoDone: m.videoDone + 1 }))
       }
 
-      await supabase.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
+      await demoDb.from('monitoring_assets').update(updatePayload).eq('monitoring_id', row.id)
     }
 
     const msg = [
@@ -992,7 +992,7 @@ export default function MonitoringArchive() {
     }
     const newOverrides = { ...overrides, [targetSlot]: url }
     const newRowIds = { ...rowIds, [targetSlot]: rowId }
-    const { error } = await supabase
+    const { error } = await demoDb
       .from('brand_report_pages')
       .update({ content: { ...page.content, bmOverrides: JSON.stringify(newOverrides), bmRowIds: JSON.stringify(newRowIds) } })
       .eq('id', page.id)
@@ -1048,7 +1048,7 @@ export default function MonitoringArchive() {
       ...reportBmPage.content,
       bmOverrides: JSON.stringify({ ...currentOverrides, [key]: url }),
     }
-    const { error } = await supabase.from('report_pages').update({ content: newContent }).eq('id', reportBmPage.id)
+    const { error } = await demoDb.from('report_pages').update({ content: newContent }).eq('id', reportBmPage.id)
     if (!error) { setReportBmPage({ ...reportBmPage, content: newContent }); return true }
     return false
   }
@@ -1059,7 +1059,7 @@ export default function MonitoringArchive() {
       showToast('베스트 리뷰는 최대 3개까지 선택할 수 있습니다', 'info')
       return
     }
-    const { error } = await supabase.from('monitoring').update({ best_review_picks: nowOn }).eq('id', row.id)
+    const { error } = await demoDb.from('monitoring').update({ best_review_picks: nowOn }).eq('id', row.id)
     if (error) { showToast('저장 실패', 'error'); return }
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, best_review_picks: nowOn } : r))
   }
@@ -1094,7 +1094,7 @@ export default function MonitoringArchive() {
               {filteredRows.some(r =>
                 r.assets?.video_url?.includes('api.apify.com') ||
                 (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('monitoring-photos')) ||
-                (!!r.assets?.cover_url && !r.assets.cover_url.includes('supabase'))
+                (!!r.assets?.cover_url && !r.assets.cover_url.includes('demoDb'))
               ) && (
                 <button
                   className="page-banner-btn page-banner-btn--secondary"
@@ -1123,8 +1123,8 @@ export default function MonitoringArchive() {
 
       {!loading && filteredRows.some(r =>
         r.assets?.video_url?.includes('api.apify.com') ||
-        (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('supabase')) ||
-        (!!r.assets?.cover_url && !r.assets.cover_url.includes('supabase'))
+        (!!r.assets?.image_urls?.[0] && !r.assets.image_urls[0].includes('demoDb')) ||
+        (!!r.assets?.cover_url && !r.assets.cover_url.includes('demoDb'))
       ) && (
         <div className="mon-arch-notice">
           <Clock size={13} className="mon-arch-notice__icon" />

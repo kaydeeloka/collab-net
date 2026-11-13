@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 
 export interface EmailRecipient {
   email: string
@@ -7,7 +7,7 @@ export interface EmailRecipient {
 }
 
 export async function fetchEmailRecipients(): Promise<EmailRecipient[]> {
-  const { data } = await supabase
+  const { data } = await demoDb
     .from('email_recipients')
     .select('email, name, selected')
     .order('name')
@@ -28,9 +28,9 @@ export function recipientInitial(recipient: Pick<EmailRecipient, 'name' | 'email
 }
 
 export async function setEmailRecipientSelected(email: string, selected: boolean) {
-  await supabase.from('email_recipients').update({ selected }).eq('email', email)
+  await demoDb.from('email_recipients').update({ selected }).eq('email', email)
 }
 
 export async function setAllEmailRecipientsSelected(selected: boolean) {
-  await supabase.from('email_recipients').update({ selected }).neq('email', '')
+  await demoDb.from('email_recipients').update({ selected }).neq('email', '')
 }

@@ -35,13 +35,13 @@ export const EMAIL_TEMPLATE_UI_CONFIG: Record<EmailTemplateDomain, EmailTemplate
     titlePlaceholders: ['{{이름}}', '{{핸들}}'],
     bodyPlaceholders: ['{{이름}}', '{{핸들}}', '{{이메일}}', '{{팔로워}}', '{{조회수}}'],
     dummyValues: {
-      '{{이름}}':   { value: 'MiMuse Creator',    color: '#a07800' },
-      '{{핸들}}':   { value: '@mimuse_creator',    color: '#0369a1' },
-      '{{이메일}}': { value: 'creator@mimuse.com', color: '#b45309' },
+      '{{이름}}':   { value: 'CollabNet Creator',    color: '#a07800' },
+      '{{핸들}}':   { value: '@collabnet_creator',    color: '#0369a1' },
+      '{{이메일}}': { value: 'creator@collabnet.com', color: '#b45309' },
       '{{팔로워}}': { value: '42,800',             color: '#065f46' },
       '{{조회수}}': { value: '18,500',             color: '#be123c' },
     },
-    previewSender: '보내는 사람 · MiMuse Team <beautyproject@cranecomm.com>',
+    previewSender: '보내는 사람 · CollabNet Team <project1@collabnet.com>',
     titleMaxLength: 50,
   },
   brand: {
@@ -58,7 +58,7 @@ export const EMAIL_TEMPLATE_UI_CONFIG: Record<EmailTemplateDomain, EmailTemplate
       '{{담당자}}':   { value: '김민지',        color: '#0369a1' },
       '{{직함}}':     { value: '마케팅 팀장',    color: '#065f46' },
     },
-    previewSender: '보내는 사람 · MiMuse Team <beautyproject@cranecomm.com>',
+    previewSender: '보내는 사람 · CollabNet Team <project1@collabnet.com>',
     titleMaxLength: 50,
   },
   ems: {
@@ -82,7 +82,7 @@ export const EMAIL_TEMPLATE_UI_CONFIG: Record<EmailTemplateDomain, EmailTemplate
       '{오류_사유}':  { value: '주소 불명',       color: '#be123c' },
       '{국가}':       { value: '미국',            color: '#065f46' },
     },
-    previewSender: '보내는 사람 · MiMuse 팀 <hello@mimuse.com>',
+    previewSender: '보내는 사람 · CollabNet 팀 <hello@collabnet.com>',
     titleMaxLength: 80,
   },
 }

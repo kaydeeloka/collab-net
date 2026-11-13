@@ -28,8 +28,8 @@ import {
   isBulkAllSelected,
   toggleBulkAllFiltered,
 } from '@/lib/contact/outreach-email'
-import { supabase } from '@/lib/supabase'
-import { supabaseNow } from '@/lib/kst-time'
+import { demoDb } from '@/lib/local-db'
+import { demoDbNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -155,7 +155,7 @@ export default function BrandContact() {
       return
     }
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('brand_contacts')
       .select('id, brand_name, contact_name, position, email, personal_email, personal_phone, telephone, website, phase_id, status, send_count, reply_count, last_contact_at, last_reply_at, notes')
       .eq('contacted', true)
@@ -208,7 +208,7 @@ export default function BrandContact() {
   }, [showStatusFilter])
 
   const recordSendAfterEmail = useCallback(async (row: BrandRow, sentAt: string) => {
-    const { data, error: readErr } = await supabase
+    const { data, error: readErr } = await demoDb
       .from('brand_contacts')
       .select('send_count')
       .eq('id', row.id)
@@ -220,7 +220,7 @@ export default function BrandContact() {
       status: 'yes',
       last_contact_at: sentAt,
     }
-    const { error } = await supabase.from('brand_contacts').update(patch).eq('id', row.id)
+    const { error } = await demoDb.from('brand_contacts').update(patch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return false }
 
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, ...patch } : r))
@@ -239,7 +239,7 @@ export default function BrandContact() {
       }
       if (REPLY_STATUSES.includes(nextStatus)) {
         if (patch.last_reply_at === undefined) {
-          dbPatch.last_reply_at = supabaseNow()
+          dbPatch.last_reply_at = demoDbNow()
           patch = { ...patch, last_reply_at: dbPatch.last_reply_at as string }
         }
       }
@@ -249,13 +249,13 @@ export default function BrandContact() {
     if (patch.last_contact_at  !== undefined) dbPatch.last_contact_at  = patch.last_contact_at
     if (patch.last_reply_at    !== undefined) dbPatch.last_reply_at    = patch.last_reply_at
     if (patch.notes       !== undefined) dbPatch.notes       = patch.notes
-    const { error } = await supabase.from('brand_contacts').update(dbPatch).eq('id', row.id)
+    const { error } = await demoDb.from('brand_contacts').update(dbPatch).eq('id', row.id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.map(r => r.id === row.id ? { ...r, ...patch } : r))
 
     // Auto-create confirmed_brands entry when status becomes 'accept'
     if (patch.status === 'accept' && row.status !== 'accept' && row.phase_id) {
-      const { data: existing, error: lookupError } = await supabase
+      const { data: existing, error: lookupError } = await demoDb
         .from('confirmed_brands')
         .select('id')
         .eq('phase_id', row.phase_id)
@@ -264,7 +264,7 @@ export default function BrandContact() {
       if (lookupError) {
         showToast(`확정 브랜드 확인 실패: ${lookupError.message}`, 'error')
       } else if (!existing) {
-        const { error: insertError } = await supabase.from('confirmed_brands').insert({
+        const { error: insertError } = await demoDb.from('confirmed_brands').insert({
           phase_id:     row.phase_id,
           brand_name:   row.brand,
           contact_name: row.name,
@@ -350,7 +350,7 @@ export default function BrandContact() {
           const row = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
           if (!row || !isNewReply(row, reply)) continue
 
-          const { data: fresh, error: readErr } = await supabase
+          const { data: fresh, error: readErr } = await demoDb
             .from('brand_contacts')
             .select('reply_count, status, last_contact_at, last_reply_at')
             .eq('id', row.id)
@@ -368,7 +368,7 @@ export default function BrandContact() {
             statusUpdates++
           }
 
-          const { error } = await supabase.from('brand_contacts').update(patch).eq('id', row.id)
+          const { error } = await demoDb.from('brand_contacts').update(patch).eq('id', row.id)
           if (error) { showToast(error.message, 'error'); continue }
 
           newReplies++
@@ -434,7 +434,7 @@ export default function BrandContact() {
       async () => {
         setBulkMarking(true)
         try {
-          const sentAt = supabaseNow()
+          const sentAt = demoDbNow()
           let updated = 0
           for (const row of targets) {
             const ok = await recordSendAfterEmail(row, sentAt)
@@ -505,7 +505,7 @@ export default function BrandContact() {
 
   const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'title' | 'body'>) => {
     const keys = Array.from(checkedIds)
-    const batchStartedAt = supabaseNow()
+    const batchStartedAt = demoDbNow()
     const sentRows: BrandRow[] = []
     const entries = keys.map(key => {
       const row = filtered.find(r => rowKey(r) === key)
@@ -527,7 +527,7 @@ export default function BrandContact() {
       await runBulkOutreachSend(entries, async (key) => {
         const row = filtered.find(r => rowKey(r) === key)
         if (!row || !row.email) return 'skipped'
-        const sentAt = supabaseNow()
+        const sentAt = demoDbNow()
         const res = await sendOutreachEmail({
           to: row.email,
           subject: applyPlaceholders(tpl.title, row),

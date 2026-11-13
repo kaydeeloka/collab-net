@@ -4,7 +4,7 @@
 //
 //  ONE-TIME SETUP (Azure Portal → portal.azure.com):
 //  1. App registrations → New registration
-//     - Name: MiMuse Outreach
+//     - Name: CollabNet Outreach
 //     - Supported account types: "Accounts in this organizational directory only"
 //     - Redirect URI: Web → https://login.microsoftonline.com/common/oauth2/nativeclient
 //  2. API permissions → Add → Microsoft Graph → Delegated:

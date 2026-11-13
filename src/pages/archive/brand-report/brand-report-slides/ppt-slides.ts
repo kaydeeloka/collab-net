@@ -62,7 +62,7 @@ async function buildCoverSlide(prs: pptxgen, page: BrandReportPage, ctx: Builder
   slide.background = { color: COLORS.bg }
 
   const logoW = 3.5
-  addLogoImage(slide, { x: -0.2, y: 0.6, w: logoW, h: logoW * (2900 / 6628) })
+  addLogoImage(slide, { x: -0.2, y: 0.6, w: logoW, h: logoW * (58 / 260) })
 
   slide.addText('© CRANECOMMUNICATIONS', {
     x: 0.22, y: SLIDE_H - 0.45, w: 4, h: 0.25,
@@ -213,7 +213,7 @@ async function buildBrandContentPerformanceSlide(prs: pptxgen, page: BrandReport
   })
 
   const reviewRows = reviewRowsOf(ctx.rows)
-  const mimuseRows = reviewRows.filter(r => r.brand === 'mimuse')
+  const collabnetRows = reviewRows.filter(r => r.brand === 'collabnet')
   const brandRows = brandRowsOf(ctx)
 
   const infMap = new Map<string, boolean>()
@@ -265,10 +265,10 @@ async function buildBrandContentPerformanceSlide(prs: pptxgen, page: BrandReport
     const magazine = rws.filter(r => platformLabel(r.platform ?? '') === 'Magazine').length
     return { tiktok, instagram, magazine, total: tiktok + instagram + magazine }
   }
-  const allBrandRows = reviewRows.filter(r => r.brand !== 'mimuse')
+  const allBrandRows = reviewRows.filter(r => r.brand !== 'collabnet')
   const brandLabel = (ctx.brandEn ?? ctx.brandName).toUpperCase()
   const ctRows = [
-    { label: 'Mi Muse 리뷰', ...countByPlat(mimuseRows) },
+    { label: 'CollabNet 리뷰', ...countByPlat(collabnetRows) },
     { label: '브랜드별 리뷰', ...countByPlat(allBrandRows) },
     { label: `${brandLabel} 리뷰`, ...countByPlat(brandRows) },
     { label: '합계', ...countByPlat(reviewRows) },
@@ -324,17 +324,17 @@ async function buildReviewListSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   slide.background = { color: COLORS.bg }
   const c = page.content
   const logoW = 1.1
-  addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * (2900 / 6628) })
+  addLogoImage(slide, { x: SLIDE_W - 0.5 - logoW, y: 0.32, w: logoW, h: logoW * (58 / 260) })
   slide.addText(c.engTitle ?? '', {
     x: 0.5, y: 0.35, w: 7.5, h: 0.3, fontFace: FONT.BOLD, bold: true, fontSize: 13, color: COLORS.teal,
   })
 
-  const subtitle = c.rlSubtitle ?? 'Mi Muse 리뷰'
-  const isMimuse = subtitle.includes('Mi Muse') || subtitle.includes('mimuse')
+  const subtitle = c.rlSubtitle ?? 'CollabNet 리뷰'
+  const isMimuse = subtitle.includes('CollabNet') || subtitle.includes('collabnet')
   const reviewRows = reviewRowsOf(ctx.rows)
-  const mimuseRows = reviewRows.filter(r => r.brand === 'mimuse')
-  const allBrandReviewRows = reviewRows.filter(r => r.brand !== 'mimuse')
-  const tableRows = isMimuse ? mimuseRows : allBrandReviewRows
+  const collabnetRows = reviewRows.filter(r => r.brand === 'collabnet')
+  const allBrandReviewRows = reviewRows.filter(r => r.brand !== 'collabnet')
+  const tableRows = isMimuse ? collabnetRows : allBrandReviewRows
   const offset = c.rlOffset ?? 0
   const ROWS_PER_PAGE = 15
   const pageRows = tableRows.slice(offset, offset + ROWS_PER_PAGE)
@@ -386,8 +386,8 @@ async function buildBestReviewSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
   const c = page.content
   addContentChrome(slide, c.engTitle, c.korTitle)
 
-  const mimuseRows = reviewRowsOf(ctx.rows)
-    .filter(r => r.brand === 'mimuse')
+  const collabnetRows = reviewRowsOf(ctx.rows)
+    .filter(r => r.brand === 'collabnet')
     .sort((a, b) => {
       const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
       const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
@@ -403,7 +403,7 @@ async function buildBestReviewSlide(prs: pptxgen, page: BrandReportPage, ctx: Bu
 
   const jobs: Promise<void>[] = []
   for (let i = 0; i < cols * rowsN; i++) {
-    const row = mimuseRows[i]
+    const row = collabnetRows[i]
     const thumbUrl = row ? resolveMonitoringThumbnailUrl(row.assets) : null
     const col = i % cols
     const rIdx = Math.floor(i / cols)

@@ -1,14 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
-import { AuthProvider } from '@/contexts/AuthContext'
 import { ToastProvider } from '@/contexts/ToastContext'
 import { PhaseProvider, usePhase } from '@/contexts/PhaseContext'
 import RequireAuth from '@/components/RequireAuth'
 import Layout from '@/components/Layout'
 import Spinner from '@/components/Spinner'
-import SessionWarningModal from '@/components/SessionWarningModal'
 import { archiveSectionPath } from '@/pages/archive/archive-slug'
 
-import Lock        from './pages/Lock'
 import Dashboard   from './pages/home'
 import BeautyNews         from './pages/trend/beauty-news'
 import BeautyNewsArchive  from './pages/trend/beauty-news/archive/index'
@@ -87,12 +84,9 @@ function RedirectLegacySeasonPhase() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <SessionWarningModal />
-        <PhaseProvider>
+      <PhaseProvider>
         <ToastProvider>
           <Routes>
-            <Route path="/lock" element={<Lock />} />
             <Route element={<RequireAuth />}>
               <Route element={<Layout />}>
 
@@ -168,8 +162,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ToastProvider>
-        </PhaseProvider>
-      </AuthProvider>
+      </PhaseProvider>
     </BrowserRouter>
   )
 }

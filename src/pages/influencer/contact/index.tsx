@@ -37,8 +37,8 @@ import {
   toIsoTimestamp,
 } from '@/lib/contact/reply-sync'
 import { logOutboundOutreach } from '@/lib/contact/outreach-log'
-import { supabase } from '@/lib/supabase'
-import { supabaseNow } from '@/lib/kst-time'
+import { demoDb } from '@/lib/local-db'
+import { demoDbNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -244,7 +244,7 @@ export default function Outreach() {
   const loadInfluencers = useCallback(async () => {
     if (!viewPhaseId) return
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('influencers')
       .select('id, handle, display_name, email, followers, following, following_ratio, video_count, engagement_rate, profile_url, platform, status, contacted, contact_count, last_contact_at, last_reply_at, reply_count, memo, source_phase_id, tiers(rank, label, category)')
       .eq('phase_id', viewPhaseId)
@@ -295,10 +295,10 @@ export default function Outreach() {
       finalPatch.reply_count = (inf.reply_count ?? 0) + 1
     }
     if (patch.status && replyStatuses.includes(patch.status)) {
-      finalPatch.last_reply_at = supabaseNow()
+      finalPatch.last_reply_at = demoDbNow()
     }
 
-    const { error } = await supabase.from('influencers').update(finalPatch).eq('id', id)
+    const { error } = await demoDb.from('influencers').update(finalPatch).eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, ...finalPatch } : r))
 
@@ -374,7 +374,7 @@ export default function Outreach() {
     if (!inf.email) return
     const subject = applyPlaceholders(tpl.title, inf)
     const body = applyPlaceholders(tpl.body, inf)
-    const sentAt = supabaseNow()
+    const sentAt = demoDbNow()
     const res = await sendOutreachEmail({ to: inf.email, subject, body })
     const sendErr = getOutreachSendError(res)
     if (sendErr) throw new Error(sendErr)
@@ -386,7 +386,7 @@ export default function Outreach() {
       template_id: tpl.id,
       sent_at: sentAt,
     })
-    const { data: fresh, error: readErr } = await supabase
+    const { data: fresh, error: readErr } = await demoDb
       .from('influencers')
       .select('contact_count')
       .eq('id', inf.id)
@@ -397,7 +397,7 @@ export default function Outreach() {
   }, [updateField])
 
   const recordSendAfterEmail = useCallback(async (inf: Influencer, sentAt: string) => {
-    const { data: fresh, error: readErr } = await supabase
+    const { data: fresh, error: readErr } = await demoDb
       .from('influencers')
       .select('contact_count')
       .eq('id', inf.id)
@@ -469,7 +469,7 @@ export default function Outreach() {
           const inf = candidates.find(r => r.email!.toLowerCase() === reply.email.toLowerCase())
           if (!inf || !isNewReply(inf, reply)) continue
 
-          const { data: fresh, error: readErr } = await supabase
+          const { data: fresh, error: readErr } = await demoDb
             .from('influencers')
             .select('reply_count, status, last_contact_at, last_reply_at')
             .eq('id', inf.id)
@@ -488,7 +488,7 @@ export default function Outreach() {
             statusUpdates++
           }
 
-          const { error } = await supabase.from('influencers').update(patch).eq('id', inf.id)
+          const { error } = await demoDb.from('influencers').update(patch).eq('id', inf.id)
           if (error) { showToast(error.message, 'error'); continue }
 
           newReplies++
@@ -562,7 +562,7 @@ export default function Outreach() {
       async () => {
         setBulkMarking(true)
         try {
-          const sentAt = supabaseNow()
+          const sentAt = demoDbNow()
           let updated = 0
           for (const inf of targets) {
             const ok = await recordSendAfterEmail(inf, sentAt)
@@ -587,7 +587,7 @@ export default function Outreach() {
 
   const executeBulkSend = useCallback(async (tpl: Pick<EmailTemplate, 'id' | 'name' | 'title' | 'body'>) => {
     const ids = Array.from(checkedIds)
-    const batchStartedAt = supabaseNow()
+    const batchStartedAt = demoDbNow()
     const sentRows: Influencer[] = []
     const entries = ids.map(id => {
       const inf = filtered.find(r => r.id === id)

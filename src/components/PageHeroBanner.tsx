@@ -60,7 +60,7 @@ export function PageHeroBannerContent({
         {eyebrow && <div className="page-hero-meta">{eyebrow}</div>}
         {showLogo ? (
           <div className="page-hero-brand page-hero-brand--page">
-            <img src="/img/logo-black.svg" alt="Mi Muse" className="page-hero-logo page-hero-logo--page" />
+            <img src="/img/logo-black.svg" alt="CollabNet" className="page-hero-logo page-hero-logo--page" />
             <h1 className="page-hero-title page-hero-title--page">{title}</h1>
           </div>
         ) : (

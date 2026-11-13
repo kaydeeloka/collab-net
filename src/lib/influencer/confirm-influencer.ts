@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { defaultProfileUrl } from '@/lib/influencer/content-platforms'
 
 export interface InfluencerConfirmSource {
@@ -74,7 +74,7 @@ function rowScore(row: ConfirmedRowRef): number {
 }
 
 async function nextConfirmedSeq(phaseId: string): Promise<number> {
-  const { data } = await supabase
+  const { data } = await demoDb
     .from('confirmed_influencers')
     .select('seq')
     .eq('phase_id', phaseId)
@@ -85,7 +85,7 @@ async function nextConfirmedSeq(phaseId: string): Promise<number> {
 }
 
 async function loadConfirmedInPhase(phaseId: string): Promise<ConfirmedRowRef[]> {
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('confirmed_influencers')
     .select(`
       id, influencer_id, phase_id, email, form_submitted, phone, seq, created_at,
@@ -103,7 +103,7 @@ async function findExistingConfirmed(
   phaseId: string,
   phaseRows?: ConfirmedRowRef[],
 ): Promise<ConfirmedRowRef | null> {
-  const { data: byInfluencer } = await supabase
+  const { data: byInfluencer } = await demoDb
     .from('confirmed_influencers')
     .select('id, influencer_id, phase_id, email, form_submitted, phone, seq, created_at')
     .eq('influencer_id', inf.id)
@@ -113,7 +113,7 @@ async function findExistingConfirmed(
 
   const email = inf.email?.trim()
   if (email) {
-    const { data: byEmail } = await supabase
+    const { data: byEmail } = await demoDb
       .from('confirmed_influencers')
       .select('id, influencer_id, phase_id, email, form_submitted, phone, seq, created_at')
       .eq('phase_id', phaseId)
@@ -138,7 +138,7 @@ async function ensureInfluencerPlatform(
   const rawHandle  = inf.handle || ''
   const key        = platformAccountKey(platform, rawHandle)
 
-  const { data: platforms } = await supabase
+  const { data: platforms } = await demoDb
     .from('influencer_platform')
     .select('id, platform, handle')
     .eq('confirmed_influencer_id', confirmedId)
@@ -148,7 +148,7 @@ async function ensureInfluencerPlatform(
   )
   if (exists) return null
 
-  const { error } = await supabase.from('influencer_platform').insert({
+  const { error } = await demoDb.from('influencer_platform').insert({
     confirmed_influencer_id: confirmedId,
     platform,
     handle: rawHandle,
@@ -159,7 +159,7 @@ async function ensureInfluencerPlatform(
 }
 
 async function dedupePlatformsForConfirmed(confirmedId: string): Promise<number> {
-  const { data: platforms, error } = await supabase
+  const { data: platforms, error } = await demoDb
     .from('influencer_platform')
     .select('id, platform, handle, followers')
     .eq('confirmed_influencer_id', confirmedId)
@@ -183,7 +183,7 @@ async function dedupePlatformsForConfirmed(confirmedId: string): Promise<number>
 
   if (!deleteIds.length) return 0
 
-  const { error: delErr } = await supabase
+  const { error: delErr } = await demoDb
     .from('influencer_platform')
     .delete()
     .in('id', deleteIds)
@@ -197,7 +197,7 @@ export async function dedupePlatformsInPhase(
 ): Promise<{ removed: number; error?: string }> {
   if (!phaseId) return { removed: 0 }
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await demoDb
     .from('confirmed_influencers')
     .select('id')
     .eq('phase_id', phaseId)
@@ -230,14 +230,14 @@ export async function syncInfluencerOnAccept(
     if (inf.email && existing!.email !== inf.email) patch.email = inf.email
 
     if (Object.keys(patch).length) {
-      const { error } = await supabase
+      const { error } = await demoDb
         .from('confirmed_influencers')
         .update(patch)
         .eq('id', confirmedId)
       if (error) return { ok: false, error: error.message }
     }
   } else {
-    const { data: inserted, error: ciErr } = await supabase
+    const { data: inserted, error: ciErr } = await demoDb
       .from('confirmed_influencers')
       .insert({
         influencer_id: inf.id,
@@ -263,7 +263,7 @@ export async function syncInfluencerOnAccept(
 export async function removeInfluencerOnUnaccept(
   influencerId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase
+  const { error } = await demoDb
     .from('confirmed_influencers')
     .delete()
     .eq('influencer_id', influencerId)
@@ -304,7 +304,7 @@ export async function dedupeConfirmedInPhase(
       const keeper = sorted[0]
       for (const dup of sorted.slice(1)) {
         if (dup.influencer_id && !keeper.influencer_id) {
-          await supabase
+          await demoDb
             .from('confirmed_influencers')
             .update({ influencer_id: dup.influencer_id })
             .eq('id', keeper.id)
@@ -316,7 +316,7 @@ export async function dedupeConfirmedInPhase(
 
     if (!deleteIds.length) return { removed: 0 }
 
-    const { error } = await supabase
+    const { error } = await demoDb
       .from('confirmed_influencers')
       .delete()
       .in('id', deleteIds)
@@ -334,7 +334,7 @@ export async function renumberConfirmedSeqInPhase(
 ): Promise<{ renumbered: boolean; error?: string }> {
   if (!phaseId) return { renumbered: false }
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await demoDb
     .from('confirmed_influencers')
     .select('id, seq, created_at')
     .eq('phase_id', phaseId)
@@ -350,7 +350,7 @@ export async function renumberConfirmedSeqInPhase(
   for (let i = 0; i < rows.length; i++) {
     const nextSeq = i + 1
     if (rows[i].seq === nextSeq) continue
-    const { error: updErr } = await supabase
+    const { error: updErr } = await demoDb
       .from('confirmed_influencers')
       .update({ seq: nextSeq })
       .eq('id', rows[i].id)
@@ -415,7 +415,7 @@ function isDedupeRpcMissing(error: { code?: string; message?: string }): boolean
 export async function dedupeConfirmedPhaseViaDb(phaseId: string): Promise<DedupePhaseResult> {
   if (!phaseId) return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false }
 
-  const { data, error } = await supabase.rpc('dedupe_confirmed_phase', { p_phase_id: phaseId })
+  const { data, error } = await demoDb.rpc('dedupe_confirmed_phase', { p_phase_id: phaseId })
   if (error) {
     if (isDedupeRpcMissing(error)) return dedupeConfirmedPhaseData(phaseId)
     return { confirmedRemoved: 0, platformsRemoved: 0, seqRenumbered: false, error: error.message }
@@ -444,7 +444,7 @@ export async function syncMissingAcceptedToConfirmed(
 ): Promise<{ synced: number; failed: number; errors: string[] }> {
   if (!phaseId || !accepted.length) return { synced: 0, failed: 0, errors: [] }
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await demoDb
     .from('confirmed_influencers')
     .select('influencer_id, email, influencers(handle), influencer_platform(handle)')
     .eq('phase_id', phaseId)

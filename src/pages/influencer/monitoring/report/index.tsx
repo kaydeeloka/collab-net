@@ -10,7 +10,7 @@ import {
 } from '@/lib/influencer/monitoring-data'
 import { PLATFORM_DISPLAY, platformBadgeClass, platformBadgeStyle, type PlatformBucket } from '@/lib/influencer/content-platforms'
 import { monitoringBrandKey, BRAND_KW_COLORS, type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import Spinner from '@/components/Spinner'
 import { StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -263,8 +263,8 @@ export default function MonitoringReport() {
     setLoading(true)
     Promise.all([
       loadMonitoringData(viewPhaseId),
-      supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
-      supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
+      demoDb.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+      demoDb.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
     ])
       .then(([{ rows }, brandsRes, bcRes]) => {
         const brandEnMap: Record<string, string> = {}
@@ -341,8 +341,8 @@ export default function MonitoringReport() {
               valueColor="var(--blue-dk)"
               caption={(
                 <>
-                  <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>Mi Muse</span>
-                  <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{summary.totalContent.mimuse}</strong>
+                  <span style={{ color: 'var(--teal-dk)', fontWeight: 700 }}>CollabNet</span>
+                  <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{summary.totalContent.collabnet}</strong>
                   <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
                   <span style={{ color: 'var(--gray-6)', fontWeight: 700 }}>브랜드</span>
                   <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{summary.totalContent.brand}</strong>
@@ -396,7 +396,7 @@ export default function MonitoringReport() {
               </tbody>
             </ReportTable>
 
-            <ReportTable title="Mi Muse vs 브랜드 평균 성과">
+            <ReportTable title="CollabNet vs 브랜드 평균 성과">
               <thead>
                 <tr>
                   <th style={{ ...thStyle, textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12 }}>구분</th>
@@ -408,7 +408,7 @@ export default function MonitoringReport() {
               </thead>
               <tbody>
                 {report.brandPerformanceRows.map((row, i) => {
-                  const isMimuse = row.key === 'mimuse'
+                  const isMimuse = row.key === 'collabnet'
                   const color = isMimuse
                     ? 'var(--teal-dk)'
                     : BRAND_KW_COLORS[(i - 1) % BRAND_KW_COLORS.length]

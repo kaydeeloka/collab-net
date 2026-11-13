@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
 import Modal from '@/components/Modal'
@@ -35,8 +35,8 @@ export default function BrandDbPhaseImport({ onImported }: { onImported: () => v
   const loadImportPreview = useCallback(async () => {
     if (!selectedPhaseId || !importPhaseId) { setImportPreview(null); return }
     const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', selectedPhaseId),
-      supabase.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', importPhaseId),
+      demoDb.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', selectedPhaseId),
+      demoDb.from('brand_contacts').select('brand_name, email, contact_name, contacted').eq('phase_id', importPhaseId),
     ])
     const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
     const filtered = (source ?? []).filter(r => !importContactedOnly || r.contacted === true)
@@ -59,8 +59,8 @@ export default function BrandDbPhaseImport({ onImported }: { onImported: () => v
     setImporting(true)
     try {
       const [{ data: current }, { data: source }] = await Promise.all([
-        supabase.from('brand_contacts').select('brand_name, email, contact_name').eq('phase_id', selectedPhaseId!),
-        supabase.from('brand_contacts').select('*').eq('phase_id', importPhaseId),
+        demoDb.from('brand_contacts').select('brand_name, email, contact_name').eq('phase_id', selectedPhaseId!),
+        demoDb.from('brand_contacts').select('*').eq('phase_id', importPhaseId),
       ])
       const existingSet = new Set((current ?? []).map(r => dedupKey(r)))
       const rows = (source ?? [])
@@ -89,7 +89,7 @@ export default function BrandDbPhaseImport({ onImported }: { onImported: () => v
           personal_phone:   r.personal_phone   ?? null,
         }))
       if (!rows.length) { showToast('추가할 브랜드가 없습니다.', 'error'); return }
-      const { error } = await supabase.from('brand_contacts').insert(rows)
+      const { error } = await demoDb.from('brand_contacts').insert(rows)
       if (error) throw error
       showToast(`${rows.length}건을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
       setShowModal(false)

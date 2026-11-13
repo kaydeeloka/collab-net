@@ -1,5 +1,5 @@
-import { supabaseNow } from '@/lib/kst-time'
-import { supabase } from '../supabase'
+import { demoDbNow } from '@/lib/kst-time'
+import { demoDb } from '../local-db'
 
 /** Optional audit log when user clicks 발송 (outbound only). Failures are non-blocking. */
 export async function logOutboundOutreach(params: {
@@ -10,14 +10,14 @@ export async function logOutboundOutreach(params: {
   template_id?: string
   sent_at?: string
 }): Promise<void> {
-  const { error } = await supabase.from('outreach_messages').insert({
+  const { error } = await demoDb.from('outreach_messages').insert({
     influencer_id: params.influencer_id,
     direction: 'outbound',
     subject: params.subject,
     body: params.body,
     template_name: params.template_name ?? null,
     template_id: params.template_id ?? null,
-    sent_at: params.sent_at ?? supabaseNow(),
+    sent_at: params.sent_at ?? demoDbNow(),
   })
   if (error) console.warn('outreach_messages log failed:', error.message)
 }

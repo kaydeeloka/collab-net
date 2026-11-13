@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { demoDb } from './local-db'
 
 export interface BeautyNewsKeyword {
   tag: string
@@ -22,7 +22,7 @@ export function normalizeKeywords(raw: unknown): BeautyNewsKeyword[] {
 }
 
 export async function fetchLatestBeautyNewsKeywords(): Promise<BeautyNewsKeyword[]> {
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('beauty_news_archives')
     .select('keywords')
     .order('windows_end', { ascending: false, nullsFirst: false })

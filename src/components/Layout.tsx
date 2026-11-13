@@ -2,7 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Home, TrendingUp, Users, Building2, Package, Activity, Archive, Globe, Settings, ChevronUp, ChevronDown } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { phaseNum, escHtml, normalizePhaseNameInput, suggestNextPhaseName } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -190,7 +190,7 @@ export default function Layout() {
     setNewPhaseLoading(true)
     setNewPhaseStatus('차수 생성 중...')
     try {
-      const { error } = await supabase.from('phases').insert({
+      const { error } = await demoDb.from('phases').insert({
         name,
         is_active:        false,
         started_at:       newPhaseStartDate  || null,
@@ -225,7 +225,7 @@ export default function Layout() {
     setEditLoading(true)
     setEditStatus('저장 중...')
     try {
-      const { error } = await supabase.from('phases').update({
+      const { error } = await demoDb.from('phases').update({
         started_at:        editStartDate  || null,
         ended_at:          editEndDate    || null,
         kit_send_date:     editKitDate    || null,
@@ -246,7 +246,7 @@ export default function Layout() {
     try {
       const phase = phaseList.find(p => p.name === deleteTarget)
       if (!phase) return
-      const { error } = await supabase.from('phases').delete().eq('id', phase.id)
+      const { error } = await demoDb.from('phases').delete().eq('id', phase.id)
       setShowDeleteModal(false)
       if (error) { showToast(error.message, 'error'); return }
       showToast(`「${deleteTarget}」 삭제 완료`, 'success')
@@ -300,7 +300,7 @@ export default function Layout() {
 
         <div className="sidebar-header">
           <NavLink to="/" className="sidebar-logo-link" title="홈으로">
-            <img className="sidebar-logo-icon" src="/img/logo-black.svg" alt="MiMuse" />
+            <span className="sidebar-logo-icon" aria-label="Collab-Net">C</span>
           </NavLink>
         </div>
 
@@ -323,7 +323,7 @@ export default function Layout() {
 
         <div className="sidebar-footer">
           <a
-            href="https://mimuse.imweb.me/"
+            href="#"
             target="_blank"
             rel="noopener noreferrer"
             className="sidebar-website-btn"

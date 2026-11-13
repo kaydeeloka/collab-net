@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Download, User, MapPin } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { kstToday } from '@/lib/kst-time'
 import { useToast } from '@/contexts/ToastContext'
 import { usePhase } from '@/contexts/PhaseContext'
@@ -247,7 +247,7 @@ export default function EmsData() {
     }
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      const { data, error } = await demoDb
         .from('confirmed_influencers')
         .select(`
           id, seq, email, phone, influencer_id,
@@ -294,14 +294,14 @@ export default function EmsData() {
     setSaving(true)
     try {
       if (modalRow.influencer_id && editForm.name.trim()) {
-        const { error } = await supabase
+        const { error } = await demoDb
           .from('influencers')
           .update({ display_name: editForm.name.trim() })
           .eq('id', modalRow.influencer_id)
         if (error) throw error
       }
 
-      const { error } = await supabase
+      const { error } = await demoDb
         .from('confirmed_influencers')
         .update({
           email:          editForm.email.trim() || null,

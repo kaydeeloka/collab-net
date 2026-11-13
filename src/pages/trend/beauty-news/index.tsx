@@ -4,7 +4,7 @@ import {
   Pencil, Plus, Trash2,
 } from 'lucide-react'
 import { gasPost } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
 import ReportBody from './ReportBody'
@@ -217,7 +217,7 @@ export default function BeautyNews() {
     const name  = addName.trim()
     if (!email) return
     setRcptSaving(true)
-    const { error } = await supabase.from('email_recipients').insert({ email, name: name || null })
+    const { error } = await demoDb.from('email_recipients').insert({ email, name: name || null })
     if (!error) { setAddEmail(''); setAddName(''); setShowAddForm(false); await loadRecipients() }
     setRcptSaving(false)
   }
@@ -233,7 +233,7 @@ export default function BeautyNews() {
     const name  = editName.trim()
     if (!email) return
     setRcptSaving(true)
-    const { error } = await supabase
+    const { error } = await demoDb
       .from('email_recipients')
       .update({ email, name: name || null })
       .eq('email', oldEmail)
@@ -250,7 +250,7 @@ export default function BeautyNews() {
   }
 
   async function deleteRecipient(email: string) {
-    const { error } = await supabase.from('email_recipients').delete().eq('email', email)
+    const { error } = await demoDb.from('email_recipients').delete().eq('email', email)
     if (!error) {
       setSelectedRcpt(prev => { const next = new Set(prev); next.delete(email); return next })
       await loadRecipients()
@@ -260,7 +260,7 @@ export default function BeautyNews() {
   async function loadLatestReport() {
     setLatestLoading(true)
     try {
-      const { data, error } = await supabase
+      const { data, error } = await demoDb
         .from('beauty_news_archives')
         .select('id, windows_start, windows_end, report_title, categories, keywords, created_at')
       if (error || !data?.length) return
@@ -364,7 +364,7 @@ export default function BeautyNews() {
     const range = ws + (we ? ' – ' + we : '')
     const title = data.reportTitle || ('이번 주 뷰티 브리핑 — ' + range)
     let h = `<html><body style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#222">`
-    h += `<h1 style="font-size:20px;border-bottom:2px solid #f5c518;padding-bottom:8px">🌟 MiMuse ${title}</h1>`
+    h += `<h1 style="font-size:20px;border-bottom:2px solid #f5c518;padding-bottom:8px">🌟 CollabNet ${title}</h1>`
     if (range) h += `<p style="font-size:12px;color:#888;margin-top:4px">📅 ${range}</p>`
     for (const cat of (data.categories || [])) {
       const items = cat.items ?? []
@@ -390,7 +390,7 @@ export default function BeautyNews() {
       }
       h += `</div>`
     }
-    const dashUrl = 'https://mimuse-dashboard.vercel.app/trend/beauty-news'
+    const dashUrl = 'https://collabnet-dashboard.vercel.app/trend/beauty-news'
     h += `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">`
     h += `<a href="${dashUrl}" target="_blank" style="display:inline-block;background:#f5c518;color:#1a1a1a;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">📊 대시보드 뷰티뉴스 바로가기</a>`
     h += `</div></body></html>`

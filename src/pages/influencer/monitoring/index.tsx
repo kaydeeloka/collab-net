@@ -3,7 +3,7 @@ import { BarChart2, Copy, Download, ExternalLink, FileText, Hash, Link2, Plus, R
 import { ReportCard, ReportStat } from '@/components/ReportCard'
 import * as XLSX from 'xlsx'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
@@ -20,10 +20,10 @@ import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBadgeClass, platformBadgeSt
 import type { MonitoringAssets } from '@/lib/influencer/monitoring-data'
 import { resolveMonitoringThumbnailUrl } from '@/lib/influencer/monitoring-storage'
 import {
-  MIMUSE_BRAND,
-  MIMUSE_COLOR,
+  COLLABNET_BRAND,
+  COLLABNET_COLOR,
   BRAND_KW_COLORS as BRANDS_KW_COLORS,
-  DEFAULT_MIMUSE_KEYWORDS,
+  DEFAULT_COLLABNET_KEYWORDS,
   type BrandKwsState,
   type ConfirmedBrandKw,
   brandKeywordIndex,
@@ -316,7 +316,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
       `
 
       const [confirmedRes, monitoringRes] = await Promise.all([
-        supabase
+        demoDb
           .from('confirmed_influencers')
           .select(`
             id, seq, repost,
@@ -325,7 +325,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           `)
           .eq('phase_id', viewPhaseId)
           .order('seq', { ascending: true, nullsFirst: false }),
-        supabase
+        demoDb
           .from('monitoring')
           .select(monitoringSelect)
           .eq('phase_id', viewPhaseId)
@@ -393,10 +393,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     if (!viewPhaseId) return
     try {
       const [brandsRes, kwsRes, bcRes] = await Promise.all([
-        supabase.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
-        supabase.from('monitoring_keywords').select('brand, keywords, phase_id')
-          .or(`and(phase_id.is.null,brand.eq.${MIMUSE_BRAND}),phase_id.eq.${viewPhaseId}`),
-        supabase.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
+        demoDb.from('confirmed_brands').select('brand_name').eq('phase_id', viewPhaseId).order('brand_name'),
+        demoDb.from('monitoring_keywords').select('brand, keywords, phase_id')
+          .or(`and(phase_id.is.null,brand.eq.${COLLABNET_BRAND}),phase_id.eq.${viewPhaseId}`),
+        demoDb.from('brand_contacts').select('brand_name, brand_en').eq('phase_id', viewPhaseId),
       ])
       const brandEnMap: Record<string, string> = {}
       ;(bcRes.data || []).forEach((r: { brand_name: string; brand_en: string | null }) => {
@@ -445,10 +445,10 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     const trimmed = kw.trim()
     if (!trimmed) { clear(); return }
     let next: BrandKwsState
-    if (brandKey === MIMUSE_BRAND) {
-      const current = brandKws.mimuse || []
+    if (brandKey === COLLABNET_BRAND) {
+      const current = brandKws.collabnet || []
       if (current.includes(trimmed)) { clear(); return }
-      next = { ...brandKws, mimuse: [...current, trimmed] }
+      next = { ...brandKws, collabnet: [...current, trimmed] }
     } else {
       const current = brandKws.byBrand[brandKey] || []
       if (current.includes(trimmed)) { clear(); return }
@@ -464,8 +464,8 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   function removeKeyword(brandKey: string, kw: string) {
     let next: BrandKwsState
-    if (brandKey === MIMUSE_BRAND) {
-      next = { ...brandKws, mimuse: (brandKws.mimuse || []).filter(k => k !== kw) }
+    if (brandKey === COLLABNET_BRAND) {
+      next = { ...brandKws, collabnet: (brandKws.collabnet || []).filter(k => k !== kw) }
     } else {
       next = {
         ...brandKws,
@@ -481,7 +481,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   function brandColorForKey(key: string): string {
     const normalized = key.toLowerCase()
-    if (normalized === MIMUSE_BRAND) return MIMUSE_COLOR
+    if (normalized === COLLABNET_BRAND) return COLLABNET_COLOR
     // exact key match
     let idx = confirmedBrands.findIndex(b => b.key === normalized)
     // fall back to name match (e.g. stored 'nesh' vs brand name 'Nesh')
@@ -505,7 +505,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   function normalizeBrandToKey(raw: string): string {
     if (!raw) return ''
     const lower = raw.toLowerCase()
-    if (lower === MIMUSE_BRAND || isMimuseKeyword(lower, brandKws.mimuse || [])) return MIMUSE_BRAND
+    if (lower === COLLABNET_BRAND || isMimuseKeyword(lower, brandKws.collabnet || [])) return COLLABNET_BRAND
     const found =
       confirmedBrands.find(b => b.en === lower) ||
       confirmedBrands.find(b => b.key === lower) ||
@@ -576,9 +576,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     return (
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-          const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+          const isMimuse = isMimuseKeyword(kw, brandKws.collabnet || [])
           const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-          const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
+          const c        = isMimuse ? COLLABNET_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : 'var(--gray-5)'
           return (
             <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
           )
@@ -647,7 +647,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
     setModalEditing(true)
     setEditForm(rowToEditForm(newRow))
     if (base.confirmed_influencer_id) {
-      void supabase.from('influencer_platform')
+      void demoDb.from('influencer_platform')
         .select('id, platform, handle')
         .eq('confirmed_influencer_id', base.confirmed_influencer_id)
         .then(({ data }) => { if (data) setPlatformOptions(data) })
@@ -656,7 +656,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   async function deleteReview(r: MonRow) {
     try {
-      const { error } = await supabase.from('monitoring').delete().eq('id', r.id)
+      const { error } = await demoDb.from('monitoring').delete().eq('id', r.id)
       if (error) throw error
       showToast('삭제되었습니다', 'success')
       closeModal()
@@ -684,7 +684,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         const platformId = editForm.influencer_platform_id || modalRow.influencer_platform_id
         if (!platformId) throw new Error('platform id missing')
         const selectedPlatform = platformOptions.find(o => o.id === platformId)
-        const { data, error } = await supabase
+        const { data, error } = await demoDb
           .from('monitoring')
           .insert({ influencer_platform_id: platformId, ...payload })
           .select('id')
@@ -704,7 +704,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
         setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? updated : r))
         setModalRow(updated)
       } else {
-        const { error } = await supabase.from('monitoring').update(payload).eq('id', modalRow.id)
+        const { error } = await demoDb.from('monitoring').update(payload).eq('id', modalRow.id)
         if (error) throw error
         setRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
         setModalGroupRows(prev => prev.map(r => r.id === modalRow.id ? { ...r, ...payload } : r))
@@ -883,7 +883,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   }
   const kwCount = (keywords: string[]) =>
     [...new Set(keywords.map(k => k.toLowerCase()))].reduce((sum, kw) => sum + (stats.brandCounts[kw] ?? 0), 0)
-  const mimuseReviewCount = kwCount(brandKws.mimuse.length ? brandKws.mimuse : DEFAULT_MIMUSE_KEYWORDS)
+  const collabnetReviewCount = kwCount(brandKws.collabnet.length ? brandKws.collabnet : DEFAULT_COLLABNET_KEYWORDS)
   const brandReviewCount = confirmedBrands.reduce((sum, b) =>
     sum + kwCount([b.key, b.en, b.name, ...(brandKws.byBrand[b.key] ?? [])]), 0)
   const platformReviewCounts = Object.fromEntries(
@@ -954,7 +954,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
   function rowMatchesBrand(r: MonRow, filter: string): boolean {
     if (filter === 'all') return true
     const rowBrand = (r.brand || '').toLowerCase()
-    if (filter === MIMUSE_BRAND) return rowBrand === MIMUSE_BRAND || isMimuseKeyword(rowBrand, brandKws.mimuse || [])
+    if (filter === COLLABNET_BRAND) return rowBrand === COLLABNET_BRAND || isMimuseKeyword(rowBrand, brandKws.collabnet || [])
     const b = confirmedBrands.find(cb => brandEngKey(cb) === filter)
     if (!b) return rowBrand === filter
     const identifiers = [b.key, b.en, b.name.toLowerCase(), ...(brandKws.byBrand[b.key] || []).map(k => k.toLowerCase())].filter(Boolean)
@@ -963,7 +963,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
   const BRAND_FILTER_OPTIONS = [
     { value: 'all', label: '전체' },
-    { value: MIMUSE_BRAND, label: 'MiMuse' },
     ...confirmedBrands.map(b => ({ value: brandEngKey(b), label: brandEngKey(b) })),
   ]
 
@@ -1060,9 +1059,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           valueColor="var(--blue-dk)"
           caption={(
             <>
-              <span style={{ color: MIMUSE_COLOR, fontWeight: 700 }}>MiMuse</span>
-              <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{mimuseReviewCount}</strong>
-              <span style={{ margin: '0 6px', color: 'var(--gray-3)' }}>·</span>
               <span style={{ color: 'var(--gray-6)', fontWeight: 700 }}>브랜드별</span>
               <strong style={{ color: 'var(--gray-7)', marginLeft: 4 }}>{brandReviewCount}</strong>
             </>
@@ -1108,7 +1104,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-5)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 12 }}>브랜드 횟수</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { key: 'mimuse', label: 'MiMuse', count: mimuseReviewCount, color: MIMUSE_COLOR },
+              { key: 'collabnet', label: 'CollabNet', count: collabnetReviewCount, color: COLLABNET_COLOR },
               ...confirmedBrands.map((b, idx) => ({
                 key: b.key,
                 label: b.name,
@@ -1140,18 +1136,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-              {(brandKws.mimuse || []).map(kw => (
-                <span key={kw} style={{
-                  display: 'inline-flex', alignItems: 'center',
-                  fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                  background: MIMUSE_COLOR + '18', color: MIMUSE_COLOR,
-                  border: `1px solid ${MIMUSE_COLOR}44`,
-                }}>
-                  {kw}
-                </span>
-              ))}
-            </div>
             {confirmedBrands.map((brand, idx) => {
               const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
               const kws = brandKws.byBrand[brand.key] || []
@@ -1309,9 +1293,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                             {r.keywords ? (
                               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                 {r.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                                  const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                                  const isMimuse = isMimuseKeyword(kw, brandKws.collabnet || [])
                                   const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                                  const c = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
+                                  const c = isMimuse ? COLLABNET_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
                                   return (
                                     <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                                   )
@@ -1602,9 +1586,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                               {r.keywords
                                 ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                     {r.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                                      const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                                      const isMimuse = isMimuseKeyword(kw, brandKws.collabnet || [])
                                       const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                                      const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
+                                      const c        = isMimuse ? COLLABNET_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
                                       return (
                                         <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                                       )
@@ -1643,31 +1627,6 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
 
       {/* ── Keyword Edit Modal ── */}
       <Modal open={showKwModal} onClose={() => setShowKwModal(false)} title="키워드 설정">
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: MIMUSE_COLOR, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>MiMuse (전 페이즈 공통)</div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            {(brandKws.mimuse || []).map(kw => (
-              <span key={kw} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 2,
-                fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                background: MIMUSE_COLOR + '18', color: MIMUSE_COLOR,
-                border: `1px solid ${MIMUSE_COLOR}44`,
-              }}>
-                {kw}
-                <button onClick={() => showConfirm(`"${kw}" 키워드를 삭제할까요?`, () => removeKeyword(MIMUSE_BRAND, kw))}
-                  style={{ background: 'none', border: 'none', color: MIMUSE_COLOR, cursor: 'pointer', fontSize: 12, padding: '0 1px', lineHeight: 1 }}>×</button>
-              </span>
-            ))}
-            <span style={{ display: 'inline-flex', gap: 4 }}>
-              <input className="modal-input" placeholder="키워드 추가" value={newMimuseKw}
-                onChange={e => setNewMimuseKw(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(MIMUSE_BRAND, newMimuseKw, () => setNewMimuseKw('')) } }}
-                style={{ width: 140, padding: '8px 12px', fontSize: 12 }} />
-              <button className="cfg-btn" onClick={() => addKeyword(MIMUSE_BRAND, newMimuseKw, () => setNewMimuseKw(''))}>+</button>
-            </span>
-          </div>
-        </div>
-
         {confirmedBrands.length > 0 ? confirmedBrands.map((brand, idx) => {
           const c = BRANDS_KW_COLORS[idx % BRANDS_KW_COLORS.length]
           const kws = brandKws.byBrand[brand.key] || []
@@ -1915,9 +1874,9 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                       ? (
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {modalRow.keywords.split(',').map(kw => kw.trim()).filter(Boolean).map(kw => {
-                            const isMimuse = isMimuseKeyword(kw, brandKws.mimuse || [])
+                            const isMimuse = isMimuseKeyword(kw, brandKws.collabnet || [])
                             const brandIdx = brandKeywordIndex(kw, brandKws.byBrand, confirmedBrands)
-                            const c        = isMimuse ? MIMUSE_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
+                            const c        = isMimuse ? COLLABNET_COLOR : brandIdx >= 0 ? BRANDS_KW_COLORS[brandIdx % BRANDS_KW_COLORS.length] : '#94a3b8'
                             return (
                               <span key={kw} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: c + '18', color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{kw}</span>
                             )
@@ -1954,7 +1913,7 @@ function mapMonitoringAssets(raw: any): MonitoringAssets | null {
                   <select className="modal-input" value={editForm.brand}
                     onChange={e => setEditForm(f => f ? { ...f, brand: e.target.value } : f)}>
                     <option value="">—</option>
-                    <option value={MIMUSE_BRAND}>MiMuse</option>
+                    <option value={COLLABNET_BRAND}>CollabNet</option>
                     {confirmedBrands.map(b => { const eng = brandEngKey(b); return <option key={b.key} value={eng}>{eng}</option> })}
                   </select>
                 </div>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import JSZip from 'jszip'
 import { ArrowLeft, Download, Pencil, Save, Trash2, Upload } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -66,7 +66,7 @@ export default function BrandArchiveDetail() {
   const loadBrands = useCallback(async () => {
     if (!selectedPhaseId) { setBrands([]); setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('confirmed_brands')
       .select('id, brand_name, product, received, archive_notes, description_en, product_en')
       .eq('phase_id', selectedPhaseId)
@@ -78,7 +78,7 @@ export default function BrandArchiveDetail() {
 
   const loadAssets = useCallback(async (id: string) => {
     setAssetsLoading(true)
-    const { data: assetRows, error: assetErr } = await supabase
+    const { data: assetRows, error: assetErr } = await demoDb
       .from('confirmed_brand_assets')
       .select('id, category, file_name, storage_path, file_size, mime_type, label, created_at')
       .eq('confirmed_brand_id', id)
@@ -158,12 +158,12 @@ export default function BrandArchiveDetail() {
 
   async function deleteAsset(asset: BrandAsset, silent = false) {
     if (!isSalesLinkOnly(asset)) {
-      const { error: storageErr } = await supabase.storage.from(BUCKET).remove([asset.storage_path])
+      const { error: storageErr } = await demoDb.storage.from(BUCKET).remove([asset.storage_path])
       if (storageErr && !storageErr.message.includes('Not found')) {
         showToast(storageErr.message, 'error')
       }
     }
-    const { error } = await supabase.from('confirmed_brand_assets').delete().eq('id', asset.id)
+    const { error } = await demoDb.from('confirmed_brand_assets').delete().eq('id', asset.id)
     if (error) { showToast(error.message, 'error'); return false }
     setAssets(prev => prev.filter(a => a.id !== asset.id))
     if (!silent) showToast('파일이 삭제되었습니다', 'success')
@@ -177,7 +177,7 @@ export default function BrandArchiveDetail() {
       else showToast('다운로드할 파일이 없습니다', 'error')
       return
     }
-    const { data, error } = await supabase.storage.from(BUCKET).download(asset.storage_path)
+    const { data, error } = await demoDb.storage.from(BUCKET).download(asset.storage_path)
     if (error || !data) {
       showToast(error?.message?.includes('Invalid key')
         ? '파일 경로 오류입니다. 편집 모드에서 파일을 다시 업로드하세요.'
@@ -207,7 +207,7 @@ export default function BrandArchiveDetail() {
         for (let index = 0; index < catAssets.length; index += 1) {
           const asset = catAssets[index]
           if (isSalesLinkOnly(asset)) continue
-          const { data, error } = await supabase.storage.from(BUCKET).download(asset.storage_path)
+          const { data, error } = await demoDb.storage.from(BUCKET).download(asset.storage_path)
           if (error || !data) {
             failed += 1
             continue
@@ -270,14 +270,14 @@ export default function BrandArchiveDetail() {
           continue
         }
         const path = buildStoragePath(selectedPhaseId, brandId, category, file.name, i)
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+        const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
           cacheControl: '3600',
           upsert: false,
           contentType: file.type || undefined,
         })
         if (upErr) { showToast(upErr.message, 'error'); continue }
 
-        const { data: row, error: insErr } = await supabase
+        const { data: row, error: insErr } = await demoDb
           .from('confirmed_brand_assets')
           .insert({
             confirmed_brand_id: brandId,
@@ -292,7 +292,7 @@ export default function BrandArchiveDetail() {
           .single()
 
         if (insErr) {
-          await supabase.storage.from(BUCKET).remove([path])
+          await demoDb.storage.from(BUCKET).remove([path])
           showToast(insErr.message, 'error')
           continue
         }
@@ -323,7 +323,7 @@ export default function BrandArchiveDetail() {
       const token = crypto.randomUUID()
       const path = `${selectedPhaseId}/${brandId}/sales_channel/link_${token}.link`
       const sortOrder = assets.filter(a => a.category === 'sales_channel').length
-      const { data: row, error: insErr } = await supabase
+      const { data: row, error: insErr } = await demoDb
         .from('confirmed_brand_assets')
         .insert({
           confirmed_brand_id: brandId,
@@ -354,7 +354,7 @@ export default function BrandArchiveDetail() {
     setUploadingCat('sales_channel')
     try {
       const path = buildStoragePath(selectedPhaseId, brandId, 'sales_channel', file.name, 0)
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+      const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
         contentType: file.type || undefined,
@@ -362,7 +362,7 @@ export default function BrandArchiveDetail() {
       if (upErr) { showToast(upErr.message, 'error'); return }
 
       const sortOrder = assets.filter(a => a.category === 'sales_channel').length
-      const { data: row, error: insErr } = await supabase
+      const { data: row, error: insErr } = await demoDb
         .from('confirmed_brand_assets')
         .insert({
           confirmed_brand_id: brandId,
@@ -378,7 +378,7 @@ export default function BrandArchiveDetail() {
         .single()
 
       if (insErr) {
-        await supabase.storage.from(BUCKET).remove([path])
+        await demoDb.storage.from(BUCKET).remove([path])
         showToast(insErr.message, 'error')
         return
       }
@@ -394,7 +394,7 @@ export default function BrandArchiveDetail() {
     setUploadingCat('sales_channel')
     try {
       const path = buildStoragePath(selectedPhaseId, brandId, 'sales_channel', file.name, 0)
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+      const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
         cacheControl: '3600',
         upsert: false,
         contentType: file.type || undefined,
@@ -403,7 +403,7 @@ export default function BrandArchiveDetail() {
 
       const hadImage = !isSalesLinkOnly(asset)
       const oldPath = asset.storage_path
-      const { data: row, error: updErr } = await supabase
+      const { data: row, error: updErr } = await demoDb
         .from('confirmed_brand_assets')
         .update({
           file_name: file.name,
@@ -416,12 +416,12 @@ export default function BrandArchiveDetail() {
         .single()
 
       if (updErr) {
-        await supabase.storage.from(BUCKET).remove([path])
+        await demoDb.storage.from(BUCKET).remove([path])
         showToast(updErr.message, 'error')
         return
       }
       if (hadImage && oldPath && oldPath !== path) {
-        await supabase.storage.from(BUCKET).remove([oldPath])
+        await demoDb.storage.from(BUCKET).remove([oldPath])
       }
       setAssets(prev => prev.map(a => a.id === asset.id ? row as BrandAsset : a))
       showToast('판매처 이미지가 업데이트되었습니다', 'success')
@@ -436,7 +436,7 @@ export default function BrandArchiveDetail() {
     const existing = linkSaveTimers.current.get(asset.id)
     if (existing) clearTimeout(existing)
     linkSaveTimers.current.set(asset.id, setTimeout(async () => {
-      const { error } = await supabase
+      const { error } = await demoDb
         .from('confirmed_brand_assets')
         .update({ label: url.trim() || null })
         .eq('id', asset.id)
@@ -460,7 +460,7 @@ export default function BrandArchiveDetail() {
       if (patch.archive_notes !== undefined) update.archive_notes = patch.archive_notes || null
       if (patch.product_en !== undefined) update.product_en = patch.product_en || null
       if (patch.description_en !== undefined) update.description_en = patch.description_en || null
-      const { error } = await supabase.from('confirmed_brands').update(update).eq('id', brandId)
+      const { error } = await demoDb.from('confirmed_brands').update(update).eq('id', brandId)
       if (error) showToast(error.message, 'error')
       else {
         setBrands(prev => prev.map(b => b.id === brandId ? { ...b, ...update } : b))
@@ -484,7 +484,7 @@ export default function BrandArchiveDetail() {
     for (const timer of linkSaveTimers.current.values()) clearTimeout(timer)
     linkSaveTimers.current.clear()
     try {
-      const { error } = await supabase
+      const { error } = await demoDb
         .from('confirmed_brands')
         .update({
           archive_notes: archiveNotes || null,

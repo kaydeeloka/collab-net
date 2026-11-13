@@ -1,5 +1,5 @@
-export const MIMUSE_BRAND = 'mimuse'
-export const MIMUSE_COLOR = '#3b82f6'
+export const COLLABNET_BRAND = 'collabnet'
+export const COLLABNET_COLOR = '#3b82f6'
 
 /** Per-brand accent palette — shared by monitoring keyword badges and brand pills. */
 export const BRAND_KW_COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#f97316', '#06b6d4', '#3b82f6', '#e11d48']
@@ -8,7 +8,7 @@ export function monitoringBrandKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, '_')
 }
 
-export const DEFAULT_MIMUSE_KEYWORDS = ['mimuse', 'mi muse', 'mi-muse', '미뮤즈', 'MiMuse Beauty']
+export const DEFAULT_COLLABNET_KEYWORDS = ['collabnet', 'mi muse', 'mi-muse', '미뮤즈', 'CollabNet Beauty']
 
 export function defaultBrandKeywords(brandName: string): string[] {
   const trimmed = brandName.trim()
@@ -17,7 +17,7 @@ export function defaultBrandKeywords(brandName: string): string[] {
 }
 
 export type BrandKwsState = {
-  mimuse: string[]
+  collabnet: string[]
   byBrand: Record<string, string[]>
 }
 
@@ -28,20 +28,20 @@ export type ConfirmedBrandKw = {
 }
 
 export function emptyBrandKws(): BrandKwsState {
-  return { mimuse: [...DEFAULT_MIMUSE_KEYWORDS], byBrand: {} }
+  return { collabnet: [...DEFAULT_COLLABNET_KEYWORDS], byBrand: {} }
 }
 
 export function flattenBrandKeywords(state: BrandKwsState): string[] {
-  const flat = [...(state.mimuse || [])]
+  const flat = [...(state.collabnet || [])]
   for (const kws of Object.values(state.byBrand || {})) {
     flat.push(...kws)
   }
   return flat
 }
 
-export function isMimuseKeyword(kw: string, mimuse: string[]): boolean {
+export function isMimuseKeyword(kw: string, collabnet: string[]): boolean {
   const kwLow = kw.toLowerCase()
-  return mimuse.some(k => k.toLowerCase() === kwLow)
+  return collabnet.some(k => k.toLowerCase() === kwLow)
 }
 
 export function brandKeywordIndex(
@@ -61,7 +61,7 @@ export function brandColorForKey(
 ): string {
   const normalized = (key || '').toLowerCase()
   if (!normalized) return '#94a3b8'
-  if (normalized === MIMUSE_BRAND) return MIMUSE_COLOR
+  if (normalized === COLLABNET_BRAND) return COLLABNET_COLOR
   let idx = confirmedBrands.findIndex(b => b.key === normalized)
   if (idx < 0) idx = confirmedBrands.findIndex(b => b.name.toLowerCase() === normalized)
   if (idx < 0 && byBrand) {
@@ -76,8 +76,8 @@ export function buildBrandKwsFromRows(
   confirmedBrands: ConfirmedBrandKw[],
 ): BrandKwsState {
   const state = emptyBrandKws()
-  const mimuseRow = rows.find(r => r.brand === MIMUSE_BRAND && !r.phase_id)
-  if (mimuseRow?.keywords?.length) state.mimuse = mimuseRow.keywords
+  const collabnetRow = rows.find(r => r.brand === COLLABNET_BRAND && !r.phase_id)
+  if (collabnetRow?.keywords?.length) state.collabnet = collabnetRow.keywords
 
   for (const brand of confirmedBrands) {
     const keyLower = brand.key.toLowerCase()

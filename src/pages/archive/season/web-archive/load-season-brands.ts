@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { getSignedUrl } from '@/pages/brand/confirmed/archive/shared'
 
 export interface SeasonBrandItem {
@@ -13,7 +13,7 @@ export interface SeasonBrandItem {
 }
 
 export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem[]> {
-  const { data: brands, error } = await supabase
+  const { data: brands, error } = await demoDb
     .from('confirmed_brands')
     .select('id, brand_name, product, product_en, website, description_en')
     .eq('phase_id', phaseId)
@@ -21,7 +21,7 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
 
   if (error || !brands?.length) return []
 
-  const { data: contacts } = await supabase
+  const { data: contacts } = await demoDb
     .from('brand_contacts')
     .select('brand_name, brand_en')
     .eq('phase_id', phaseId)
@@ -29,7 +29,7 @@ export async function loadSeasonBrands(phaseId: string): Promise<SeasonBrandItem
   for (const c of contacts ?? []) brandEnByName.set(c.brand_name as string, (c.brand_en as string | null) ?? null)
 
   const ids = brands.map(b => b.id)
-  const { data: assets } = await supabase
+  const { data: assets } = await demoDb
     .from('confirmed_brand_assets')
     .select('id, confirmed_brand_id, category, storage_path, file_name, file_size, sort_order, created_at')
     .in('confirmed_brand_id', ids)

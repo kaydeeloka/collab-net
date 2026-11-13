@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import { countReshipNeeded, countReshipCompleted, fetchReshipmentMap } from '@/lib/ems/ems-errors'
@@ -42,7 +42,7 @@ async function fetchEmsStats(phaseId: string | null): Promise<EmsStats> {
   if (!phaseId) return empty
 
   const [{ data, error }, reshipMap] = await Promise.all([
-    supabase
+    demoDb
       .from('confirmed_influencers')
       .select(`
         id,

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { BUCKET, getSignedUrl } from '@/pages/brand/confirmed/archive/shared'
 
 export interface DesignArchiveFolder {
@@ -32,7 +32,7 @@ function buildFilePath(phaseId: string, folderId: string, fileName: string, inde
 }
 
 export async function loadDesignArchiveFolders(phaseId: string, parentId: string | null = null): Promise<DesignArchiveFolder[]> {
-  let query = supabase
+  let query = demoDb
     .from('design_archive_folders')
     .select('id, phase_id, name, sort_order, created_at, parent_folder_id')
     .eq('phase_id', phaseId)
@@ -52,7 +52,7 @@ export async function loadDesignArchiveFolders(phaseId: string, parentId: string
     return []
   }
 
-  const { data: counts } = await supabase
+  const { data: counts } = await demoDb
     .from('design_archive_files')
     .select('folder_id')
     .in('folder_id', folders.map(f => f.id))
@@ -65,7 +65,7 @@ export async function loadDesignArchiveFolders(phaseId: string, parentId: string
 
   let subCountByFolder = new Map<string, number>()
   if (parentId === null) {
-    const { data: subRows } = await supabase
+    const { data: subRows } = await demoDb
       .from('design_archive_folders')
       .select('parent_folder_id')
       .in('parent_folder_id', folders.map(f => f.id))
@@ -86,7 +86,7 @@ export async function createDesignArchiveFolder(phaseId: string, name: string, p
   const trimmed = name.trim()
   if (!trimmed) return { folder: null, error: '폴더 이름을 입력하세요' }
 
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('design_archive_folders')
     .insert({
       phase_id: phaseId,
@@ -101,17 +101,17 @@ export async function createDesignArchiveFolder(phaseId: string, name: string, p
 }
 
 export async function deleteDesignArchiveFolder(folderId: string) {
-  const { data: files } = await supabase
+  const { data: files } = await demoDb
     .from('design_archive_files')
     .select('storage_path')
     .eq('folder_id', folderId)
 
   const paths = (files ?? []).map(f => f.storage_path as string)
   if (paths.length) {
-    await supabase.storage.from(BUCKET).remove(paths)
+    await demoDb.storage.from(BUCKET).remove(paths)
   }
 
-  const { error } = await supabase.from('design_archive_folders').delete().eq('id', folderId)
+  const { error } = await demoDb.from('design_archive_folders').delete().eq('id', folderId)
   if (error) return { error: error.message }
   return { error: null }
 }
@@ -120,7 +120,7 @@ export async function renameDesignArchiveFolder(folderId: string, name: string) 
   const trimmed = name.trim()
   if (!trimmed) return { error: '폴더 이름을 입력하세요' }
 
-  const { error } = await supabase
+  const { error } = await demoDb
     .from('design_archive_folders')
     .update({ name: trimmed })
     .eq('id', folderId)
@@ -130,7 +130,7 @@ export async function renameDesignArchiveFolder(folderId: string, name: string) 
 }
 
 export async function loadDesignArchiveFiles(folderId: string): Promise<DesignArchiveFile[]> {
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('design_archive_files')
     .select('id, folder_id, file_name, storage_path, file_size, mime_type, sort_order, created_at')
     .eq('folder_id', folderId)
@@ -164,7 +164,7 @@ export async function uploadDesignArchiveFiles(
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const path = buildFilePath(phaseId, folderId, file.name, i)
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
       cacheControl: '3600',
       upsert: false,
       contentType: file.type || undefined,
@@ -174,7 +174,7 @@ export async function uploadDesignArchiveFiles(
       continue
     }
 
-    const { data: row, error: insErr } = await supabase
+    const { data: row, error: insErr } = await demoDb
       .from('design_archive_files')
       .insert({
         folder_id: folderId,
@@ -188,7 +188,7 @@ export async function uploadDesignArchiveFiles(
       .single()
 
     if (insErr) {
-      await supabase.storage.from(BUCKET).remove([path])
+      await demoDb.storage.from(BUCKET).remove([path])
       errors.push(`${file.name}: ${insErr.message}`)
       continue
     }
@@ -205,7 +205,7 @@ export async function uploadDesignArchiveFiles(
 export async function renameDesignArchiveFile(fileId: string, newName: string) {
   const trimmed = newName.trim()
   if (!trimmed) return { error: '파일 이름을 입력하세요' }
-  const { error } = await supabase.from('design_archive_files').update({ file_name: trimmed }).eq('id', fileId)
+  const { error } = await demoDb.from('design_archive_files').update({ file_name: trimmed }).eq('id', fileId)
   if (error) return { error: error.message }
   return { error: null }
 }
@@ -213,7 +213,7 @@ export async function renameDesignArchiveFile(fileId: string, newName: string) {
 export async function reorderDesignArchiveFolders(ordered: DesignArchiveFolder[]) {
   const results = await Promise.all(
     ordered.map((f, i) =>
-      supabase.from('design_archive_folders').update({ sort_order: i }).eq('id', f.id)
+      demoDb.from('design_archive_folders').update({ sort_order: i }).eq('id', f.id)
     )
   )
   const err = results.find(r => r.error)?.error
@@ -221,10 +221,10 @@ export async function reorderDesignArchiveFolders(ordered: DesignArchiveFolder[]
 }
 
 export async function deleteDesignArchiveFile(fileId: string, storagePath: string) {
-  const { error: storageErr } = await supabase.storage.from(BUCKET).remove([storagePath])
+  const { error: storageErr } = await demoDb.storage.from(BUCKET).remove([storagePath])
   if (storageErr) return { error: storageErr.message }
 
-  const { error } = await supabase.from('design_archive_files').delete().eq('id', fileId)
+  const { error } = await demoDb.from('design_archive_files').delete().eq('id', fileId)
   if (error) return { error: error.message }
   return { error: null }
 }

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { demoDb } from '../local-db'
 
 export interface OriginalShipment {
   ems_number:         string
@@ -64,7 +64,7 @@ export function countReshipCompleted(rows: Pick<EmsErrorRow, 'status'>[]): numbe
 export type ReshipmentRef = { id: string; status: string; ems_number: string | null }
 
 async function fetchConfirmedIdsForPhase(phaseId: string): Promise<string[]> {
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('confirmed_influencers')
     .select('id')
     .eq('phase_id', phaseId)
@@ -79,7 +79,7 @@ export async function fetchReshipmentMap(phaseId?: string | null): Promise<Map<s
   const confirmedIds = await fetchConfirmedIdsForPhase(phaseId)
   if (confirmedIds.length === 0) return new Map()
 
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('ems_reshipments')
     .select('id, status, ems_number, confirmed_influencer_id')
     .in('confirmed_influencer_id', confirmedIds)
@@ -101,7 +101,7 @@ export async function fetchEmsErrors(phaseId?: string | null): Promise<EmsErrorR
   const confirmedIds = await fetchConfirmedIdsForPhase(phaseId)
   if (confirmedIds.length === 0) return []
 
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('ems_reshipments')
     .select(`
       id, ems_number, application_number, registered_date, error_reason, status, carrier_status, email_sent,
@@ -121,7 +121,7 @@ export async function fetchEmsErrors(phaseId?: string | null): Promise<EmsErrorR
 
   let trackingMap = new Map<string, OriginalShipment>()
   if (trackingIds.length > 0) {
-    const { data: trackings, error: tErr } = await supabase
+    const { data: trackings, error: tErr } = await demoDb
       .from('ems_tracking')
       .select('id, ems_number, application_number, registered_date, status, last_update')
       .in('id', trackingIds)
@@ -163,7 +163,7 @@ export async function createEmsReship(
   confirmedInfluencerId: string,
   tracking: EmsTrackingSnapshot,
 ) {
-  return supabase.from('ems_reshipments').insert({
+  return demoDb.from('ems_reshipments').insert({
     confirmed_influencer_id: confirmedInfluencerId,
     original_tracking_id:    tracking.id,
     email_sent:              tracking.email_sent ?? false,
@@ -178,7 +178,7 @@ export async function createEmsReship(
 }
 
 export async function deleteEmsReship(confirmedInfluencerId: string) {
-  return supabase.from('ems_reshipments').delete().eq('confirmed_influencer_id', confirmedInfluencerId)
+  return demoDb.from('ems_reshipments').delete().eq('confirmed_influencer_id', confirmedInfluencerId)
 }
 
 export async function updateEmsReship(
@@ -194,5 +194,5 @@ export async function updateEmsReship(
     email_sent?:         boolean
   },
 ) {
-  return supabase.from('ems_reshipments').update(payload).eq('id', reshipId)
+  return demoDb.from('ems_reshipments').update(payload).eq('id', reshipId)
 }

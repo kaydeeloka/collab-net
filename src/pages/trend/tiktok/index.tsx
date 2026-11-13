@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { gasGet, gasPost } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { useToast } from '@/contexts/ToastContext'
 import {
   fetchEmailRecipients,
@@ -266,7 +266,7 @@ function ArchiveDraftBody({ draft }: { draft: TrendDraft }) {
 function buildTiktokEmailHtml(data: TiktokReport): string {
   const title = '이번 주 틱톡 트렌드 — ' + data.period
   let h = `<html><body style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:24px;color:#222">`
-  h += `<h1 style="font-size:20px;border-bottom:2px solid #ee0979;padding-bottom:8px">🎵 MiMuse ${title}</h1>`
+  h += `<h1 style="font-size:20px;border-bottom:2px solid #ee0979;padding-bottom:8px">🎵 CollabNet ${title}</h1>`
   h += `<p style="font-size:12px;color:#888;margin-top:4px">📅 ${data.period} · ${data.focus}</p>`
 
   h += `<h2 style="font-size:16px;margin-top:28px">🎬 바이럴 영상</h2>`
@@ -291,7 +291,7 @@ function buildTiktokEmailHtml(data: TiktokReport): string {
     h += `</div>`
   }
 
-  const dashUrl = 'https://mimuse-automation-dashboard.vercel.app/trend/tiktok'
+  const dashUrl = 'https://collabnet-automation-dashboard.vercel.app/trend/tiktok'
   h += `<div style="margin-top:40px;padding-top:20px;border-top:1px solid #e0e0e0;text-align:center">`
   h += `<a href="${dashUrl}" target="_blank" style="display:inline-block;background:#ee0979;color:#fff;font-weight:700;font-size:13px;padding:12px 28px;border-radius:8px;text-decoration:none">📊 대시보드 틱톡 트렌드 바로가기</a>`
   h += `</div></body></html>`
@@ -361,7 +361,7 @@ export default function TiktokTrend() {
     const name  = addName.trim()
     if (!email) return
     setRcptSaving(true)
-    const { error } = await supabase.from('email_recipients').insert({ email, name: name || null })
+    const { error } = await demoDb.from('email_recipients').insert({ email, name: name || null })
     if (!error) { setAddEmail(''); setAddName(''); setShowAddForm(false); await loadRecipients() }
     setRcptSaving(false)
   }
@@ -377,7 +377,7 @@ export default function TiktokTrend() {
     const name  = editName.trim()
     if (!email) return
     setRcptSaving(true)
-    const { error } = await supabase
+    const { error } = await demoDb
       .from('email_recipients')
       .update({ email, name: name || null })
       .eq('email', oldEmail)
@@ -394,7 +394,7 @@ export default function TiktokTrend() {
   }
 
   async function deleteRecipient(email: string) {
-    const { error } = await supabase.from('email_recipients').delete().eq('email', email)
+    const { error } = await demoDb.from('email_recipients').delete().eq('email', email)
     if (!error) {
       setSelectedRcpt(prev => { const next = new Set(prev); next.delete(email); return next })
       await loadRecipients()
@@ -407,7 +407,7 @@ export default function TiktokTrend() {
     setEmailSending(true)
     setEmailStatus('')
     try {
-      const subject  = '[MiMuse] 주간 틱톡 트렌드 · ' + data.period
+      const subject  = '[CollabNet] 주간 틱톡 트렌드 · ' + data.period
       const htmlBody = buildTiktokEmailHtml(data)
       const result: { ok: boolean; sent?: number; error?: string } = await gasPost({
         action: 'sendBeautyNewsEmail',

@@ -37,7 +37,7 @@ function _tcmCfg() {
 
 // ── One-time token setup ──────────────────────────────────────
 // Step 1: open this URL in a browser (replace YOUR_APP_ID and YOUR_REDIRECT_URI):
-//   https://business-api.tiktok.com/portal/auth?app_id=YOUR_APP_ID&state=mimuse&redirect_uri=YOUR_REDIRECT_URI
+//   https://business-api.tiktok.com/portal/auth?app_id=YOUR_APP_ID&state=collabnet&redirect_uri=YOUR_REDIRECT_URI
 // Step 2: after authorizing, TikTok redirects to your redirect_uri with ?auth_code=XXXX in the URL.
 // Step 3: paste that auth_code into the line below and run this function once from the GAS editor.
 function tcmExchangeAuthCode() {

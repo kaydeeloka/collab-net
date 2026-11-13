@@ -8,7 +8,7 @@ export function parseTimestamp(value: string | null | undefined): Date | null {
 }
 
 /** Current instant as ISO UTC — use when writing Supabase `timestamptz` columns. */
-export function supabaseNow(): string {
+export function demoDbNow(): string {
   return new Date().toISOString()
 }
 
@@ -114,7 +114,7 @@ export function dateOnlyToIso(dateStr: string): string {
     return parseKstDateOnly(dateStr).toISOString()
   }
   const d = parseTimestamp(dateStr)
-  return d ? d.toISOString() : supabaseNow()
+  return d ? d.toISOString() : demoDbNow()
 }
 
 /** Compare Supabase `created_at` filter against a KST date picker value. */

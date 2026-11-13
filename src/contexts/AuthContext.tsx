@@ -12,8 +12,8 @@ const AuthContext = createContext<AuthCtx>({
   isUnlocked: false, unlock: () => {}, showSessionWarning: false, extendSession: () => {}, lockNow: () => {},
 })
 
-const UNLOCKED_KEY = 'mimuse_unlocked'
-const ACTIVITY_KEY = 'mimuse_last_activity'
+const UNLOCKED_KEY = 'collabnet_unlocked'
+const ACTIVITY_KEY = 'collabnet_last_activity'
 const SESSION_MS = 2 * 60 * 60 * 1000 // lock after 2 hours of inactivity
 const WARNING_WINDOW_MS = 60 * 1000 // ask to extend 60s before that
 const CHECK_INTERVAL_MS = 5_000

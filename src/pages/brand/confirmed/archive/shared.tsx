@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import QRCode from 'qrcode'
 import { ChevronLeft, ChevronRight, Download, FileText, ExternalLink, Trash2, Upload, ZoomIn, ZoomOut, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import Spinner from '@/components/Spinner'
 
 export const BUCKET = 'brand-archive'
@@ -125,7 +125,7 @@ export function isWordUploadFile(file: File) {
 }
 
 export async function getSignedUrl(storagePath: string) {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 3600)
+  const { data, error } = await demoDb.storage.from(BUCKET).createSignedUrl(storagePath, 3600)
   if (error) return { url: null as string | null, error: error.message }
   return { url: data?.signedUrl ?? null, error: null }
 }
@@ -189,7 +189,7 @@ function SpreadsheetPreview({ asset, variant = 'thumb' }: { asset: BrandAsset; v
     setNaturalSize({ w: 0, h: 0 })
 
     Promise.all([
-      supabase.storage.from(BUCKET).download(asset.storage_path),
+      demoDb.storage.from(BUCKET).download(asset.storage_path),
       getSignedUrl(asset.storage_path),
     ]).then(async ([{ data: blob, error: dlErr }, { url: signed, error: urlErr }]) => {
       if (cancelled) return

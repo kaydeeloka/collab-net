@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Mail, MapPin, Phone, TrendingUp, User, Info } from 'lucide-react'
 import { ReportCard, ReportStat } from '@/components/ReportCard'
 import { FormTwoColumn } from '@/components/FormTwoColumn'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { dedupeConfirmedPhaseViaDb, uniquePlatformAccounts } from '@/lib/influencer/confirm-influencer'
 import HeaderFilterMenu from '@/components/HeaderFilterMenu'
@@ -85,21 +85,21 @@ interface ConfirmedRow {
 
 const INFLUENCER_TARGET = 50
 
-const MIMUSE_BRAND_COLOR = '#3b82f6'
+const COLLABNET_BRAND_COLOR = '#3b82f6'
 const BRAND_TOTAL_COLOR = '#64748b'
 
-function emptyBrandCounts(): { mimuse: number; brand: number } {
-  return { mimuse: 0, brand: 0 }
+function emptyBrandCounts(): { collabnet: number; brand: number } {
+  return { collabnet: 0, brand: 0 }
 }
 
-function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand: string | null }[] }[] }[]): { mimuse: number; brand: number } {
+function computeBrandCounts(data: { influencer_platform?: { monitoring?: { brand: string | null }[] }[] }[]): { collabnet: number; brand: number } {
   const counts = emptyBrandCounts()
   for (const r of data) {
     for (const p of r.influencer_platform ?? []) {
       for (const m of p.monitoring ?? []) {
         const b = (m.brand || '').toLowerCase()
         if (!b) continue
-        if (b === 'mimuse') counts.mimuse++
+        if (b === 'collabnet') counts.collabnet++
         else counts.brand++
       }
     }
@@ -374,7 +374,7 @@ export default function Confirmed() {
   useEffect(() => { if (viewPhaseId) load() }, [viewPhaseId])
 
   async function fetchConfirmedRows() {
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('confirmed_influencers')
       .select(`
         id, influencer_id, seq, email, upload_status, repost, review_link, notes, form_submitted,
@@ -436,7 +436,7 @@ export default function Confirmed() {
       .map(r => r.id)
 
     if (idsToYes.length) {
-      const { error: syncError } = await supabase
+      const { error: syncError } = await demoDb
         .from('confirmed_influencers')
         .update({ upload_status: 'Yes' })
         .in('id', idsToYes)
@@ -449,7 +449,7 @@ export default function Confirmed() {
     }
 
     if (idsToPending.length) {
-      const { error: syncError } = await supabase
+      const { error: syncError } = await demoDb
         .from('confirmed_influencers')
         .update({ upload_status: 'Pending' })
         .in('id', idsToPending)
@@ -505,7 +505,7 @@ export default function Confirmed() {
   }
 
   async function updateField(id: string, field: string, value: string) {
-    const { error } = await supabase.from('confirmed_influencers').update({ [field]: value }).eq('id', id)
+    const { error } = await demoDb.from('confirmed_influencers').update({ [field]: value }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
   }
@@ -592,29 +592,29 @@ export default function Confirmed() {
           profile_url: p.profile_url || null,
         }
         if (p.id) {
-          const { error } = await supabase.from('influencer_platform').update(payload).eq('id', p.id)
+          const { error } = await demoDb.from('influencer_platform').update(payload).eq('id', p.id)
           if (error) throw error
         } else {
-          const { error } = await supabase.from('influencer_platform').insert(payload)
+          const { error } = await demoDb.from('influencer_platform').insert(payload)
           if (error) throw error
         }
       }
 
       // DELETE removed platforms (silently skip if monitoring FK blocks it)
       for (const id of deletedIds) {
-        await supabase.from('influencer_platform').delete().eq('id', id)
+        await demoDb.from('influencer_platform').delete().eq('id', id)
       }
 
       // Save display name on the linked influencers row
       if (editInfluencerId) {
-        const { error: nameError } = await supabase.from('influencers')
+        const { error: nameError } = await demoDb.from('influencers')
           .update({ display_name: editForm.displayName.trim() || null })
           .eq('id', editInfluencerId)
         if (nameError) throw nameError
       }
 
       // Save other fields
-      const { error } = await supabase.from('confirmed_influencers').update({
+      const { error } = await demoDb.from('confirmed_influencers').update({
         phone:          editForm.phone       || null,
         repost:         editForm.repost      || null,
         address_line_1: editForm.addr1       || null,
@@ -674,7 +674,7 @@ export default function Confirmed() {
 
   async function toggleFormSubmitted(id: string, current: boolean | null) {
     const next = !current
-    const { error } = await supabase.from('confirmed_influencers').update({ form_submitted: next }).eq('id', id)
+    const { error } = await demoDb.from('confirmed_influencers').update({ form_submitted: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else setRows(prev => prev.map(r => r.id === id ? { ...r, form_submitted: next } : r))
   }
@@ -814,7 +814,7 @@ export default function Confirmed() {
               label="브랜드 횟수"
               variant="grid"
               columns={[
-                { value: brandCounts.mimuse, label: 'MiMuse', color: MIMUSE_BRAND_COLOR },
+                { value: brandCounts.collabnet, label: 'CollabNet', color: COLLABNET_BRAND_COLOR },
                 { value: brandCounts.brand, label: '브랜드별', color: BRAND_TOTAL_COLOR },
               ]}
             />

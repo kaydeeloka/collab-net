@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Package, Search } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -25,7 +25,7 @@ function ArchiveBrandCard({
     let cancelled = false
 
     async function loadThumb() {
-      const { data } = await supabase
+      const { data } = await demoDb
         .from('confirmed_brand_assets')
         .select('storage_path, category')
         .eq('confirmed_brand_id', brand.id)
@@ -85,7 +85,7 @@ export default function BrandArchiveList() {
   const loadBrands = useCallback(async () => {
     if (!selectedPhaseId) { setBrands([]); setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('confirmed_brands')
       .select('id, brand_name, product, received')
       .eq('phase_id', selectedPhaseId)

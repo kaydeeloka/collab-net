@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { BUCKET } from '@/pages/brand/confirmed/archive/shared'
 import { loadStorageImageUrl } from '../season/season-collection-images'
 
@@ -50,24 +50,24 @@ export async function uploadDesignAsset(
 ) {
   const column = COLUMN_BY_CATEGORY[category]
   const path = buildDesignAssetPath(phaseId, category, file.name)
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+  const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
     cacheControl: '3600',
     upsert: false,
     contentType: file.type || undefined,
   })
   if (upErr) return { path: null as string | null, error: upErr.message }
 
-  const { error: dbErr } = await supabase
+  const { error: dbErr } = await demoDb
     .from('phases')
     .update({ [column]: path })
     .eq('id', phaseId)
   if (dbErr) {
-    await supabase.storage.from(BUCKET).remove([path])
+    await demoDb.storage.from(BUCKET).remove([path])
     return { path: null, error: dbErr.message }
   }
 
   if (previousPath) {
-    await supabase.storage.from(BUCKET).remove([previousPath])
+    await demoDb.storage.from(BUCKET).remove([previousPath])
   }
 
   return { path, error: null }

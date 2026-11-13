@@ -19,7 +19,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-xlsx':    ['xlsx'],
           'vendor-jszip':   ['jszip'],
           'vendor-qrcode':  ['qrcode'],

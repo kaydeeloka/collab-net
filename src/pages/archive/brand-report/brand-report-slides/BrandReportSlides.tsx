@@ -8,7 +8,7 @@ import { uploadReportSlideImage } from '../../season/report-slides/report-image-
 import '../../season/report-slides/report-slides.css'
 import './brand-report-slides.css'
 
-const LOGO = '/img/logo-black.svg'
+const LOGO = '/img/collabnet-report-logo.svg'
 const ROWS_PER_PAGE = 15
 
 // ── Editable text ─────────────────────────────────────────────────
@@ -172,7 +172,7 @@ function BrandSlide({
   ])
   const reviewRows = rows.filter(r => r.review_link?.startsWith('http'))
   const brandRows = reviewRows.filter(r => r.brand && brandVariants.has(r.brand.toLowerCase()))
-  const mimuseRows = reviewRows.filter(r => r.brand === 'mimuse')
+  const collabnetRows = reviewRows.filter(r => r.brand === 'collabnet')
 
   // ── Outro ──────────────────────────────────────────────────────
   if (page.type === 'outro') {
@@ -404,9 +404,9 @@ function BrandSlide({
               const magazine = rws.filter(r => platformLabel(r.platform ?? '') === 'Magazine').length
               return { tiktok, instagram, magazine, total: tiktok + instagram + magazine }
             }
-            const allBrandRows = reviewRows.filter(r => r.brand !== 'mimuse')
+            const allBrandRows = reviewRows.filter(r => r.brand !== 'collabnet')
             const autoCtRows = [
-              { label: 'Mi Muse 리뷰', ...countByPlat(mimuseRows) },
+              { label: 'CollabNet 리뷰', ...countByPlat(collabnetRows) },
               { label: '브랜드별 리뷰', ...countByPlat(allBrandRows) },
               { label: `${(brandEn ?? brandName).toUpperCase()} 리뷰`, ...countByPlat(brandRows) },
               { label: '합계', ...countByPlat(reviewRows) },
@@ -555,10 +555,10 @@ function BrandSlide({
 
           {/* Review List */}
           {page.type === 'review_list' && (() => {
-            const subtitle = local.rlSubtitle ?? 'Mi Muse 리뷰'
-            const isMimuse = subtitle.includes('Mi Muse') || subtitle.includes('mimuse')
-            const allBrandReviewRows = reviewRows.filter(r => r.brand !== 'mimuse')
-            const tableRows = isMimuse ? mimuseRows : allBrandReviewRows
+            const subtitle = local.rlSubtitle ?? 'CollabNet 리뷰'
+            const isMimuse = subtitle.includes('CollabNet') || subtitle.includes('collabnet')
+            const allBrandReviewRows = reviewRows.filter(r => r.brand !== 'collabnet')
+            const tableRows = isMimuse ? collabnetRows : allBrandReviewRows
             const offset = local.rlOffset ?? 0
             const pageRows = tableRows.slice(offset, offset + ROWS_PER_PAGE)
             const isBrand = !isMimuse
@@ -578,7 +578,7 @@ function BrandSlide({
                         placeholder="한국어 제목..." className="rslide__kor-edit" />
                       <div className="brslide__rl-subtitle-row">
                         <select
-                          value={local.rlSubtitle ?? 'Mi Muse 리뷰'}
+                          value={local.rlSubtitle ?? 'CollabNet 리뷰'}
                           onChange={e => {
                             const next = { ...local, rlSubtitle: e.target.value, rlOffset: 0 }
                             setLocal(next)
@@ -586,7 +586,7 @@ function BrandSlide({
                           }}
                           className="brslide__rl-subtitle-select"
                         >
-                          <option value="Mi Muse 리뷰">Mi Muse 리뷰</option>
+                          <option value="CollabNet 리뷰">CollabNet 리뷰</option>
                           <option value="브랜드 개별 리뷰">브랜드 개별 리뷰</option>
                         </select>
                         <div className="brslide__rl-offset-wrap">
@@ -649,7 +649,7 @@ function BrandSlide({
 
           {/* Best Review grid */}
           {page.type === 'best_review' && (() => {
-            const hlRows = mimuseRows
+            const hlRows = collabnetRows
               .sort((a, b) => {
                 const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
                 const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
@@ -1112,11 +1112,11 @@ export default function BrandReportSlides({
           if (!SHARED_TYPES.has(page.type)) return undefined
           if (page.type === 'review_list') {
             // Match shared page by subtitle+offset to distinguish multiple review list pages
-            const subtitle = (page.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰'
+            const subtitle = (page.content as BrandPageContent).rlSubtitle ?? 'CollabNet 리뷰'
             const offset = (page.content as BrandPageContent).rlOffset ?? 0
             return sharedPages.find(s =>
               s.type === 'review_list' &&
-              ((s.content as BrandPageContent).rlSubtitle ?? 'Mi Muse 리뷰') === subtitle &&
+              ((s.content as BrandPageContent).rlSubtitle ?? 'CollabNet 리뷰') === subtitle &&
               ((s.content as BrandPageContent).rlOffset ?? 0) === offset
             )
           }

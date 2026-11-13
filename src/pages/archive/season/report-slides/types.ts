@@ -87,7 +87,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   cover:               { title: '' },
   project_overview:    {
     engTitle: 'OVERVIEW',
-    korTitle: 'Mi Muse 시딩 프로젝트 개요',
+    korTitle: 'CollabNet 시딩 프로젝트 개요',
     imageUrl: '',
     projectName: '',
     projectPurpose: '',
@@ -103,7 +103,7 @@ export const DEFAULT_CONTENT: Record<PageType, PageContent> = {
   },
   kit_composition:     {
     engTitle: 'OVERVIEW',
-    korTitle: 'Mi Muse 시딩 키트 구성',
+    korTitle: 'CollabNet 시딩 키트 구성',
     kitImageUrl: '',
     kitConceptTitle: '',
     kitConceptText: '',

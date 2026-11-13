@@ -123,7 +123,7 @@ function sendWeeklyBeautyNewsEmail(force, windowsStart, explicitRecipients) {
     }
 
     var data    = _archiveRowToBriefingData(archive);
-    var subject = '[MiMuse] 이번 주 뷰티 뉴스 · ' + _formatBriefingSubjectDate(_todayKstIso());
+    var subject = '[CollabNet] 이번 주 뷰티 뉴스 · ' + _formatBriefingSubjectDate(_todayKstIso());
     // Always use the GAS template (beauty-news-template.gs → buildBriefingHtml)
     var htmlBody = buildBriefingHtml(data);
     var result   = sendBeautyNewsEmail(explicitRecipients, htmlBody, subject);
@@ -490,12 +490,12 @@ function sendBeautyNewsEmail(recipients, htmlBody, subject) {
 }
 
 // ── Gmail draft → Supabase (Claude Cowork output) ─────────────
-// Cowork creates a Gmail draft with subject "[MiMuse Archive] …" and JSON between:
-//   MIMUSE_ARCHIVE_JSON … END_MIMUSE_ARCHIVE_JSON
+// Cowork creates a Gmail draft with subject "[CollabNet Archive] …" and JSON between:
+//   COLLABNET_ARCHIVE_JSON … END_COLLABNET_ARCHIVE_JSON
 // Run importBeautyNewsFromGmailDrafts() manually, on a time trigger, or via dashboard button.
-var GMAIL_ARCHIVE_SUBJECT_PREFIX = '[MiMuse Archive]';
-var GMAIL_ARCHIVE_JSON_START     = 'MIMUSE_ARCHIVE_JSON';
-var GMAIL_ARCHIVE_JSON_END       = 'END_MIMUSE_ARCHIVE_JSON';
+var GMAIL_ARCHIVE_SUBJECT_PREFIX = '[CollabNet Archive]';
+var GMAIL_ARCHIVE_JSON_START     = 'COLLABNET_ARCHIVE_JSON';
+var GMAIL_ARCHIVE_JSON_END       = 'END_COLLABNET_ARCHIVE_JSON';
 
 function _extractArchiveJsonFromText(text) {
   var body = String(text || '');

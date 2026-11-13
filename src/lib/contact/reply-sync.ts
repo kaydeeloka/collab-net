@@ -1,5 +1,5 @@
 import { gasPost } from '@/lib/api'
-import { dateOnlyToIso, supabaseNow, toIsoTimestamp } from '@/lib/kst-time'
+import { dateOnlyToIso, demoDbNow, toIsoTimestamp } from '@/lib/kst-time'
 
 export interface DetectedReply {
   email: string
@@ -61,7 +61,7 @@ export function replyTimestamp(reply: DetectedReply) {
     if (!Number.isNaN(ms)) return new Date(ms).toISOString()
   }
   if (reply.date) return dateOnlyToIso(reply.date)
-  return supabaseNow()
+  return demoDbNow()
 }
 
 export { toIsoTimestamp }

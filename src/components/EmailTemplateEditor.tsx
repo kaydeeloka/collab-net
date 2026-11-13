@@ -24,7 +24,7 @@ import { EmailTemplatePreviewPanel } from '@/components/EmailTemplatePreview'
 import { formatKstDateTime } from '@/lib/utils'
 import { previewDefaultSignatureHtml, syncSignatureLogoAndReset } from '@/lib/template/email-signature-sync'
 
-const LOGO_SYNC_KEY = 'outreach-logo-supabase-v3'
+const LOGO_SYNC_KEY = 'outreach-logo-demoDb-v3'
 
 function insertAtCursor(
   el: HTMLInputElement | HTMLTextAreaElement | null,

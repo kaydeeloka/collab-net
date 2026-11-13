@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { BUCKET, getSignedUrl } from '@/pages/brand/confirmed/archive/shared'
 
 function buildCollectionImgPath(phaseId: string, fileName: string) {
@@ -16,37 +16,37 @@ export async function loadStorageImageUrl(storagePath: string | null | undefined
 
 export async function uploadCollectionImg(phaseId: string, file: File, previousPath: string | null) {
   const path = buildCollectionImgPath(phaseId, file.name)
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+  const { error: upErr } = await demoDb.storage.from(BUCKET).upload(path, file, {
     cacheControl: '3600',
     upsert: false,
     contentType: file.type || undefined,
   })
   if (upErr) return { path: null as string | null, error: upErr.message }
 
-  const { error: dbErr } = await supabase
+  const { error: dbErr } = await demoDb
     .from('phases')
     .update({ collection_img: path })
     .eq('id', phaseId)
   if (dbErr) {
-    await supabase.storage.from(BUCKET).remove([path])
+    await demoDb.storage.from(BUCKET).remove([path])
     return { path: null, error: dbErr.message }
   }
 
   if (previousPath) {
-    await supabase.storage.from(BUCKET).remove([previousPath])
+    await demoDb.storage.from(BUCKET).remove([previousPath])
   }
 
   return { path, error: null }
 }
 
 export async function removeCollectionImg(phaseId: string, storagePath: string) {
-  const { error: dbErr } = await supabase
+  const { error: dbErr } = await demoDb
     .from('phases')
     .update({ collection_img: null })
     .eq('id', phaseId)
   if (dbErr) return { error: dbErr.message }
 
-  const { error: storageErr } = await supabase.storage.from(BUCKET).remove([storagePath])
+  const { error: storageErr } = await demoDb.storage.from(BUCKET).remove([storagePath])
   if (storageErr && !storageErr.message.includes('Not found')) {
     return { error: storageErr.message }
   }

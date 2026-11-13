@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { gasPost } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
-import { matchesKstDate, supabaseNow } from '@/lib/kst-time'
+import { demoDb } from '@/lib/local-db'
+import { matchesKstDate, demoDbNow } from '@/lib/kst-time'
 import { usePhase } from '@/contexts/PhaseContext'
 import { fmtNum } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
@@ -116,7 +116,7 @@ function mapDbTier(row: DbTierRow): Tier {
 }
 
 async function fetchTiersFromDb(): Promise<Tier[]> {
-  const { data } = await supabase
+  const { data } = await demoDb
     .from('tiers')
     .select('rank, label, category, tags, min_followers, max_followers')
     .order('sort_order')
@@ -206,7 +206,7 @@ function formatSearchMeta(
 }
 
 function saveConfig(key: string, value: unknown) {
-  supabase.from('app_config').upsert({ key, value, updated_at: supabaseNow() }).then()
+  demoDb.from('app_config').upsert({ key, value, updated_at: demoDbNow() }).then()
 }
 
 function saveSearchFilters(filters: Pick<SearchFilters, 'maxRatio' | 'maxUploadDays' | 'proxyCountry' | 'requireEmail'>) {
@@ -455,7 +455,7 @@ export default function Listup() {
       setConfigLoading(true)
       try {
         const [{ data: cfg }, dbTiers] = await Promise.all([
-          supabase
+          demoDb
             .from('app_config')
             .select('key, value')
             .in('key', ['tiers', 'kbeauty_keywords', 'beauty_keywords', 'filter_conditions', 'search_filters']),
@@ -507,7 +507,7 @@ export default function Listup() {
     let from = 0
     const allInf: StatsRow[] = []
     while (true) {
-      const { data } = await supabase
+      const { data } = await demoDb
         .from('influencers')
         .select('contacted, tiers(rank)')
         .eq('phase_id', viewPhaseId)
@@ -517,7 +517,7 @@ export default function Listup() {
       if (data.length < PAGE) break
       from += PAGE
     }
-    const { count: confirmedCount } = await supabase
+    const { count: confirmedCount } = await demoDb
       .from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', viewPhaseId)
     let total = 0, contacted = 0
     const tierCounts: Record<string, number> = {}
@@ -546,7 +546,7 @@ export default function Listup() {
 
   async function fetchExistingHandles() {
     if (!viewPhaseId) return []
-    const { data } = await supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId)
+    const { data } = await demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId)
     return (data ?? []).map(r => r.handle)
   }
 
@@ -605,7 +605,7 @@ export default function Listup() {
     let from = 0
     const all: Influencer[] = []
     while (true) {
-      const { data, error } = await supabase
+      const { data, error } = await demoDb
         .from('influencers')
         .select('*, tiers(rank, label, category)')
         .eq('phase_id', viewPhaseId)
@@ -624,8 +624,8 @@ export default function Listup() {
   const loadImportPreview = useCallback(async () => {
     if (!viewPhaseId || !importPhaseId) { setImportPreview(null); return }
     const [{ data: current }, { data: source }] = await Promise.all([
-      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
-      supabase.from('influencers').select('handle, status, tiers(rank)').eq('phase_id', importPhaseId).limit(5000),
+      demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
+      demoDb.from('influencers').select('handle, status, tiers(rank)').eq('phase_id', importPhaseId).limit(5000),
     ])
     const existingSet = new Set((current ?? []).map(r => r.handle.toLowerCase()))
     const sourceRows = (source ?? []) as unknown as Array<{ handle: string; status: string; tiers?: { rank: string } | null }>
@@ -650,8 +650,8 @@ export default function Listup() {
     setImporting(true)
     try {
       const [{ data: current }, { data: source }] = await Promise.all([
-        supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
-        supabase.from('influencers').select(
+        demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId).limit(5000),
+        demoDb.from('influencers').select(
           'handle, display_name, email, platform, followers, following, following_ratio, total_likes, video_count, engagement_rate, profile_url, tier_id, memo, status, tiers(rank)',
         ).eq('phase_id', importPhaseId).limit(5000),
       ])
@@ -695,7 +695,7 @@ export default function Listup() {
         return
       }
 
-      const { error } = await supabase.from('influencers').insert(rows)
+      const { error } = await demoDb.from('influencers').insert(rows)
       if (error) { showToast(error.message, 'error'); return }
 
       showToast(`${rows.length}명을 ${phaseNameById[importPhaseId] ?? '이전 차수'}에서 불러왔습니다`, 'success')
@@ -710,7 +710,7 @@ export default function Listup() {
   }
 
   async function deleteInfluencer(id: string) {
-    const { error } = await supabase.from('influencers').delete().eq('id', id)
+    const { error } = await demoDb.from('influencers').delete().eq('id', id)
     if (error) { alert('오류: ' + error.message); return }
     setInfluencers(prev => prev.filter(inf => inf.id !== id))
     loadDashStats()
@@ -738,7 +738,7 @@ export default function Listup() {
     setBulkLoading(true)
     const ids = Array.from(selected)
     const selectedRows = influencers.filter(inf => selected.has(inf.id))
-    const { error } = await supabase.from('influencers').update({ contacted: true }).in('id', ids)
+    const { error } = await demoDb.from('influencers').update({ contacted: true }).in('id', ids)
     if (error) {
       showToast(error.message, 'error')
       setBulkLoading(false)
@@ -746,7 +746,7 @@ export default function Listup() {
     }
     const needsStatus = selectedRows.filter(r => !r.status).map(r => r.id)
     if (needsStatus.length) {
-      await supabase.from('influencers').update({ status: 'target' }).in('id', needsStatus)
+      await demoDb.from('influencers').update({ status: 'target' }).in('id', needsStatus)
     }
     setInfluencers(prev => prev.map(inf => selected.has(inf.id)
       ? { ...inf, contacted: true, status: inf.status || 'target' }
@@ -761,12 +761,12 @@ export default function Listup() {
     setApifyLoading(true)
 
     const tierQuery = apifyCurrentTier
-      ? supabase.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle()
+      ? demoDb.from('tiers').select('id').eq('rank', apifyCurrentTier.rank).maybeSingle()
       : Promise.resolve({ data: null, error: null })
 
     const [{ data: tierRow }, { data: existing }] = await Promise.all([
       tierQuery,
-      supabase.from('influencers').select('handle').eq('phase_id', viewPhaseId),
+      demoDb.from('influencers').select('handle').eq('phase_id', viewPhaseId),
     ])
     const existingSet = new Set((existing ?? []).map(r => r.handle.toLowerCase()))
 
@@ -797,7 +797,7 @@ export default function Listup() {
       return
     }
 
-    const { error, data } = await supabase
+    const { error, data } = await demoDb
       .from('influencers')
       .upsert(rows, { onConflict: 'phase_id,handle', ignoreDuplicates: true })
       .select('*, tiers(rank, label, category)')

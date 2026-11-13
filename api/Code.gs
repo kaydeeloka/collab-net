@@ -1,5 +1,5 @@
 // ============================================================
-//  MiMuse Dashboard — API entry point
+//  CollabNet Dashboard — API entry point
 //  Data: Supabase (influencers, EMS, monitoring, beauty news)
 //  Integrations: Apify, Microsoft Outlook Graph
 // ============================================================
@@ -45,7 +45,7 @@ function doGet(e) {
         '[테스트] WebFetch 연결 확인'
       ) };
     }
-    if (result === null) result = { ok: true, api: 'MiMuse GAS API v1' };
+    if (result === null) result = { ok: true, api: 'CollabNet GAS API v1' };
   } catch (err) {
     result = { error: err.toString() };
   }

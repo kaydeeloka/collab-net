@@ -41,7 +41,7 @@ function updateInfluencerSheet(body) {
     );
     if (!Array.isArray(rows)) return { error: 'Supabase 오류: ' + JSON.stringify(rows) };
 
-    var ss = _getOrCreateSpreadsheet('INFLUENCER_SPREADSHEET_ID', 'MiMuse 인플루언서 DB');
+    var ss = _getOrCreateSpreadsheet('INFLUENCER_SPREADSHEET_ID', 'CollabNet 인플루언서 DB');
 
     var headers = ['No.', '이름', '핸들', '이메일', '티어', '카테고리', '팔로워', '팔로잉', '팔로잉 비율', '좋아요', '영상 수', '참여율(%)'];
     var sheetRows = rows.map(function(r, i) {
@@ -88,7 +88,7 @@ function updateBrandSheet(body) {
     );
     if (!Array.isArray(rows)) return { error: 'DB 조회 오류: ' + JSON.stringify(rows) };
 
-    var ss = _getOrCreateSpreadsheet('BRAND_SPREADSHEET_ID', 'MiMuse 브랜드 DB');
+    var ss = _getOrCreateSpreadsheet('BRAND_SPREADSHEET_ID', 'CollabNet 브랜드 DB');
 
     var headers = ['No.', '브랜드명', '브랜드 영문명', '회사명', '담당자명', '부서', '직급', '이메일', '내선번호', '개인 이메일', '개인 전화번호', '웹사이트', '상품 카테고리', '해외 진출', '컨택 여부', '상태', '비고'];
     var sheetRows = rows.map(function(r, i) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { Globe, Info, Mail, Package, Phone, User } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import Modal from '@/components/Modal'
@@ -93,14 +93,14 @@ export default function BrandConfirmedManagement() {
   async function load() {
     if (!selectedPhaseId) { setRows([]); setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('confirmed_brands')
       .select('*')
       .eq('phase_id', selectedPhaseId)
       .order('created_at', { ascending: false })
     if (error) { showToast(error.message, 'error'); setLoading(false); return }
     setRows((data ?? []) as ConfirmedBrand[])
-    const { data: bcData } = await supabase
+    const { data: bcData } = await demoDb
       .from('brand_contacts')
       .select('brand_name, brand_en')
       .eq('phase_id', selectedPhaseId)
@@ -114,7 +114,7 @@ export default function BrandConfirmedManagement() {
   async function addBrand() {
     if (!addForm.brand_name.trim()) { showToast('브랜드명을 입력해주세요.', 'error'); return }
     setAdding(true)
-    const { error } = await supabase.from('confirmed_brands').insert({
+    const { error } = await demoDb.from('confirmed_brands').insert({
       phase_id:        selectedPhaseId,
       brand_name:      addForm.brand_name.trim(),
       contact_name:    addForm.contact_name.trim()    || null,
@@ -153,7 +153,7 @@ export default function BrandConfirmedManagement() {
   async function saveEdit() {
     if (!editForm.brand_name.trim()) { showToast('브랜드명을 입력해주세요.', 'error'); return }
     setSaving(true)
-    const { error } = await supabase.from('confirmed_brands').update({
+    const { error } = await demoDb.from('confirmed_brands').update({
       brand_name:      editForm.brand_name.trim(),
       contact_name:    editForm.contact_name.trim()    || null,
       position:        editForm.position.trim()        || null,
@@ -172,7 +172,7 @@ export default function BrandConfirmedManagement() {
   }
 
   async function deleteRow(id: string) {
-    const { error } = await supabase.from('confirmed_brands').delete().eq('id', id)
+    const { error } = await demoDb.from('confirmed_brands').delete().eq('id', id)
     if (error) { showToast(error.message, 'error'); return }
     setRows(prev => prev.filter(r => r.id !== id))
     setShowView(false)
@@ -181,7 +181,7 @@ export default function BrandConfirmedManagement() {
 
   async function toggleReceived(id: string, current: boolean) {
     const next = !current
-    const { error } = await supabase.from('confirmed_brands').update({ received: next }).eq('id', id)
+    const { error } = await demoDb.from('confirmed_brands').update({ received: next }).eq('id', id)
     if (error) showToast(error.message, 'error')
     else {
       setRows(prev => prev.map(r => r.id === id ? { ...r, received: next } : r))
@@ -193,7 +193,7 @@ export default function BrandConfirmedManagement() {
     setNoteEdits(prev => ({ ...prev, [id]: value }))
     if (noteTimers.current[id]) clearTimeout(noteTimers.current[id])
     noteTimers.current[id] = setTimeout(async () => {
-      const { error } = await supabase.from('confirmed_brands').update({ notes: value }).eq('id', id)
+      const { error } = await demoDb.from('confirmed_brands').update({ notes: value }).eq('id', id)
       if (error) showToast(error.message, 'error')
       else setRows(prev => prev.map(r => r.id === id ? { ...r, notes: value } : r))
     }, 800)

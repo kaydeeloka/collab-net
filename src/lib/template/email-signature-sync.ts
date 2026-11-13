@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import {
   buildDefaultOutreachSignatureHtml,
@@ -28,12 +28,12 @@ export async function syncSignatureLogoAndReset(): Promise<string> {
   if (!res.ok) throw new Error(`로고 파일을 찾을 수 없습니다 (public/email/${LOGO_FILE})`)
 
   const blob = await res.blob()
-  const { error: uploadErr } = await supabase.storage
+  const { error: uploadErr } = await demoDb.storage
     .from(BUCKET)
     .upload(LOGO_PATH, blob, { upsert: true, contentType: 'image/png' })
   if (uploadErr) throw new Error(`로고 업로드 실패: ${uploadErr.message}`)
 
-  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(LOGO_PATH)
+  const { data: pub } = demoDb.storage.from(BUCKET).getPublicUrl(LOGO_PATH)
   const logoUrl = pub.publicUrl
 
   await gasPost({ action: 'setOutreachSignatureLogoUrl', url: logoUrl })

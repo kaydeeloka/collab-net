@@ -7,7 +7,7 @@ import type { ReportPage, PageContent, ProcessStep } from './types'
 import { uploadReportSlideImage } from './report-image-upload'
 import './report-slides.css'
 
-const LOGO = '/img/logo-report.svg'
+const LOGO = '/img/collabnet-report-logo.svg'
 
 // ── Editable text element ─────────────────────────────────────────
 
@@ -209,7 +209,7 @@ function Slide({
 
   // ── Outro ──────────────────────────────────────────────────────
   if (page.type === 'outro') {
-    const DEFAULT_CONTACT = 'CONTACT | beautyproject@cranecomm.com'
+    const DEFAULT_CONTACT = 'CONTACT | project1@collabnet.com'
     const captionValue = local.caption || DEFAULT_CONTACT
     const contactParts = captionValue.split('|').map(p => p.trim())
     return (
@@ -439,10 +439,10 @@ function Slide({
             )
           })()}
 
-          {/* Best review highlights — mimuse thumbnail grid */}
+          {/* Best review highlights — collabnet thumbnail grid */}
           {page.type === 'best_review' && (() => {
-            const mimuseRows = reviewRows
-              .filter(r => (r.brand || '').toLowerCase() === 'mimuse')
+            const collabnetRows = reviewRows
+              .filter(r => (r.brand || '').toLowerCase() === 'collabnet')
               .sort((a, b) => {
                 const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
                 const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
@@ -453,7 +453,7 @@ function Slide({
             return (
               <div className="rslide__hl-grid">
                 {Array.from({ length: 16 }).map((_, i) => {
-                  const r = mimuseRows[i]
+                  const r = collabnetRows[i]
                   const thumbUrl = r ? resolveMonitoringThumbnailUrl(r.assets) : null
                   return (
                     <div key={i} className="rslide__hl-cell">
@@ -805,7 +805,7 @@ function Slide({
                   )}
                 </div>
                 <div className="rslide__kit-cell rslide__kit-cell--composition">
-                  <SectionPill className="rslide__section-pill--composition">Mi Muse 구성품</SectionPill>
+                  <SectionPill className="rslide__section-pill--composition">CollabNet 구성품</SectionPill>
                   {editMode ? (
                     <ET
                       value={(local.kitMimuseItems ?? '').split('\n').map(l => l ? `■ ${l.replace(/^■\s?/, '')}` : '').join('\n')}

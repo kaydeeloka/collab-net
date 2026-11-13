@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { usePhase } from '@/contexts/PhaseContext'
 import { PageTabs, StatCard, StatCards } from '@/components/ui'
 import { PageHeroBanner, PageHeroBannerContent } from '@/components/PageHeroBanner'
@@ -27,7 +27,7 @@ export default function BrandConfirmed() {
       setStats({ total: 0, received: 0, pending: 0 })
       return
     }
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('confirmed_brands')
       .select('received')
       .eq('phase_id', selectedPhaseId)

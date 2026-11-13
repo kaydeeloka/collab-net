@@ -8,7 +8,7 @@
 // ============================================================
 
 function _emptyMonitoringKeywords() {
-  return { mimuse: [], byBrand: {} };
+  return { collabnet: [], byBrand: {} };
 }
 
 function _keywordsFromRows(rows) {
@@ -16,8 +16,8 @@ function _keywordsFromRows(rows) {
   if (!Array.isArray(rows)) return result;
   rows.forEach(function(row) {
     if (!row.brand || !Array.isArray(row.keywords)) return;
-    if (row.brand === 'mimuse' && !row.phase_id) {
-      result.mimuse = row.keywords;
+    if (row.brand === 'collabnet' && !row.phase_id) {
+      result.collabnet = row.keywords;
     } else if (row.phase_id) {
       result.byBrand[row.brand] = row.keywords;
     }
@@ -76,13 +76,13 @@ function getMonitoringKeywords(phaseId) {
   try {
     var q = '/rest/v1/monitoring_keywords?select=brand,keywords,phase_id&order=brand';
     if (phaseId) {
-      q += '&or=(and(phase_id.is.null,brand.eq.mimuse),phase_id.eq.' + phaseId + ')';
+      q += '&or=(and(phase_id.is.null,brand.eq.collabnet),phase_id.eq.' + phaseId + ')';
     } else {
       q += '&phase_id=is.null';
     }
     var rows = supabaseGet(q);
     var result = _keywordsFromRows(rows);
-    Logger.log('키워드 Supabase 로드 (phase=' + (phaseId || 'global') + '): mimuse=' + result.mimuse.length + ', brands=' + Object.keys(result.byBrand).length);
+    Logger.log('키워드 Supabase 로드 (phase=' + (phaseId || 'global') + '): collabnet=' + result.collabnet.length + ', brands=' + Object.keys(result.byBrand).length);
     return result;
   } catch (e) {
     Logger.log('getMonitoringKeywords Supabase 오류: ' + e);
@@ -102,15 +102,15 @@ function saveMonitoringKeywords(body) {
     return { ok: false, error: 'keywords object required' };
   }
 
-  var mimuseKws = brandKeywords.mimuse;
-  if (Array.isArray(mimuseKws)) {
-    var mimuseRows = supabaseGet('/rest/v1/monitoring_keywords?select=id&brand=eq.mimuse&phase_id=is.null&limit=1');
-    if (Array.isArray(mimuseRows) && mimuseRows.length) {
-      supabasePatch('monitoring_keywords', 'id=eq.' + mimuseRows[0].id, { keywords: mimuseKws });
+  var collabnetKws = brandKeywords.collabnet;
+  if (Array.isArray(collabnetKws)) {
+    var collabnetRows = supabaseGet('/rest/v1/monitoring_keywords?select=id&brand=eq.collabnet&phase_id=is.null&limit=1');
+    if (Array.isArray(collabnetRows) && collabnetRows.length) {
+      supabasePatch('monitoring_keywords', 'id=eq.' + collabnetRows[0].id, { keywords: collabnetKws });
     } else {
       supabaseRequest('/rest/v1/monitoring_keywords', {
         method: 'post',
-        payload: { brand: 'mimuse', phase_id: null, keywords: mimuseKws },
+        payload: { brand: 'collabnet', phase_id: null, keywords: collabnetKws },
       });
     }
   }
@@ -127,7 +127,7 @@ function saveMonitoringKeywords(body) {
   });
   if (payloads.length) {
     // Delete stale rows first (handles brand key changes from manual entry vs confirmed_brands)
-    supabaseRequest('/rest/v1/monitoring_keywords?phase_id=eq.' + phaseId + '&brand=neq.mimuse', { method: 'delete' });
+    supabaseRequest('/rest/v1/monitoring_keywords?phase_id=eq.' + phaseId + '&brand=neq.collabnet', { method: 'delete' });
     var res = supabaseUpsert('monitoring_keywords', payloads, 'phase_id,brand');
     if (!res.ok) return { ok: false, error: 'Supabase upsert failed: HTTP ' + res.status };
   }
@@ -136,7 +136,7 @@ function saveMonitoringKeywords(body) {
 
 function _getAllKeywordsFlat(phaseId) {
   var brandKws = getMonitoringKeywords(phaseId);
-  var flat = (brandKws.mimuse || []).slice();
+  var flat = (brandKws.collabnet || []).slice();
   Object.keys(brandKws.byBrand || {}).forEach(function(brand) {
     flat = flat.concat(brandKws.byBrand[brand] || []);
   });
@@ -496,14 +496,14 @@ function processApifyRunById(runId, phaseId) {
 function testKeywordMatching() {
   const nestedItem = {
     authorMeta   : { name: 'anikafong', uniqueId: 'anikafong' },
-    text         : 'Unbox the Mi Muse Box with me! @mimuse @nesh @varuza_global #kbeauty',
+    text         : 'Unbox the CollabNet Box with me! @collabnet @nesh @varuza_global #kbeauty',
     diggCount    : 55, playCount: 581, commentCount: 3,
     createTimeISO: '2026-03-30T03:00:29.000Z',
     webVideoUrl  : 'https://www.tiktok.com/@anikafong/video/7622878040212770061',
   };
   const flatItem = {
     'authorMeta.name': 'charity_017',
-    text         : 'Packaging is so cute I love it @mimuse #prgifted #gifted',
+    text         : 'Packaging is so cute I love it @collabnet #prgifted #gifted',
     diggCount    : 12, playCount: 203, commentCount: 1,
     createTimeISO: '2026-04-06T03:00:31.000Z',
     webVideoUrl  : 'https://www.tiktok.com/@charity_017/video/7625475714870971678',

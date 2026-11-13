@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapPin, Package, StickyNote, User } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { gasPost } from '@/lib/api'
 import { useToast } from '@/contexts/ToastContext'
 import Spinner from '@/components/Spinner'
@@ -129,7 +129,7 @@ export default function Ems() {
     if (!opts?.silent) setLoading(true)
     try {
       const [{ data, error }, reshipMap] = await Promise.all([
-        supabase
+        demoDb
           .from('confirmed_influencers')
           .select(`
             id, seq, email, phone, notes,
@@ -265,7 +265,7 @@ export default function Ems() {
         })
         if (error) throw error
         if (row.tracking_id) {
-          await supabase.from('ems_tracking').update({ status: 'Exception' }).eq('id', row.tracking_id)
+          await demoDb.from('ems_tracking').update({ status: 'Exception' }).eq('id', row.tracking_id)
         }
         if (created?.id) {
           setRows(prev => prev.map(r => r.confirmed_influencer_id === row.confirmed_influencer_id
@@ -301,7 +301,7 @@ export default function Ems() {
     setStatusSaving(row.confirmed_influencer_id)
     try {
       if (row.tracking_id) {
-        const { error } = await supabase
+        const { error } = await demoDb
           .from('ems_tracking')
           .update({ status: newStatus })
           .eq('id', row.tracking_id)
@@ -313,7 +313,7 @@ export default function Ems() {
           setViewRow(prev => prev ? { ...prev, status: newStatus } : prev)
         }
       } else {
-        const { data, error } = await supabase
+        const { data, error } = await demoDb
           .from('ems_tracking')
           .insert({
             confirmed_influencer_id: row.confirmed_influencer_id,
@@ -351,10 +351,10 @@ export default function Ems() {
 
       let err: unknown
       if (trackingForm.tracking_id) {
-        const res = await supabase.from('ems_tracking').update(payload).eq('id', trackingForm.tracking_id)
+        const res = await demoDb.from('ems_tracking').update(payload).eq('id', trackingForm.tracking_id)
         err = res.error
       } else {
-        const res = await supabase.from('ems_tracking').insert(payload)
+        const res = await demoDb.from('ems_tracking').insert(payload)
         err = res.error
       }
       if (err) throw err

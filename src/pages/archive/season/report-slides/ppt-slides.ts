@@ -66,7 +66,7 @@ async function buildOutroSlide(prs: pptxgen, page: ReportPage) {
     fontFace: FONT.SANS, fontSize: IN.cqwPt(6), bold: true, color: COLORS.ink,
   })
 
-  const DEFAULT_CONTACT = 'CONTACT | beautyproject@cranecomm.com'
+  const DEFAULT_CONTACT = 'CONTACT | project1@collabnet.com'
   const caption = page.content.caption || DEFAULT_CONTACT
   const parts = caption.split('|').map(p => p.trim())
   const barY = SLIDE_H - IN.cqw(3.8) - 0.14
@@ -226,7 +226,7 @@ async function buildKitCompositionSlide(prs: pptxgen, page: ReportPage) {
   const cellW = (CONTENT_BOX.w - gapX) / 2
   const compData: { title: string; items: string }[] = [
     { title: '브랜드 구성품', items: c.kitBrandItems ?? '' },
-    { title: 'Mi Muse 구성품', items: c.kitMimuseItems ?? '' },
+    { title: 'CollabNet 구성품', items: c.kitMimuseItems ?? '' },
   ]
   compData.forEach((comp, i) => {
     const x = CONTENT_BOX.x + i * (cellW + gapX)
@@ -333,8 +333,8 @@ async function buildBestReviewSlide(prs: pptxgen, page: ReportPage, ctx: Builder
   addContentChrome(slide, c.engTitle, c.korTitle)
 
   const reviewRows = reviewRowsOf(ctx.rows)
-  const mimuseRows = reviewRows
-    .filter(r => (r.brand || '').toLowerCase() === 'mimuse')
+  const collabnetRows = reviewRows
+    .filter(r => (r.brand || '').toLowerCase() === 'collabnet')
     .sort((a, b) => {
       const aThumb = !!resolveMonitoringThumbnailUrl(a.assets)
       const bThumb = !!resolveMonitoringThumbnailUrl(b.assets)
@@ -350,7 +350,7 @@ async function buildBestReviewSlide(prs: pptxgen, page: ReportPage, ctx: Builder
 
   const jobs: Promise<void>[] = []
   for (let i = 0; i < cols * rowsN; i++) {
-    const row = mimuseRows[i]
+    const row = collabnetRows[i]
     const thumbUrl = row ? resolveMonitoringThumbnailUrl(row.assets) : null
     const col = i % cols
     const rIdx = Math.floor(i / cols)

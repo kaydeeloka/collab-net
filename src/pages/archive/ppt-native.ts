@@ -54,9 +54,9 @@ export const CARD_SHADOW = { type: 'outer' as const, color: '000000', opacity: 0
  *  asvg:svgBlip extLst) has repeated, longstanding PowerPoint "needs repair" bugs (see
  *  gitbrent/PptxGenJS #522, #1150, #1449); a plain raster embed uses the same reliable
  *  codepath every other image in this report already goes through. */
-export const LOGO_PATH = '/img/logo-report.png'
-/** Logo is 6628x2900 -> h/w aspect ratio, used since pptxgenjs needs explicit w/h. */
-export const LOGO_ASPECT = 2900 / 6628
+export const LOGO_PATH = '/img/collabnet-report-logo.svg'
+/** CollabNet logo h/w aspect ratio, used since pptxgenjs needs explicit w/h. */
+export const LOGO_ASPECT = 58 / 260
 
 /** Control characters illegal in XML 1.0 text content (everything except tab/LF/CR).
  *  A single one of these — e.g. a stray vertical-tab (0x0B) left over from a Windows
@@ -129,7 +129,7 @@ export async function fetchImageAsBase64(url: string | null | undefined): Promis
   }
 }
 
-/** Places the MiMuse logo (a plain PNG — see LOGO_PATH) at the given box. */
+/** Places the CollabNet logo (a plain PNG — see LOGO_PATH) at the given box. */
 export function addLogoImage(slide: Slide, opts: { x: number; y: number; w: number; h: number }) {
   slide.addImage({ path: LOGO_PATH, x: opts.x, y: opts.y, w: opts.w, h: opts.h })
 }

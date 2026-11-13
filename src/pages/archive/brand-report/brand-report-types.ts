@@ -35,7 +35,7 @@ export interface BrandPageContent {
   cpContentTypeRows?: string   // "label|tiktok|instagram|magazine|total" per line
   cpCommentReaction?: string   // editable text block
   // review_list
-  rlSubtitle?: string          // "Mi Muse 리뷰" | "브랜드 개별 리뷰"
+  rlSubtitle?: string          // "CollabNet 리뷰" | "브랜드 개별 리뷰"
   rlOffset?: number            // row pagination start index
   // best_review_detail
   brdPickIndex?: number    // which best pick (0=1st, 1=2nd, 2=3rd)
@@ -91,7 +91,7 @@ export const BRAND_DEFAULT_CONTENT: Record<BrandPageType, BrandPageContent> = {
   cover: { title: '' },
   project_overview: {
     engTitle: 'OVERVIEW',
-    korTitle: 'Mi Muse 시딩 프로젝트 개요',
+    korTitle: 'CollabNet 시딩 프로젝트 개요',
     imageUrl: '',
     projectName: '',
     projectPurpose: '',
@@ -104,13 +104,13 @@ export const BRAND_DEFAULT_CONTENT: Record<BrandPageType, BrandPageContent> = {
     engTitle: 'Content Performance',
     korTitle: '콘텐츠 성과 OVERVIEW',
     cpRecoveryCards: '인플루언서||80\n매거진||100\n콘텐츠 수량||98',
-    cpContentTypeRows: 'Mi Muse 리뷰|0|0|0|0\n개별 브랜드 리뷰|0|0|0|0\n브랜드 단독 리뷰|0|0|0|0\n합계|0|0|0|0',
+    cpContentTypeRows: 'CollabNet 리뷰|0|0|0|0\n개별 브랜드 리뷰|0|0|0|0\n브랜드 단독 리뷰|0|0|0|0\n합계|0|0|0|0',
     cpCommentReaction: '',
   },
   review_list: {
     engTitle: 'REVIEW',
     korTitle: '리뷰 업로드 리스트',
-    rlSubtitle: 'Mi Muse 리뷰',
+    rlSubtitle: 'CollabNet 리뷰',
     rlOffset: 0,
   },
   best_review: {
@@ -148,7 +148,7 @@ export const BRAND_DEFAULT_PAGE_ORDER: Array<{
   { type: 'cover' },
   { type: 'project_overview' },
   { type: 'brand_content_performance' },
-  { type: 'review_list', extra: { rlSubtitle: 'Mi Muse 리뷰', rlOffset: 0 } },
+  { type: 'review_list', extra: { rlSubtitle: 'CollabNet 리뷰', rlOffset: 0 } },
   { type: 'review_list', extra: { rlSubtitle: '브랜드 개별 리뷰', rlOffset: 0 } },
   { type: 'best_review' },
   { type: 'best_review_detail', extra: { brdPickIndex: 0 } },

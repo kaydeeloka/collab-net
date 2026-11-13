@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import BeautyNewsShell from '../shell'
 import ArchiveDetail from './detail'
 import ArchiveList from './list'
@@ -18,7 +18,7 @@ const ARCHIVE_SELECT =
   'id, windows_start, windows_end, report_title, categories, keywords, created_at'
 
 async function fetchArchiveItemByDate(date: string): Promise<ArchiveItem | null> {
-  const { data, error } = await supabase
+  const { data, error } = await demoDb
     .from('beauty_news_archives')
     .select(ARCHIVE_SELECT)
   if (error || !data?.length) return null
@@ -48,7 +48,7 @@ export default function BeautyNewsArchive() {
   const refreshArchiveList = useCallback(async () => {
     setArchiveListLoading(true)
     try {
-      const { data, error } = await supabase
+      const { data, error } = await demoDb
         .from('beauty_news_archives')
         .select(ARCHIVE_SELECT)
       if (error) throw error
@@ -97,7 +97,7 @@ export default function BeautyNewsArchive() {
       }
 
       try {
-        const { data, error } = await supabase
+        const { data, error } = await demoDb
           .from('beauty_news_archives')
           .select('id, windows_start, windows_end, report_title, categories, keywords')
           .eq('windows_start', item.windows_start)

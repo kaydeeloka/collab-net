@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { PLATFORM_BUCKETS, PLATFORM_DISPLAY, platformBucket, type PlatformBucket } from '@/lib/influencer/content-platforms'
 import { type ConfirmedBrandKw } from '@/lib/influencer/monitoring-keywords'
 
@@ -63,7 +63,7 @@ export interface CollectionRate {
 
 export interface ReportSummary {
   uploadRate:   CollectionRate & { notUploaded: number }
-  totalContent: { count: number; mimuse: number; brand: number }
+  totalContent: { count: number; collabnet: number; brand: number }
   engagement:   { views: number; likes: number; comments: number }
 }
 
@@ -113,7 +113,7 @@ const TOP_POSTS_LIMIT = 10
 function brandDisplayLabel(brand: string | null): string {
   const b = (brand || '').toLowerCase()
   if (!b) return '—'
-  if (b === 'mimuse') return 'Mi Muse'
+  if (b === 'collabnet') return 'CollabNet'
   return brand!
 }
 
@@ -134,14 +134,14 @@ function buildBrandPerformanceRows(
 ): BrandPerformanceRow[] {
   const rows: BrandPerformanceRow[] = []
 
-  const mimuseRows = reviewRows.filter(r => contentTypeBucket(r.brand) === 'mimuse')
+  const collabnetRows = reviewRows.filter(r => contentTypeBucket(r.brand) === 'collabnet')
   rows.push({
-    key:         'mimuse',
-    label:       'Mi Muse',
-    count:       mimuseRows.length,
-    avgViews:    mimuseRows.length ? avgField(mimuseRows, 'views') : null,
-    avgLikes:    mimuseRows.length ? avgField(mimuseRows, 'likes') : null,
-    avgComments: mimuseRows.length ? avgField(mimuseRows, 'comments') : null,
+    key:         'collabnet',
+    label:       'CollabNet',
+    count:       collabnetRows.length,
+    avgViews:    collabnetRows.length ? avgField(collabnetRows, 'views') : null,
+    avgLikes:    collabnetRows.length ? avgField(collabnetRows, 'likes') : null,
+    avgComments: collabnetRows.length ? avgField(collabnetRows, 'comments') : null,
   })
 
   for (const b of confirmedBrands) {
@@ -276,7 +276,7 @@ export async function loadMonitoringData(phaseId: string): Promise<{ rows: Monit
   `
 
   const [confirmedRes, monitoringRes] = await Promise.all([
-    supabase
+    demoDb
       .from('confirmed_influencers')
       .select(`
         id, seq, repost,
@@ -285,7 +285,7 @@ export async function loadMonitoringData(phaseId: string): Promise<{ rows: Monit
       `)
       .eq('phase_id', phaseId)
       .order('seq', { ascending: true, nullsFirst: false }),
-    supabase
+    demoDb
       .from('monitoring')
       .select(monitoringSelect)
       .order('date', { ascending: false }),
@@ -346,10 +346,10 @@ function isUploaded(r: MonitoringRow): boolean {
   return !!r.review_link?.startsWith('http')
 }
 
-function contentTypeBucket(brand: string | null): 'mimuse' | 'brand' | null {
+function contentTypeBucket(brand: string | null): 'collabnet' | 'brand' | null {
   const b = (brand || '').toLowerCase()
   if (!b) return null
-  if (b === 'mimuse') return 'mimuse'
+  if (b === 'collabnet') return 'collabnet'
   return 'brand'
 }
 
@@ -383,11 +383,11 @@ export function computeContentReport(
   const groups = Array.from(groupMap.values())
 
   const uploadedGroups = groups.filter(g => g.some(isUploaded)).length
-  const mimuseCount = reviewRows.filter(r => contentTypeBucket(r.brand) === 'mimuse').length
+  const collabnetCount = reviewRows.filter(r => contentTypeBucket(r.brand) === 'collabnet').length
   const brandCount  = reviewRows.filter(r => contentTypeBucket(r.brand) === 'brand').length
 
   const typeDefs = [
-    { key: 'mimuse' as const, label: 'Mi Muse 리뷰' },
+    { key: 'collabnet' as const, label: 'CollabNet 리뷰' },
     { key: 'brand'  as const, label: '개별 브랜드 리뷰' },
   ]
 
@@ -462,7 +462,7 @@ export function computeContentReport(
       },
       totalContent: {
         count:  reviewRows.length,
-        mimuse: mimuseCount,
+        collabnet: collabnetCount,
         brand:  brandCount,
       },
       engagement: {

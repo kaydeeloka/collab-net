@@ -6,7 +6,7 @@ import ArchivePhaseListSidebar from '@/components/ArchivePhaseListSidebar'
 import { usePhase } from '@/contexts/PhaseContext'
 import { getPhaseStatusBadge } from '@/lib/phase'
 import { formatKstShortDate } from '@/lib/kst-time'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import Spinner from '@/components/Spinner'
 import '@/pages/brand/confirmed/archive/archive.css'
 import '../season/web-archive/season-collection.css'
@@ -109,7 +109,7 @@ export default function ArchiveBrandReport() {
 
     async function loadBrandNames() {
       setBrandsLoading(true)
-      const { data } = await supabase
+      const { data } = await demoDb
         .from('confirmed_brands')
         .select('phase_id, brand_name')
         .order('brand_name')

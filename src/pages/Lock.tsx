@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import './Lock.css'
 
 const CORRECT_PIN = '2626'
-const HINT_LINE_1 = '힌트: MiMuse 시작 연도의 마지막'
+const HINT_LINE_1 = '힌트: CollabNet 시작 연도의 마지막'
 const HINT_LINE_2 = '두 자리를 입력하세요'
 
 export default function Lock() {
@@ -18,8 +18,8 @@ export default function Lock() {
 
   useEffect(() => {
     if (isUnlocked) {
-      const dest = sessionStorage.getItem('mimuse_redirect') || '/'
-      sessionStorage.removeItem('mimuse_redirect')
+      const dest = sessionStorage.getItem('collabnet_redirect') || '/'
+      sessionStorage.removeItem('collabnet_redirect')
       navigate(dest, { replace: true })
     }
   }, [isUnlocked])
@@ -40,8 +40,8 @@ export default function Lock() {
   function checkPin(pin: string) {
     if (pin === CORRECT_PIN) {
       unlock()
-      const dest = sessionStorage.getItem('mimuse_redirect') || '/'
-      sessionStorage.removeItem('mimuse_redirect')
+      const dest = sessionStorage.getItem('collabnet_redirect') || '/'
+      sessionStorage.removeItem('collabnet_redirect')
       navigate(dest, { replace: true })
     } else {
       setShake(true)
@@ -53,9 +53,9 @@ export default function Lock() {
   return (
     <div className="lock-page">
       <div className="lock-card" onClick={() => inputRef.current?.focus()}>
-        <img src="/img/logo-black.svg" alt="MiMuse" className="lock-logo" />
-        <p className="lock-email">beautyproject@cranecomm.com</p>
-        <h2 className="lock-title">MiMuse 대시보드 잠금 모드</h2>
+        <img src="/img/logo-black.svg" alt="CollabNet" className="lock-logo" />
+        <p className="lock-email">project1@collabnet.com</p>
+        <h2 className="lock-title">CollabNet 대시보드 잠금 모드</h2>
 
         <div className={`lock-pins${shake ? ' lock-pins--shake' : ''}`}>
           {[0, 1, 2, 3].map(i => {

@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { usePhase } from '@/contexts/PhaseContext'
 import { useToast } from '@/contexts/ToastContext'
 import { formatKstShortDate } from '@/lib/kst-time'
-import { supabase } from '@/lib/supabase'
+import { demoDb } from '@/lib/local-db'
 import { loadMonitoringData, type MonitoringRow } from '@/lib/influencer/monitoring-data'
 import { PAGE_TYPE_LABELS, DEFAULT_CONTENT, type ReportPage, type PageContent, type PageType } from './report-slides/types'
 import ReportSlides from './report-slides/ReportSlides'
@@ -46,7 +46,7 @@ function formatPhasePeriod(startedAt: string | null, endedAt: string | null) {
 }
 
 function defaultBrandDesc(brand: SeasonBrandItem) {
-  return `${brand.brandName} — a Mi Muse kit partner brand selected for this season's creator collection.`
+  return `${brand.brandName} — a CollabNet kit partner brand selected for this season's creator collection.`
 }
 
 function ProductCard({
@@ -179,7 +179,7 @@ export default function ArchiveBrandReportPhase() {
       }
 
       const slidesHtml = sourceSlidesEl.innerHTML
-      const pdfTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phase.name} 시딩 프로젝트 결과 리포트`
+      const pdfTitle = `[CollabNet] 미국 뷰티 인플루언서 대상 ${phase.name} 시딩 프로젝트 결과 리포트`
       const printHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -286,7 +286,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
         }
       }
 
-      const pptTitle = `[Mi Muse] 미국 뷰티 인플루언서 대상 ${phase.name} 시딩 프로젝트 결과 리포트`
+      const pptTitle = `[CollabNet] 미국 뷰티 인플루언서 대상 ${phase.name} 시딩 프로젝트 결과 리포트`
       await prs.writeFile({ fileName: `${pptTitle}.pptx` })
     } catch (e) {
       showToast(`PPT 오류: ${e instanceof Error ? e.message.slice(0, 80) : String(e)}`, 'error')
@@ -326,7 +326,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     setHeroLoading(true)
 
     void (async () => {
-      const { data, error } = await supabase
+      const { data, error } = await demoDb
         .from('phases')
         .select('collection_img, archive_desc, project_concept, design_kit_box_img, design_theme_img')
         .eq('id', resolvedPhaseId)
@@ -384,10 +384,10 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     void (async () => {
       try {
         const [{ data }, { rows }, { data: cbData }, { data: kwData }] = await Promise.all([
-          supabase.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
+          demoDb.from('report_pages').select('*').eq('phase_id', resolvedPhaseId).order('order_index'),
           loadMonitoringData(resolvedPhaseId),
-          supabase.from('confirmed_brands').select('brand_name').eq('phase_id', resolvedPhaseId),
-          supabase.from('monitoring_keywords').select('brand, keywords, phase_id').eq('phase_id', resolvedPhaseId),
+          demoDb.from('confirmed_brands').select('brand_name').eq('phase_id', resolvedPhaseId),
+          demoDb.from('monitoring_keywords').select('brand, keywords, phase_id').eq('phase_id', resolvedPhaseId),
         ])
         if (cancelled) return
 
@@ -401,7 +401,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
             type,
             content: DEFAULT_CONTENT[type],
           }))
-          const { data: newPages } = await supabase.from('report_pages').insert(inserts).select()
+          const { data: newPages } = await demoDb.from('report_pages').insert(inserts).select()
           if (!cancelled) pages = (newPages as ReportPage[]) ?? []
         }
 
@@ -416,7 +416,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
             const kwRow =
               kwRows.find(k => Array.isArray(k.keywords) && k.keywords.some(kw => kw.toLowerCase() === korLower)) ??
               kwRows.find(k => k.brand === korKey || k.brand === korLower) ??
-              kwRows.filter(k => k.brand !== 'mimuse')[i]
+              kwRows.filter(k => k.brand !== 'collabnet')[i]
             let nameEn = r.brand_name
             if (kwRow) {
               if (isAscii(kwRow.brand) && kwRow.brand.toLowerCase() !== korLower && kwRow.brand.toLowerCase() !== korKey) {
@@ -466,7 +466,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
   }
 
   async function handleUpdateReportPage(page: ReportPage) {
-    await supabase.from('report_pages').update({ content: page.content }).eq('id', page.id)
+    await demoDb.from('report_pages').update({ content: page.content }).eq('id', page.id)
     setReportPages(prev => prev.map(p => p.id === page.id ? page : p))
   }
 
@@ -474,7 +474,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     if (!resolvedPhaseId) return
     setAddOpen(false)
     const maxOrder = reportPages.reduce((m, p) => Math.max(m, p.order_index), -1)
-    const { data, error } = await supabase
+    const { data, error } = await demoDb
       .from('report_pages')
       .insert({ phase_id: resolvedPhaseId, order_index: maxOrder + 1, type, content: DEFAULT_CONTENT[type] })
       .select()
@@ -498,7 +498,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
     const updated = reordered.map((p, i) => ({ ...p, order_index: i }))
     setReportPages(updated)
     await Promise.all(updated.map(p =>
-      supabase.from('report_pages').update({ order_index: p.order_index }).eq('id', p.id)
+      demoDb.from('report_pages').update({ order_index: p.order_index }).eq('id', p.id)
     ))
   }
 
@@ -510,7 +510,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
   function deleteReportPage(id: string, label: string) {
     showConfirm(`「${label}」 페이지를 삭제하시겠습니까?`, () => {
       void (async () => {
-        const { error } = await supabase.from('report_pages').delete().eq('id', id)
+        const { error } = await demoDb.from('report_pages').delete().eq('id', id)
         if (error) { showToast(error.message, 'error'); return }
         setReportPages(prev => prev.filter(p => p.id !== id))
       })()
@@ -538,7 +538,7 @@ html, body { margin: 0; padding: 0; width: 960px; background: #F8F6F6; }
         phaseArchiveDesc,
       )
 
-      const { error: phaseErr } = await supabase
+      const { error: phaseErr } = await demoDb
         .from('phases')
         .update({
           archive_desc: archiveDescValue,

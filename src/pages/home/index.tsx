@@ -1,10 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ClipboardList, Package, BarChart2, TrendingUp, Building2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { fetchLatestBeautyNewsKeywords, type BeautyNewsKeyword } from '@/lib/beauty-news'
-import { fetchReshipmentMap } from '@/lib/ems/ems-errors'
-import { isEmsDelivered, isEmsException, isEmsInTransit } from '@/lib/ems/ems-tracking-status'
 import { usePhase } from '@/contexts/PhaseContext'
 import { parseKstDateOnly } from '@/lib/kst-time'
 import { TIKTOK_HASHTAGS_PREVIEW } from '../trend/tiktok'
@@ -20,24 +15,6 @@ function StatCell({ html }: StatSnippet) {
   return <div className="feature-stats" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-const SPINNER_HTML = '<div class="fstat"><div class="fstat-val"><span class="spinner spinner--sm"></span></div><div class="fstat-lbl">로딩 중</div></div>'
-const DB_TIERS = ['1순위', '2순위', '3순위', '4순위', '5순위']
-const INFLUENCER_CONTACT_SENT_STATUSES = ['yes', 'reply', 'negotiate', 'accept', 'reject']
-const INFLUENCER_CONTACT_REPLIED_STATUSES = ['reply', 'negotiate']
-const INFLUENCER_SEARCH_TARGET = 1000
-
-function calcDday(target: Date): string {
-  const now   = new Date()
-  const diff  = Math.ceil((target.getTime() - now.getTime()) / 86_400_000)
-  if (diff > 0)  return `D-${diff}`
-  if (diff === 0) return 'D-Day'
-  return `D+${Math.abs(diff)}`
-}
-
-function statError(msg: string) {
-  return `<div style="font-size:11px;color:#c00">오류: ${String(msg).substring(0, 60)}</div>`
-}
-
 export default function Dashboard() {
   const { dbOptions, activeDbId, switchPhase } = useOutletContext<PhaseCtx>()
   const { viewPhaseId, phases } = usePhase()
@@ -45,172 +22,26 @@ export default function Dashboard() {
   const dispatchDate  = currentPhase?.kit_send_date ? parseKstDateOnly(currentPhase.kit_send_date) : null
   const deadlineDate  = currentPhase?.ended_at      ? parseKstDateOnly(currentPhase.ended_at.split('T')[0]) : null
 
-  const [statsListup,    setStatsListup]    = useState(SPINNER_HTML)
-  const [statsOutreach,  setStatsOutreach]  = useState(SPINNER_HTML)
-  const [statsEms,       setStatsEms]       = useState(SPINNER_HTML)
-  const [statsMonitoring,setStatsMonitoring]= useState(SPINNER_HTML)
-  const [newsKeywords,   setNewsKeywords]   = useState<BeautyNewsKeyword[]>([])
-
-  const loadListupStats = useCallback(async () => {
-    const phaseId = viewPhaseId ?? activeDbId
-    if (!phaseId) return
-    try {
-      const [{ data: infData, count: infTotal }, { count: confirmedCount }] = await Promise.all([
-        supabase.from('influencers').select('status, contacted', { count: 'exact' }).eq('phase_id', phaseId),
-        supabase.from('confirmed_influencers').select('*', { count: 'exact', head: true }).eq('phase_id', phaseId),
-      ])
-      const contacted = (infData ?? []).filter(r => r.contacted)
-      const contactTotal = contacted.length
-      const total = infTotal ?? infData?.length ?? 0
-      const sent = contacted.filter(r => INFLUENCER_CONTACT_SENT_STATUSES.includes(r.status)).length
-      const replied = contacted.filter(r => INFLUENCER_CONTACT_REPLIED_STATUSES.includes(r.status)).length
-      const confirmed = confirmedCount ?? 0
-      const recruitPct = Math.round(confirmed / 50 * 100)
-      const bar = (pct: number, color: string) =>
-        `<div style="width:100%;height:4px;background:#e5e7eb;border-radius:99px;margin-top:5px;overflow:hidden">` +
-        `<div style="height:100%;width:${Math.min(pct,100)}%;background:${color};border-radius:99px;transition:width .4s"></div></div>`
-      setStatsListup(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${contactTotal}명</span></div><div class="fstat-lbl">발송 완료</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${total}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${INFLUENCER_SEARCH_TARGET}명</span></div><div class="fstat-lbl">서치 완료</div></div>` +
-        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmed}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명 (${recruitPct}%)</span></div>${bar(recruitPct,'#648085')}<div class="fstat-lbl" style="margin-top:5px">확정 인플루언서</div></div>`
-      )
-    } catch (e: unknown) { setStatsListup(statError((e as Error).message)) }
-  }, [viewPhaseId, activeDbId])
-
-  const loadOutreachStats = useCallback(async () => {
-    if (!activeDbId) return
-    try {
-      const [{ data }, { count: confirmedBrandCount }] = await Promise.all([
-        supabase.from('brand_contacts').select('contacted, status').eq('phase_id', activeDbId),
-        supabase.from('confirmed_brands').select('*', { count: 'exact', head: true }).eq('phase_id', activeDbId),
-      ])
-      const all          = data ?? []
-      const contacted    = all.filter((r: any) => r.contacted)
-      const total        = contacted.length
-      const sent         = contacted.filter((r: any) => r.status === 'yes').length
-      const replied      = all.filter((r: any) => ['reply', 'positive', 'negative', 'accept'].includes(r.status)).length
-      const confirmedBrands = confirmedBrandCount ?? 0
-      setStatsOutreach(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${sent}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${total}개</span></div><div class="fstat-lbl">발송</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#d97706">${replied}</div><div class="fstat-lbl">회신</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${all.length}</div><div class="fstat-lbl">전체 브랜드 DB</div></div>` +
-        `<div class="fstat" style="border-left:1px solid #e5e7eb;padding-left:12px;margin-left:4px"><div class="fstat-val" style="color:var(--blue-dk)">${confirmedBrands}</div><div class="fstat-lbl">확정 브랜드</div></div>`
-      )
-    } catch (e: unknown) { setStatsOutreach(statError((e as Error).message)) }
-  }, [activeDbId])
-
-  const loadEmsStats = useCallback(async () => {
-    if (!activeDbId) return
-    try {
-      const [{ data, error }, reshipMap] = await Promise.all([
-        supabase
-          .from('confirmed_influencers')
-          .select('id, ems_tracking(status)')
-          .eq('phase_id', activeDbId),
-        fetchReshipmentMap(activeDbId),
-      ])
-      if (error) throw error
-      const rows = (data || []).map((ci: any) => {
-        const ems = (ci.ems_tracking || [])[0] || {}
-        return {
-          status:    ems.status || null,
-          reship_id: reshipMap.get(ci.id)?.id ?? null,
-        }
-      })
-      const delivered = rows.filter(r => isEmsDelivered(r.status)).length
-      const inTransit = rows.filter(r => isEmsInTransit(r.status)).length
-      const exception = rows.filter(r => isEmsException(r.status) || r.reship_id).length
-      setStatsEms(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--green)">${delivered}</div><div class="fstat-lbl">배송 완료</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${inTransit}</div><div class="fstat-lbl">배송 중</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:#e53935">${exception}</div><div class="fstat-lbl">오류/미수취</div></div>`
-      )
-    } catch (e: unknown) { setStatsEms(statError((e as Error).message)) }
-  }, [activeDbId])
-
-  const emptyMonitoringHtml =
-    `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 0명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
-    `<div class="fstat"><div class="fstat-val">0</div><div class="fstat-lbl">브랜드별 리뷰</div></div>` +
-    `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">0</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
-
-  const loadMonitoringStats = useCallback(async () => {
-    if (!activeDbId) return
-    try {
-      const { data: confirmed, error: cErr } = await supabase
-        .from('confirmed_influencers')
-        .select('id')
-        .eq('phase_id', activeDbId)
-      if (cErr) throw cErr
-
-      const confirmedIds = (confirmed || []).map(r => r.id)
-      if (confirmedIds.length === 0) {
-        setStatsMonitoring(emptyMonitoringHtml)
-        return
-      }
-
-      const { data: platforms, error: pErr } = await supabase
-        .from('influencer_platform')
-        .select('id')
-        .in('confirmed_influencer_id', confirmedIds)
-      if (pErr) throw pErr
-
-      const platformIds = (platforms || []).map(r => r.id)
-      if (platformIds.length === 0) {
-        setStatsMonitoring(emptyMonitoringHtml)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('monitoring')
-        .select('brand, influencer_platform_id, review_link')
-        .in('influencer_platform_id', platformIds)
-      if (error) throw error
-
-      const rows           = data || []
-      const reviewRows     = rows.filter((r: any) => r.review_link?.startsWith('http'))
-      const totalReviews   = reviewRows.length
-      const reviewInfluencers = new Set(reviewRows.map((r: any) => r.influencer_platform_id)).size
-      const brandCounts: Record<string, number> = {}
-      reviewRows.forEach((r: any) => {
-        const b = (r.brand || '').toLowerCase()
-        if (b) brandCounts[b] = (brandCounts[b] || 0) + 1
-      })
-      const brandReviewCount = Object.entries(brandCounts).reduce(
-        (sum, [key, count]) => (key === 'mimuse' ? sum : sum + count),
-        0,
-      )
-      const mimuseCount = brandCounts['mimuse'] || 0
-      setStatsMonitoring(
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${totalReviews}<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / ${reviewInfluencers}명</span></div><div class="fstat-lbl">리뷰 업로드</div></div>` +
-        `<div class="fstat"><div class="fstat-val">${brandReviewCount}</div><div class="fstat-lbl">브랜드별 리뷰</div></div>` +
-        `<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">${mimuseCount}</div><div class="fstat-lbl">미뮤즈 리뷰</div></div>`
-      )
-    } catch (e: unknown) { setStatsMonitoring(statError((e as Error).message)) }
-  }, [activeDbId])
-
-  useEffect(() => {
-    loadListupStats()
-  }, [loadListupStats])
-
-  useEffect(() => {
-    loadOutreachStats()
-  }, [loadOutreachStats])
-
-  useEffect(() => {
-    loadEmsStats()
-  }, [loadEmsStats])
-
-  useEffect(() => {
-    loadMonitoringStats()
-  }, [loadMonitoringStats])
-
-  useEffect(() => {
-    fetchLatestBeautyNewsKeywords().then(setNewsKeywords).catch(() => {})
-  }, [])
+  const statsListup = '<div class="fstat"><div class="fstat-val" style="color:var(--green)">3<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 3명</span></div><div class="fstat-lbl">발송 완료</div></div><div class="fstat"><div class="fstat-val" style="color:#d97706">2</div><div class="fstat-lbl">회신</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">6<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 1,000명</span></div><div class="fstat-lbl">서치 완료</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">4<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 50명 (8%)</span></div><div class="fstat-lbl">확정 인플루언서</div></div>'
+  const statsOutreach = '<div class="fstat"><div class="fstat-val" style="color:var(--green)">1<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 3개</span></div><div class="fstat-lbl">발송</div></div><div class="fstat"><div class="fstat-val" style="color:#d97706">2</div><div class="fstat-lbl">회신</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">5</div><div class="fstat-lbl">전체 브랜드 DB</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">2</div><div class="fstat-lbl">확정 브랜드</div></div>'
+  const statsEms = '<div class="fstat"><div class="fstat-val" style="color:var(--green)">1</div><div class="fstat-lbl">배송 완료</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">2</div><div class="fstat-lbl">배송 중</div></div><div class="fstat"><div class="fstat-val" style="color:#e53935">1</div><div class="fstat-lbl">오류/미수취</div></div>'
+  const statsMonitoring = '<div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">5<span style="font-size:16px;font-weight:500;color:var(--gray-5)"> / 4명</span></div><div class="fstat-lbl">리뷰 업로드</div></div><div class="fstat"><div class="fstat-val">2</div><div class="fstat-lbl">브랜드별 리뷰</div></div><div class="fstat"><div class="fstat-val" style="color:var(--blue-dk)">3</div><div class="fstat-lbl">Collab-Net 리뷰</div></div>'
+  const newsKeywords = [
+    { tag: '#BarrierFirst', explanation: '피부 장벽 케어와 보습 루틴이 미국 뷰티 크리에이터 콘텐츠에서 주목받고 있습니다.' },
+    { tag: '#GlowTint', explanation: '가볍고 촉촉한 베이스 메이크업 제품이 데일리 콘텐츠의 핵심 포맷으로 자리 잡고 있습니다.' },
+  ]
 
   return (
     <div className="page">
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        marginBottom: 16, borderRadius: 10, background: '#eff6ff',
+        border: '1px solid #bfdbfe', color: '#1e40af', fontSize: 12,
+      }}>
+        <span style={{ fontSize: 15 }} aria-hidden="true">ⓘ</span>
+        <span><strong>Demo mode</strong> · 지금은 화면 안내를 위한 샘플 데이터를 표시하고 있습니다. Supabase를 연결하면 실제 캠페인 데이터로 전환할 수 있습니다.</span>
+      </div>
 
       <PageHeroBanner
         aside={(() => {
@@ -283,11 +114,11 @@ export default function Dashboard() {
             <span className="page-hero-eyebrow">K-Beauty US Creator Seeding</span>
           </div>
           <div className="page-hero-brand">
-            <img src="/img/logo-black.svg" alt="Mi Muse" className="page-hero-logo" />
+            <div className="page-hero-title">Collab-Net</div>
             <h1 className="page-hero-title">대시보드</h1>
           </div>
           <p className="page-hero-desc">
-            미국 인플루언서 시딩 프로젝트 Mi Muse 현황을 한눈에 확인하세요
+            인플루언서 협업 캠페인 현황을 한눈에 확인하세요
           </p>
         </div>
 
