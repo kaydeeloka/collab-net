@@ -731,6 +731,7 @@ export default function Listup() {
       contacted: nextContacted,
       status: nextContacted && !r.status ? 'target' : r.status,
     } : r))
+    if (nextContacted) navigate('/influencer/contact')
   }
 
   async function bulkMarkTarget() {

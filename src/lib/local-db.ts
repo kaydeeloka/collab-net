@@ -96,10 +96,24 @@ class LocalQuery implements PromiseLike<any> {
   range(start: number, end: number) { this.rows = this.rows.slice(start, end + 1); return this }
   single() { this.resultSingle = true; return this }
   maybeSingle() { this.resultSingle = true; return this }
-  insert(value: Row | Row[]) { const rows = Array.isArray(value) ? value : [value]; this.rows.push(...rows); return this }
+  insert(value: Row | Row[]) {
+    const rows = Array.isArray(value) ? value : [value]
+    this.rows.push(...rows)
+    return this
+  }
   upsert(value: Row | Row[], ..._args: any[]) { return this.insert(value) }
-  update(patch: Row) { this.rows = this.rows.map(row => matches(row, this.filters) ? { ...row, ...patch } : row); return this }
-  delete() { this.rows = this.rows.filter(row => !matches(row, this.filters)); return this }
+  update(patch: Row) {
+    for (const row of this.rows) {
+      if (matches(row, this.filters)) Object.assign(row, patch)
+    }
+    return this
+  }
+  delete() {
+    for (let index = this.rows.length - 1; index >= 0; index--) {
+      if (matches(this.rows[index], this.filters)) this.rows.splice(index, 1)
+    }
+    return this
+  }
   then<TResult1 = { data: DemoData; error: any; count: number }, TResult2 = never>(
     resolve?: ((value: { data: DemoData; error: any; count: number }) => TResult1 | PromiseLike<TResult1>) | null,
     _reject?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,

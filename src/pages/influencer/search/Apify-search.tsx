@@ -438,6 +438,7 @@ export default function Listup() {
     const { error } = await demoDb.from('influencers').update({ status: newStatus }).eq('id', id)
     if (error) return
     setInfluencers(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r))
+    if (newStatus === 'target') navigate('/influencer/contact')
   }
 
   async function bulkMarkTarget() {
